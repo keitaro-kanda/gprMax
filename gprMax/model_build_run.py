@@ -41,7 +41,7 @@ from gprMax.fields_outputs import store_outputs
 from gprMax.fields_outputs import kernel_template_store_outputs
 from gprMax.fields_outputs import write_hdf5_outputfile
 
-#aiueo
+
 from gprMax.fields_updates_ext import update_electric
 from gprMax.fields_updates_ext import update_magnetic
 from gprMax.fields_updates_ext import update_electric_dispersive_multipole_A
