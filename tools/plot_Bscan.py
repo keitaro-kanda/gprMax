@@ -20,10 +20,11 @@ import argparse
 import os
 
 import h5py
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from gprMax.exceptions import CmdInputError
+
 from .outputfiles_merge import get_output_data
 
 
@@ -66,11 +67,11 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
         cb.set_label('Current [A]')
 
     # Save a PDF/PNG of the figure
-    # savefile = os.path.splitext(filename)[0]
+    savefile = os.path.splitext(filename)[0]
     # fig.savefig(path + os.sep + savefile + '.pdf', dpi=None, format='pdf', 
     #             bbox_inches='tight', pad_inches=0.1)
-    # fig.savefig(path + os.sep + savefile + '.png', dpi=150, format='png', 
-    #             bbox_inches='tight', pad_inches=0.1)
+    fig.savefig(path + os.sep + savefile + '.png', dpi=150, format='png', 
+                 bbox_inches='tight', pad_inches=0.1)
 
     return plt
 
