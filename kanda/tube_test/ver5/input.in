@@ -1,4 +1,4 @@
-#title: B-scan from a symple tube model
+#title: modify time window 3e-6 -> 3e-7
 #domain: 32.0 32.0 0.10
 #dx_dy_dz: 0.10 0.10 0.10
 #time_window: 3e-7
