@@ -1,11 +1,11 @@
-#title: B-scan from a symple tube model
+#title: modify time window 3e-7 -> 1.5e-7
 #domain: 32.0 32.0 0.10
 #dx_dy_dz: 0.10 0.10 0.10
 #time_window: 1.5e-7
 
 #material: 4 0 1 0 basalt
 
-#waveform: ricker 3 100e6 my_ricker
+#waveform: ricker 1 100e6 my_ricker
 #hertzian_dipole: z 6.0 26.5 0 my_ricker
 #rx: 6.0 26.5 0
 #src_steps: 1 0 0
