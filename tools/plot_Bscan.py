@@ -46,17 +46,17 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
 
     fig = plt.figure(num=filename + ' - rx' + str(rxnumber), 
                      figsize=(20, 10), facecolor='w', edgecolor='w')
-    """ 追加 """
+    """ 追加 （dBスケールっぽくするやつ）
     # Check the elements of "outputdata" one by one using a for statement, and if they are positive, rewrite the array elements to 1
     for i in range(len(outputdata)):
         for j in range(len(outputdata[i])):
             if outputdata[i][j] > 0:
-                outputdata[i][j] = 10 * np.log10(outputdata[i][j] / np.amax(outputdata))
+                outputdata[i][j] = - 10 * np.log10(outputdata[i][j] / np.amax(outputdata))
             elif outputdata[i][j] < 0:
                 outputdata[i][j] = 10 * np.log10(outputdata[i][j] / np.amin(outputdata))
             elif outputdata[i][j] == 0:
                 outputdata[i][j] = 0
-    """ 追加 """
+    追加 """
     plt.imshow(outputdata, 
                extent=[0, outputdata.shape[1], outputdata.shape[0] * dt, 0], 
                interpolation='nearest', aspect='auto', cmap='seismic', 
