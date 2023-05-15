@@ -24,6 +24,7 @@ import h5py
 import numpy as np
 
 from gprMax._version import __version__
+from gprMax.exceptions import CmdInputError  # 追加
 
 
 def get_output_data(filename, rxnumber, rxcomponent):

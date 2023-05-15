@@ -46,7 +46,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
 
     fig = plt.figure(num=filename + ' - rx' + str(rxnumber), 
                      figsize=(20, 10), facecolor='w', edgecolor='w')
-    """ 追加 （dBスケールっぽくするやつ）
+    """ 追加 （dBスケールっぽくするやつ
     # Check the elements of "outputdata" one by one using a for statement, and if they are positive, rewrite the array elements to 1
     for i in range(len(outputdata)):
         for j in range(len(outputdata[i])):
