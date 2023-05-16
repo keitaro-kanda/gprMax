@@ -63,7 +63,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                vmin=-np.amax(np.abs(outputdata)), vmax=np.amax(np.abs(outputdata)))
     plt.xlabel('Trace number')
     plt.ylabel('Time [s]')
-    # plt.title('{}'.format(filename))
+    plt.title('{}'.format(filename))
 
     # Grid properties
     ax = fig.gca()
