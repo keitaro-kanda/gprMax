@@ -59,7 +59,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     追加 """
     plt.imshow(outputdata, 
                extent=[0, outputdata.shape[1], outputdata.shape[0] * dt, 0], 
-               interpolation='nearest', aspect='auto', cmap='seismic', 
+               interpolation='nearest', aspect='auto', cmap='viridis', 
                vmin=-np.amax(np.abs(outputdata)), vmax=np.amax(np.abs(outputdata)))
     plt.xlabel('Trace number')
     plt.ylabel('Time [s]')
