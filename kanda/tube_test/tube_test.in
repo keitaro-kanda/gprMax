@@ -1,17 +1,18 @@
 #title: B-scan from a symple tube model
-#domain: 32.0 32.0 0.10
-#dx_dy_dz: 0.10 0.10 0.10
+#domain: 32.0 32.0 0.05
+#dx_dy_dz: 0.05 0.05 0.05
 #time_window: 1.5e-7
 
 #material: 4 0 1 0 basalt
 
-#waveform: ricker 3 100e6 my_ricker
+#waveform: ricker 3 500e6 my_ricker
 #hertzian_dipole: z 6.0 26.5 0 my_ricker
 #rx: 6.0 26.5 0
 #src_steps: 0.5 0 0
 #rx_steps: 0.5 0 0
 
-#box: 1.0 1.0 0 31.0 26.0 0.1 basalt n
-#cylindrical_sector: z 16.0 16.0 0 0.1 5.0 0　180 free_space n
+#box: 1.0 1.0 0 31.0 26.0 0.05 basalt n
+#cylindrical_sector: z 16.0 16.0 0 0.05 5.0 0　180 free_space n
+#pml_cells: 100 100 0 100 100 0
 
-#output_dir: ver8
+#output_dir: ver10
