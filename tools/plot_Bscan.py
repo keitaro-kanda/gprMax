@@ -22,6 +22,7 @@ import os
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import LogNorm
 
 from gprMax.exceptions import CmdInputError
 
@@ -72,7 +73,9 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     plt.imshow(outputdata, 
                extent=[0, outputdata.shape[1], outputdata.shape[0] * dt, 0], 
                interpolation='nearest', aspect='auto', cmap='seismic', 
-               vmin=-np.amax(np.abs(outputdata)), vmax=np.amax(np.abs(outputdata)))
+               vmin=-np.amax(np.abs(outputdata)), vmax=np.amax(np.abs(outputdata))
+               #norm=LogNorm()
+               )
     plt.xlabel('Trace number')
     plt.ylabel('Time [s]')
     plt.title('{}'.format(filename))
