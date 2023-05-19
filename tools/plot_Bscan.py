@@ -59,7 +59,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
             #    outputdata[i][j] = 0
     追加 """
 
-    """ 追加 （dBスケールっぽくするやつ）"""
+    """ 追加 （dBスケールっぽくするやつ）
     # Check the elements of "outputdata" one by one using a for statement, and if they are positive, rewrite the array elements to 1
     for i in range(len(outputdata)):
         for j in range(len(outputdata[i])):
@@ -69,11 +69,11 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 outputdata[i][j] = 10 * np.log10(outputdata[i][j] / np.amin(outputdata))
             elif outputdata[i][j] == 0:
                 outputdata[i][j] = 0
-    """追加 """
+    追加 """
     plt.imshow(outputdata, 
                extent=[0, outputdata.shape[1], outputdata.shape[0] * dt, 0], 
                interpolation='nearest', aspect='auto', cmap='seismic', 
-               vmin=-np.amax(np.abs(outputdata)), vmax=np.amax(np.abs(outputdata))
+               vmin=-np.amax(np.abs(outputdata))/20, vmax=np.amax(np.abs(outputdata)/20)
                #norm=LogNorm()
                )
     plt.xlabel('Trace number')
@@ -86,7 +86,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
 
     cb = plt.colorbar()
     if 'E' in rxcomponent:
-        cb.set_label('Field strength [V/m]')
+        cb.set_label('Field strength/20 [V/m]')
     elif 'H' in rxcomponent:
         cb.set_label('Field strength [A/m]')
     elif 'I' in rxcomponent:
