@@ -21,9 +21,9 @@ import os
 import sys
 
 import h5py
-import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
 
 from gprMax.exceptions import CmdInputError
 from gprMax.receivers import Rx
@@ -217,7 +217,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
         # Save a PDF/PNG of the figure
         # fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.pdf', dpi=None, format='pdf', bbox_inches='tight', pad_inches=0.1)
-        # fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
 
     f.close()
 
