@@ -9,6 +9,7 @@
 
 #waveform: gaussian 1 100e6 my_src
 #hertzian_dipole: z 5.5 41.5 0 my_src
-#rx: 5.5 41.5
+#rx: 5.5 41.5 0
 #src_steps: 0.5 0 0
 #rx_steps: 0.5 0 0
+80
