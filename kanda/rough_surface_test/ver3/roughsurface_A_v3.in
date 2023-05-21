@@ -9,7 +9,7 @@
 #fractal_box: 0.5 0.5 0 50.5 40.5 0.05 1.5 1 1 1 1 basalt basalt_fractal 
 #add_surface_roughness: 0.5 40.5 0 50.5 40.5 0.05 1.5 1 1 40 41 basalt_fractal 
 
-#cylindrical_sector: z 25.5 35.5 0 0.05 5.0 0　180 free_space n
+#cylindrical_sector: z 25.5 30.5 0 0.05 5.0 0　180 free_space n
 #pml_cells: 10 10 0 10 10 0
 
 
