@@ -1,4 +1,4 @@
-#title: rough surface ver.2
+#title: rough surface ver.3
 #domain: 51.0 51.0 0.05
 #dx_dy_dz: 0.05 0.05 0.05
 #time_window: 3e-7
@@ -13,7 +13,7 @@
 #pml_cells: 10 10 0 10 10 0
 
 
-#geometry_view: 0 0 0 32.0 32.0 0.05 0.05 0.05 0.05 geometry n
+#geometry_view: 0 0 0 51.0 51.0 0.05 0.05 0.05 0.05 geometry n
 #geometry_objects_write: 0 0 0 51.0 51.0 0.05 roughsurface_v3
 
 
