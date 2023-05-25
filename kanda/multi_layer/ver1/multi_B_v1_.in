@@ -4,7 +4,7 @@
 #time_window: 3e-7
 
 
-#geometry_objects_read: 0 0 0 kanda/multi_layer/ver2/muti_layer_2.h5 kanda/multi_layer/ver2/muti_layer_2_materials.txt
+#geometry_objects_read: 0 0 0 kanda/multi_layer/ver1/muti_layer_1.h5 kanda/multi_layer/ver1/muti_layer_1_materials.txt
 
 
 #waveform: gaussian 1 100e6 my_src
