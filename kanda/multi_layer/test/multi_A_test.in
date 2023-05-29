@@ -8,7 +8,7 @@
 
 
 #box: 0.5 30.5 0 50.5 35.5 0.05 regolith n
-#box: 0.5 0.5 0 30.5 50.5 0.05 basalt n
+#box: 0.5 0.5 0 50.5 30.5 0.05 basalt n
 #box: 10.5 20.5 0 40.5 25.5 0.05 free_space n
 
 #pml_cells: 10 10 0 10 10 0
