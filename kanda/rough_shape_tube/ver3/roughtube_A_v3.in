@@ -1,0 +1,31 @@
+#title: rough shape tube ver1
+#domain: 51.0 51.0 0.05
+#dx_dy_dz: 0.05 0.05 0.05
+#time_window: 5e-7
+
+#material: 4 0 1 0 basalt
+#material: 2 0 1 0 regolith
+
+
+
+#box: 0.5 0.5 0 50.5 40.5 0.05 basalt 
+
+#box: 0.5 40.5 0 50.5 45.5 0.05 regolith
+
+#fractal_box: 20.5 30.5 0 30.5 35.5 0.05 1.5 1 1 1 1 free_space tube_fractal
+#add_surface_roughness: 20.5 30.5 0 30.5 30.5 0.05 1.5 1 1 30.2 30.8 tube_fractal
+#add_surface_roughness: 20.5 35.5 0 30.5 35.5 0.05 1.5 1 1 35.2 36.5 tube_fractal
+#add_surface_roughness: 20.5 30.5 0 20.5 35.5 0.05 1.5 1 1 19.5 20.5 tube_fractal
+#add_surface_roughness: 30.5 30.5 0 30.5 35.5 0.05 1.5 1 1 30.5 31.5 tube_fractal
+
+
+#pml_cells: 10 10 0 10 10 0
+
+
+#geometry_view: 0 0 0 51.0 51.0 0.05 0.05 0.05 0.05 geometry_view n
+#geometry_objects_write: 0 0 0 51.0 51.0 0.05 geometry_data
+
+
+#waveform: gaussian 1 100e6 my_src
+#hertzian_dipole: z 25.5 46 0 my_src
+#rx: 24.5 46 0
