@@ -339,24 +339,24 @@ def peakdet(v, delta, x=None):
         this = v[i]
         if this > mx:
             mx = this
-            mxpos = x[i]
+            mxpos = x_i
         if this < mn:
             mn = this
-            mnpos = x[i]
+            mnpos = x_i
 
         if lookformax:
             if this < mx - delta:
                 if int(mxpos) != 0:
                     maxtab.append(int(mxpos))
                     mn = this
-                    mnpos = x[i]
+                    mnpos = x_i
                     lookformax = False
         else:
             if this > mn + delta:
                 if int(mnpos) != 0:
                     mintab.append(int(mnpos))
                     mx = this
-                    mxpos = x[i]
+                    mxpos = x_i
                     lookformax = True
 
     return maxtab, mintab
