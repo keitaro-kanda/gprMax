@@ -20,9 +20,9 @@
 
 
 #waveform: gaussian 1 100e6 my_src 
-#hertzian_dipole: z 41 28 0 my_src
+#hertzian_dipole: z 36 26 0 my_src
 
-#rx: 41 28 0
+#rx: 36 26 0
 
 #python:
 for i in range(1, 51):

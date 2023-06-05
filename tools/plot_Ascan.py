@@ -181,8 +181,8 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 # ax.set_ylim([-15, 20])
                 elif output == 'Ez':
                     ax = plt.subplot(gs[2, 0])
-                    ax.plot(time, outputdata, 'r', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', field strength [V/m]')
+                    ax.plot(time, outputdata/np.amax(np.abs(outputdata)), 'r', lw=2, label=outputtext) 
+                    ax.set_ylabel(outputtext + ', field strength [V/m] (normalised by max value)')
                 # ax.set_ylim([-15, 20])
                 elif output == 'Hx':
                     ax = plt.subplot(gs[0, 1])
@@ -213,7 +213,8 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.set_ylabel(outputtext + ', current [A]')
             for ax in fig.axes:
                 ax.set_xlim([0, np.amax(time)])
-                ax.grid(which='both', axis='both', linestyle='-.')
+                ax.grid(which='both', axis='both', linestyle='--')
+                ax.minorticks_on()
 
         # Save a PDF/PNG of the figure
         # fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.pdf', dpi=None, format='pdf', bbox_inches='tight', pad_inches=0.1)
