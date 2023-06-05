@@ -17,69 +17,50 @@
 # along with gprMax.  If not, see <http://www.gnu.org/licenses/>.
 
 import datetime
-from importlib import import_module
 import itertools
 import os
-import psutil
 import sys
+from importlib import import_module
 
-from colorama import init
-from colorama import Fore
-from colorama import Style
+import psutil
+from colorama import Fore, Style, init
+
 init()
 import numpy as np
 from terminaltables import AsciiTable
 from tqdm import tqdm
 
-from gprMax.constants import floattype
-from gprMax.constants import complextype
-from gprMax.constants import cudafloattype
-from gprMax.constants import cudacomplextype
+from gprMax.constants import (complextype, cudacomplextype, cudafloattype,
+                              floattype)
 from gprMax.exceptions import GeneralError
-
-from gprMax.fields_outputs import store_outputs
-from gprMax.fields_outputs import kernel_template_store_outputs
-from gprMax.fields_outputs import write_hdf5_outputfile
-
-
-from gprMax.fields_updates_ext import update_electric
-from gprMax.fields_updates_ext import update_magnetic
-from gprMax.fields_updates_ext import update_electric_dispersive_multipole_A
-from gprMax.fields_updates_ext import update_electric_dispersive_multipole_B
-from gprMax.fields_updates_ext import update_electric_dispersive_1pole_A
-from gprMax.fields_updates_ext import update_electric_dispersive_1pole_B
+from gprMax.fields_outputs import (kernel_template_store_outputs,
+                                   store_outputs, write_hdf5_outputfile)
+from gprMax.fields_updates_ext import (update_electric,
+                                       update_electric_dispersive_1pole_A,
+                                       update_electric_dispersive_1pole_B,
+                                       update_electric_dispersive_multipole_A,
+                                       update_electric_dispersive_multipole_B,
+                                       update_magnetic)
 from gprMax.fields_updates_gpu import kernels_template_fields
-
-from gprMax.grid import FDTDGrid
-from gprMax.grid import dispersion_analysis
-
+from gprMax.grid import FDTDGrid, dispersion_analysis
+from gprMax.input_cmds_file import (check_cmd_names,
+                                    process_python_include_code,
+                                    write_processed_file)
 from gprMax.input_cmds_geometry import process_geometrycmds
-from gprMax.input_cmds_file import process_python_include_code
-from gprMax.input_cmds_file import write_processed_file
-from gprMax.input_cmds_file import check_cmd_names
 from gprMax.input_cmds_multiuse import process_multicmds
 from gprMax.input_cmds_singleuse import process_singlecmds
-from gprMax.materials import Material
-from gprMax.materials import process_materials
-from gprMax.pml import CFS
-from gprMax.pml import PML
-from gprMax.pml import build_pmls
-from gprMax.receivers import gpu_initialise_rx_arrays
-from gprMax.receivers import gpu_get_rx_array
-from gprMax.snapshots import Snapshot
-from gprMax.snapshots import gpu_initialise_snapshot_array
-from gprMax.snapshots import gpu_get_snapshot_array
+from gprMax.materials import Material, process_materials
+from gprMax.pml import CFS, PML, build_pmls
+from gprMax.receivers import gpu_get_rx_array, gpu_initialise_rx_arrays
+from gprMax.snapshots import (Snapshot, gpu_get_snapshot_array,
+                              gpu_initialise_snapshot_array)
 from gprMax.snapshots_gpu import kernel_template_store_snapshot
-from gprMax.sources import gpu_initialise_src_arrays
 from gprMax.source_updates_gpu import kernels_template_sources
-from gprMax.utilities import get_host_info
-from gprMax.utilities import get_terminal_width
-from gprMax.utilities import human_size
-from gprMax.utilities import open_path_file
-from gprMax.utilities import round32
-from gprMax.utilities import timer
-from gprMax.yee_cell_build_ext import build_electric_components
-from gprMax.yee_cell_build_ext import build_magnetic_components
+from gprMax.sources import gpu_initialise_src_arrays
+from gprMax.utilities import (get_host_info, get_terminal_width, human_size,
+                              open_path_file, round32, timer)
+from gprMax.yee_cell_build_ext import (build_electric_components,
+                                       build_magnetic_components)
 
 
 def run_model(args, currentmodelrun, modelend, numbermodelruns, inputfile, usernamespace):

@@ -1,0 +1,14 @@
+#domain: 162 62 0.05
+#dx_dy_dz: 0.05 0.05 0.05
+#time_window: 6e-7
+
+
+#geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
+
+
+#waveform: gaussian 1 100e6 my_src
+#hertzian_dipole: z 81 21 0 my_src
+#rx: 80 21 0
+#src_steps: 0 0.5 0
+#rx_steps: 0 0.5 0
+36
