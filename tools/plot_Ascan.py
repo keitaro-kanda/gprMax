@@ -24,6 +24,7 @@ import h5py
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import markers
 
 from gprMax.exceptions import CmdInputError
 from gprMax.receivers import Rx
@@ -180,9 +181,23 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.set_ylabel(outputtext + ', field strength [V/m]')
                 # ax.set_ylim([-15, 20])
                 elif output == 'Ez':
+                    outputdata_norm = outputdata/np.amax(np.abs(outputdata))
                     ax = plt.subplot(gs[2, 0])
-                    ax.plot(time, outputdata/np.amax(np.abs(outputdata)), 'r', lw=2, label=outputtext) 
+                    ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext) 
                     ax.set_ylabel(outputtext + ', field strength [V/m] (normalised by max value)')
+                    # detect peak and plot
+                    # peak is the point where outputdata_norm is the largest in nerby 100 points
+                    for i in range(100, len(outputdata_norm)-100):
+                        if outputdata_norm[i] == np.amax(np.abs(outputdata_norm[i-100:i+100])):
+                            if np.abs(outputdata_norm[i]) > 0.01:
+                                ax.plot(time[i], outputdata_norm[i], 'bo', markersize=2)
+                                # Display time to one decimal place
+                                ax.text(time[i], outputdata_norm[i], '{:.2g}'.format(time[i]*10**7), fontsize=10)
+
+                        
+
+
+
                 # ax.set_ylim([-15, 20])
                 elif output == 'Hx':
                     ax = plt.subplot(gs[0, 1])
