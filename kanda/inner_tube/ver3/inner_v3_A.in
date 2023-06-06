@@ -1,0 +1,31 @@
+#domain: 72 52 0.05
+
+#dx_dy_dz: 0.05 0.05 0.05
+
+#time_window: 5e-7
+
+#material: 6 0 1 0 basalt
+
+#box: 1 1 0 71 51 0.05 basalt 
+#box: 21 21 0 51 31 0.05 free_space
+#box: 31 21 0 32 22 0.05 basalt
+
+
+#pml_cells: 20 20 0 20 20 0
+
+
+#geometry_view: 0 0 0 72 52 0.05 0.05 0.05 0.05 geometry_inner_v3 n
+
+#geometry_objects_write: 0 0 0 72 52 0.05 geometry_data
+
+
+
+#waveform: gaussian 1 100e6 my_src 
+#hertzian_dipole: z 36 26 0 my_src
+
+#rx: 36 26 0
+
+#python:
+for i in range(1, 51):
+    print('#snapshot: 0 0 0 72 52 0.05 0.05 0.05 0.05 {} snapshot{}'.format(i*1e-8, i))
+#end_python:
