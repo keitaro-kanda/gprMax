@@ -199,9 +199,9 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                             if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[i-100:i+100])) and np.abs(outputdata_norm[i]) > 0.01:
                                 ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
                                 if outputdata_norm[i] > 0:
-                                    ax.text(time[i], outputdata_norm[i]+0.05, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    ax.text(time[i], outputdata_norm[i]+0.05, '{:.3g}'.format(time[i]*10**7), fontsize=12)
                                 else:
-                                    ax.text(time[i], outputdata_norm[i]-0.15, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    ax.text(time[i], outputdata_norm[i]-0.15, '{:.3g}'.format(time[i]*10**7), fontsize=12)
 
                         
 
