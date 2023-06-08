@@ -71,13 +71,28 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 outputdata[i][j] = 0
     追加 """
 
+    # [%]に変換
     outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
-    plt.imshow(outputdata_norm, 
-               extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
-               interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
 
-    plt.xlabel('Trace number')
-    plt.ylabel('Time [s]')
+    # 観測の方向
+    radar_direction = 'vertical'
+
+    # プロット
+    if radar_direction == 'horizontal':
+        plt.imshow(outputdata_norm, 
+                 extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
+                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
+        plt.xlabel('Trace number')
+        plt.ylabel('Time [s]')
+    else:
+    # Create a plot rotated 90 degrees and then reversed up and down.
+        plt.imshow(outputdata_norm.T[::-1],
+                extent=[0, outputdata_norm.shape[0] * dt, 0, outputdata_norm.shape[1]], 
+                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
+        plt.xlabel('Time [s]')
+        plt.ylabel('Trace number')
+
+
     plt.title('{}'.format(filename))
 
     # Grid properties
