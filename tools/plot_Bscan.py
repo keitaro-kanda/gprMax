@@ -70,12 +70,12 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
             elif outputdata[i][j] == 0:
                 outputdata[i][j] = 0
     追加 """
-    plt.imshow(outputdata, 
-               extent=[0, outputdata.shape[1], outputdata.shape[0] * dt, 0], 
-               interpolation='nearest', aspect='auto', cmap='seismic', 
-               vmin=-np.amax(np.abs(outputdata))/10, vmax=np.amax(np.abs(outputdata)/10)
-               #norm=LogNorm()
-               )
+
+    outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
+    plt.imshow(outputdata_norm, 
+               extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
+               interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
+
     plt.xlabel('Trace number')
     plt.ylabel('Time [s]')
     plt.title('{}'.format(filename))
@@ -86,7 +86,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
 
     cb = plt.colorbar()
     if 'E' in rxcomponent:
-        cb.set_label('Field strength/10 [V/m]')
+        cb.set_label('Field strength percentage [%]')
     elif 'H' in rxcomponent:
         cb.set_label('Field strength [A/m]')
     elif 'I' in rxcomponent:
