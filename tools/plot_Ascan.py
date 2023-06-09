@@ -187,9 +187,9 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.set_ylabel(outputtext + ', field strength percentage [%]')
                     # detect peak and plot
                     # peak is the point where outputdata_norm is the largest in nerby 100 points
-                    for i in range(0, len(outputdata_norm)-100):
+                    for i in range(0, len(outputdata_norm)-50):
                         if i<100:  
-                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[0:i+100])) and np.abs(outputdata_norm[i]) > 0.5:
+                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[0:i+50])) and np.abs(outputdata_norm[i]) > 0.5:
                                 ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
                                 ax.set_ylim([-10, 10])
                                 if outputdata_norm[i] > 0:
@@ -197,7 +197,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                                 else:
                                     ax.text(time[i], outputdata_norm[i]/20, 'max_amp:'+'{:.2g}'.format(time[i]*10**7), fontsize=12)
                         else:
-                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[i-100:i+100])) and np.abs(outputdata_norm[i]) > 0.5:
+                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[i-50:i+50])) and np.abs(outputdata_norm[i]) > 0.5:
                                 ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
                                 if outputdata_norm[i] > 0:
                                     ax.text(time[i], outputdata_norm[i]+0.05, '{:.3g}'.format(time[i]*10**7), fontsize=12)
