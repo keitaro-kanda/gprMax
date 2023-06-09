@@ -18,7 +18,7 @@ tube_box = patches.Rectangle(xy=(31, 31), width=30, height=15, fc='w', label='Tu
 src_horizontal = patches.Arrow(x=38.5, y=32, dx=15, dy=0, width=1, fc='r', label='Source horizontal')
 src_vertical = patches.Arrow(x=46, y=41, dx=0, dy=10, width=1, fc='b', label='Source vertical') 
 
-src_x = 46
+src_x = 38.5
 src_y = 32
 src_point = patches.Circle(xy=(src_x, src_y), radius=0.5, fc='g', label='Source point')
 
@@ -30,7 +30,7 @@ ax.add_patch(src_horizontal)
 #ax.add_patch(src_vertical)
 ax.add_patch(src_point)
 
-time = [1.03, 1.5, 5.13, 6]
+time = [0.58, 1.03, 1.9, 2.33, 5.13, 6]
 tx_time = np.ones_like(time) * 0.088
 print(tx_time)
 
