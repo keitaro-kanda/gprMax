@@ -18,38 +18,38 @@
 
 ＜毎回変える＞tx,rxの設定
 #waveform: gaussian 1 100e6 my_src 
-#hertzian_dipole: z 66 38.5 0 my_src
+#hertzian_dipole: z 66 45 0 my_src
 
-#rx: 66 38.5 0
+#rx: 66 45 0
 
 
 
 =====A-scan用=====
-#geometry_view: 0 0 0 132 77 0.05 0.05 0.05 0.05 geometry_inner_v6 n
-#geometry_objects_write: 0 0 0 132 77 0.05 geometry_data
+geometry_view: 0 0 0 132 77 0.05 0.05 0.05 0.05 geometry_inner_v6 n
+geometry_objects_write: 0 0 0 132 77 0.05 geometry_data
 
-#python:
+python:
 for i in range(1, 81):
     print('#snapshot: 0 0 0 132 77 0.05 0.05 0.05 0.05 {} snapshot{}'.format(i*0.5e-8, i))
-#end_python:
+end_python:
 ==========
 
 
 
 =====B-scan用=====
-geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
+#geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
 
 ＜毎回変える＞
 水平
-src_steps: 0.2 0 0
-rx_steps: 0.2 0 0
+src_steps: 0.5 0 0
+rx_steps: 0.5 0 0
 
 鉛直
-src_steps: 0 0.2 0
-rx_steps: 0 0.2 0
+#src_steps: 0 -0.2 0
+#rx_steps: 0 -0.2 0
 
 ==========
 
 
 ＜毎回変える＞
-#output_dir: A-scan/v6_A_66_385
+#output_dir: B-scan/v6_B_66_45_y_-12m_02step

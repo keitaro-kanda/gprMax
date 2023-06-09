@@ -9,7 +9,7 @@ from matplotlib import tight_layout
 
 version = 'ver2'
 
-fig = plt.figure(facecolor='gray',figsize=(16, 7), tight_layout=True)
+fig = plt.figure(facecolor='gray',figsize=(17, 7), tight_layout=True)
 ax =plt.axes()
 
 
@@ -20,8 +20,8 @@ basalt_box_2 = patches.Rectangle(xy=(1, 46), width=130, height=30, fc='k')
 tube_box = patches.Rectangle(xy=(1, 31), width=130, height=15, fc='w', label='Vacuum')
 tube_dent = patches.Rectangle(xy=(71, 26), width=5, height=5, fc='w')
 
-src_horizontal = patches.Arrow(x=38.5, y=32, dx=15, dy=0, width=1, fc='r', label='Source horizontal')
-src_vertical = patches.Arrow(x=46, y=41, dx=0, dy=10, width=1, fc='b', label='Source vertical') 
+src_horizontal = patches.Arrow(x=56, y=32, dx=20, dy=0, width=1, fc='r', label='Source horizontal')
+src_vertical = patches.Arrow(x=66, y=45, dx=0, dy=-13, width=1, fc='b', label='Source vertical') 
 
 src_x = 66
 src_y = 38.5
@@ -36,8 +36,8 @@ ax.add_patch(tube_box)
 ax.add_patch(tube_dent)
 
 #ax.add_patch(src_horizontal)
-#ax.add_patch(src_vertical)
-ax.add_patch(src_point)
+ax.add_patch(src_vertical)
+#ax.add_patch(src_point)
 
 
 time = [0.592, 1.09, 1.59]
@@ -47,9 +47,9 @@ print(tx_time)
 tau = time - tx_time
 print(tau)
 
-for i in range(len(tau)):
-    range_i = patches.Circle(xy=(src_x, src_y), radius=tau[i]*30/2, ec='g', fill=False, label='tau='+str(time[i]))
-    ax.add_patch(range_i)
+#for i in range(len(tau)):
+#    range_i = patches.Circle(xy=(src_x, src_y), radius=tau[i]*30/2, ec='g', fill=False, label='tau='+str(time[i]))
+#    ax.add_patch(range_i)
 
 # set legend at the outside of the plot
 ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0, fontsize=20)
