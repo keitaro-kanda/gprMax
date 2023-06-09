@@ -30,7 +30,7 @@ ax.add_patch(src_horizontal)
 #ax.add_patch(src_vertical)
 ax.add_patch(src_point)
 
-time = [0.58, 1.03, 1.9, 2.33, 5.13, 6]
+time = [0.58, 1.03, 1.09, 1.21, 1.9, 2.33, 5.13, 6]
 tx_time = np.ones_like(time) * 0.088
 print(tx_time)
 
