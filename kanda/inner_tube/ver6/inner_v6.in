@@ -1,0 +1,55 @@
+#domain: 132 77 0.05
+
+#dx_dy_dz: 0.05 0.05 0.05
+
+#time_window: 4e-7
+
+
+#material: 6 0 1 0 basalt
+
+#box: 1 1 0 131 31 0.05 basalt
+#box: 1 46 0 131 76 0.05 basalt 
+#box: 1 31 0 131 46 0.05 free_space
+#box: 71 26 0 76 31 0.05 free_space
+
+
+#pml_cells: 20 20 0 20 20 0
+
+
+＜毎回変える＞tx,rxの設定
+#waveform: gaussian 1 100e6 my_src 
+#hertzian_dipole: z 66 38.5 0 my_src
+
+#rx: 66 38.5 0
+
+
+
+=====A-scan用=====
+#geometry_view: 0 0 0 132 77 0.05 0.05 0.05 0.05 geometry_inner_v6 n
+#geometry_objects_write: 0 0 0 132 77 0.05 geometry_data
+
+#python:
+for i in range(1, 81):
+    print('#snapshot: 0 0 0 132 77 0.05 0.05 0.05 0.05 {} snapshot{}'.format(i*0.5e-8, i))
+#end_python:
+==========
+
+
+
+=====B-scan用=====
+geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
+
+＜毎回変える＞
+水平
+src_steps: 0.2 0 0
+rx_steps: 0.2 0 0
+
+鉛直
+src_steps: 0 0.2 0
+rx_steps: 0 0.2 0
+
+==========
+
+
+＜毎回変える＞
+#output_dir: A-scan/v6_A_66_385
