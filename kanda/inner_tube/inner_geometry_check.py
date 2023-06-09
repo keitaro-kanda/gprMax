@@ -12,12 +12,15 @@ fig = plt.figure(figsize=(10, 7))
 ax =plt.axes()
 
 
-domain = patches.Rectangle(xy=(0, 0), width=92, height=92, fc='c', label='PML')
-basalt_box = patches.Rectangle(xy=(1, 1), width=90, height=90, fc='k', label='Basalt')
-tube_box = patches.Rectangle(xy=(31, 31), width=30, height=30, fc='w', label='Tube')
-src_horizontal = patches.Arrow(x=41, y=46, dx=15, dy=0, width=1, fc='r', label='Source horizontal')
+domain = patches.Rectangle(xy=(0, 0), width=92, height=77, fc='c', label='PML')
+basalt_box = patches.Rectangle(xy=(1, 1), width=90, height=75, fc='k', label='Basalt')
+tube_box = patches.Rectangle(xy=(31, 31), width=30, height=15, fc='w', label='Tube')
+src_horizontal = patches.Arrow(x=38.5, y=32, dx=15, dy=0, width=1, fc='r', label='Source horizontal')
 src_vertical = patches.Arrow(x=46, y=41, dx=0, dy=10, width=1, fc='b', label='Source vertical') 
-src_point = patches.Circle(xy=(41, 46), radius=0.5, fc='g', label='Source point')
+
+src_x = 46
+src_y = 32
+src_point = patches.Circle(xy=(src_x, src_y), radius=0.5, fc='g', label='Source point')
 
 
 ax.add_patch(domain) 
@@ -25,9 +28,9 @@ ax.add_patch(basalt_box)
 ax.add_patch(tube_box)
 ax.add_patch(src_horizontal)
 #ax.add_patch(src_vertical)
-#ax.add_patch(src_point)
+ax.add_patch(src_point)
 
-time = [0.759, 1.09, 1.29, 1.43, 1.76, 2.09, 2.33]
+time = [1.03, 1.5, 5.13, 6]
 tx_time = np.ones_like(time) * 0.088
 print(tx_time)
 
@@ -35,7 +38,7 @@ tau = time - tx_time
 print(tau)
 
 for i in range(len(tau)):
-    range_i = patches.Circle(xy=(41, 46), radius=tau[i]*30/2, ec='g', fill=False, label='tau='+str(time[i]))
+    range_i = patches.Circle(xy=(src_x, src_y), radius=tau[i]*30/2, ec='g', fill=False, label='tau='+str(time[i]))
     ax.add_patch(range_i)
 
 # set legend at the outside of the plot

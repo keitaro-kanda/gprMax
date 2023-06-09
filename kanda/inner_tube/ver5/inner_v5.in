@@ -14,11 +14,11 @@
 #pml_cells: 20 20 0 20 20 0
 
 
-tx,rxの設定
+＜毎回変える＞tx,rxの設定
 #waveform: gaussian 1 100e6 my_src 
-#hertzian_dipole: z 46 35.5 0 my_src
+#hertzian_dipole: z 46 32 0 my_src
 
-#rx: 46 35.5 0
+#rx: 46 32 0
 
 
 
@@ -37,9 +37,17 @@ end_python:
 =====B-scan用=====
 #geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
 
-#src_steps: 0 0.2 0
-#rx_steps: 0 0.2 0
+＜毎回変える＞
+水平
+src_steps: 0.2 0 0
+rx_steps: 0.2 0 0
+
+鉛直
+src_steps: 0 0.2 0
+rx_steps: 0 0.2 0
+
 ==========
 
 
-#output_dir: B-scan/v5_B_46_355_y50
+＜毎回変える＞
+#output_dir: A-scan/v5_A_46_32

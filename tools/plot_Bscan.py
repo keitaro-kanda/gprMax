@@ -75,7 +75,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
 
     # 観測の方向
-    radar_direction = 'vertical'
+    radar_direction = 'horizontal' # horizontal or vertical
 
     # プロット
     if radar_direction == 'horizontal':
