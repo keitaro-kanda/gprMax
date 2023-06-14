@@ -40,16 +40,16 @@ ax.add_patch(src_vertical)
 #ax.add_patch(src_point)
 
 
-time = [0.592, 1.09, 1.59]
+time = [0.759, 1.09, 1.29, 1.43, 1.76, 2.2, 2.33,  2.5, 2.92, 5.73]
 tx_time = np.ones_like(time) * 0.088
 print(tx_time)
 
 tau = time - tx_time
 print(tau)
 
-#for i in range(len(tau)):
-#    range_i = patches.Circle(xy=(src_x, src_y), radius=tau[i]*30/2, ec='g', fill=False, label='tau='+str(time[i]))
-#    ax.add_patch(range_i)
+for i in range(len(tau)):
+    range_i = patches.Circle(xy=(src_x, src_y), radius=tau[i]*30/2, ec='g', fill=False, label='tau='+str(time[i]))
+    ax.add_patch(range_i)
 
 # set legend at the outside of the plot
 ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0, fontsize=20)
