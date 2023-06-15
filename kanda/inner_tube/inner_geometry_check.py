@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import tight_layout
 
-version = 'ver2'
+version = 'ver7'
 
 fig = plt.figure(facecolor='gray',figsize=(17, 7), tight_layout=True)
 ax =plt.axes()
@@ -16,6 +16,7 @@ ax =plt.axes()
 domain = patches.Rectangle(xy=(0, 0), width=132, height=77, fc='c', label='PML')
 basalt_box_1 = patches.Rectangle(xy=(1, 1), width=130, height=30, fc='k', label='Basalt')
 basalt_box_2 = patches.Rectangle(xy=(1, 46), width=130, height=30, fc='k')
+basalt_box_3 = patches.Rectangle(xy=(46, 31), width=5, height=5, fc='k', label='Basalt3')
 
 tube_box = patches.Rectangle(xy=(1, 31), width=130, height=15, fc='w', label='Vacuum')
 tube_dent = patches.Rectangle(xy=(71, 26), width=5, height=5, fc='w')
@@ -34,9 +35,10 @@ ax.add_patch(basalt_box_2)
 
 ax.add_patch(tube_box)
 ax.add_patch(tube_dent)
+ax.add_patch(basalt_box_3)
 
-#ax.add_patch(src_horizontal)
-ax.add_patch(src_vertical)
+ax.add_patch(src_horizontal)
+#ax.add_patch(src_vertical)
 #ax.add_patch(src_point)
 
 
@@ -47,9 +49,9 @@ print(tx_time)
 tau = time - tx_time
 print(tau)
 
-for i in range(len(tau)):
-    range_i = patches.Circle(xy=(src_x, src_y), radius=tau[i]*30/2, ec='g', fill=False, label='tau='+str(time[i]))
-    ax.add_patch(range_i)
+#for i in range(len(tau)):
+#    range_i = patches.Circle(xy=(src_x, src_y), radius=tau[i]*30/2, ec='g', fill=False, label='tau='+str(time[i]))
+#    ax.add_patch(range_i)
 
 # set legend at the outside of the plot
 ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0, fontsize=20)
