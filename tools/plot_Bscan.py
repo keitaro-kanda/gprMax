@@ -81,7 +81,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     if radar_direction == 'horizontal':
         plt.imshow(outputdata_norm, 
                  extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
-                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
+                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.5, vmax=0.5)
         plt.xlabel('Trace number')
         plt.ylabel('Time [s]')
     else:

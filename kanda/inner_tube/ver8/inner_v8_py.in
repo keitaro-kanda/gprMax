@@ -1,0 +1,60 @@
+#python:
+from gprMax.input_cmd_funcs import *
+
+command('title', 'A or B scan from a metal cylinder buried in a dielectric half-space')
+
+grid_size = 0.002
+calculation_time = 3e-7
+
+scan_type = 'A-scan' #'A-scan' or 'B-scan'
+
+
+domain = domain(x=10, y=10, z=grid_size)
+dx = dx_dy_dz(grid_size, grid_size, grid_size)
+time_window(calculation_time)
+
+# マテリアルの設定
+material(permittivity=6, conductivity=0, permeability=1, magconductivity=0, name='basalt_6')
+material(permittivity=4, conductivity=0, permeability=1, magconductivity=0, name='basalt_4')
+
+
+# オブジェクトの設定
+basalt_box_1 = box(0, 0, 0,
+                domain.x, 2, domain.z, material='basalt_6')
+basalt_box_2 = box(0, 2, 0,
+                domain.x, 4, domain.z, material='basalt_4')
+basalt_box_3 = box(0, 9, 0,
+                domain.x, domain.y, domain.z, material='basalt_6') 
+
+
+# 波源の設定
+identifier = waveform('gaussian', amplitude=1, frequency=1e9, identifier='my_src')
+
+
+# アンテナ位置
+if scan_type == 'A-scan':
+    ant_x = domain.x / 2
+    ant_y = 5
+else:
+    ant_x = domain.x / 2 - 2
+    ant_y = 5
+
+
+# アンテナ設定
+tx = hertzian_dipole('z', ant_x, ant_y, 0, identifier)
+rx(tx.x, tx.y, tx.z)
+
+
+# Outputs, geometry and snapshots
+geometry_view(0, 0, 0,
+              domain.x, domain.y, domain.z,
+              dx.x, dx.y, dx.z,
+              'inner_v8', 'n')
+
+N = calculation_time/0.5e-8
+for i in range(1, N+1):
+    snapshot(0, 0, 0,
+             domain.x, domain.y, domain.z,
+             dx.x, dx.y, dx.z, i*(tsim/N), 'snapshot' + str(i))
+             
+#end_python:
