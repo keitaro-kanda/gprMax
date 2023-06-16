@@ -187,17 +187,25 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.set_ylabel(outputtext + ', field strength percentage [%]')
                     # detect peak and plot
                     # peak is the point where outputdata_norm is the largest in nerby 100 points
+
+                    # 検出条件の設定（最大強度に対するパーセンテージ）
+                    peak_detection_condition = 0.05
+                    # peak_detection_conditionをtextで表示する
+                    ax.text(1e-7, 0.5, 'peak_detection_condition:'+str(peak_detection_condition)+'[%]', fontsize=12)
                     for i in range(0, len(outputdata_norm)-50):
+
                         if i<100:  
-                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[0:i+50])) and np.abs(outputdata_norm[i]) > 0.5:
+                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[0:i+50])) and np.abs(outputdata_norm[i]) > peak_detection_condition:
                                 ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
-                                ax.set_ylim([-10, 10])
+                                ax.set_ylim([-1, 1])
+
+                                # テキストの生成位置
                                 if outputdata_norm[i] > 0:
-                                    ax.text(time[i], outputdata_norm[i]/20, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    ax.text(time[i], outputdata_norm[i]/200, '{:.2g}'.format(time[i]*10**7), fontsize=12)
                                 else:
-                                    ax.text(time[i], outputdata_norm[i]/20, 'max_amp:'+'{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    ax.text(time[i], -0.8, 'max_amp:'+'{:.2g}'.format(time[i]*10**7), fontsize=12)
                         else:
-                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[i-50:i+50])) and np.abs(outputdata_norm[i]) > 0.5:
+                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[i-50:i+50])) and np.abs(outputdata_norm[i]) > peak_detection_condition:
                                 ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
                                 if outputdata_norm[i] > 0:
                                     ax.text(time[i], outputdata_norm[i]+0.05, '{:.3g}'.format(time[i]*10**7), fontsize=12)

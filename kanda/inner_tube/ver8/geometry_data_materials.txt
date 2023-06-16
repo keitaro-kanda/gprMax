@@ -2,6 +2,3 @@
 #material: 1 0 1 0 free_space
 #material: 6 0 1 0 basalt_6
 #material: 4 0 1 0 basalt_4
-#material: 5 0 1 0 basalt_4+basalt_4+basalt_6+basalt_6
-#material: 2.5 0 1 0 free_space+free_space+basalt_4+basalt_4
-#material: 3.5 0 1 0 basalt_6+basalt_6+free_space+free_space
