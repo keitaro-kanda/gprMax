@@ -27,8 +27,8 @@
 
 
 =====A-scan用=====
-hertzian_dipole: z 5 5 0 my_src
-rx: 5 5 0
+#hertzian_dipole: z 5 5 0 my_src
+#rx: 5 5 0
 
 地形vtiファイル作成
 geometry_view: 0 0 0 10 10 0.01 0.01 0.01 0.01 geometry_inner_v8 n
@@ -37,22 +37,22 @@ geometry_view: 0 0 0 10 10 0.01 0.01 0.01 0.01 geometry_inner_v8 n
 geometry_objects_write: 0 0 0 10 10 0.01 geometry_data
 
 snapshot作成
-python:
+#python:
 for i in range(1, 81):
     print('#snapshot: 0 0 0 10 10 0.01 0.01 0.01 0.01 {} snapshot{}'.format(i*0.25e-8, i))
-end_python:
+#end_python:
 ==========
 
 
 
 =====B-scan用=====
-#hertzian_dipole: z 3 5 0 my_src
-#rx: 3 5 0
+hertzian_dipole: z 3 5 0 my_src
+rx: 3 5 0
 
 ＜毎回変える＞
 水平
-#src_steps: 0.2 0 0
-#rx_steps: 0.2 0 0
+src_steps: 0.2 0 0
+rx_steps: 0.2 0 0
 n回数：20
 
 鉛直
@@ -60,10 +60,10 @@ src_steps: 0 -0.2 0
 rx_steps: 0 -0.2 0
 
 地形読み込み
-geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
+#geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
 ==========
 
 
 ＜毎回変える＞
-output_dir: A-scan/v8_A_3_5_rough
+output_dir: A-scan/v8_A_3_5
 #output_dir: B-scan/v8_A_35_x4_02_rough
