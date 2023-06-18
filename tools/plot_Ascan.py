@@ -201,16 +201,28 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
                                 # テキストの生成位置
                                 if outputdata_norm[i] > 0:
-                                    ax.text(time[i], outputdata_norm[i]/200, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    if outputdata_norm[i] > 1:
+                                        ax.text(time[i], 0.8, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    else:
+                                        ax.text(time[i], outputdata_norm[i]+0.05, '{:.2g}'.format(time[i]*10**7), fontsize=12)
                                 else:
-                                    ax.text(time[i], -0.8, 'max_amp:'+'{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    if outputdata_norm[i] < -1:
+                                        ax.text(time[i], -0.8, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    else:
+                                        ax.text(time[i], outputdata_norm[i]-0.15, '{:.2g}'.format(time[i]*10**7), fontsize=12)
                         else:
                             if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[i-50:i+50])) and np.abs(outputdata_norm[i]) > peak_detection_condition:
                                 ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
                                 if outputdata_norm[i] > 0:
-                                    ax.text(time[i], outputdata_norm[i]+0.05, '{:.3g}'.format(time[i]*10**7), fontsize=12)
+                                    if outputdata_norm[i] > 1:
+                                        ax.text(time[i], 0.8, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    else:
+                                        ax.text(time[i], outputdata_norm[i]+0.05, '{:.2g}'.format(time[i]*10**7), fontsize=12)
                                 else:
-                                    ax.text(time[i], outputdata_norm[i]-0.15, '{:.3g}'.format(time[i]*10**7), fontsize=12)
+                                    if outputdata_norm[i] < -1:
+                                        ax.text(time[i], -0.8, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                    else:
+                                        ax.text(time[i], outputdata_norm[i]-0.15, '{:.2g}'.format(time[i]*10**7), fontsize=12)
 
                         
 
