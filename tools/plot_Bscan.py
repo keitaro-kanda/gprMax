@@ -84,6 +84,10 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.5, vmax=0.5)
         plt.xlabel('Trace number')
         plt.ylabel('Time [s]')
+        closeup = True
+        if closeup:
+            plt.ylim(1.0e-7, 0)
+            plt.minorticks_on( )
     else:
     # Create a plot rotated 90 degrees and then reversed up and down.
         plt.imshow(outputdata_norm.T[::-1],
