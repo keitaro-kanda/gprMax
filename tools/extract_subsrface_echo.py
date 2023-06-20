@@ -1,4 +1,6 @@
 import h5py
+import matplotlib.pyplot as plt
+import numpy as np
 
 from tools.outputfiles_merge import get_output_data
 from tools.plot_Bscan import mpl_plot
@@ -23,19 +25,43 @@ for filename in filename_array:
 
 
 # 地下エコー要素の抽出
-outputdata_extract_subsurface = outputdata_1 - outputdata_2 
-#f = h5py.File('outputdata_extract_subsurface.out', 'w')
+outputdata_extract = outputdata_1 - outputdata_2
 
-def PrintOnlyDataset(name, obj):
-    if isinstance(obj, h5py.Dataset):
-        print(name)
-        # print('\t',obj)
-outputdata_extract_subsurface.visititems(PrintOnlyDataset) 
+outputdata_norm = outputdata_extract / np.amax(np.abs(outputdata_1)) * 100
+
+fig = plt.figure(figsize=(20, 10), facecolor='w', edgecolor='w')
 
 
-# 地下エコー要素のプロット
-#for rx in range(1, nrx + 1):
-#    plthandle = mpl_plot(filename, outputdata_extract_subsurface, dt, rx, 'Ez')
+# 観測の方向
+radar_direction = 'horizontal' # horizontal or vertical
 
-#plthandle.show()
+# プロット
+if radar_direction == 'horizontal':
+    plt.imshow(outputdata_norm, 
+             extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-2, vmax=2)
+    plt.xlabel('Trace number')
+    plt.ylabel('Time [s]')
+    closeup = True # True or False
+    if closeup:
+        plt.ylim(1.0e-7, 0)
+        plt.minorticks_on( )
+else:
+# Create a plot rotated 90 degrees and then reversed up and down.
+    plt.imshow(outputdata_norm.T[::-1],
+            extent=[0, outputdata_norm.shape[0] * dt, 0, outputdata_norm.shape[1]], 
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
+    
+    plt.xlabel('Time [s]')
+    plt.ylabel('Trace number')
 
+plt.title('{}'.format(filename))
+
+# Grid properties
+ax = fig.gca()
+ax.grid(which='both', axis='both', linestyle='-.')
+
+cb = plt.colorbar()
+cb.set_label('Field strength percentage [%]')
+
+plt.show( )
