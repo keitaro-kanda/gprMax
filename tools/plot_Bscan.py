@@ -29,6 +29,7 @@ from gprMax.exceptions import CmdInputError
 from .outputfiles_merge import get_output_data
 
 
+# プロットを作る関数の作成部分？
 def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     """Creates a plot (with matplotlib) of the B-scan.
 
@@ -84,7 +85,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.5, vmax=0.5)
         plt.xlabel('Trace number')
         plt.ylabel('Time [s]')
-        closeup = False # True or False
+        closeup = True # True or False
         if closeup:
             plt.ylim(1.0e-7, 0)
             plt.minorticks_on( )
@@ -132,14 +133,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Open output file and read number of outputs (receivers)
-    f = h5py.File(args.outputfile, 'r')
-    nrx = f.attrs['nrx']
+    f = h5py.File(args.outputfile, 'r') # outファイルの読み込み？
+    nrx = f.attrs['nrx'] # Attribute(属性)の読み取り？、nrx:レシーバーの総数
     f.close()
 
     # Check there are any receivers
     if nrx == 0:
         raise CmdInputError('No receivers found in {}'.format(args.outputfile))
 
+    # データの取得とプロットの作成を実行？
     for rx in range(1, nrx + 1):
         outputdata, dt = get_output_data(args.outputfile, rx, args.rx_component)
         plthandle = mpl_plot(args.outputfile, outputdata, dt, rx, args.rx_component)
