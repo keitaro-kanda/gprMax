@@ -84,7 +84,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.5, vmax=0.5)
         plt.xlabel('Trace number')
         plt.ylabel('Time [s]')
-        closeup = True
+        closeup = False # True or False
         if closeup:
             plt.ylim(1.0e-7, 0)
             plt.minorticks_on( )

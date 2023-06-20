@@ -2,7 +2,7 @@
 
 #dx_dy_dz: 0.01 0.01 0.01
 
-#time_window: 2e-7
+#time_window: 3e-7
 
 #material: 6 0 1 0 basalt_6
 #material: 4 0 1 0 basalt_4
@@ -30,20 +30,20 @@ add_surface_roughness: 0 2 0 10 2 0.01 1.5 1 1 1.7 2.3 basalt_fractal_3
 
 
 =====A-scan用=====
-#hertzian_dipole: z 5 5 0 my_src
-#rx: 5 5 0
+hertzian_dipole: z 5 5 0 my_src
+rx: 5 5 0
 
 地形vtiファイル作成
-#geometry_view: 0 0 0 10 10 0.01 0.01 0.01 0.01 geometry_inner_v8 n
+geometry_view: 0 0 0 10 10 0.01 0.01 0.01 0.01 geometry/geometry_inner_v8_singlelayer n
 
 地形書き出し
-#geometry_objects_write: 0 0 0 10 10 0.01 geometry_data
+geometry_objects_write: 0 0 0 10 10 0.01 geometry_data_singlelayer
 
 snapshot作成
-#python:
+python:
 for i in range(1, 81):
     print('#snapshot: 0 0 0 10 10 0.01 0.01 0.01 0.01 {} snapshot{}'.format(i*0.25e-8, i))
-#end_python:
+end_python:
 ==========
 
 
@@ -63,10 +63,13 @@ src_steps: 0 -0.2 0
 rx_steps: 0 -0.2 0
 
 地形読み込み
-geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
+#geometry_objects_read: 0 0 0 geometry/geometry_data_singlelayer.h5 geometry_data_singlelayer_materials.txt
 ==========
 
 
 ＜毎回変える＞
 output_dir: A-scan/v8_A_3_5
-#output_dir: B-scan/v8_A_35_x4_02
+output_dir: A-scan/v8_A_3_5_singlelayer
+
+output_dir: B-scan/v8_A_35_x4_02
+#output_dir: B-scan/v8_A_35_x4_02_singlelayer
