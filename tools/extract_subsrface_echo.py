@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from tools.outputfiles_merge import get_output_data
-from tools.plot_Bscan import mpl_plot
 
 # 読み込むファイルの指定
 filename_original = 'kanda/inner_tube/ver8/B-scan/v8_A_35_x4_02_original/inner_v8_merged.out'
@@ -67,3 +66,7 @@ cb = plt.colorbar()
 cb.set_label('Field strength percentage [%]')
 
 plt.show( )
+
+output_dir = 'kanda/inner_tube/ver8/B-scan/extraction/'
+fig.savefig(output_dir + 'extract_original_singlelayer.png', dpi=150, format='png',
+            bbox_inches='tight', pad_inches=0.1)
