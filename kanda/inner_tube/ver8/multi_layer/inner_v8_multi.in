@@ -1,0 +1,58 @@
+#domain: 10 10 0.01
+
+#dx_dy_dz: 0.01 0.01 0.01
+
+#time_window: 2e-7
+
+#material: 6 0 1 0 basalt_6
+#material: 4 0 1 0 basalt_4
+
+
+#box: 0 9 0 10 10 0.01 basalt_6
+#box: 0 4 0 10 9 0.01 free_space
+#box: 0 0 0 10 4 0.01 basalt_4
+#box: 0 0 0 10 2 0.01 basalt_6
+
+
+#waveform: gaussian 1 500e6 my_src 
+
+
+
+
+=====A-scan用=====
+hertzian_dipole: z 5 5 0 my_src
+rx: 5 5 0
+
+地形vtiファイル作成
+geometry_view: 0 0 0 10 10 0.01 0.01 0.01 0.01 geometry_inner_v8_multi n
+
+地形書き出し
+geometry_objects_write: 0 0 0 10 10 0.01 geometry_data_multi
+
+snapshot作成
+python:
+for i in range(1, 81):
+    print('#snapshot: 0 0 0 10 10 0.01 0.01 0.01 0.01 {} snapshot{}'.format(i*0.25e-8, i))
+end_python:
+
+output_dir: A-scan
+==========
+
+
+
+=====B-scan用=====
+#hertzian_dipole: z 3 5 0 my_src
+#rx: 3 5 0
+
+＜毎回変える＞
+#src_steps: 0.2 0 0
+#rx_steps: 0.2 0 0
+n回数：20
+
+
+地形読み込み
+#geometry_objects_read: 0 0 0 geometry_data_multi.h5 geometry_data_multi_materials.txt
+
+#output_dir: B-scan
+==========
+

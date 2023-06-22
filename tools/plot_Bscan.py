@@ -85,7 +85,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.5, vmax=0.5)
         plt.xlabel('Trace number')
         plt.ylabel('Time [s]')
-        closeup = True # True or False
+        closeup = False # True or False
         if closeup:
             plt.ylim(1.0e-7, 0)
             plt.minorticks_on( )
@@ -98,7 +98,10 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
         plt.ylabel('Trace number')
 
 
-    plt.title('{}'.format(filename))
+    if closeup:
+        plt.title('{}'.format(filename) + '_closeup')
+    else:
+        plt.title('{}'.format(filename))
 
     # Grid properties
     ax = fig.gca()
@@ -116,7 +119,11 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     savefile = os.path.splitext(filename)[0]
     # fig.savefig(path + os.sep + savefile + '.pdf', dpi=None, format='pdf', 
     #             bbox_inches='tight', pad_inches=0.1)
-    fig.savefig(path + os.sep + savefile + '.png', dpi=150, format='png', 
+    if closeup:
+        fig.savefig(path + os.sep + savefile + '_closeup.png', dpi=150, format='png', 
+                 bbox_inches='tight', pad_inches=0.1)
+    else:
+        fig.savefig(path + os.sep + savefile + '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
 
     return plt
