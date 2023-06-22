@@ -7,8 +7,8 @@ import numpy as np
 from tools.outputfiles_merge import get_output_data
 
 # 読み込むファイルの指定
-filename_original = 'kanda/inner_tube/ver8/B-scan/v8_A_35_x4_02_original/inner_v8_merged.out'
-filename_onlysurface = 'kanda/inner_tube/ver8/B-scan/v8_A_35_x4_02_singlelayer/inner_v8_merged.out'
+filename_original = 'kanda/inner_tube/ver8/multi_layer/B-scan/inner_v8_multi_merged.out'
+filename_onlysurface = 'kanda/inner_tube/ver8/single_layer/B-scan/inner_v8_single_merged.out'
 filename_array = [filename_original, filename_onlysurface]
 
 
@@ -43,10 +43,14 @@ if radar_direction == 'horizontal':
             interpolation='nearest', aspect='auto', cmap='seismic', vmin=-2, vmax=2)
     plt.xlabel('Trace number')
     plt.ylabel('Time [s]')
+
+    # クローズアップのON/OFF
     closeup = True # True or False
     if closeup:
         plt.ylim(1.0e-7, 0)
         plt.minorticks_on( )
+
+
 else:
 # Create a plot rotated 90 degrees and then reversed up and down.
     plt.imshow(outputdata_norm.T[::-1],
@@ -56,7 +60,10 @@ else:
     plt.xlabel('Time [s]')
     plt.ylabel('Trace number')
 
-plt.title('{}'.format(filename))
+if closeup:
+    plt.title('{}'.format(filename) + '_closeup')
+else:
+    plt.title('{}'.format(filename))
 
 # Grid properties
 ax = fig.gca()
@@ -67,6 +74,10 @@ cb.set_label('Field strength percentage [%]')
 
 plt.show( )
 
-output_dir = 'kanda/inner_tube/ver8/B-scan/extraction/'
-fig.savefig(output_dir + 'extract_original_singlelayer.png', dpi=150, format='png',
+output_dir = 'kanda/inner_tube/ver8/extraction/'
+if closeup:
+    fig.savefig(output_dir + 'extract_subsurface_closeup.png', dpi=150, format='png',
             bbox_inches='tight', pad_inches=0.1)
+else:
+    fig.savefig(output_dir + 'extract_subsurface.png', dpi=150, format='png',
+                bbox_inches='tight', pad_inches=0.1)
