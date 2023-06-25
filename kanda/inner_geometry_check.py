@@ -15,7 +15,7 @@ ax =plt.axes()
 
 domain = patches.Rectangle(xy=(0, 0), width=10, height=10, ec='k',fill=False, label='domain')
 basalt_box_1 = patches.Rectangle(xy=(0, 0), width=10, height=2, fc='k', label=r'$\varepsilon_r=6.0$')
-basalt_box_2 = patches.Rectangle(xy=(0, 2), width=10, height=2, fc='grey', label=r'$\varepsilon_r=4.0$')
+basalt_box_2 = patches.Rectangle(xy=(0, 0), width=10, height=4, fc='grey', label=r'$\varepsilon_r=4.0$')
 basalt_box_3 = patches.Rectangle(xy=(0, 9), width=10, height=1, fc='k')
 
 src_horizontal = patches.Arrow(x=56, y=32, dx=20, dy=0, width=1, fc='r', label='Source horizontal')
@@ -27,7 +27,7 @@ src_point = patches.Circle(xy=(src_x, src_y), radius=0.05, fc='r', label='Source
 
 
 ax.add_patch(domain) 
-ax.add_patch(basalt_box_1)
+#ax.add_patch(basalt_box_1)
 ax.add_patch(basalt_box_2)
 
 ax.add_patch(basalt_box_3)
@@ -37,9 +37,9 @@ ax.add_patch(basalt_box_3)
 ax.add_patch(src_point)
 
 
-time = [0.076, 0.28, 0.35, 0.41, 0.62]
-tx_time = 0.009
-tx_time_array = np.ones_like(time) * 0.009
+time = [0.085, 0.29, 0.35, 0.42, 0.62, 0.69]
+tx_time = 0.018
+tx_time_array = np.ones_like(time) * tx_time
 #ax.text(domain.get_width+1, 1, 'tx time: '+str(tx_time), fontsize=20)
 
 tau = time - tx_time_array
