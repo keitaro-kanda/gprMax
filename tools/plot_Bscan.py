@@ -25,6 +25,7 @@ import numpy as np
 from matplotlib.colors import LogNorm
 
 from gprMax.exceptions import CmdInputError
+from gprMax.input_cmd_funcs import src_steps
 
 from .outputfiles_merge import get_output_data
 
@@ -77,17 +78,19 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
 
     # 観測の方向
     radar_direction = 'horizontal' # horizontal or vertical
+    # 観測の間隔
+    src_step = 0.4 #[m]
 
     # プロット
     if radar_direction == 'horizontal':
         plt.imshow(outputdata_norm, 
-                 extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
+                 extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
-        plt.xlabel('Trace number')
+        plt.xlabel('Horizontal distance [m]')
         plt.ylabel('Time [s]')
-        closeup = False # True or False
+        closeup = True # True or False
         if closeup:
-            plt.ylim(1.0e-7, 0)
+            plt.ylim(2.0e-7, 0)
             plt.minorticks_on( )
     else:
     # Create a plot rotated 90 degrees and then reversed up and down.

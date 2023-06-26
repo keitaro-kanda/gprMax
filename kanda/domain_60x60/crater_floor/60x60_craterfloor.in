@@ -1,0 +1,66 @@
+#domain: 60 60 0.1
+
+#dx_dy_dz: 0.1 0.1 0.1
+
+#time_window: 7e-7
+
+#material: 4 0 1 0 basalt_4
+#material: 6 0 1 0 basalt_6 
+#material: 8 0 1 0 basalt_8 
+
+
+床
+#box: 0 0 0 60 20 0.1 basalt_6 n
+ピット壁面
+#box: 0 35 0 5 60 0.1 basalt_6 n
+#box: 55 35 0 60 60 0.1 basalt_6 n
+
+クレーター
+#cylinder: 30 20 0 30 20 0.1 10 basalt_4
+#box: 0 17 0 60 20 0.1 basalt_4
+#box: 0 20 0 60 35 0.1 free_space
+
+
+#waveform: gaussian 1 50e6 my_src 
+
+
+
+
+=====A-scan用=====
+hertzian_dipole: z 30.5 21 0 my_src
+rx: 29.5 21 0
+
+地形vtiファイル作成
+geometry_view: 0 0 0 60 60 0.1 0.1 0.1 0.1 geometry_60x60_craterfloor n
+
+地形書き出し
+geometry_objects_write: 0 0 0 60 60 0.1 geometry_data
+
+snapshot作成
+python:
+for i in range(1, 141):
+    print('#snapshot: 0 0 0 60 60 0.1 0.1 0.1 0.1 {} snapshot{}'.format(i*0.25e-8, i))
+end_python:
+
+output_dir: A-scan
+==========
+
+
+
+=====B-scan用=====
+20 m探査したい
+#hertzian_dipole: z 15.5 21 0 my_src
+#rx: 14.5 21 0
+
+＜毎回変える＞
+#src_steps: 0.4 0 0
+#rx_steps: 0.4 0 0
+n回数：75
+
+
+地形読み込み
+geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
+
+#output_dir: B-scan
+==========
+
