@@ -90,7 +90,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
         plt.ylabel('Time [s]')
         closeup = True # True or False
         if closeup:
-            plt.ylim(2.0e-7, 0)
+            plt.ylim(3.5e-7, 0)
             plt.minorticks_on( )
     else:
     # Create a plot rotated 90 degrees and then reversed up and down.
