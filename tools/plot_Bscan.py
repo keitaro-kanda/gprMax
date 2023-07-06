@@ -85,12 +85,12 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     if radar_direction == 'horizontal':
         plt.imshow(outputdata_norm, 
                  extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
-                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
+                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1, vmax=1)
         plt.xlabel('Horizontal distance [m]')
         plt.ylabel('Time [s]')
-        closeup = True # True or False
+        closeup = False # True or False
         if closeup:
-            plt.ylim(3.5e-7, 0)
+            plt.ylim(2.5e-7, 0)
             plt.minorticks_on( )
     else:
     # Create a plot rotated 90 degrees and then reversed up and down.
