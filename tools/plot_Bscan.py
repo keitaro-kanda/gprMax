@@ -79,13 +79,13 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     # 観測の方向
     radar_direction = 'horizontal' # horizontal or vertical
     # 観測の間隔
-    src_step = 0.4 #[m]
+    src_step = 0.2 #[m]
 
     # プロット
     if radar_direction == 'horizontal':
         plt.imshow(outputdata_norm, 
                  extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
-                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1, vmax=1)
+                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
         plt.xlabel('Horizontal distance [m]')
         plt.ylabel('Time [s]')
         closeup = False # True or False
