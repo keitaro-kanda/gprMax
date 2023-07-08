@@ -79,8 +79,6 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     # 観測の方向
     radar_direction = 'horizontal' # horizontal or vertical
     # 観測の間隔
-    c = rx_steps(path, rxnumber)
-    print(c)
     src_step = 0.2 #[m]
 
     # プロット
