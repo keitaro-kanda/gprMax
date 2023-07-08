@@ -17,8 +17,39 @@ for rx in range(1, nrx + 1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
 
 
-# outputdataをtxtファイルに書き出し
-file_path = 'kanda/domain_10x10/rock'
-np.savetxt('outputdata.txt', outputdata, delimiter=',')
+# outputdataの行を移動平均
+outputdata_ave = np.zeros(outputdata.shape)
+for i in range(outputdata.shape[0]):
+    outputdata_ave[i] = np.mean(outputdata[i:i+5], axis=1)
 
+# 観測の間隔
+src_step = 0.2 #[m]
+
+fig = plt.figure(figsize=(20, 10), facecolor='w', edgecolor='w')
+
+plt.imshow(outputdata_ave,, 
+             extent=[0, outputdata_ave.shape[1] * src_step, outputdata_ave.shape[0] * dt, 0], 
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-2, vmax=2)
+
+
+plt.xlabel('Trace number')
+plt.ylabel('Time [s]')
+
+# クローズアップのON/OFF
+closeup = True # True or False
+if closeup:
+    plt.ylim(1.0e-7, 0)
+    plt.minorticks_on( )
+
+if closeup:
+    plt.title('{}'.format('closeup'))
+
+# Grid properties
+ax = fig.gca()
+ax.grid(which='both', axis='both', linestyle='-.')
+
+cb = plt.colorbar()
+cb.set_label('Field strength percentage [%]')
+
+plt.show( )
 
