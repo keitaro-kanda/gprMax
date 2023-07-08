@@ -19,17 +19,19 @@ for rx in range(1, nrx + 1):
 
 # outputdataの行を移動平均
 outputdata_ave = np.zeros(outputdata.shape)
-for i in range(outputdata.shape[0]):
-    outputdata_ave[i] = np.mean(outputdata[i:i+5], axis=1)
+for i in range(outputdata.shape[0]): # 列
+    for j in range(outputdata.shape[1] - 2): # 行
+        outputdata_ave[i, j] = (outputdata[i, j-2] + outputdata[i, j-1] + outputdata[i, j] + \
+                                outputdata[i, j+1] + outputdata[i, j+2]) / 5
 
 # 観測の間隔
 src_step = 0.2 #[m]
 
 fig = plt.figure(figsize=(20, 10), facecolor='w', edgecolor='w')
 
-plt.imshow(outputdata_ave,, 
+plt.imshow(outputdata_ave,
              extent=[0, outputdata_ave.shape[1] * src_step, outputdata_ave.shape[0] * dt, 0], 
-            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-2, vmax=2)
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1, vmax=1)
 
 
 plt.xlabel('Trace number')
@@ -38,7 +40,7 @@ plt.ylabel('Time [s]')
 # クローズアップのON/OFF
 closeup = True # True or False
 if closeup:
-    plt.ylim(1.0e-7, 0)
+    plt.ylim(1.5e-7, 0)
     plt.minorticks_on( )
 
 if closeup:
@@ -53,3 +55,5 @@ cb.set_label('Field strength percentage [%]')
 
 plt.show( )
 
+print(outputdata.shape)
+print(outputdata_ave.shape)
