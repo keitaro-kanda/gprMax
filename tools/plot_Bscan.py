@@ -25,7 +25,7 @@ import numpy as np
 from matplotlib.colors import LogNorm
 
 from gprMax.exceptions import CmdInputError
-from gprMax.input_cmd_funcs import src_steps
+from gprMax.input_cmd_funcs import rx_steps
 
 from .outputfiles_merge import get_output_data
 
@@ -79,7 +79,9 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     # 観測の方向
     radar_direction = 'horizontal' # horizontal or vertical
     # 観測の間隔
-    src_step = src_steps #[m]
+    c = rx_steps(path, rxnumber)
+    print(c)
+    src_step = 0.2 #[m]
 
     # プロット
     if radar_direction == 'horizontal':
