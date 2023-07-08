@@ -19,6 +19,6 @@ for rx in range(1, nrx + 1):
 
 # outputdataをtxtファイルに書き出し
 file_path = 'kanda/domain_10x10/rock'
-np.savetxt('outputdata.txt', outputdata, delimiter=',')
+np.savetxt(file_path + 'outputdata.txt', outputdata, delimiter=',')
 
 
