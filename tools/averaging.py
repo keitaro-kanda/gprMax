@@ -17,10 +17,16 @@ for rx in range(1, nrx + 1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
 
 
+<<<<<<< HEAD
 # outputdataの行を移動平均
 outputdata_ave = np.zeros(outputdata.shape)
 for i in range(outputdata.shape[0]):
     outputdata_ave[i] = np.mean(outputdata[i:i+5], axis=1)
+=======
+# outputdataをtxtファイルに書き出し
+file_path = 'kanda/domain_10x10/rock'
+np.savetxt(file_path + 'outputdata.txt', outputdata, delimiter=',')
+>>>>>>> 4f3429945ddb6da6498e472fa5a56d5ecf599bdb
 
 # 観測の間隔
 src_step = 0.2 #[m]
