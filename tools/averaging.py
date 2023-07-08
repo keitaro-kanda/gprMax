@@ -13,5 +13,12 @@ output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
 output_data.close()
 
+for rx in range(1, nrx + 1):
+    outputdata, dt = get_output_data(file_name, rx, 'Ez')
+
+
+# outputdataをtxtファイルに書き出し
+file_path = 'kanda/domain_10x10/rock'
+np.savetxt('outputdata.txt', outputdata, delimiter=',')
 
 
