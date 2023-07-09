@@ -2,7 +2,7 @@
 
 #dx_dy_dz: 0.01 0.01 0.01
 
-#time_window: 2e-7
+#time_window: 4e-7
 
 
 =====地形読み込み=====
@@ -29,5 +29,5 @@ geometry_objects_read: 0 0 0 geometry/geometry_data_3layers.h5 geometry/geometry
 #rx_steps: 0.2 0 0
 n回数：40
 
-#output_dir: B-scan/3layers/v2/0.2step_n40_ricker
+#output_dir: B-scan/3layers/v2/0.2step_n40_ricker_4e-7
 ==========
