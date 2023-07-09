@@ -85,12 +85,14 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     if radar_direction == 'horizontal':
         plt.imshow(outputdata_norm, 
                  extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
-                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1, vmax=1)
+                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-3, vmax=3)
         plt.xlabel('Horizontal distance [m]')
         plt.ylabel('Time [s]')
         closeup = True # True or False
         if closeup:
-            plt.ylim(1.5e-7, 0)
+            closeup_start = 0
+            closeup_end = 0.25
+            plt.ylim(closeup_end*1e-7, closeup_start*1e-7)
             plt.minorticks_on( )
     else:
     # Create a plot rotated 90 degrees and then reversed up and down.
@@ -102,7 +104,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
 
 
     if closeup:
-        plt.title('{}'.format(filename) + '_closeup')
+        plt.title('{}'.format(filename) + '_closeup_'+str(closeup_start)+'-'+str(closeup_end))
     else:
         plt.title('{}'.format(filename))
 
@@ -123,7 +125,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     # fig.savefig(path + os.sep + savefile + '.pdf', dpi=None, format='pdf', 
     #             bbox_inches='tight', pad_inches=0.1)
     if closeup:
-        fig.savefig(path + os.sep + savefile + '_closeup.png', dpi=150, format='png', 
+        fig.savefig(path + os.sep + savefile + '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
     else:
         fig.savefig(path + os.sep + savefile + '.png', dpi=150, format='png', 
