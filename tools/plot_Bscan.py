@@ -50,28 +50,6 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     fig = plt.figure(num=filename + ' - rx' + str(rxnumber), 
                      figsize=(20, 10), facecolor='w', edgecolor='w')
     
-    """ 追加（logスケールにするやつ
-    for i in range(len(outputdata)):
-        for j in range(len(outputdata[i])):
-            if outputdata[i][j] > 0:
-                outputdata[i][j] = np.log10(outputdata[i][j])
-            elif outputdata[i][j] < 0:
-                outputdata[i][j] = -np.log10(-outputdata[i][j])
-            #elif outputdata[i][j] == 0:
-            #    outputdata[i][j] = 0
-    追加 """
-
-    """ 追加 （dBスケールっぽくするやつ）
-    # Check the elements of "outputdata" one by one using a for statement, and if they are positive, rewrite the array elements to 1
-    for i in range(len(outputdata)):
-        for j in range(len(outputdata[i])):
-            if outputdata[i][j] > 0:
-                outputdata[i][j] = - 10 * np.log10(outputdata[i][j] / np.amax(outputdata))
-            elif outputdata[i][j] < 0:
-                outputdata[i][j] = 10 * np.log10(outputdata[i][j] / np.amin(outputdata))
-            elif outputdata[i][j] == 0:
-                outputdata[i][j] = 0
-    追加 """
 
     # [%]に変換
     outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
@@ -88,7 +66,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-3, vmax=3)
         plt.xlabel('Horizontal distance [m]')
         plt.ylabel('Time [s]')
-        closeup = True # True or False
+        closeup = False # True or False
         if closeup:
             closeup_start = 0
             closeup_end = 0.25
