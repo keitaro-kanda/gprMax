@@ -2,27 +2,27 @@
 
 #dx_dy_dz: 0.01 0.01 0.01
 
-#time_window: 4e-7
+#time_window: 2e-7
 
 #material: 5 0 1 0 basalt_5
 #material: 7 0 1 0 basalt_7
 
 
 ＜床＞
-fractal_box: 0 0 0 10 8 0.01 1.5 1 1 1 1 basalt_5 basalt5_fractal n
-add_surface_roughness 0 8 0 10 8 0.01 1.5 1 1 9.7 10.3 basalt5_fractal
+#fractal_box: 0 0 0 10 8 0.01 1.5 1 1 1 1 basalt_5 basalt5_fractal n
+#add_surface_roughness 0 8 0 10 8 0.01 1.5 1 1 9.7 10.3 basalt5_fractal
 
 ＜埋没岩塊の設定＞
-box: 4 2.5 0 6 4.5 0.01 basalt_7 n
+#box: 4 2.5 0 6 4.5 0.01 basalt_7 n
 ＜岩塊の角＞
-triangle: 4 2.5 0 6 2.5 0 4.2 2 0 0.01 basalt_7 n
-triangle: 6 2.5 0 6 4.5 0 6.5 3 0 0.01 basalt_7 n
-triangle: 4 4.5 0 6 4.5 0 5.2 5 0 0.01 basalt_7 n
-triangle: 4 2.5 0 4 4.5 0 3.5 3.5 0 0.01 basalt_7 n
+#triangle: 4 2.5 0 6 2.5 0 4.2 2 0 0.01 basalt_7 n
+#triangle: 6 2.5 0 6 4.5 0 6.5 3 0 0.01 basalt_7 n
+#triangle: 4 4.5 0 6 4.5 0 5.2 5 0 0.01 basalt_7 n
+#triangle: 4 2.5 0 4 4.5 0 3.5 3.5 0 0.01 basalt_7 n
 
 
 ＜波源設定＞
-#waveform: gaussian 1 500e6 my_src 
+#waveform: ricker 1 500e6 my_src 
 
 
 
@@ -38,29 +38,29 @@ geometry_objects_read: 0 0 0 geometry_data.h5 geometry_data_materials.txt
 
 
 =====A-scan用=====
-hertzian_dipole: z  5.5 9 0 my_src
-rx:  4.5 9 0
+#hertzian_dipole: z  5.25 9 0 my_src
+#rx:  4.75 9 0
 
 snapshot作成
-python:
+#python:
 for i in range(1, 80):
     print('#snapshot: 0 0 0 10 10 0.01 0.1 0.1 0.01 {} snapshot{}'.format(i*0.25e-8, i))
-end_python:
+#end_python:
 
-output_dir: A-scan
+#output_dir: A-scan/roughsurface_ricker
 ==========
 
 
 
 =====B-scan用=====
-#hertzian_dipole: z 1.5 9 0 my_src
-#rx: 0.5 9 0
+hertzian_dipole: z 1.5 9 0 my_src
+rx: 0.5 9 0
 
 ＜毎回変える＞
-#src_steps: 0.2 0 0
-#rx_steps: 0.2 0 0
+src_steps: 0.2 0 0
+rx_steps: 0.2 0 0
 n回数：40
 
-#output_dir: B-scan/0.2step_n40_roughsurface
+output_dir: B-scan/0.2step_n40_ricker
 ==========
 
