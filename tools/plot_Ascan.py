@@ -25,6 +25,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import markers
+from numpy import size
 
 from gprMax.exceptions import CmdInputError
 from gprMax.receivers import Rx
@@ -180,11 +181,18 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.plot(time, outputdata, 'r', lw=2, label=outputtext)
                     ax.set_ylabel(outputtext + ', field strength [V/m]')
                 # ax.set_ylim([-15, 20])
+
+                # =====Ezのプロット=====
                 elif output == 'Ez':
                     outputdata_norm = outputdata/np.amax(np.abs(outputdata)) * 100
                     ax = plt.subplot(gs[2, 0])
                     ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext) 
-                    ax.set_ylabel(outputtext + ', field strength percentage [%]')
+                    ax.set_ylim([-3, 3])
+                    ax.set_xlim([0.3e-7, 0.8e-7])
+                    ax.set_ylabel(outputtext + ' strength [%]', size=18)
+                    ax.tick_params(labelsize=18)
+
+                    # =====ピーク検出=====
                     # detect peak and plot
                     # peak is the point where outputdata_norm is the largest in nerby 100 points
 
@@ -202,14 +210,14 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                                 # テキストの生成位置
                                 if outputdata_norm[i] > 0:
                                     if outputdata_norm[i] > 1:
-                                        ax.text(time[i], 0.8, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                        ax.text(time[i], 0.8, '{:.3g}'.format(time[i]*10**7), fontsize=12)
                                     else:
-                                        ax.text(time[i], outputdata_norm[i]+0.05, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                        ax.text(time[i], outputdata_norm[i]+0.05, '{:.3g}'.format(time[i]*10**7), fontsize=12)
                                 else:
                                     if outputdata_norm[i] < -1:
-                                        ax.text(time[i], -0.8, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                        ax.text(time[i], -0.8, '{:.3g}'.format(time[i]*10**7), fontsize=12)
                                     else:
-                                        ax.text(time[i], outputdata_norm[i]-0.15, '{:.2g}'.format(time[i]*10**7), fontsize=12)
+                                        ax.text(time[i], outputdata_norm[i]-0.15, '{:.3g}'.format(time[i]*10**7), fontsize=12)
                         else:
                             if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[i-50:i+50])) and np.abs(outputdata_norm[i]) > peak_detection_condition:
                                 ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
@@ -224,7 +232,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                                     else:
                                         ax.text(time[i], outputdata_norm[i]-0.15, '{:.2g}'.format(time[i]*10**7), fontsize=12)
 
-                        
+                    # =====ピーク検出=====
 
 
 

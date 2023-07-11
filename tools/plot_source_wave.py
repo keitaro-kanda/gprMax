@@ -20,12 +20,12 @@ import argparse
 import os
 import sys
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from numpy import size
 
 from gprMax.exceptions import CmdInputError
-from gprMax.utilities import fft_power
-from gprMax.utilities import round_value
+from gprMax.utilities import fft_power, round_value
 from gprMax.waveforms import Waveform
 
 
@@ -115,8 +115,8 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False):
 
         # Plot waveform
         ax1.plot(time, waveform, 'r', lw=2)
-        ax1.set_xlabel('Time [s]')
-        ax1.set_ylabel('Amplitude')
+        ax1.set_xlabel('Time [s]', size=20)
+        ax1.set_ylabel('Amplitude', size=20)
 
         # Plot frequency spectra
         markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.', use_line_collection=True)
@@ -124,8 +124,14 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False):
         plt.setp(stemlines, 'color', 'r')
         plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
         ax2.plot(freqs[pltrange], power[pltrange], 'r', lw=2)
-        ax2.set_xlabel('Frequency [Hz]')
-        ax2.set_ylabel('Power [dB]')
+        ax2.set_xlabel('Frequency [Hz]', size=20)
+        ax2.set_ylabel('Power [dB]', size=20)
+
+        # メモリサイズの変更
+        ax1.tick_params(labelsize=18)
+        ax2.tick_params(labelsize=18)
+
+        
 
     else:
         fig, ax1 = plt.subplots(num=w.type, figsize=(20, 10), facecolor='w', edgecolor='w')

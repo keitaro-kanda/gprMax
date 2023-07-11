@@ -15,8 +15,8 @@ add_surface_roughness: 0 8 0 20 8 0.01 1.5 1 1 7.8 8.2 regolith_fractal_1
 
 
 ＜petmittivity　=　5　layer＞
-fractal_box: 0 0 0 20 6 0.01 1.5 1 1 1 1 basalt_5 basalt5_fractal
-add_surface_roughness: 0 6 0 20 6 0.01 1.5 1 1 5.8 6.2 basalt5_fractal
+fractal_box: 0 0 0 20 8 0.01 1.5 1 1 1 1 basalt_5 basalt5_fractal
+add_surface_roughness: 0 8 0 20 8 0.01 1.5 1 1 7.8 8.2 basalt5_fractal
 
 
 ＜ancient　regolith　layer＞
@@ -35,15 +35,15 @@ triangle: 9 2.5 0 9 4.5 0 8.5 3.5 0 0.01 basalt_8 n
 
 =====geometry making=====
 ＜地形vtiファイル作成＞
-geometry_view: 0 0 0 20 10 0.01 0.01 0.01 0.01 5region_singlerock n
+geometry_view: 0 0 0 20 10 0.01 0.01 0.01 0.01 4region_singlerock n
 
 ＜地形書き出し＞
-geometry_objects_write: 0 0 0 20 10 0.01 5region_singlerock
+geometry_objects_write: 0 0 0 20 10 0.01 4region_singlerock
 ==========
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 5region_singlerock.h5 5region_singlerock_materials.txt
+#geometry_objects_read: 0 0 0 4region_singlerock.h5 4region_singlerock_materials.txt
 ==========
 
 
@@ -51,8 +51,8 @@ geometry_objects_write: 0 0 0 20 10 0.01 5region_singlerock
 ＜波源設定＞
 #waveform: ricker 1 500e6 my_src 
 
-#hertzian_dipole: z 13.35 9 0 my_src
-#rx: 12.85 9 0
+#hertzian_dipole: z 11.75 9 0 my_src
+#rx: 11.25 9 0
 
 <snapshot作成>
 #python:
