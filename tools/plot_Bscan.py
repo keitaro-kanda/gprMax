@@ -66,7 +66,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-3, vmax=3)
         plt.xlabel('Horizontal distance [m]')
         plt.ylabel('Time [s]')
-        closeup = True # True or False
+        closeup = False # True or False
         if closeup:
             closeup_start = 0.25
             closeup_end = 0.75

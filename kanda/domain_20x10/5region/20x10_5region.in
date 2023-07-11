@@ -49,7 +49,7 @@ geometry_objects_read: 0 0 0 geometry_data_roughsurface.h5 geometry_data_materia
 geometry_objects_read: 0 0 0 geometry/geometry_data_3layers.h5 geometry/geometry_data_3layers_materials.txt
 
 <3layers_v2>
-#geometry_objects_read: 0 0 0 geometry/geometry_3layers_v2.h5 geometry/geometry_data_3layers_materials.txt
+geometry_objects_read: 0 0 0 geometry/geometry_3layers_v2.h5 geometry/geometry_data_3layers_materials.txt
 ==========
 
 
