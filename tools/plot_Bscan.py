@@ -66,10 +66,10 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-3, vmax=3)
         plt.xlabel('Horizontal distance [m]')
         plt.ylabel('Time [s]')
-        closeup = False # True or False
+        closeup = True # True or False
         if closeup:
-            closeup_start = 0.25
-            closeup_end = 0.75
+            closeup_start = 0
+            closeup_end = 0.25
             plt.ylim(closeup_end*1e-7, closeup_start*1e-7)
             plt.minorticks_on( )
     else:
