@@ -57,7 +57,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     # 観測の方向
     radar_direction = 'horizontal' # horizontal or vertical
     # 観測の間隔
-    src_step = 0.2 #[m]
+    src_step = 1 #[m]
 
     # プロット
     if radar_direction == 'horizontal':
@@ -71,7 +71,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
             closeup_start = 0
             closeup_end = 1.0
             plt.ylim(closeup_end*1e-7, closeup_start*1e-7)
-            plt.xlim(4, 12)
+            plt.xlim(35, 55)
             plt.minorticks_on( )
     else:
     # Create a plot rotated 90 degrees and then reversed up and down.
