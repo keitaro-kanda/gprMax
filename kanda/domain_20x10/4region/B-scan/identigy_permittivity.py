@@ -1,9 +1,5 @@
-import time
-from cProfile import label
-
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy import size
 
 # 真空を伝播する時間
 c = 299792458 # [m/s]
@@ -30,7 +26,7 @@ for i in range(len(time_array)):
     index[i] = l
 
     epsilon_r1[i] = ((time_array[i]) **2 - (rx40_time)**2) * (c /2 /l)**2 
-    epsilon_r2[i] = (c**4 * rx40_time**2)*(time_array[i]**2 - rx40_time**2) / ((2 * l * (c * rx40_time - 2))**2)
+    epsilon_r2[i] = (c**4 * rx40_time**2)*(time_array[i](1 - 2/c/rx40_time))**2 - (rx40_time-2/c)**2 / ((2 * l * (c * rx40_time - 2))**2)
 
 
 plt.plot(index, epsilon_r1, label='no vacuum rivised')
