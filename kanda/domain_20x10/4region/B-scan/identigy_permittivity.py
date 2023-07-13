@@ -1,3 +1,5 @@
+import time
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -22,11 +24,24 @@ index = np.zeros(len(time_array))
 
 for i in range(len(time_array)):
 
-    l = (i + 1) * 0.2 # [m]
-    index[i] = l
+    L = (i + 1) * 0.2 # [m]
+    index[i] = L
 
-    epsilon_r1[i] = ((time_array[i]) **2 - (rx40_time)**2) * (c /2 /l)**2 
-    epsilon_r2[i] = (c**4 * rx40_time**2)*(time_array[i](1 - 2/c/rx40_time))**2 - (rx40_time-2/c)**2 / ((2 * l * (c * rx40_time - 2))**2)
+    # 
+    epsilon_r1[i] = ((time_array[i]) **2 - (rx40_time)**2) * (c /2 /L)**2 
+
+    #tau1 = time_array[i]*(1 - 2/c/rx40_time) # 
+    #tau0 = rx40_time - 2/c
+    #epsilon_r2[i] = (c**4 * rx40_time**2)*(tau1**2 - tau0**2) / ((2 * l * (c * rx40_time - 2))**2)
+
+    #
+    time_1m = 2/c
+    time_perp = rx40_time - time_1m # A
+    time_oblique_vacuum = time_1m * time_array[i] / rx40_time # tau1'
+    time_oblique_ground = time_array[i] - time_oblique_vacuum # B
+
+    v_ground = 2 * L /np.sqrt(time_oblique_ground**2 - time_perp**2) - c * time_array[i] / time_oblique_ground
+    epsilon_r2[i] = (c / v_ground)**2
 
 
 plt.plot(index, epsilon_r1, label='no vacuum rivised')
