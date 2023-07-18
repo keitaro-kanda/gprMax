@@ -1,0 +1,69 @@
+#domain: 550 270 0.2
+
+#dx_dy_dz: 0.2 0.2 0.2
+
+#time_window: 2e-6
+
+#material: 4 0 1 0 regolith
+#material: 6 0 1 0 basalt_6
+#material: 5 0 1 0 basalt_5
+
+
+＜ベースの玄武岩層＞
+#box: 0 0 0 550 270 0.2 basalt_6
+
+＜レゴリス層＞
+#box: 0 0 0 550 2 0.2 regolith
+
+ ＜リル側面＞
+#triangle: 0 0 0 50 0 0 0 270 0 0.2 basalt_5
+#triangle: 500 0 0 550 0 0 550 270 0 0.2 basalt_5
+
+＜縦孔とチューブ＞
+#fractal_box: 250 245 0 300 270 0.2 1.5 1 1 1 1 free_space hole_fractal
+#add_surface_roughness: 250 245 0 250 270 0.2 1.5 1 1 249.6 250.4 hole_fractal
+#add_surface_roughness: 300 245 0 300 270 0.2 1.5 1 1 299.6 300.4 hole_fractal
+
+#fractal_box: 200 230 0 350 245 0.2 1.5 1 1 1 1 free_space tube_fractal
+#add_surface_roughness: 200 230 0 350 230 0.2 1.5 1 1 229.6 230.4 tube_fractal
+
+＜堆積層＞
+#fractal_box: 200 220 0 350 230 0.2 1.5 1 1 1 1 basalt_5 collapse_fractal
+#add_surface_roughness: 200 220 0 350 220 0.2 1.5 1 1 219.6 220.4 collapse_fractal
+
+
+
+
+
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 550 270 0.2 0.2 0.2 0.2 550x270 n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 550 270 0.2 550x270
+==========
+
+=====地形読み込み=====
+<>
+geometry_objects_read: 0 0 0 550x270.h5 550x270.txt
+==========
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 50e6 my_src 
+
+#hertzian_dipole: z 275.4 231 0 my_src
+#rx: 274.6 231 0
+
+<snapshot作成>
+python:
+for i in range(1, 80):
+    print('#snapshot: 0 0 0 20 10 0.01 0.01 0.01 0.01 {} snapshot{}'.format(i*0.25e-8, i))
+end_python:
+
+output_dir: identify_permittivity
+==========
+
+

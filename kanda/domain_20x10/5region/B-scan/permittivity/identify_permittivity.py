@@ -49,8 +49,8 @@ for i in range(len(time_array)):
     epsilon_r2[i] = (c / v_ground)**2
 
 
-plt.plot(index, epsilon_r1, label='no vacuum rivised')
-plt.plot(index, epsilon_r2, label='vacuum rivised')
+#plt.plot(index, epsilon_r1, label='no vacuum rivised')
+plt.plot(index, epsilon_r2, label='relative permittivity')
 plt.xlabel('distance from echo peak [m]', size=18)
 plt.ylabel('relative permittivity', size=18)
 #plt.yscale('log')
