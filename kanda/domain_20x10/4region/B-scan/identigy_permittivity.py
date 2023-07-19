@@ -43,6 +43,8 @@ for i in range(len(time_array)):
     v_ground = 2 * L /np.sqrt(time_oblique_ground**2 - time_perp**2) - c * time_array[i] / time_oblique_ground
     epsilon_r2[i] = (c / v_ground)**2
 
+mean = np.mean(epsilon_r2)
+print(mean)
 
 plt.plot(index, epsilon_r1, label='no vacuum rivised')
 plt.plot(index, epsilon_r2, label='vacuum rivised')
