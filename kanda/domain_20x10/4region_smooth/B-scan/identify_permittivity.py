@@ -7,7 +7,8 @@ from tools.outputfiles_merge import get_output_data
 
 # 真空を伝播する時間
 c = 299792458 # [m/s]
-t_vacuum0 = 2/c # [s]
+#t_vacuum0 = 2/c # [s]
+t_vacuum = 0.09525e-7 - 0.1e-8 # [s]
 
 
 # rx=11~
@@ -18,10 +19,10 @@ time_array = np.array([
                 0.6666e-7, 0.6786e-7, 0.6908e-7, 0.7031e-7, 0.7156e-7, # 30まで
                 0.7281e-7, 0.7409e-7, 0.7536e-7, 0.7666e-7, 0.7793e-7, # 35まで
 ])
-time_array = time_array - 0.0434e-7 
+time_array = time_array - 0.1e-8 
 
 # rx= 10を基準にする
-tau0 = 0.5444e-7 - 0.0434e-7 # [s]
+tau0 = 0.5444e-7 - 0.1e-8 # [s]
 
 
 epsilon_r1 = np.zeros(len(time_array))
@@ -43,6 +44,7 @@ for i in range(len(time_array)):
 
     #
     time_1m = 2/c
+    #t = 0.09525e-7 - 0.04340e-7 # [s]
     time_perp = tau0 - time_1m # A
     time_oblique_vacuum = time_1m * time_array[i] / tau0 # tau1'
     time_oblique_ground = time_array[i] - time_oblique_vacuum # B
@@ -50,7 +52,7 @@ for i in range(len(time_array)):
     delta_l = c * time_oblique_vacuum / 2 * np.cos(theta) # Δl
     l = L - delta_l # l
 
-    v_ground = 2 * L /np.sqrt( np.abs(time_oblique_ground**2 - time_perp**2)) - c * time_array[i] / time_oblique_ground
+    v_ground = 2 * L /np.sqrt(time_oblique_ground**2 - time_perp**2) - c * time_array[i] / time_oblique_ground
     epsilon_r2[i] = (c / v_ground)**2
 
     epsilon_r3[i] = (c / 2 / l)**2 * (time_oblique_ground**2 - time_perp**2)
