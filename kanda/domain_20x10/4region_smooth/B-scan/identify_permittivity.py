@@ -25,6 +25,7 @@ tau0 = 0.5444e-7 - 0.0434e-7 # [s]
 
 epsilon_r1 = np.zeros(len(time_array))
 epsilon_r2 = np.zeros(len(time_array))
+epsilon_r3 = np.zeros(len(time_array))
 index = np.zeros(len(time_array))
 
 for i in range(len(time_array)):
@@ -44,15 +45,21 @@ for i in range(len(time_array)):
     time_perp = tau0 - time_1m # A
     time_oblique_vacuum = time_1m * time_array[i] / tau0 # tau1'
     time_oblique_ground = time_array[i] - time_oblique_vacuum # B
+    theta = np.arcsin(1/(c * time_oblique_vacuum / 2)) # Θの導出
+    delta_l = c * time_oblique_vacuum / 2 * np.cos(theta) # Δl
+    l = L - delta_l # l
 
     v_ground = 2 * L /np.sqrt( np.abs(time_oblique_ground**2 - time_perp**2)) - c * time_array[i] / time_oblique_ground
     epsilon_r2[i] = (c / v_ground)**2
+
+    epsilon_r3[i] = (c / 2 / l)**2 * (time_oblique_ground**2 - time_perp**2)
 
 mean = np.mean(epsilon_r2)
 print(mean)
 
 #plt.plot(index, epsilon_r1, label='no vacuum rivised')
 plt.plot(index, epsilon_r2, label='relative permittivity')
+plt.plot(index, epsilon_r3)
 plt.xlabel('distance from echo peak [m]', size=18)
 plt.ylabel('relative permittivity', size=18)
 #plt.yscale('log')
