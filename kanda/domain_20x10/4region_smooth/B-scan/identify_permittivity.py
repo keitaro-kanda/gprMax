@@ -59,6 +59,6 @@ plt.legend(fontsize = 18)
 
 
 plt.grid()
-plt.savefig('kanda/domain_20x10/5region/B-scan/permittivity')
+plt.savefig('kanda/domain_20x10/4region_smooth/B-scan/permittivity')
 
 plt.show()
