@@ -17,9 +17,10 @@ time_array = np.array([
                 0.6666e-7, 0.6786e-7, 0.6908e-7, 0.7031e-7, 0.7156e-7, # 30まで
                 0.7281e-7, 0.7409e-7, 0.7536e-7, 0.7666e-7, 0.7793e-7, # 35まで
 ])
+time_array = time_array - 0.0434e-7 
 
 # rx= 10を基準にする
-tau0 = 0.5444e-7
+tau0 = 0.5444e-7 - 0.0434e-7 # [s]
 
 
 epsilon_r1 = np.zeros(len(time_array))
