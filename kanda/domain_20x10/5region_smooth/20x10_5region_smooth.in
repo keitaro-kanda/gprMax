@@ -32,15 +32,15 @@
 
 =====geometry making=====
 ＜地形vtiファイル作成＞
-geometry_view: 0 0 0 20 10 0.01 0.01 0.01 0.01 5region_singlerock n
+#geometry_view: 0 0 0 20 10 0.01 0.01 0.01 0.01 5region_singlerock n
 
 ＜地形書き出し＞
-geometry_objects_write: 0 0 0 20 10 0.01 5region_singlerock
+#geometry_objects_write: 0 0 0 20 10 0.01 5region_singlerock
 ==========
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 5region_singlerock.h5 5region_singlerock_materials.txt
+geometry_objects_read: 0 0 0 5region_singlerock.h5 5region_singlerock_materials.txt
 ==========
 
 
