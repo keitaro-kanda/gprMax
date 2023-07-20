@@ -1,6 +1,7 @@
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy import size
 
 from tools.outputfiles_merge import get_output_data
 
@@ -55,6 +56,7 @@ print(mean)
 plt.plot(index, epsilon_r2, label='relative permittivity')
 plt.xlabel('distance from echo peak [m]', size=18)
 plt.ylabel('relative permittivity', size=18)
+plt.title(str(mean), size=20)
 #plt.yscale('log')
 plt.legend(fontsize = 18)
 
