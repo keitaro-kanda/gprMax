@@ -57,15 +57,18 @@ for i in range(len(time_array)):
 
     epsilon_r3[i] = (c / 2 / l)**2 * (time_oblique_ground**2 - time_perp**2)
 
-mean = np.mean(epsilon_r2)
-print(mean)
+mean1 = np.mean(epsilon_r2)
+mean2 = np.mean(epsilon_r3)
+#print(mean1)
+print(mean2)
 
 #plt.plot(index, epsilon_r1, label='no vacuum rivised')
-plt.plot(index, epsilon_r2, label='relative permittivity')
+#plt.plot(index, epsilon_r2, label='relative permittivity')
 plt.plot(index, epsilon_r3)
 plt.xlabel('distance from echo peak [m]', size=18)
 plt.ylabel('relative permittivity', size=18)
-plt.title(str(mean), size=20)
+# タイトルに平均値を小数点第３位まで表示
+plt.title('mean = {:.3f}'.format(mean2), size=20)
 #plt.yscale('log')
 plt.legend(fontsize = 18)
 
