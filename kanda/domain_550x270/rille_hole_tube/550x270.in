@@ -1,0 +1,92 @@
+#domain: 550 270 0.2
+
+#dx_dy_dz: 0.2 0.2 0.2
+
+#time_window: 4e-6
+
+#material: 4 0 1 0 regolith
+#material: 6 0 1 0 basalt_6
+#material: 5 0 1 0 basalt_5
+
+
+
+＜レゴリス層＞
+#box: 0 0 0 550 2 0.2 regolith
+
+＜ベースのバサルト＞
+#box: 0 0 0 550 235 0.2 basalt_6
+
+ ＜リル側面＞
+#python:
+from gprMax.input_cmd_funcs import *
+import numpy as np
+
+for y_lower in range(250):
+    # 左側
+    roughness_factor1 = np.random.randint(-3, 3)
+    roughness1 = 0.2 * roughness_factor1
+
+    upper_x = 125 - y_lower*2/5 + roughness1 # リル壁面boxの右上のx座標
+
+    box(0, 10+y_lower, 0, upper_x, 11+y_lower, 0.2, 'basalt_6')
+    box(upper_x, 10+y_lower, 0, upper_x+1, 12+y_lower, 0.2, 'regolith')
+
+    # 右側
+    roughness_factor2 = np.random.randint(-3, 3)
+    roughness2 = 0.2 * roughness_factor2
+
+    lower_x = 550 - (125 - y_lower*2/5 + roughness2)
+
+    box(lower_x, 10+y_lower, 0, 550, 11+y_lower, 0.2, 'basalt_6')
+    box(lower_x-1, 10+y_lower, 0, lower_x, 12+y_lower, 0.2, 'regolith')
+
+#end_python:
+
+＜リル床＞
+#fractal_box: 125 8 0 425 10 0.2 1.5 1 1 1 1 regolith rille_floor_surface
+#add_surface_roughness: 126 10 0 424 10 0.2 1.5 1 1 9 11 rille_floor_surface
+
+
+＜縦孔＞
+#fractal_box: 250 200 0 300 235 0.2 1.5 1 1 1 1 free_space hole
+#add_surface_roughness: 250 200 0 250 235 0.2 1.5 1 1 249 251 hole
+#add_surface_roughness: 300 200 0 300 235 0.2 1.5 1 1 299 301 hole
+＜チューブ＞
+#fractal_box: 175 192 0 375 209 0.2 1.5 1 1 1 1 free_space tube_fractal
+#add_surface_roughness: 175 209 0 375 209 0.2 1.5 1 1 208 210 tube_fractal
+#add_surface_roughness: 175 192 0 375 192 0.2 1.5 1 1 191 193 tube_fractal
+
+
+
+
+
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 550 270 0.2 0.2 0.2 0.2 550x270 n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 550 270 0.2 550x270
+==========
+
+=====地形読み込み=====
+<>
+geometry_objects_read: 0 0 0 550x270.h5 550x270.txt
+==========
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 50e6 my_src 
+
+#hertzian_dipole: z 275.2 193 0 my_src
+#rx: 274.8 193 0
+
+<snapshot作成>
+#python:
+for i in range(1, 80):
+    print('#snapshot: 0 0 0 550 270 0.2 0.2 0.2 0.2 {} snapshot{}'.format(i*0.25e-8, i))
+#end_python:
+
+output_dir: A-scan
+==========
