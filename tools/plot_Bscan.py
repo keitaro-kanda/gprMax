@@ -22,16 +22,14 @@ import os
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LogNorm
 
 from gprMax.exceptions import CmdInputError
-from gprMax.input_cmd_funcs import rx_steps
 
 from .outputfiles_merge import get_output_data
 
 
 # プロットを作る関数の作成部分？
-def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
+def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     """Creates a plot (with matplotlib) of the B-scan.
 
     Args:
@@ -60,19 +58,21 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
     src_step = 1 #[m]
 
     # プロット
-    if radar_direction == 'horizontal':
-        plt.imshow(outputdata_norm, 
-                 extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
-                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1, vmax=1)
-        plt.xlabel('Horizontal distance [m]')
-        plt.ylabel('Time [s]')
-        closeup = False # True or False
-        if closeup:
-            closeup_start = 0
-            closeup_end = 1.0
-            plt.ylim(closeup_end*1e-7, closeup_start*1e-7)
-            plt.xlim(35, 55)
-            plt.minorticks_on( )
+    #if radar_direction == 'horizontal':
+    plt.imshow(outputdata_norm, 
+             extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1.5, vmax=1.5)
+    plt.xlabel('Horizontal distance [m]')
+    plt.ylabel('Time [s]')
+
+    # closeup
+    if closeup:
+        closeup_start = 3e-6
+        closeup_end = 4e-6
+        #plt.xlim(35, 55)
+        plt.ylim(closeup_end, closeup_start)
+        plt.minorticks_on( )
+    """""
     else:
     # Create a plot rotated 90 degrees and then reversed up and down.
         plt.imshow(outputdata_norm.T[::-1],
@@ -80,6 +80,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent):
                 interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
         plt.xlabel('Time [s]')
         plt.ylabel('Trace number')
+        """""
 
 
     if closeup:
@@ -121,6 +122,8 @@ if __name__ == "__main__":
     parser.add_argument('outputfile', help='name of output file including path')
     parser.add_argument('rx_component', help='name of output component to be plotted', 
                         choices=['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz'])
+    # closeupのオプションを作る
+    parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
     args = parser.parse_args()
 
     # Open output file and read number of outputs (receivers)
@@ -135,6 +138,6 @@ if __name__ == "__main__":
     # データの取得とプロットの作成を実行？
     for rx in range(1, nrx + 1):
         outputdata, dt = get_output_data(args.outputfile, rx, args.rx_component)
-        plthandle = mpl_plot(args.outputfile, outputdata, dt, rx, args.rx_component)
+        plthandle = mpl_plot(args.outputfile, outputdata, dt, rx, args.rx_component, args.closeup)
 
     plthandle.show()
