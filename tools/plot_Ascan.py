@@ -187,8 +187,8 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     outputdata_norm = outputdata/np.amax(np.abs(outputdata)) * 100
                     ax = plt.subplot(gs[2, 0])
                     ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext) 
-                    ax.set_ylim([-3, 3])
-                    ax.set_xlim([0.3e-7, 0.8e-7])
+                    #ax.set_ylim([-3, 3])
+                    #ax.set_xlim([0.3e-7, 0.8e-7])
                     ax.set_ylabel(outputtext + ' strength [%]', size=18)
                     ax.tick_params(labelsize=18)
 

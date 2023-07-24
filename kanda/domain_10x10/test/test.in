@@ -2,13 +2,13 @@
 
 #dx_dy_dz: 0.01 0.01 0.01
 
-#time_window: 0.1e-7
+#time_window: 1e-7
 
 
 #material: 4 0 1 0 basalt_4
 #box: 0 0 0 4 10 0.01 basalt_4
 
-#waveform: ricker 1 500e6 my_src 
+#waveform: ricker 1 50e6 my_src 
 
 #hertzian_dipole: z 2 5 0 my_src
 #rx:  2 5.5 0
