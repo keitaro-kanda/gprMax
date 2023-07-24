@@ -85,7 +85,7 @@ geometry_objects_read: 0 0 0 550x270.h5 550x270.txt
 <snapshot作成>
 #python:
 for i in range(1, 80):
-    print('#snapshot: 0 0 0 550 270 0.2 0.2 0.2 0.2 {} snapshot{}'.format(i*0.25e-8, i))
+    print('#snapshot: 0 0 0 550 270 0.2 0.2 0.2 0.2 {} snapshot{}'.format(i*0.05e-6, i))
 #end_python:
 
 output_dir: A-scan
