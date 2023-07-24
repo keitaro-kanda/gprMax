@@ -61,14 +61,20 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     #if radar_direction == 'horizontal':
     plt.imshow(outputdata_norm, 
              extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
-            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1.5, vmax=1.5)
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1, vmax=1)
     plt.xlabel('Horizontal distance [m]')
     plt.ylabel('Time [s]')
 
-    # closeup
+    # closeupオプション
     if closeup:
+
         closeup_start = 3e-6
         closeup_end = 4e-6
+        max_value = np.amax(np.abs(outputdata_norm[int(closeup_start/dt): int(closeup_end/dt)]))
+
+        plt.imshow(outputdata_norm, 
+             extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-max_value, vmax=max_value)
         #plt.xlim(35, 55)
         plt.ylim(closeup_end, closeup_start)
         plt.minorticks_on( )
@@ -105,7 +111,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     # fig.savefig(path + os.sep + savefile + '.pdf', dpi=None, format='pdf', 
     #             bbox_inches='tight', pad_inches=0.1)
     if closeup:
-        fig.savefig(path + os.sep + savefile + '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
+        fig.savefig(path + os.sep + 'closeup_plots/closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
     else:
         fig.savefig(path + os.sep + savefile + '.png', dpi=150, format='png', 
