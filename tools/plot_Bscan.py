@@ -22,6 +22,7 @@ import os
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from traitlets import default
 
 from gprMax.exceptions import CmdInputError
 
@@ -65,11 +66,13 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     plt.xlabel('Horizontal distance [m]')
     plt.ylabel('Time [s]')
 
-    # closeupオプション
+    # =====closeupオプション=====
     if closeup:
 
-        closeup_start = 3e-6
+        closeup_start = 2.5e-6
         closeup_end = 4e-6
+
+        # カラーバー範囲の設定
         max_value = np.amax(np.abs(outputdata_norm[int(closeup_start/dt): int(closeup_end/dt)]))
 
         plt.imshow(outputdata_norm, 
