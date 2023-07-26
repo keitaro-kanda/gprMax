@@ -6,89 +6,113 @@ import numpy as np
 sample_rate = 1e3 # 1kHz
 tmax = 15
 t_simulation = np.arange(0, tmax, 1/sample_rate)
-obserbed_data = np.zeros_like(t_simulation)
-
-# ===入力電波===
-freq = 10 # 10 Hz
-wave_duration = 1 # 1s
-t_transmission = np.arange(0, wave_duration, 1/sample_rate)
-transmission = np.cos(2 * np.pi * freq * t_transmission)
-# transmissionをobserbed_dataに入れる
-obserbed_data[:len(transmission)] = transmission
 
 
-# ===反射波(2s間隔)===
-t_start = 5 # 5s
-# 反射波の間隔
-t_interval_2 = 2*wave_duration # 2s
-t_reflection_2 = np.arange(t_start, tmax, t_interval_2)
+# ===入射波の作成===
+def input_wave():
 
-t_interval_15 = 1.5*wave_duration # 1.5s
-t_reflection_15 = np.arange(t_start, tmax, t_interval_15)
+    transmission_inpulse = np.zeros_like(t_simulation)
+    transmission_chirp = np.zeros_like(t_simulation)
 
-attenuation = 0.8 # 伝搬中の減衰率
-reflection_rate = 0.2 # 反射率
-reflected_wave_2 = np.zeros_like(t_simulation)
-reflected_wave_15 = np.zeros_like(t_simulation)
+    freq = 10 # 10 Hz
+    wave_duration = 1 # 1s
+    t_transmission = np.arange(0, wave_duration, 1/sample_rate) # puse duration
 
-for t in t_reflection_2:
-    amp_rate = reflection_rate * attenuation**(t - t_start) # 振幅の減衰率を計算
-    reflected_wave_2[int(t*sample_rate):int((t+wave_duration)*sample_rate)] = transmission * amp_rate
+    # インパルス
+    inpulse = np.cos(2 * np.pi * freq * t_transmission)
+    transmission_inpulse[:len(inpulse)] = inpulse
 
-for t in t_reflection_15:
-    amp_rate = reflection_rate * attenuation**(t - t_start) # 振幅の減衰率を計算
-    reflected_wave_15[int(t*sample_rate):int((t+wave_duration)*sample_rate)] = transmission * amp_rate
+    # チャープ
+    chirp = np.cos(10 *np.pi * t_transmission**2)
+    transmission_chirp[:len(chirp)] = chirp
 
-# 白色ノイズを加える
-SNR = 10 # [dB]
-white_noise = np.random.randn(len(t_simulation)) * np.std(transmission) / np.power(10, SNR/20)
-reflected_wave_noise_2 = reflected_wave_2 + white_noise
-reflected_wave_noise_15 = reflected_wave_15 + white_noise
+    return wave_duration, transmission_inpulse, transmission_chirp, inpulse, chirp
 
-# ===相互相関処理===
-correlation_2 = np.correlate(reflected_wave_2, transmission, mode='same')
-correlation_2 /= np.amax(correlation_2) # 正規化
-correlation_15 = np.correlate(reflected_wave_15, transmission, mode='same')
-correlation_15 /= np.amax(correlation_15) # 正規化
+wave_duration, transmission_inpulse, transmission_chirp, inpulse, chirp = input_wave()
 
 
-# ===プロット===
-fig = plt.figure(figsize=(20, 10), facecolor='w', edgecolor='w')
 
-# 1つ目のグラフ
-plt.subplot(2, 2, 1)
-plt.plot(t_simulation, reflected_wave_noise_2, label='reflected wave+' + str(SNR) + 'dB white noisse')
-plt.plot(t_simulation, obserbed_data, label='transmission')
-plt.plot(t_simulation, reflected_wave_2, label='reflected wave')
+# ===反射波の作成===
+def make_reflected_wave(interval, input_type):
 
-plt.xlabel('Time [s]')
-plt.ylabel('Amplitude')
-plt.legend()
+    interval = 2 # 反射波の到来間隔
+    input_type = transmission_inpulse # 入射波の種類
+    reflected_wave = np.zeros_like(t_simulation)
 
-# 2つ目のグラフ
-plt.subplot(2, 2, 3)
-plt.plot(t_simulation, correlation_2, label='correlation')
+    t_start = 5 # 最初の反射波の到来時刻
+    reflection_interval = interval*wave_duration # 反射波の到来間隔
+    reflection_time = np.arange(t_start, tmax, reflection_interval) # 反射波の到来時刻
 
-plt.xlabel('Time [s]')
-plt.ylabel('Amplitude')
-plt.legend()
+    attenuation = 0.8 # 伝搬中の減衰率
+    reflection_rate = 0.2 # 反射率
 
-# 3つ目のグラフ
-plt.subplot(2, 2, 2)
-plt.plot(t_simulation, reflected_wave_noise_15, label='reflected wave+' + str(SNR) + 'dB white noisse')
-plt.plot(t_simulation, obserbed_data, label='transmission')
-plt.plot(t_simulation, reflected_wave_15, label='reflected wave')
+    for t in reflection_time:
+        amp_rate = reflection_rate * attenuation**(t - reflection_time) # 振幅の減衰率を計算
+        if input_type == 'transmission_inpulse':
+            reflected_wave[int(t*sample_rate): int((t+wave_duration)*sample_rate)] = inpulse * amp_rate
+        elif input_type == 'transmission_chirp':
+            reflected_wave[int(t*sample_rate): int((t+wave_duration)*sample_rate)] = chirp * amp_rate
 
-plt.xlabel('Time [s]')
-plt.ylabel('Amplitude')
-plt.legend()
 
-# 4つ目のグラフ
-plt.subplot(2, 2, 4)
-plt.plot(t_simulation, correlation_15, label='correlation')
-plt.xlabel('Time [s]')
-plt.ylabel('Amplitude')
-plt.legend()
+    # 白色ノイズを加える
+    SNR = 15 # [dB]
+
+    white_noise = np.random.randn(len(t_simulation)) * np.std(input_type) / np.power(10, SNR/20)
+    reflected_wave_noise = reflected_wave + white_noise
+
+    return reflected_wave, reflected_wave_noise, SNR, reflection_time
+
+reflected_wave_1 = make_reflected_wave(2, transmission_inpulse)[0]
+
+
+# 2種類のinterval、2種類のinput_typeについてreflected_waveを計算しplotする
+interval_list = [2, 1.5]
+input_type_list = [transmission_inpulse, transmission_chirp]
+
+def calc_correlation(input_type, reflect_type):
+    correlation = np.correlate(reflect_type, input_type, mode='same')
+    correlation /= np.amax(correlation) # 正規化
+    return correlation
+
+correlation_1 = calc_correlation(transmission_inpulse, make_reflected_wave(2, transmission_inpulse)[1])
+correlation_2 = calc_correlation(transmission_inpulse, make_reflected_wave(1.5, transmission_inpulse)[1])
+correlation_3 = calc_correlation(transmission_inpulse, make_reflected_wave(2, transmission_chirp)[1])
+correlation_4 = calc_correlation(transmission_inpulse, make_reflected_wave(1.5, transmission_chirp)[1])
+
+
+# ===plot===
+fig = plt.figure(figsize=(20, 10))
+
+ax1 = fig.add_subplot(2, 2, 1)
+ax1.plot(t_simulation, make_reflected_wave(2, transmission_inpulse)[1], label='reflected wave with noise')
+ax1.plot(t_simulation, transmission_inpulse, label='transmission')
+ax1.plot(t_simulation, make_reflected_wave(2, transmission_inpulse)[0], label='reflected wave')
+
+ax2 = fig.add_subplot(2, 2, 2)
+ax2.plot(t_simulation, make_reflected_wave(1.5, transmission_inpulse)[1], label='reflected wave with noise')
+ax2.plot(t_simulation, transmission_inpulse, label='transmission')
+ax2.plot(t_simulation, make_reflected_wave(1.5, transmission_inpulse)[0], label='reflected wave')
+
+ax3 = fig.add_subplot(2, 2, 3)
+ax3.plot(t_simulation, correlation_1, label='correlation')
+
+ax4 = fig.add_subplot(2, 2, 4)
+ax4.plot(t_simulation, correlation_2, label='correlation')
 
 plt.show()
+""""
+# 整合フィルタ処理
+def matched_filter():
+    # transmissionのフーリエ変換
+    transmission_fft = np.fft.fft(transmission)
+    # transmissionのパワースペクトル
+    transmission_power = np.abs(transmission_fft) ** 2
+    
+    # reflected_wave_noise_15のフーリエ変換
+    reflected_wave_noise_15_fft = np.fft.fft(reflected_wave_noise_15)
 
+    return plt
+
+
+matched_filter()
+"""
