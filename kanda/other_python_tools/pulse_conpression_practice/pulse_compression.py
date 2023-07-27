@@ -9,6 +9,8 @@ sample_rate = 1e3 # 1kHz
 tmax = 15
 t_simulation = np.arange(0, tmax, 1/sample_rate)
 
+SNR = 15 # [dB]
+
 
 # ===入射波の作成===
 def input_wave():
@@ -57,7 +59,7 @@ def make_reflected_wave(interval, input_type):
             reflected_wave[reflect_start: reflect_end] = chirp * amp_rate
 
     # 白色ノイズを加える
-    SNR = 15 # [dB]
+    #NR = 15 # [dB]
 
     white_noise = np.zeros_like(t_simulation)
     if input_type == 'inpulse':
@@ -69,7 +71,8 @@ def make_reflected_wave(interval, input_type):
 
     reflected_wave_noise = reflected_wave + white_noise
 
-    return reflected_wave, reflected_wave_noise, SNR, reflection_time
+    return reflected_wave, reflected_wave_noise
+
 
 
 
@@ -90,7 +93,7 @@ def plot():
     # ===plot===
     fig, ax = plt.subplots(4, 2, figsize=(24, 12), tight_layout=True)
 
-    ax[0, 0].plot(t_simulation, make_reflected_wave(2, 'inpulse')[1], label='reflected wave with noise')
+    ax[0, 0].plot(t_simulation, make_reflected_wave(2, 'inpulse')[1], label='reflected wave with ' + str(SNR) + 'dB noise')
     ax[0, 0].plot(t_simulation, transmission_inpulse, label='input wave')
     ax[0, 0].plot(t_simulation, make_reflected_wave(2, 'inpulse')[0], label='reflected wave')
     ax[0, 0].set_title('inpulse input & wide interval', size=18)
@@ -99,7 +102,7 @@ def plot():
     ax[1, 0].plot(t_simulation, correlation_1, label='correlation')
     ax[1, 0].legend(fontsize=12)
 
-    ax[2, 0].plot(t_simulation, make_reflected_wave(1.5, 'inpulse')[1], label='reflected wave with noise')
+    ax[2, 0].plot(t_simulation, make_reflected_wave(1.5, 'inpulse')[1], label='reflected wave with ' + str(SNR) + 'dB noise')
     ax[2, 0].plot(t_simulation, transmission_inpulse, label='input wave')
     ax[2, 0].plot(t_simulation, make_reflected_wave(1.5, 'inpulse')[0], label='reflected wave')
     ax[2, 0].set_title('inpulse input & narrow interval', size=18)
@@ -110,7 +113,7 @@ def plot():
     ax[3, 0].legend(fontsize=12)
 
 
-    ax[0, 1].plot(t_simulation, make_reflected_wave(2, 'chirp')[1], label='reflected wave with noise')
+    ax[0, 1].plot(t_simulation, make_reflected_wave(2, 'chirp')[1], label='reflected wave with ' + str(SNR) + 'dB noise')
     ax[0, 1].plot(t_simulation, transmission_chirp, label='input wave')
     ax[0, 1].plot(t_simulation, make_reflected_wave(2,  'chirp')[0], label='reflected wave')
     ax[0, 1].set_title('chirp input & wide interval', size=18)
@@ -120,7 +123,7 @@ def plot():
     ax[1, 1].plot(t_simulation, correlation_3, label='correlation')
     ax[1, 1].legend(fontsize=12)
 
-    ax[2, 1].plot(t_simulation, make_reflected_wave(1.5,  'chirp')[1], label='reflected wave with noise')
+    ax[2, 1].plot(t_simulation, make_reflected_wave(1.5,  'chirp')[1], label='reflected wave with ' + str(SNR) + 'dB noise')
     ax[2, 1].plot(t_simulation, transmission_chirp, label='input wave')
     ax[2, 1].plot(t_simulation, make_reflected_wave(1.5,  'chirp')[0], label='reflected wave')
     ax[2, 1].set_title('chirp input & narrow interval', size=18)
@@ -132,10 +135,12 @@ def plot():
 
     fig.supxlabel('Time [s]', size=20)
     fig.supylabel('Amplitude', size=20)
+    
+    plt.savefig('kanda/other_python_tools/pulse_conpression_practice/cross_correlation.png')
     plt.show()
 
     return plt
-#plot()
+plot()
 
 
 
@@ -159,10 +164,11 @@ fft_data, freq = calc_fft(transmission_chirp)
 #plt.show()
 
 # ===整合フィルタ処理===
-def calc_matched_filter(input_array, reflect_array):
+def calc_matched_filter(input_type, reflect_array):
 
     # パディング
-    input_array = np.hstack((np.flipud(input_array), np.zeros(len(reflect_array) - len(input_array))))
+    input_flip = np.flipud(input_type) # 入力信号の時間反転
+    input_array = np.hstack((input_flip, np.zeros(len(reflect_array) - len(input_type))))
     input_fft = fft.fft(input_array)
     reflect_fft = fft.fft(reflect_array)
 
@@ -170,11 +176,38 @@ def calc_matched_filter(input_array, reflect_array):
     fft_conv = input_fft * reflect_fft
     # フーリエ逆変換
     Ifft = fft.ifft(fft_conv)
-    Ifft = np.abs(Ifft)/np.amax(np.abs(Ifft)) # 正規化
-    power = 10 * np.log10(np.abs(Ifft))
-    power -= np.amax(power) # 最大値を0dBにする
+    #Ifft = fft.fftshift(Ifft)
+    power = 10 * np.log10(np.abs(Ifft)/np.amax(np.abs(Ifft)))
 
     return power
 
-plt.plot(t_simulation, calc_matched_filter(chirp, make_reflected_wave(1.5, 'chirp')[1]))
-plt.show()
+
+def plot_matched_filtering():
+    fig, ax = plt.subplots(2, 2, figsize=(20, 10), tight_layout=True)
+
+    ax1 = ax[0, 0]
+    ax1.plot(t_simulation, calc_matched_filter(inpulse, make_reflected_wave(2, 'inpulse')[1]))
+    ax1.set_title('inpulse input & wide interval', size=18)
+
+    ax2 = ax[1, 0]
+    ax2.plot(t_simulation, calc_matched_filter(inpulse, make_reflected_wave(1.5, 'inpulse')[1]))
+    ax2.set_title('inpulse input & narrow interval', size=18)
+
+    ax3 = ax[0, 1]
+    ax3.plot(t_simulation, calc_matched_filter(chirp, make_reflected_wave(2, 'chirp')[1]))
+    ax3.set_title('chirp input & wide interval', size=18)
+
+    ax4 = ax[1, 1]
+    ax4.plot(t_simulation, calc_matched_filter(chirp, make_reflected_wave(1.5, 'chirp')[1]))
+    ax4.set_title('chirp input & narrow interval', size=18)
+
+    fig.supxlabel('Time [s]', size=20)
+    fig.supylabel('Power [dB]', size=20)
+
+
+    plt.savefig('kanda/other_python_tools/pulse_conpression_practice/matched_filtering.png')
+    plt.show()
+
+    return plt
+
+plot_matched_filtering()
