@@ -1,7 +1,10 @@
 import re
+from operator import le
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import tight_layout
+from numpy import size
 
 sample_rate = 1e3 # 1kHz
 tmax = 15
@@ -22,7 +25,7 @@ def input_wave():
     inpulse = np.cos(2 * np.pi * freq * t_transmission)
     transmission_inpulse[:len(inpulse)] = inpulse
 
-    # チャープ
+    # チャープ 
     chirp = np.cos(10 *np.pi * t_transmission**2)
     transmission_chirp[:len(chirp)] = chirp
 
@@ -31,75 +34,107 @@ def input_wave():
 wave_duration, transmission_inpulse, transmission_chirp, inpulse, chirp = input_wave()
 
 
-
 # ===反射波の作成===
 def make_reflected_wave(interval, input_type):
 
-    interval = 2 # 反射波の到来間隔
-    input_type = transmission_inpulse # 入射波の種類
     reflected_wave = np.zeros_like(t_simulation)
 
     t_start = 5 # 最初の反射波の到来時刻
     reflection_interval = interval*wave_duration # 反射波の到来間隔
-    reflection_time = np.arange(t_start, tmax, reflection_interval) # 反射波の到来時刻
+    reflection_time = np.arange(t_start, tmax, reflection_interval) # 反射波の到来時刻のリスト
 
     attenuation = 0.8 # 伝搬中の減衰率
     reflection_rate = 0.2 # 反射率
 
-    for t in reflection_time:
-        amp_rate = reflection_rate * attenuation**(t - reflection_time) # 振幅の減衰率を計算
-        if input_type == 'transmission_inpulse':
-            reflected_wave[int(t*sample_rate): int((t+wave_duration)*sample_rate)] = inpulse * amp_rate
-        elif input_type == 'transmission_chirp':
-            reflected_wave[int(t*sample_rate): int((t+wave_duration)*sample_rate)] = chirp * amp_rate
 
+    for t in reflection_time:
+        amp_rate = reflection_rate * attenuation**(t - t_start) # 振幅の減衰率を計算
+        reflect_start = int(t*sample_rate) # 反射波の到来時刻
+        reflect_end = int((t+wave_duration)*sample_rate) # 反射波の終了時刻
+
+        if input_type == 'inpulse':
+            reflected_wave[reflect_start: reflect_end] = inpulse * amp_rate
+        elif input_type == 'chirp':
+            reflected_wave[reflect_start: reflect_end] = chirp * amp_rate
 
     # 白色ノイズを加える
     SNR = 15 # [dB]
 
-    white_noise = np.random.randn(len(t_simulation)) * np.std(input_type) / np.power(10, SNR/20)
+    white_noise = np.zeros_like(t_simulation)
+    if input_type == 'inpulse':
+        white_noise = np.random.randn(len(t_simulation)) * np.std(inpulse) / np.power(10, SNR/20)
+    elif input_type == 'chirp':
+        white_noise = np.random.randn(len(t_simulation)) * np.std(chirp) / np.power(10, SNR/20)
+    else:
+        print('input_type is inpulse or chirp')
+
     reflected_wave_noise = reflected_wave + white_noise
 
     return reflected_wave, reflected_wave_noise, SNR, reflection_time
 
-reflected_wave_1 = make_reflected_wave(2, transmission_inpulse)[0]
 
 
-# 2種類のinterval、2種類のinput_typeについてreflected_waveを計算しplotする
-interval_list = [2, 1.5]
-input_type_list = [transmission_inpulse, transmission_chirp]
+# ===相互相関の計算===
+def calc_correlation(input_array, reflect_array):
+    reflect_wave = make_reflected_wave
 
-def calc_correlation(input_type, reflect_type):
-    correlation = np.correlate(reflect_type, input_type, mode='same')
+    correlation = np.correlate(reflect_array, input_array, mode='same')
     correlation /= np.amax(correlation) # 正規化
     return correlation
 
-correlation_1 = calc_correlation(transmission_inpulse, make_reflected_wave(2, transmission_inpulse)[1])
-correlation_2 = calc_correlation(transmission_inpulse, make_reflected_wave(1.5, transmission_inpulse)[1])
-correlation_3 = calc_correlation(transmission_inpulse, make_reflected_wave(2, transmission_chirp)[1])
-correlation_4 = calc_correlation(transmission_inpulse, make_reflected_wave(1.5, transmission_chirp)[1])
+correlation_1 = calc_correlation(inpulse, make_reflected_wave(2, 'inpulse')[1])
+correlation_2 = calc_correlation(inpulse, make_reflected_wave(1.5, 'inpulse')[1])
+correlation_3 = calc_correlation(chirp, make_reflected_wave(2, 'chirp')[1])
+correlation_4 = calc_correlation(chirp, make_reflected_wave(1.5, 'chirp')[1])
 
 
 # ===plot===
-fig = plt.figure(figsize=(20, 10))
+fig, ax = plt.subplots(4, 2, figsize=(24, 12), tight_layout=True)
 
-ax1 = fig.add_subplot(2, 2, 1)
-ax1.plot(t_simulation, make_reflected_wave(2, transmission_inpulse)[1], label='reflected wave with noise')
-ax1.plot(t_simulation, transmission_inpulse, label='transmission')
-ax1.plot(t_simulation, make_reflected_wave(2, transmission_inpulse)[0], label='reflected wave')
+ax[0, 0].plot(t_simulation, make_reflected_wave(2, 'inpulse')[1], label='reflected wave with noise')
+ax[0, 0].plot(t_simulation, transmission_inpulse, label='input wave')
+ax[0, 0].plot(t_simulation, make_reflected_wave(2, 'inpulse')[0], label='reflected wave')
+ax[0, 0].set_title('inpulse input & wide interval', size=18)
+ax[0,0].legend(fontsize=12)
 
-ax2 = fig.add_subplot(2, 2, 2)
-ax2.plot(t_simulation, make_reflected_wave(1.5, transmission_inpulse)[1], label='reflected wave with noise')
-ax2.plot(t_simulation, transmission_inpulse, label='transmission')
-ax2.plot(t_simulation, make_reflected_wave(1.5, transmission_inpulse)[0], label='reflected wave')
+ax[1, 0].plot(t_simulation, correlation_1, label='correlation')
+ax[1, 0].legend(fontsize=12)
 
-ax3 = fig.add_subplot(2, 2, 3)
-ax3.plot(t_simulation, correlation_1, label='correlation')
+ax[2, 0].plot(t_simulation, make_reflected_wave(1.5, 'inpulse')[1], label='reflected wave with noise')
+ax[2, 0].plot(t_simulation, transmission_inpulse, label='input wave')
+ax[2, 0].plot(t_simulation, make_reflected_wave(1.5, 'inpulse')[0], label='reflected wave')
+ax[2, 0].set_title('inpulse input & narrow interval', size=18)
+ax[2, 0].legend(fontsize=12)
 
-ax4 = fig.add_subplot(2, 2, 4)
-ax4.plot(t_simulation, correlation_2, label='correlation')
 
+ax[3, 0].plot(t_simulation, correlation_2, label='correlation')
+ax[3, 0].legend(fontsize=12)
+
+
+ax[0, 1].plot(t_simulation, make_reflected_wave(2, 'chirp')[1], label='reflected wave with noise')
+ax[0, 1].plot(t_simulation, transmission_chirp, label='input wave')
+ax[0, 1].plot(t_simulation, make_reflected_wave(2,  'chirp')[0], label='reflected wave')
+ax[0, 1].set_title('chirp input & wide interval', size=18)
+ax[0, 1].legend(fontsize=12)
+
+
+ax[1, 1].plot(t_simulation, correlation_3, label='correlation')
+ax[1, 1].legend(fontsize=12)
+
+ax[2, 1].plot(t_simulation, make_reflected_wave(1.5,  'chirp')[1], label='reflected wave with noise')
+ax[2, 1].plot(t_simulation, transmission_chirp, label='input wave')
+ax[2, 1].plot(t_simulation, make_reflected_wave(1.5,  'chirp')[0], label='reflected wave')
+ax[2, 1].set_title('chirp input & narrow interval', size=18)
+ax[2, 1].legend(fontsize=12)
+
+ax[3, 1].plot(t_simulation, correlation_4, label='correlation')
+ax[3, 1].legend(fontsize=12)
+
+
+fig.supxlabel('Time [s]', size=20)
+fig.supylabel('Amplitude', size=20)
 plt.show()
+
 """"
 # 整合フィルタ処理
 def matched_filter():
