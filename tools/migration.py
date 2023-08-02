@@ -4,6 +4,7 @@ from calendar import c
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 from tools.outputfiles_merge import get_output_data
 
@@ -18,6 +19,7 @@ output_data.close()
 for rx in range(1, nrx + 1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
 
+rx_totalnum = outputdata.shape[1] # rxの数
 
 c = 299792458 # [m/s], 光速
 epsilon_1 = 1 # 空気
@@ -26,25 +28,29 @@ epsilon_2 = 4 # レゴリス
 h = 1.5 # [m], アンテナ高さ
 antenna_distance = 0.5 # [m], アンテナ間隔
 
-outputdata_mig = np.zeros(outputdata.shape)
+outputdata_mig = np.zeros([950, 30]) # grid数で定義、[m]じゃないよ！！
 
-xgrid_num = outputdata.shape[1] # x
-zgrid_num = outputdata.shape[0] # z
+xgrid_num = outputdata_mig.shape[1] # x
+zgrid_num = outputdata_mig.shape[0] # z
+print(xgrid_num)
 
 
 # migration処理関数の作成
 def migration(src_step, x, z):
     recieve_power_array = np.zeros(xgrid_num) # rxの数だけ0を並べた配列を作成
 
-    for k in range(outputdata.shape[1]): # rx
+    for k in range(rx_totalnum): 
 
-        #x = i * src_step # xの位置
-        #z = j * dt * c / 2 # zの位置
-        x_rx = k * src_step + 1.75 # rxの位置、1.75 mは初期位置
+        rx_start = 1.75 # rxの初期位置
+        x_rx = k * src_step + rx_start # rxの位置
         x_tx = x_rx + antenna_distance # txの位置
+
+        x_index = int(100 * x)
+        z_index = int(100 * z)
 
 
         # ===Xiao et al.,(2019)の式(5)===
+
         # d_Rを求める、d_R：電波の地中侵入地点とrxの水平距離
         d_R_array = np.arange(0.01, 10.01, 0.01) # 間隔は空間ステップにしたがう
 
@@ -103,7 +109,7 @@ def migration(src_step, x, z):
         recieve_power_array[k] = outputdata[int(recieve_time / dt), k] # 受信点の電力を配列に格納
         
     # recieve_power_arrayの要素の和をとる
-    outputdata_mig[x, z] = np.sum(recieve_power_array)
+    outputdata_mig[x_index, z_index] = np.sum(recieve_power_array)
 
     return outputdata_mig
 
@@ -111,11 +117,14 @@ def migration(src_step, x, z):
 
 # migration処理関数の実行しまくって地下構造を推定する
 def calc_subsurface_structure(src_step):
-    for i in range(xgrid_num): # x
+    for i in tqdm(range(xgrid_num)): # x
         for j in range(zgrid_num): # z
-            migration(src_step, i, j)
 
-    return migration(src_step, i, j)
+            x = i / 100
+            z = j / 100
+            migration(src_step, x, z)
+
+    return migration(src_step, x, z)
 
 
 migration_result = calc_subsurface_structure(0.2)
