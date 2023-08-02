@@ -4,6 +4,8 @@ from calendar import c
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy import size
+from scipy import spatial
 from tqdm import tqdm
 
 from tools.outputfiles_merge import get_output_data
@@ -28,7 +30,7 @@ epsilon_2 = 4 # レゴリス
 h = 1.5 # [m], アンテナ高さ
 antenna_distance = 0.5 # [m], アンテナ間隔
 
-outputdata_mig = np.zeros([950, 30]) # grid数で定義、[m]じゃないよ！！
+outputdata_mig = np.zeros([950, 50]) # grid数で定義、[m]じゃないよ！！
 
 xgrid_num = outputdata_mig.shape[1] # x
 zgrid_num = outputdata_mig.shape[0] # z
@@ -127,6 +129,13 @@ def calc_subsurface_structure(src_step, spatial_step):
 
 migration_result = calc_subsurface_structure(0.2, 0.01)
 
-plt.imshow(migration_result,aspect='auto', cmap='seismic')
+plt.figure(figsize=(18, 15), facecolor='w', edgecolor='w')
+plt.imshow(migration_result,
+           aspect='auto', cmap='seismic',
+           vmin=-np.amax(np.abs(migration_result)), vmax=np.amax(np.abs(migration_result)))
 plt.colorbar()
+plt.xlabel('Horizontal distance [m]', size=20)
+plt.ylabel('Depth form surface [m]', size=20)
+plt.xticks(np.arange(0, xgrid_num, 5))
+plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
 plt.show()
