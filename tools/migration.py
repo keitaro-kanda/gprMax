@@ -32,11 +32,10 @@ outputdata_mig = np.zeros([950, 30]) # grid数で定義、[m]じゃないよ！�
 
 xgrid_num = outputdata_mig.shape[1] # x
 zgrid_num = outputdata_mig.shape[0] # z
-print(xgrid_num)
 
 
 # migration処理関数の作成
-def migration(src_step, x, z):
+def migration(src_step, spatial_step, x_index, z_index):
     recieve_power_array = np.zeros(xgrid_num) # rxの数だけ0を並べた配列を作成
 
     for k in range(rx_totalnum): 
@@ -45,8 +44,8 @@ def migration(src_step, x, z):
         x_rx = k * src_step + rx_start # rxの位置
         x_tx = x_rx + antenna_distance # txの位置
 
-        x_index = int(100 * x)
-        z_index = int(100 * z)
+        x = x_index * src_step # [m]
+        z = z_index * spatial_step # [m]
 
 
         # ===Xiao et al.,(2019)の式(5)===
@@ -109,28 +108,25 @@ def migration(src_step, x, z):
         recieve_power_array[k] = outputdata[int(recieve_time / dt), k] # 受信点の電力を配列に格納
         
     # recieve_power_arrayの要素の和をとる
-    outputdata_mig[x_index, z_index] = np.sum(recieve_power_array)
+    outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
 
     return outputdata_mig
 
 
 
+
 # migration処理関数の実行しまくって地下構造を推定する
-def calc_subsurface_structure(src_step):
+def calc_subsurface_structure(src_step, spatial_step):
     for i in tqdm(range(xgrid_num)): # x
         for j in range(zgrid_num): # z
 
-            x = i / 100
-            z = j / 100
-            migration(src_step, x, z)
-
-    return migration(src_step, x, z)
+            migration(src_step,spatial_step, i, j)
+    
+    return outputdata_mig
 
 
-migration_result = calc_subsurface_structure(0.2)
-print(migration_result.shape)
-print(migration_result)
+migration_result = calc_subsurface_structure(0.2, 0.01)
 
-plt.imshow(migration_result, aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
-plt.show( )
-
+plt.imshow(migration_result,aspect='auto', cmap='seismic')
+plt.colorbar()
+plt.show()
