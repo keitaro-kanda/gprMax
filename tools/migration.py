@@ -54,10 +54,6 @@ def migration(src_step, spatial_step, x_index, z_index):
             x_rx = rx_start
             x_tx = rx_start + antenna_distance + k * src_step
 
-        rx_start = params['rx_start'] # rxの初期位置
-        x_rx = k * src_step + rx_start # rxの位置
-        x_tx = x_rx + antenna_distance # txの位置
-
         x = x_index * src_step # [m]
         z = z_index * spatial_step # [m]
 
