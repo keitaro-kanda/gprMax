@@ -15,11 +15,6 @@ import json #jsonの取り扱いに必要
 
 # 読み込みファイル名
 file_name = 'kanda/domain_10x10/test/B-scan/smooth/test_B_merged.out'
-
-# jsonファイルの読み込み
-with open ('kanda/domain_10x10/test/test_mig.json') as f:
-    params = json.load(f)
-
 # .outファイルの読み込み
 output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
@@ -28,7 +23,11 @@ output_data.close()
 for rx in range(1, nrx + 1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
 
-rx_totalnum = outputdata.shape[1] # rxの数
+
+# jsonファイルの読み込み
+with open ('kanda/domain_10x10/test/test_mig.jsonc') as f:
+    params = json.load(f)
+
 
 c = 299792458 # [m/s], 光速
 epsilon_1 = 1 # 空気
@@ -43,17 +42,21 @@ outputdata_mig = np.zeros([params['geometry_matrix_axis0'],
 xgrid_num = outputdata_mig.shape[1] # x
 zgrid_num = outputdata_mig.shape[0] # z
 
-
 # migration処理関数の作成
 def migration(src_step, spatial_step, x_index, z_index):
     recieve_power_array = np.zeros(xgrid_num) # rxの数だけ0を並べた配列を作成
+    rx_totalnum = outputdata.shape[1] # rxの数
+    rx_start = params[rx_start] # rxの初期位置
 
     for k in range(rx_totalnum): 
+        if params['observation_type'] == 'monostatic':
+            x_rx = k * src_step + rx_start # rxの位置
+            x_tx = x_rx + antenna_distance # txの位置
+        elif params['observation_type'] == 'bistatic':
+            x_rx = rx_start
+            x_tx = rx_start + antenna_distance + k * src_step
 
-        rx_start = params[rx_start] # rxの初期位置
-        x_rx = k * src_step + rx_start # rxの位置
-        x_tx = x_rx + antenna_distance # txの位置
-
+        
         x = x_index * src_step # [m]
         z = z_index * spatial_step # [m]
 
