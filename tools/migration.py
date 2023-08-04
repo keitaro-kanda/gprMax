@@ -12,7 +12,7 @@ from tqdm import tqdm  # プログレスバーに必要
 from tools.outputfiles_merge import get_output_data
 
 # 読み込みファイル名
-file_name = 'kanda/domain_10x10/test/B-scan/smooth_2_bi/test_B_merged.out'
+file_name = 'kanda/domain_10x10/test/B-scan/smooth_2/test_B_merged.out'
 # .outファイルの読み込み
 output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
@@ -73,7 +73,7 @@ def migration(src_step, spatial_step, x_index, z_index):
                 / np.sqrt(z**2 + (np.abs(x_rx - x) - d_R_array)**2)
 
             # d_R_leftとd_R_rightの差が最小になるd_Rarrayをd_Rとする
-            d_R = np.argmin(np.abs(d_R_left - d_R_right)) / 100 # [m]
+            d_R = np.argmin(np.abs(d_R_left - d_R_right)) / 100 # [m] 
             #print(d_R) 
 
 
@@ -104,7 +104,7 @@ def migration(src_step, spatial_step, x_index, z_index):
 
         else:
             R_1 = np.sqrt(h**2 + d_T**2) # 送信点から地面までの距離
-            R_2 = np.sqrt(z**2 + (np.abs(x_rx - x) - d_T)**2) # 地面から(x, z)までの距離
+            R_2 = np.sqrt(z**2 + (np.abs(x_tx - x) - d_T)**2) # 地面から(x, z)までの距離
             R_3 = np.sqrt(z**2 + (np.abs(x_rx - x) - d_R)**2) # (x, z)から地面までの距離
             R_4 = np.sqrt(h**2 + d_R**2) # 地面から受信点までの距離
 
