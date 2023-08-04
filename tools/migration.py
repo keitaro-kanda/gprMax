@@ -13,11 +13,6 @@ from tools.outputfiles_merge import get_output_data
 
 # 読み込みファイル名
 file_name = 'kanda/domain_10x10/test/B-scan/smooth_2/test_B_merged.out'
-
-# jsonファイルの読み込み
-with open ('kanda/domain_10x10/test/test_mig.json') as f:
-    params = json.load(f)
-
 # .outファイルの読み込み
 output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
@@ -49,13 +44,13 @@ zgrid_num = outputdata_mig.shape[0] # z
 def migration(src_step, spatial_step, x_index, z_index):
     recieve_power_array = np.zeros(xgrid_num) # rxの数だけ0を並べた配列を作成
     rx_totalnum = outputdata.shape[1] # rxの数
-    rx_start = params[rx_start] # rxの初期位置
+    rx_start = params["rx_start"] # rxの初期位置
 
     for k in range(rx_totalnum): 
-        if params['observation_type'] == 'monostatic':
+        if params['observation_type'] == "monostatic":
             x_rx = k * src_step + rx_start # rxの位置
             x_tx = x_rx + antenna_distance # txの位置
-        elif params['observation_type'] == 'bistatic':
+        elif params['observation_type'] == "bistatic":
             x_rx = rx_start
             x_tx = rx_start + antenna_distance + k * src_step
 
