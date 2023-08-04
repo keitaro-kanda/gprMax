@@ -1,5 +1,6 @@
 {
-    "observation_type": "monostatic",
+    // monostatic or bistatic
+    "observation_type": "bistatic",
 
     // simulation box settings 
     "geometry_matrix_axis0": 950,
