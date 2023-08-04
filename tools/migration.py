@@ -1,3 +1,4 @@
+import json  # jsonの取り扱いに必要
 import re
 from calendar import c
 
@@ -6,15 +7,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy import size
 from scipy import spatial
-from tqdm import tqdm # プログレスバーに必要
+from tqdm import tqdm  # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
-import json #jsonの取り扱いに必要
-
-
 
 # 読み込みファイル名
-file_name = 'kanda/domain_10x10/test/B-scan/smooth/test_B_merged.out'
+file_name = 'kanda/domain_10x10/test/B-scan/smooth_2/test_B_merged.out'
 
 # jsonファイルの読み込み
 with open ('kanda/domain_10x10/test/test_mig.json') as f:
@@ -38,7 +36,7 @@ h = params['antenna_hight'] # [m], アンテナ高さ
 antenna_distance = 0.5 # [m], アンテナ間隔
 
 outputdata_mig = np.zeros([params['geometry_matrix_axis0'], 
-                           params['geometry_matrix_axis0']]) # grid数で定義、[m]じゃないよ！！
+                           params['geometry_matrix_axis1']]) # grid数で定義、[m]じゃないよ！！
 
 xgrid_num = outputdata_mig.shape[1] # x
 zgrid_num = outputdata_mig.shape[0] # z
@@ -50,7 +48,7 @@ def migration(src_step, spatial_step, x_index, z_index):
 
     for k in range(rx_totalnum): 
 
-        rx_start = params[rx_start] # rxの初期位置
+        rx_start = params['rx_start'] # rxの初期位置
         x_rx = k * src_step + rx_start # rxの位置
         x_tx = x_rx + antenna_distance # txの位置
 
@@ -149,6 +147,6 @@ plt.imshow(migration_result,
 plt.colorbar()
 plt.xlabel('Horizontal distance [m]', size=20)
 plt.ylabel('Depth form surface [m]', size=20)
-plt.xticks(np.arange(0, xgrid_num, 5))
+plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
 plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
 plt.show()

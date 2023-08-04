@@ -3,6 +3,6 @@
     "geometry_matrix_axis0": 950,
     "geometry_matrix_axis1": 50,
     "observation_intarval": 0.2,
-    "spatial_resolution": 0.01,
+    "spatial_step": 0.01,
     "rx_start": 1.75
 }
