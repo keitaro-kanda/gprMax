@@ -6,12 +6,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy import size
 from scipy import spatial
-from tqdm import tqdm
+from tqdm import tqdm # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
+import json #jsonの取り扱いに必要
+
+
 
 # 読み込みファイル名
 file_name = 'kanda/domain_10x10/test/B-scan/smooth/test_B_merged.out'
+
+# jsonファイルの読み込み
+with open ('kanda/domain_10x10/test/test_mig.json') as f:
+    params = json.load(f)
 
 # .outファイルの読み込み
 output_data = h5py.File(file_name, 'r')
@@ -27,10 +34,11 @@ c = 299792458 # [m/s], 光速
 epsilon_1 = 1 # 空気
 epsilon_2 = 4 # レゴリス
 
-h = 1.5 # [m], アンテナ高さ
+h = params['antenna_hight'] # [m], アンテナ高さ
 antenna_distance = 0.5 # [m], アンテナ間隔
 
-outputdata_mig = np.zeros([950, 50]) # grid数で定義、[m]じゃないよ！！
+outputdata_mig = np.zeros([params['geometry_matrix_axis0'], 
+                           params['geometry_matrix_axis0']]) # grid数で定義、[m]じゃないよ！！
 
 xgrid_num = outputdata_mig.shape[1] # x
 zgrid_num = outputdata_mig.shape[0] # z
@@ -42,7 +50,7 @@ def migration(src_step, spatial_step, x_index, z_index):
 
     for k in range(rx_totalnum): 
 
-        rx_start = 1.75 # rxの初期位置
+        rx_start = params[rx_start] # rxの初期位置
         x_rx = k * src_step + rx_start # rxの位置
         x_tx = x_rx + antenna_distance # txの位置
 
@@ -53,7 +61,7 @@ def migration(src_step, spatial_step, x_index, z_index):
         # ===Xiao et al.,(2019)の式(5)===
 
         # d_Rを求める、d_R：電波の地中侵入地点とrxの水平距離
-        d_R_array = np.arange(0.01, 10.01, 0.01) # 間隔は空間ステップにしたがう
+        d_R_array = np.arange(0.01, 10.01, spatial_step) # 間隔は空間ステップにしたがう
 
         # (x, z)が地表面にいる場合、ゼロ徐算を避ける
         if z == 0:
@@ -127,8 +135,13 @@ def calc_subsurface_structure(src_step, spatial_step):
     return outputdata_mig
 
 
-migration_result = calc_subsurface_structure(0.2, 0.01)
+# 関数の実行
+obs_intarval = params['observation_intarval'] # [m]
+spatial_step = params['spatial_step'] # [m]
+migration_result = calc_subsurface_structure(obs_intarval, spatial_step)
 
+
+# プロット
 plt.figure(figsize=(18, 15), facecolor='w', edgecolor='w')
 plt.imshow(migration_result,
            aspect='auto', cmap='seismic',
