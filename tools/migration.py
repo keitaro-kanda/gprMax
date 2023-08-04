@@ -12,7 +12,7 @@ from tqdm import tqdm  # プログレスバーに必要
 from tools.outputfiles_merge import get_output_data
 
 # 読み込みファイル名
-file_name = 'kanda/domain_10x10/test/B-scan/smooth_2/test_B_merged.out'
+file_name = 'kanda/domain_10x10/test/B-scan/smooth_2_bi/test_B_merged.out'
 # .outファイルの読み込み
 output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
