@@ -61,7 +61,7 @@ def migration(src_step, spatial_step, x_index, z_index):
         # ===Xiao et al.,(2019)の式(5)===
 
         # d_Rを求める、d_R：電波の地中侵入地点とrxの水平距離
-        d_R_array = np.arange(0.01, 10.01, spatial_step) # 間隔は空間ステップにしたがう
+        d_R_array = np.arange(0, xgrid_num*obs_intarval, spatial_step) # 間隔は空間ステップにしたがう
 
         # (x, z)が地表面にいる場合、ゼロ徐算を避ける
         if z == 0:
@@ -79,7 +79,7 @@ def migration(src_step, spatial_step, x_index, z_index):
 
 
         # d_Tを求める、d_T：電波の地中侵入地点とtxの水平距離
-        d_T_array = np.arange(0.01, 10.01, 0.01)
+        d_T_array = np.arange(0, xgrid_num*obs_intarval, spatial_step)
 
         # (x, z)が地表面にいる場合、ゼロ徐算を避ける
         if z == 0:
