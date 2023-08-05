@@ -97,10 +97,10 @@ def migration(src_step, spatial_step, x_index, z_index):
         
         # ===Xiao et al.,(2019)の式(4)===
         if z == 0:
-            R_1 = np.sqrt(h**2 + d_T**2) # 送信点から地面までの距離
+            R_1 = d_T # 送信点から地面までの距離
             R_2 = 0 # 地面から(x, z)までの距離
             R_3 = 0 # (x, z)から地面までの距離
-            R_4 = np.sqrt(h**2 + d_R**2) # 地面から受信点までの距離
+            R_4 = d_R # 地面から受信点までの距離
 
         else:
             R_1 = np.sqrt(h**2 + d_T**2) # 送信点から地面までの距離
