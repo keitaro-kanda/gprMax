@@ -1,8 +1,8 @@
 {
     "_comment": "input data file",
-    "input_data": "kanda/domain_10x10/test/B-scan/smooth_2/test_B_merged.out",
+    "input_data": "kanda/domain_10x10/test/B-scan/smooth_2_bi/test_B_merged.out",
     "_comment" : "monostatic or bistatic",
-    "observation_type": "monostatic",
+    "observation_type": "bistatic",
 
     "_comment": "simulation box settings",
     "geometry_matrix_axis0": 800,

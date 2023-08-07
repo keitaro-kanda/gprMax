@@ -153,7 +153,7 @@ plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
 plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
 
 # plotの保存
-path = os.path.abspath(__file__)
+path = os.path.dirname(file_name)
 plt.savefig(path+'/migration_result.png', bbox_inches='tight', dpi=300)
 
 plt.show()
