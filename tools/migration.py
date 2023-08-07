@@ -1,14 +1,10 @@
-import imp
 import json  # jsonの取り扱いに必要
 import os
-import re
 from calendar import c
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy import size
-from scipy import spatial
 from tqdm import tqdm  # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
@@ -156,7 +152,8 @@ plt.ylabel('Depth form surface [m]', size=20)
 plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
 plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
 
-# .outファイルと同じ場所にplotを保存
-plt.savefig('migration_result.png', bbox_inches='tight', dpi=300)
+# plotの保存
+path = os.path.abspath(__file__)
+plt.savefig(path+'/migration_result.png', bbox_inches='tight', dpi=300)
 
 plt.show()
