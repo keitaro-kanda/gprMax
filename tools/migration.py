@@ -12,7 +12,7 @@ from tqdm import tqdm  # プログレスバーに必要
 from tools.outputfiles_merge import get_output_data
 
 # 読み込みファイル名
-file_name = 'kanda/domain_10x10/test/B-scan/smooth_2/test_B_merged.out'
+file_name = 'kanda/domain_10x10/test/B-scan/smooth_2_bi/test_B_merged.out'
 # .outファイルの読み込み
 output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
@@ -23,7 +23,7 @@ for rx in range(1, nrx + 1):
 
 
 # jsonファイルの読み込み
-with open ('kanda/domain_10x10/test/test_mig.jsonc') as f:
+with open ('kanda/domain_10x10/test/test_mig.json') as f:
     params = json.load(f)
 
 
@@ -31,10 +31,14 @@ c = 299792458 # [m/s], 光速
 epsilon_1 = 1 # 空気
 epsilon_2 = 4 # レゴリス
 
-h = params['antenna_hight'] # [m], アンテナ高さ
+
+obs_intarval = params['observation_intarval'] # [m]
+spatial_step = params['spatial_step'] # [m]
+#antenna_zindex = params['antenna_zindex'] / spatial_step # [m]
+h = params['antenna_hight'] # [m], アンテナの高さ
 antenna_distance = 0.5 # [m], アンテナ間隔
 
-outputdata_mig = np.zeros([params['geometry_matrix_axis0'], 
+outputdata_mig = np.zeros([params['geometry_matrix_axis0']+spatial_step, 
                            params['geometry_matrix_axis1']]) # grid数で定義、[m]じゃないよ！！
 
 xgrid_num = outputdata_mig.shape[1] # x
@@ -136,8 +140,6 @@ def calc_subsurface_structure(src_step, spatial_step):
 
 
 # 関数の実行
-obs_intarval = params['observation_intarval'] # [m]
-spatial_step = params['spatial_step'] # [m]
 migration_result = calc_subsurface_structure(obs_intarval, spatial_step)
 
 
@@ -151,4 +153,6 @@ plt.xlabel('Horizontal distance [m]', size=20)
 plt.ylabel('Depth form surface [m]', size=20)
 plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
 plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
+
+
 plt.show()

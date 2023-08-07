@@ -3,11 +3,12 @@
     "observation_type": "monostatic",
 
     "_comment": "simulation box settings",
-    "geometry_matrix_axis0": 950,
+    "geometry_matrix_axis0": 800,
     "geometry_matrix_axis1": 50,
     "spatial_step": 0.01,
 
     "_comment": "observation settings",
+    "antenna_zindex": 0.5,
     "antenna_hight": 1.5,
     "rx_start": 1.75,
     "observation_intarval": 0.2
