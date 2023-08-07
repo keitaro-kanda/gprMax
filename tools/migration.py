@@ -11,9 +11,14 @@ from tqdm import tqdm  # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
 
-# 読み込みファイル名
-file_name = 'kanda/domain_10x10/test/B-scan/smooth_2_bi/test_B_merged.out'
+
+# jsonファイルの読み込み
+with open ('kanda/domain_10x10/test/test_mig.json') as f:
+    params = json.load(f)
+
+
 # .outファイルの読み込み
+file_name = params['input_data']
 output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
 output_data.close()
@@ -22,11 +27,7 @@ for rx in range(1, nrx + 1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
 
 
-# jsonファイルの読み込み
-with open ('kanda/domain_10x10/test/test_mig.json') as f:
-    params = json.load(f)
-
-
+# 定数の設定
 c = 299792458 # [m/s], 光速
 epsilon_1 = 1 # 空気
 epsilon_2 = 4 # レゴリス
@@ -154,5 +155,7 @@ plt.ylabel('Depth form surface [m]', size=20)
 plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
 plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
 
+# .outファイルと同じ場所にplotを保存
+plt.savefig('migration_result.png', bbox_inches='tight', dpi=300)
 
 plt.show()
