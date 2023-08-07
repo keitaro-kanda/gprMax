@@ -1,4 +1,6 @@
+import imp
 import json  # jsonの取り扱いに必要
+import os
 import re
 from calendar import c
 
@@ -10,7 +12,6 @@ from scipy import spatial
 from tqdm import tqdm  # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
-
 
 # jsonファイルの読み込み
 with open ('kanda/domain_10x10/test/test_mig.json') as f:
@@ -39,7 +40,7 @@ spatial_step = params['spatial_step'] # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
 antenna_distance = 0.5 # [m], アンテナ間隔
 
-outputdata_mig = np.zeros([params['geometry_matrix_axis0']+spatial_step, 
+outputdata_mig = np.zeros([params['geometry_matrix_axis0'], 
                            params['geometry_matrix_axis1']]) # grid数で定義、[m]じゃないよ！！
 
 xgrid_num = outputdata_mig.shape[1] # x
