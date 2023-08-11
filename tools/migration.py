@@ -21,8 +21,6 @@ output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
 output_data.close()
 
-for rx in range(1, nrx + 1):
-    outputdata, dt = get_output_data(file_name, rx, 'Ez')
 
 
 # 定数の設定
@@ -31,7 +29,9 @@ epsilon_1 = 1 # 空気
 epsilon_2 = 4 # レゴリス
 
 
-obs_intarval = params['observation_intarval'] # [m]
+tx_step = params['tx_step'] # [m]
+rx_step = params['rx_step'] # [m]
+x_resolution = params['x_resolution'] # [m]
 spatial_step = params['spatial_step'] # [m]
 #antenna_zindex = params['antenna_zindex'] / spatial_step # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
@@ -44,27 +44,34 @@ xgrid_num = outputdata_mig.shape[1] # x
 zgrid_num = outputdata_mig.shape[0] # z
 
 # migration処理関数の作成
-def migration(src_step, spatial_step, x_index, z_index):
+def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
     recieve_power_array = np.zeros(xgrid_num) # rxの数だけ0を並べた配列を作成
-    rx_totalnum = outputdata.shape[1] # rxの数
+    total_trace_num =  params["total_trace_num"] # rxの数
+    tx_start = params["tx_start"] # txの初期位置
     rx_start = params["rx_start"] # rxの初期位置
 
-    for k in range(rx_totalnum): 
+    for k in range(total_trace_num): 
         if params['observation_type'] == "monostatic":
-            x_rx = k * src_step + rx_start # rxの位置
+            x_rx = k * rx_step + rx_start # rxの位置
             x_tx = x_rx + antenna_distance # txの位置
         elif params['observation_type'] == "bistatic":
-            x_rx = rx_start
-            x_tx = rx_start + antenna_distance + k * src_step
+            x_rx = rx_start + k * rx_step
+            x_tx = tx_start + k * tx_step
+        elif params['observation_type'] == "array":
+            x_rx = rx_start + rx * rx_step
+            x_tx = tx_start + k * tx_step
+        else:
+            print("observation_type is monostatic or bistatic")
+            break
 
-        x = x_index * src_step # [m]
+        x = x_index * x_resolution # [m]
         z = z_index * spatial_step # [m]
 
 
         # ===Xiao et al.,(2019)の式(5)===
 
         # d_Rを求める、d_R：電波の地中侵入地点とrxの水平距離
-        d_R_array = np.arange(0, xgrid_num*obs_intarval, spatial_step) # 間隔は空間ステップにしたがう
+        d_R_array = np.arange(0, xgrid_num*x_resolution, spatial_step) # 間隔は空間ステップにしたがう
 
         # (x, z)が地表面にいる場合、ゼロ徐算を避ける
         if z == 0:
@@ -83,7 +90,7 @@ def migration(src_step, spatial_step, x_index, z_index):
 
 
         # d_Tを求める、d_T：電波の地中侵入地点とtxの水平距離
-        d_T_array = np.arange(0, xgrid_num*obs_intarval, spatial_step)
+        d_T_array = np.arange(0, xgrid_num*x_resolution, spatial_step)
 
         # (x, z)が地表面にいる場合、ゼロ徐算を避ける
         if z == 0:
@@ -117,7 +124,7 @@ def migration(src_step, spatial_step, x_index, z_index):
         # ===伝搬時間、到来時間の計算===
         total_propagating_distance = (np.sqrt(epsilon_1)*(R_1 + R_4) + np.sqrt(epsilon_2) * (R_2 + R_3))
         delta_t = total_propagating_distance / c # 伝搬時間
-        recieve_time = delta_t # 伝搬時間
+        recieve_time = 0.1e-8 + delta_t # 伝搬時間
 
 
         # ===それぞれのアンテナ位置rxに対し、位置(x, z)における反射強度を保存===
@@ -133,31 +140,34 @@ def migration(src_step, spatial_step, x_index, z_index):
 
 
 # migration処理関数の実行しまくって地下構造を推定する
-def calc_subsurface_structure(src_step, spatial_step):
+def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
     for i in tqdm(range(xgrid_num)): # x
         for j in range(zgrid_num): # z
 
-            migration(src_step,spatial_step, i, j)
+            migration(rx, tx_step, rx_step, spatial_step, i, j)
     
     return outputdata_mig
 
 
 # 関数の実行
-migration_result = calc_subsurface_structure(obs_intarval, spatial_step)
+for rx in range(1, nrx + 1):
+    outputdata, dt = get_output_data(file_name, rx, 'Ez')
+    migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
 
 
-# プロット
-plt.figure(figsize=(18, 15), facecolor='w', edgecolor='w')
-plt.imshow(migration_result,
-           aspect='auto', cmap='seismic', vmin=-np.amax(outputdata_mig), vmax=np.amax(outputdata_mig))
-plt.colorbar()
-plt.xlabel('Horizontal distance [m]', size=20)
-plt.ylabel('Depth form surface [m]', size=20)
-plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
-plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
+    # プロット
+    plt.figure(figsize=(18, 15), facecolor='w', edgecolor='w')
+    plt.imshow(migration_result,
+            aspect='auto', cmap='seismic', vmin=-np.amax(outputdata_mig), vmax=np.amax(outputdata_mig))
+    plt.colorbar()
+    plt.xlabel('Horizontal distance [m]', size=20)
+    plt.ylabel('Depth form surface [m]', size=20)
+    plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
+    plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
+    plt.title('Migration result rx: ' + str(rx), size=20)
 
-# plotの保存
-path = os.path.dirname(file_name)
-plt.savefig(path+'/migration_result.png', bbox_inches='tight', dpi=300)
+    # plotの保存
+    path = os.path.dirname(file_name)
+    plt.savefig(path+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
 
-plt.show()
+    plt.show()
