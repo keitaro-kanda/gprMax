@@ -11,7 +11,7 @@ from tqdm import tqdm  # プログレスバーに必要
 from tools.outputfiles_merge import get_output_data
 
 # jsonファイルの読み込み
-with open ('kanda/domain_10x10/test/test_mig.json') as f:
+with open ('kanda/domain_10x10/test/B-scan/smooth_2/smooth_2_mig.json') as f:
     params = json.load(f)
 
 
@@ -35,7 +35,7 @@ x_resolution = params['x_resolution'] # [m]
 spatial_step = params['spatial_step'] # [m]
 #antenna_zindex = params['antenna_zindex'] / spatial_step # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
-antenna_distance = 0.5 # [m], アンテナ間隔
+antenna_distance = params["monostatic_antenna_distance"]# [m], アンテナ間隔
 
 outputdata_mig = np.zeros([params['geometry_matrix_axis0'], 
                            params['geometry_matrix_axis1']]) # grid数で定義、[m]じゃないよ！！
@@ -51,13 +51,13 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
     rx_start = params["rx_start"] # rxの初期位置
 
     for k in range(total_trace_num): 
-        if params['observation_type'] == "monostatic":
+        if params['monostatic'] == "yes":
             x_rx = k * rx_step + rx_start # rxの位置
             x_tx = x_rx + antenna_distance # txの位置
-        elif params['observation_type'] == "bistatic":
+        elif params['bistatic'] == "yes":
             x_rx = rx_start + k * rx_step
             x_tx = tx_start + k * tx_step
-        elif params['observation_type'] == "array":
+        elif params['array'] == "yes":
             x_rx = rx_start + rx * rx_step
             x_tx = tx_start + k * tx_step
         else:
@@ -171,3 +171,4 @@ for rx in range(1, nrx + 1):
     plt.savefig(path+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
 
     plt.show()
+    plt.close()
