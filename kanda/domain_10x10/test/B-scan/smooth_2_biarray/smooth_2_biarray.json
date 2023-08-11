@@ -1,0 +1,24 @@
+{
+    "_comment": "input data file",
+    "input_data": "kanda/domain_10x10/test/B-scan/smooth_2/rx20/test_B_merged.out",
+    "_comment" : "radar type",
+    "monostatic": "no",
+    "monostatic_antenna_distance": 0.5,
+    "bistatic": "no",
+    "array": "yes",
+
+    "_comment": "simulation box settings",
+    "geometry_matrix_axis0": 800,
+    "geometry_matrix_axis1": 50,
+    "spatial_step": 0.01,
+
+    "_comment": "observation settings",
+    "antenna_zindex": 0.5,
+    "antenna_hight": 1.5,
+    "tx_start": 2,
+    "rx_start": 2,
+    "tx_step": 0.5,
+    "rx_step": 0,
+    "x_resolution": 0.2,
+    "total_trace_num": 30
+}

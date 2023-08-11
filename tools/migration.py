@@ -11,7 +11,7 @@ from tqdm import tqdm  # プログレスバーに必要
 from tools.outputfiles_merge import get_output_data
 
 # jsonファイルの読み込み
-with open ('kanda/domain_10x10/test/B-scan/smooth_2/smooth_2_mig.json') as f:
+with open ('kanda/domain_10x10/test/B-scan/smooth_2_bi/smooth_2_bi.json') as f:
     params = json.load(f)
 
 
@@ -51,17 +51,17 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
     rx_start = params["rx_start"] # rxの初期位置
 
     for k in range(total_trace_num): 
-        if params['monostatic'] == "yes":
+        if params['monostatic'] == "yes" and params['bistatic'] == "no" and params['array'] == "no":
             x_rx = k * rx_step + rx_start # rxの位置
             x_tx = x_rx + antenna_distance # txの位置
-        elif params['bistatic'] == "yes":
+        elif params['bistatic'] == "yes" and params['monostatic'] == "no" and params['array'] == "no":
             x_rx = rx_start + k * rx_step
             x_tx = tx_start + k * tx_step
-        elif params['array'] == "yes":
+        elif params['array'] == "yes" and params['monostatic'] == "no" and params['bistatic'] == "no":
             x_rx = rx_start + rx * rx_step
             x_tx = tx_start + k * tx_step
         else:
-            print("observation_type is monostatic or bistatic")
+            print("input correct antenna type")
             break
 
         x = x_index * x_resolution # [m]
