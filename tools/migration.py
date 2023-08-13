@@ -1,3 +1,4 @@
+import argparse
 import json  # jsonの取り扱いに必要
 import os
 
@@ -8,8 +9,6 @@ from matplotlib.colors import LogNorm
 from tqdm import tqdm  # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
-import argparse
-
 
 # ======load files=====
 # Parse command line arguments
@@ -27,7 +26,13 @@ file_name = params['input_data']
 output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
 output_data.close()
+input_dir_path = os.path.dirname(file_name)
 # =====load files=====
+
+# make output directory
+output_dir_path = os.path.join(input_dir_path, 'migration')
+if not os.path.exists(output_dir_path):
+    os.mkdir(output_dir_path)
 
 
 
@@ -164,7 +169,7 @@ for rx in range(1, nrx + 1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
     migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
     # migration_resultをtxtファイルに保存
-    np.savetxt('migration_result_rx' + str(rx) + '.txt', migration_result)
+    np.savetxt(output_dir_path+'/migration_result_rx' + str(rx) + '.txt', migration_result)
 
 
     # プロット
@@ -176,11 +181,10 @@ for rx in range(1, nrx + 1):
     plt.ylabel('Depth form surface [m]', size=20)
     plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
     plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
-    plt.title('Migration result rx: ' + str(rx), size=20)
+    plt.title('Migration result rx' + str(rx), size=20)
 
     # plotの保存
-    path = os.path.dirname(file_name)
-    plt.savefig(path+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+    plt.savefig(output_dir_path+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
 
     plt.show()
     plt.close()
