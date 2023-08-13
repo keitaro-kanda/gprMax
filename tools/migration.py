@@ -1,6 +1,5 @@
 import json  # jsonの取り扱いに必要
 import os
-from calendar import c
 
 import h5py
 import matplotlib.pyplot as plt
@@ -9,17 +8,26 @@ from matplotlib.colors import LogNorm
 from tqdm import tqdm  # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
+import argparse
 
-# jsonファイルの読み込み
-with open ('kanda/domain_10x10/test/B-scan/smooth_2_bi/smooth_2_bi.json') as f:
+
+# ======load files=====
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Processing migration', 
+                                 usage='cd gprMax; python -m tools.migration jsonfile')
+parser.add_argument('jsonfile', help='json file name')
+args = parser.parse_args()
+
+# load json file
+with open (args.jsonfile) as f:
     params = json.load(f)
 
-
-# .outファイルの読み込み
+# Open output file and read number of outputs (receivers)
 file_name = params['input_data']
 output_data = h5py.File(file_name, 'r')
 nrx = output_data.attrs['nrx']
 output_data.close()
+# =====load files=====
 
 
 
@@ -42,6 +50,8 @@ outputdata_mig = np.zeros([params['geometry_matrix_axis0'],
 
 xgrid_num = outputdata_mig.shape[1] # x
 zgrid_num = outputdata_mig.shape[0] # z
+
+
 
 # migration処理関数の作成
 def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
@@ -153,6 +163,8 @@ def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
 for rx in range(1, nrx + 1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
     migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
+    # migration_resultをtxtファイルに保存
+    np.savetxt('migration_result_rx' + str(rx) + '.txt', migration_result)
 
 
     # プロット
