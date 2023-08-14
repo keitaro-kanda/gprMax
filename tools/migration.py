@@ -93,7 +93,11 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         delta_t = (L_vacuum + L_ground) / c # [s]
         recieved_time = delta_t + params["wave_start_time"] # [s]
 
-        recieve_power_array[k] = outputdata[int(recieved_time / dt), k]
+        #recieve_power_array[k] = outputdata[int(recieved_time / dt), k]
+        for l in range(k+1, total_trace_num):
+            l_array = np.zeros(total_trace_num-k)
+            l_array[l-k-1] = outputdata[int(recieved_time / dt), k] * outputdata[int(recieved_time / dt), l]
+            recieve_power_array[k] = np.sum(l_array)
     
     # recieve_power_arrayの要素の和をとる
     outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
@@ -172,7 +176,7 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
 
 # migration処理関数の実行しまくって地下構造を推定する
 def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
-    for i in tqdm(range(xgrid_num), desc="rx"+rx): # x
+    for i in tqdm(range(xgrid_num), desc="rx" + str(rx)): # x
         for j in range(zgrid_num): # z
 
             migration(rx, tx_step, rx_step, spatial_step, i, j)
@@ -181,7 +185,8 @@ def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
 
 
 # 関数の実行
-for rx in range(1, nrx + 1):
+#for rx in range(1, nrx + 1):
+for rx in range(1, 2):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
     migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
     # migration_resultをtxtファイルに保存
@@ -189,9 +194,10 @@ for rx in range(1, nrx + 1):
 
 
     # プロット
+    migration_result_percent = migration_result / np.amax(migration_result) * 100
     plt.figure(figsize=(18, 15), facecolor='w', edgecolor='w')
-    plt.imshow(migration_result,
-            aspect='auto', cmap='seismic', vmin=-np.amax(outputdata_mig), vmax=np.amax(outputdata_mig))
+    plt.imshow(migration_result_percent,
+            aspect='auto', cmap='seismic', vmin=-10, vmax=10)
     plt.colorbar()
     plt.xlabel('Horizontal distance [m]', size=20)
     plt.ylabel('Depth form surface [m]', size=20)
