@@ -83,20 +83,32 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         x = x_index * x_resolution # [m]
         z = z_index * spatial_step # [m]
 
-        # Tx->(x, z)
-        Lt = np.sqrt(np.abs(x_tx - x)**2 + (h + z)**2 ) # [m]
+        # trace k
+        Lt_k = np.sqrt(np.abs(x_tx - x)**2 + (h + z)**2 ) # [m]
         Lr = np.sqrt(np.abs(x_rx - x)**2 + (h + z)**2 ) # [m]
 
-        L_vacuum = np.sqrt(epsilon_1)*(Lt + Lr) * h / (z + h)   
-        L_ground = np.sqrt(epsilon_2)*(Lt + Lr) * z / (z + h) 
+        L_vacuum_k = np.sqrt(epsilon_1)*(Lt_k + Lr) * h / (z + h)   
+        L_ground_k = np.sqrt(epsilon_2)*(Lt_k + Lr) * z / (z + h) 
 
-        delta_t = (L_vacuum + L_ground) / c # [s]
-        recieved_time = delta_t + params["wave_start_time"] # [s]
+        delta_t_k = (L_vacuum_k + L_ground_k) / c # [s]
+        recieved_time_k = delta_t_k + params["wave_start_time"] # [s]
 
-        #recieve_power_array[k] = outputdata[int(recieved_time / dt), k]
+
         for l in range(k+1, total_trace_num):
+            # trace l
+            x_tx_l = x_tx + (l-k) * x_resolution
+            Lt_l = np.sqrt(np.abs(x_tx_l - x)**2 + (h + z)**2 ) # [m]
+
+            L_vacuum_l = np.sqrt(epsilon_1)*(Lt_l + Lr) * h / (z + h)   
+            L_ground_l = np.sqrt(epsilon_2)*(Lt_l + Lr) * z / (z + h) 
+
+            delta_t_l = (L_vacuum_l + L_ground_l) / c # [s]
+            recieved_time_l = delta_t_l + params["wave_start_time"] # [s]
+
+            #recieve_power_array[k] = outputdata[int(recieved_time / dt), k]
             l_array = np.zeros(total_trace_num-k)
-            l_array[l-k-1] = outputdata[int(recieved_time / dt), k] * outputdata[int(recieved_time / dt), l]
+            l_array[l-k-1] = (Lt_k + Lr) * outputdata[int(recieved_time_k / dt), k] \
+                * (Lt_l + Lr) * outputdata[int(recieved_time_l / dt), l]
             recieve_power_array[k] = np.sum(l_array)
     
     # recieve_power_arrayの要素の和をとる
@@ -186,7 +198,7 @@ def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
 
 # 関数の実行
 #for rx in range(1, nrx + 1):
-for rx in range(1, 2):
+for rx in range(15, 16):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
     migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
     # migration_resultをtxtファイルに保存
@@ -201,8 +213,8 @@ for rx in range(1, 2):
     plt.colorbar()
     plt.xlabel('Horizontal distance [m]', size=20)
     plt.ylabel('Depth form surface [m]', size=20)
-    plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
-    plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
+    plt.xticks(np.arange(0, xgrid_num+1, 5), np.arange(0, xgrid_num*0.2, 1))
+    plt.yticks(np.arange(0, zgrid_num+1, 100), np.arange(0, zgrid_num*0.01, 1))
     plt.title('Migration result rx' + str(rx), size=20)
 
     # plotの保存
