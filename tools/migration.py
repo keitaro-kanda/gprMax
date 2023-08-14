@@ -202,4 +202,5 @@ for rx in range(1, nrx + 1):
     # plotの保存
     plt.savefig(output_dir_path+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
 
-    plt.show()
+    if params['monostatic'] == "yes" or params['bistatic'] == "yes":
+        plt.show()
