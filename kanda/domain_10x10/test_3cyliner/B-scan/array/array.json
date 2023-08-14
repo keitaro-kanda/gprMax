@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "input_data": "kanda/domain_10x10/test/B-scan/smooth_2/rx20/test_B_merged.out",
+    "input_data": "/Users/keitarokanda/gprMax/kanda/domain_10x10/test_3cyliner/B-scan/array/B_out/array_merged.out",
     "_comment" : "radar type",
     "monostatic": "no",
     "monostatic_antenna_distance": 0.5,
