@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "input_data": "kanda/domain_10x10/test_3cyliner/B-scan/monostatic/test_B_merged.out",
+    "input_data": "kanda/domain_10x10/test_3cyliner/B-scan/monostatic/B_out/out_files/monostatic_merged.out",
     "_comment" : "radar type",
     "monostatic": "yes",
     "monostatic_antenna_distance": 0.5,
@@ -15,8 +15,8 @@
     "_comment": "observation settings",
     "antenna_zindex": 0.5,
     "antenna_hight": 1.5,
-    "tx_start": 2.25,
-    "rx_start": 1.75,
+    "tx_start": 2.5,
+    "rx_start": 2,
     "tx_step": 0.2,
     "rx_step": 0.2,
     "x_resolution": 0.2,
