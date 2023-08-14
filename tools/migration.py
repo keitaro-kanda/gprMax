@@ -87,8 +87,8 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         Lt = np.sqrt(np.abs(x_tx - x)**2 + (h + z)**2 ) # [m]
         Lr = np.sqrt(np.abs(x_rx - x)**2 + (h + z)**2 ) # [m]
 
-        L_vacuum = np.sqrt(epsilon_1)(Lt + Lr) * h / (z + h)   
-        L_ground = np.sqrt(epsilon_2)(Lt + Lr) * z / (z + h) 
+        L_vacuum = np.sqrt(epsilon_1)*(Lt + Lr) * h / (z + h)   
+        L_ground = np.sqrt(epsilon_2)*(Lt + Lr) * z / (z + h) 
 
         delta_t = (L_vacuum + L_ground) / c # [s]
         recieved_time = delta_t + params["wave_start_time"] # [s]
