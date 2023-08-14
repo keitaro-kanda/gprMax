@@ -97,8 +97,9 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
     
     # recieve_power_arrayの要素の和をとる
     outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
+    return outputdata_mig
 
-        """
+"""
         # ===Xiao et al.,(2019)の式(5)===
 
         # d_Rを求める、d_R: 電波の地中侵入地点とrxの水平距離
@@ -164,9 +165,7 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         
     # recieve_power_arrayの要素の和をとる
     outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
-    """
-
-    return outputdata_mig
+"""
 
 
 
