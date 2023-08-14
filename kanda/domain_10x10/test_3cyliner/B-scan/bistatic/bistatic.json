@@ -1,11 +1,11 @@
 {
     "_comment": "input data file",
-    "input_data": "kanda/domain_10x10/test/B-scan/smooth_2_bi/test_B_merged.out",
+    "input_data": "/Users/keitarokanda/gprMax/kanda/domain_10x10/test_3cyliner/B-scan/bistatic/B_out/test_B_merged.out",
     "_comment" : "radar type",
     "monostatic": "no",
     "monostatic_antenna_distance": 0.5,
-    "bistatic": "no",
-    "array": "yes",
+    "bistatic": "yes",
+    "array": "no",
 
     "_comment": "simulation box settings",
     "geometry_matrix_axis0": 800,
@@ -20,5 +20,6 @@
     "tx_step": 0.2,
     "rx_step": 0,
     "x_resolution": 0.2,
-    "total_trace_num": 30
+    "total_trace_num": 30,
+    "wave_start_time": 0.1e-8
 }
