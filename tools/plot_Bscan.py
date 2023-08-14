@@ -45,6 +45,9 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     """
 
     (path, filename) = os.path.split(filename)
+    outputdir = os.path.join(path, 'Bscan_plots')
+    if not os.path.exists(outputdir):
+        os.mkdir(outputdir)
 
     fig = plt.figure(num=filename + ' - rx' + str(rxnumber), 
                      figsize=(20, 10), facecolor='w', edgecolor='w')
@@ -114,10 +117,11 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     # fig.savefig(path + os.sep + savefile + '.pdf', dpi=None, format='pdf', 
     #             bbox_inches='tight', pad_inches=0.1)
     if closeup:
-        fig.savefig(path + os.sep + 'closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
+        fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
+                    'closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
     else:
-        fig.savefig(path + os.sep + savefile + '.png', dpi=150, format='png', 
+        fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
 
     return plt
