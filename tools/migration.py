@@ -213,8 +213,8 @@ for rx in range(15, 16):
     plt.colorbar()
     plt.xlabel('Horizontal distance [m]', size=20)
     plt.ylabel('Depth form surface [m]', size=20)
-    plt.xticks(np.arange(0, xgrid_num+1, 5), np.arange(0, xgrid_num*0.2, 1))
-    plt.yticks(np.arange(0, zgrid_num+1, 100), np.arange(0, zgrid_num*0.01, 1))
+    plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
+    plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
     plt.title('Migration result rx' + str(rx), size=20)
 
     # plotの保存
