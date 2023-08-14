@@ -172,7 +172,7 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
 
 # migration処理関数の実行しまくって地下構造を推定する
 def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
-    for i in tqdm(range(xgrid_num)): # x
+    for i in tqdm(range(xgrid_num), desc="rx"+rx): # x
         for j in range(zgrid_num): # z
 
             migration(rx, tx_step, rx_step, spatial_step, i, j)
