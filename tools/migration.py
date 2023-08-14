@@ -92,8 +92,9 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
 
         delta_t_k = (L_vacuum_k + L_ground_k) / c # [s]
         recieved_time_k = delta_t_k + params["wave_start_time"] # [s]
+        recieve_power_array[k] = outputdata[int(recieved_time_k / dt), k]
 
-
+        """ correration
         for l in range(k+1, total_trace_num):
             # trace l
             x_tx_l = x_tx + (l-k) * x_resolution
@@ -110,6 +111,7 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
             l_array[l-k-1] = (Lt_k + Lr) * outputdata[int(recieved_time_k / dt), k] \
                 * (Lt_l + Lr) * outputdata[int(recieved_time_l / dt), l]
             recieve_power_array[k] = np.sum(l_array)
+        """
     
     # recieve_power_arrayの要素の和をとる
     outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
