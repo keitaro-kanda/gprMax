@@ -74,7 +74,7 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
             x_rx = rx_start + k * rx_step
             x_tx = tx_start + k * tx_step
         elif params['array'] == "yes" and params['monostatic'] == "no" and params['bistatic'] == "no":
-            x_rx = rx_start + rx * rx_step
+            x_rx = rx_start + (rx-1) * x_resolution
             x_tx = tx_start + k * tx_step
         else:
             print("input correct antenna type")
