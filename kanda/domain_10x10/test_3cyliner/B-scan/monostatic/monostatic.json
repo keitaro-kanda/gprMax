@@ -20,5 +20,6 @@
     "tx_step": 0.2,
     "rx_step": 0.2,
     "x_resolution": 0.2,
-    "total_trace_num": 30
+    "total_trace_num": 30,
+    "wave_start_time": 0.1e-8
 }
