@@ -15,7 +15,7 @@ for i in range(1, 32, 1):
         axis1 = mig_data.shape[1]
         migration_merge = np.zeros([axis0, axis1])
     
-    migration_merge = migration_merge + mig_data * 1/31
+    migration_merge = migration_merge + mig_data
 
 migration_result_percent = migration_merge / np.amax(migration_merge) * 100
 plt.figure(figsize=(18, 15), facecolor='w', edgecolor='w')
@@ -26,7 +26,7 @@ plt.xlabel('Horizontal distance [m]', size=20)
 plt.ylabel('Depth form surface [m]', size=20)
 plt.xticks(np.arange(0, axis1, 5), np.arange(0, 10, 1))
 plt.yticks(np.arange(0, axis0, 100), np.arange(0, 8, 1))
-plt.title('Migration Merged', size=20)
+plt.title('Migration merged', size=20)
 
 
 plt.grid()
