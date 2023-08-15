@@ -1,12 +1,10 @@
 import argparse
 import json  # jsonの取り扱いに必要
 import os
-from re import L
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LogNorm
 from tqdm import tqdm  # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
