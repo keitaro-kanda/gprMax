@@ -4,6 +4,7 @@ import os
 
 import h5py
 import matplotlib.pyplot as plt
+import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
 from tqdm import tqdm  # プログレスバーに必要
 
@@ -37,8 +38,8 @@ if not os.path.exists(output_dir_path):
 
 # 定数の設定
 c = 299792458 # [m/s], 光速
-epsilon_0 = 1 # 空気
-epsilon_ground_1 = params['epsilon_ground_1'] # レゴリス
+epsilon_0 = 1 # 真空の誘電率
+epsilon_ground_1 = params['epsilon_ground_1'] 
 
 
 tx_step = params['tx_step'] # [m]
@@ -85,12 +86,19 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         Lt_k = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
         Lr = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
 
-        L_vacuum_k = np.sqrt(epsilon_0)*(Lt_k + Lr) * h / np.abs(antenna_zpoint - z)
-        L_ground_k = np.sqrt(epsilon_ground_1)*(Lt_k + Lr) * np.abs(antenna_zpoint - z - h) / np.abs(antenna_zpoint - z)
+        if z == antenna_zpoint:
+            recieved_time_k = 0
+        else:
+            L_vacuum_k = np.sqrt(epsilon_0)*(Lt_k + Lr) * h / np.abs(antenna_zpoint - z)
+            L_ground_k = np.sqrt(epsilon_ground_1)*(Lt_k + Lr) * np.abs(antenna_zpoint - z - h) / np.abs(antenna_zpoint - z)
 
-        delta_t_k = (L_vacuum_k + L_ground_k) / c # [s]
-        recieved_time_k = delta_t_k + params["wave_start_time"] # [s]
-        recieve_power_array[k] = outputdata[int(recieved_time_k / dt), k]
+            delta_t_k = (L_vacuum_k + L_ground_k) / c # [s]
+            recieved_time_k = delta_t_k + params["wave_start_time"] # [s]
+            
+        if recieved_time_k/dt < outputdata.shape[0]:
+            recieve_power_array[k] = outputdata[int(recieved_time_k / dt), k]
+        else:
+            recieve_power_array[k] = 0
 
         """ correration
         for l in range(k+1, total_trace_num):
@@ -207,15 +215,21 @@ for rx in range(1, 32):
 
     # プロット
     migration_result_percent = migration_result / np.amax(migration_result) * 100
-    plt.figure(figsize=(18, 15), facecolor='w', edgecolor='w')
+    
+    fig = plt.figure(figsize=(15, 12), facecolor='w', edgecolor='w')
+    ax = fig.add_subplot(111)
     plt.imshow(migration_result_percent,
-            aspect='auto', cmap='seismic', vmin=-10, vmax=10)
-    plt.colorbar()
-    plt.xlabel('Horizontal distance [m]', size=20)
-    plt.ylabel('Depth form surface [m]', size=20)
-    plt.xticks(np.arange(0, xgrid_num, 5), np.arange(0, xgrid_num*0.2, 1))
-    plt.yticks(np.arange(0, zgrid_num, 100), np.arange(0, zgrid_num*0.01, 1))
-    plt.title('Migration result rx' + str(rx), size=20)
+            aspect=spatial_step/x_resolution, cmap='seismic', vmin=-10, vmax=10)
+    
+    delvider = axgrid1.make_axes_locatable(ax)
+    cax = delvider.append_axes('right', size='5%', pad=0.1)
+    plt.colorbar(cax=cax)
+
+    ax.set_xlabel('Horizontal distance [m]', size=20)
+    ax.set_ylabel('Depth form surface [m]', size=20)
+    #ax.set_xticks(np.linspace(0, xgrid_num, 10), np.linspace(0, xgrid_num*x_resolution, 10))
+    #ax.set_yticks(np.linspace(0, zgrid_num, 10), np.linspace(0, zgrid_num*spatial_step, 11))
+    ax.set_title('Migration result rx' + str(rx), size=20)
 
     # plotの保存
     plt.savefig(output_dir_path+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)

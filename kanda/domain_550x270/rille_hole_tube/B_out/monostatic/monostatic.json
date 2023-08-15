@@ -1,10 +1,10 @@
 {
     "_comment": "input data file",
-    "input_data": "/Users/keitarokanda/gprMax/kanda/domain_10x10/test_3cyliner/B-scan/array/B_out/array_merged.out",
+    "input_data": "kanda/domain_550x270/rille_hole_tube/B_out/monostatic/550x270_B_merged.out",
     "_comment" : "radar type",
     "monostatic": "yes",
     "bistatic": "no",
-    "array": "yes",
+    "array": "no",
 
     "_comment": "simulation box settings",
     "geometry_matrix_axis0": 270,
