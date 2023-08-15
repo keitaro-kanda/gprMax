@@ -37,15 +37,15 @@ if not os.path.exists(output_dir_path):
 
 # 定数の設定
 c = 299792458 # [m/s], 光速
-epsilon_1 = 1 # 空気
-epsilon_2 = 4 # レゴリス
+epsilon_0 = 1 # 空気
+epsilon_ground_1 = params['epsilon_ground_1'] # レゴリス
 
 
 tx_step = params['tx_step'] # [m]
 rx_step = params['rx_step'] # [m]
 x_resolution = params['x_resolution'] # [m]
 spatial_step = params['spatial_step'] # [m]
-#antenna_zindex = params['antenna_zindex'] / spatial_step # [m]
+antenna_zpoint = params['antenna_zpoint'] # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
 antenna_distance = params["monostatic_antenna_distance"]# [m], アンテナ間隔
 
@@ -82,11 +82,11 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         z = z_index * spatial_step # [m]
 
         # trace k
-        Lt_k = np.sqrt(np.abs(x_tx - x)**2 + (h + z)**2 ) # [m]
-        Lr = np.sqrt(np.abs(x_rx - x)**2 + (h + z)**2 ) # [m]
+        Lt_k = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
+        Lr = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
 
-        L_vacuum_k = np.sqrt(epsilon_1)*(Lt_k + Lr) * h / (z + h)   
-        L_ground_k = np.sqrt(epsilon_2)*(Lt_k + Lr) * z / (z + h) 
+        L_vacuum_k = np.sqrt(epsilon_0)*(Lt_k + Lr) * h / np.abs(antenna_zpoint - z)
+        L_ground_k = np.sqrt(epsilon_ground_1)*(Lt_k + Lr) * np.abs(antenna_zpoint - z - h) / np.abs(antenna_zpoint - z)
 
         delta_t_k = (L_vacuum_k + L_ground_k) / c # [s]
         recieved_time_k = delta_t_k + params["wave_start_time"] # [s]
