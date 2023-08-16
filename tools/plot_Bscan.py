@@ -58,13 +58,11 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
     # 観測の方向
     radar_direction = 'horizontal' # horizontal or vertical
-    # 観測の間隔
-    src_step = 1 #[m]
 
     # プロット
     #if radar_direction == 'horizontal':
     plt.imshow(outputdata_norm, 
-             extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
+             extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
             interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1, vmax=1)
     plt.xlabel('trace number')
     plt.ylabel('Time [s]')
@@ -79,7 +77,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         max_value = np.amax(np.abs(outputdata_norm[int(closeup_start/dt): int(closeup_end/dt)]))
 
         plt.imshow(outputdata_norm, 
-             extent=[0, outputdata_norm.shape[1] * src_step, outputdata_norm.shape[0] * dt, 0], 
+             extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
             interpolation='nearest', aspect='auto', cmap='seismic', vmin=-max_value, vmax=max_value)
         #plt.xlim(35, 55)
         plt.ylim(closeup_end, closeup_start)

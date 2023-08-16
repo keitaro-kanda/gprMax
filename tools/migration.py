@@ -206,7 +206,7 @@ def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
 
 # 関数の実行
 #for rx in range(1, nrx + 1):
-for rx in range(1, 32):
+for rx in range(1, nrx+1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
     migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
     # migration_resultをtxtファイルに保存
