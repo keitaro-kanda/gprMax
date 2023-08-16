@@ -10,7 +10,7 @@ file_name = 'migration_result_rx'
 spatial_step = 1
 x_resolution = 1
 
-for i in range(1, 32, 1):
+for i in range(1, 51, 1):
     mig_data = np.loadtxt(file_path + '/' + file_name + str(i) + '.txt')
     
     if i ==1:
