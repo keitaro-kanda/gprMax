@@ -1,12 +1,13 @@
 import os
+from math import e
+from textwrap import fill
 
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
-import cv2
-import matplotlib.patches as patches
 
-file_path = os.path.dirname('kanda/domain_550x270/rille_hole_tube/B_out/array/out_files/migration/migration_result_rx1.txt')
+file_path = os.path.dirname('kanda/domain_550x270/rille_hole_tube/B_out/array/migration/migration_result_rx1.txt')
 file_name = 'migration_result_rx'
 
 spatial_step = 1
@@ -55,7 +56,7 @@ def plot_migration_and_geometry():
     # マイグレーション結果のプロット
     plt.imshow(migration_result_percent,
             aspect=spatial_step/x_resolution, cmap='seismic', vmin=-10, vmax=10)
-    plt.grid()
+    #plt.grid()
 
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
@@ -68,9 +69,17 @@ def plot_migration_and_geometry():
     ax.set_title('Migration merged', size=20)
 
     # 地形のプロット
-    
+    rille_apex_list = [(0, 10), (25, 10), (125, 260), (425, 260), (525, 10), (550, 10)]
+    rille = patches.Polygon(rille_apex_list, ec='gray', linestyle='--', fill=False, linewidth=1, closed=False)
+    ax.add_patch(rille)
 
-    plt.savefig(file_path + '/migration_merged.png')
+    surface_hole_tube_list = [(35, 35), (250, 35), (250, 60), (175, 60), (175, 77),
+                              (375, 77), (375, 60), (300, 60), (300, 35), (515, 35)]
+    tube = patches.Polygon(surface_hole_tube_list, ec='gray', linestyle='--', fill=False, linewidth=1, closed=False)
+    ax.add_patch(tube)
+
+    plt.savefig(file_path + '/migration_merged_geometry.png')
+
     plt.show()
 
     return plt
