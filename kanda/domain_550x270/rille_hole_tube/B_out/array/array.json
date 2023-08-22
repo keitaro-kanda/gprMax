@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "input_data": "kanda/domain_550x270/rille_hole_tube/B_out/array/out_files/array_merged.out",
+    "input_data": "kanda/domain_550x270/rille_hole_tube/B_out/array/array_merged.out",
     "_comment" : "radar type",
     "monostatic": "no",
     "bistatic": "no",

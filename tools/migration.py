@@ -229,7 +229,7 @@ for rx in range(rx_num_start, rx_num_end):
     migration_result_percent = migration_result / np.amax(migration_result) * 100
     
     
-    fig = plt.figure(figsize=(15, 12), facecolor='w', edgecolor='w')
+    fig = plt.figure(figsize=(13, 14), facecolor='w', edgecolor='w')
     ax = fig.add_subplot(211)
     plt.imshow(migration_result_percent,
             aspect=spatial_step/x_resolution, cmap='seismic', vmin=-10, vmax=10)
