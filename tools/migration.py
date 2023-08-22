@@ -16,6 +16,7 @@ from tools.outputfiles_merge import get_output_data
 parser = argparse.ArgumentParser(description='Processing migration', 
                                  usage='cd gprMax; python -m tools.migration jsonfile')
 parser.add_argument('jsonfile', help='json file name')
+parser.add_argument('-select_rx', help='select specific rx number from array', default=False, action='store_true')
 args = parser.parse_args()
 
 # load json file
@@ -84,19 +85,23 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         z = z_index * spatial_step # [m]
 
         # trace k
-        Lt_k = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
         Lr = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
-
-        if z == antenna_zpoint:
+        if x == x_rx and z == antenna_zpoint:
             recieved_time_k = 0
+        elif z <= antenna_zpoint:
+            Lt_k = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
+            delta_t_k = (Lr + Lt_k) / c # [s]
+            recieved_time_k = delta_t_k + params["wave_start_time"] # [s]
         else:
+            Lt_k = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
+
             L_vacuum_k = np.sqrt(epsilon_0)*(Lt_k + Lr) * h / np.abs(antenna_zpoint - z)
             L_ground_k = np.sqrt(epsilon_ground_1)*(Lt_k + Lr) * np.abs(antenna_zpoint - z - h) / np.abs(antenna_zpoint - z)
 
             delta_t_k = (L_vacuum_k + L_ground_k) / c # [s]
             recieved_time_k = delta_t_k + params["wave_start_time"] # [s]
-            
-        if recieved_time_k/dt < outputdata.shape[0]:
+        
+        if recieved_time_k/dt <= outputdata.shape[0]:
             recieve_power_array[k] = outputdata[int(recieved_time_k / dt), k]
         else:
             recieve_power_array[k] = 0
@@ -206,7 +211,14 @@ def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
 
 
 # 関数の実行
-for rx in range(1, nrx+1):
+rx_num_start =  1
+rx_num_end =  nrx + 1
+# arrayから一点を取り出したい場合は手動で設定
+if args.select_rx == True:
+    rx_num_start = 25
+    rx_num_end = rx_num_start + 1
+
+for rx in range(rx_num_start, rx_num_end):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
     migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
     # migration_resultをtxtファイルに保存

@@ -69,9 +69,6 @@ surface_hole_tube_list = [(35, 35), (250, 35), (250, 60), (175, 60), (175, 77),
 tube = patches.Polygon(surface_hole_tube_list, ec='gray', linestyle='--', fill=False, linewidth=1, closed=False)
 ax.add_patch(tube)
 
-#fig.suptitle('Migration result ' + str(rx), size=20)
-#fig.supxlabel('Horizontal distance [m]', size=20)
-#fig.supylabel('Depth [m]', size=20)
 
 
 # plotの保存
