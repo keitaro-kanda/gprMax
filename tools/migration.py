@@ -3,6 +3,7 @@ import json  # jsonの取り扱いに必要
 import os
 
 import h5py
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
@@ -205,8 +206,7 @@ def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
 
 
 # 関数の実行
-#for rx in range(1, nrx + 1):
-for rx in range(32, nrx+1):
+for rx in range(1, nrx+1):
     outputdata, dt = get_output_data(file_name, rx, 'Ez')
     migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
     # migration_resultをtxtファイルに保存
@@ -216,8 +216,9 @@ for rx in range(32, nrx+1):
     # プロット
     migration_result_percent = migration_result / np.amax(migration_result) * 100
     
+    
     fig = plt.figure(figsize=(15, 12), facecolor='w', edgecolor='w')
-    ax = fig.add_subplot(111)
+    ax = fig.add_subplot(211)
     plt.imshow(migration_result_percent,
             aspect=spatial_step/x_resolution, cmap='seismic', vmin=-10, vmax=10)
     
@@ -230,6 +231,31 @@ for rx in range(32, nrx+1):
     #ax.set_xticks(np.linspace(0, xgrid_num, 10), np.linspace(0, xgrid_num*x_resolution, 10))
     #ax.set_yticks(np.linspace(0, zgrid_num, 10), np.linspace(0, zgrid_num*spatial_step, 11))
     ax.set_title('Migration result rx' + str(rx), size=20)
+
+
+    ax = fig.add_subplot(212)
+    plt.imshow(migration_result_percent,
+            aspect=spatial_step/x_resolution, cmap='seismic', vmin=-10, vmax=10)
+    
+    delvider = axgrid1.make_axes_locatable(ax)
+    cax = delvider.append_axes('right', size='5%', pad=0.1)
+    plt.colorbar(cax=cax)
+
+    ax.set_xlabel('Horizontal distance [m]', size=20)
+    ax.set_ylabel('Depth form surface [m]', size=20)
+    #ax.set_xticks(np.linspace(0, xgrid_num, 10), np.linspace(0, xgrid_num*x_resolution, 10))
+    #ax.set_yticks(np.linspace(0, zgrid_num, 10), np.linspace(0, zgrid_num*spatial_step, 11))
+    ax.set_title('Migration result rx' + str(rx), size=20)
+    # 地形のプロット
+    rille_apex_list = [(0, 10), (25, 10), (125, 260), (425, 260), (525, 10), (550, 10)]
+    rille = patches.Polygon(rille_apex_list, ec='gray', linestyle='--', fill=False, linewidth=1, closed=False)
+    ax.add_patch(rille)
+
+    surface_hole_tube_list = [(35, 35), (250, 35), (250, 60), (175, 60), (175, 77),
+                            (375, 77), (375, 60), (300, 60), (300, 35), (515, 35)]
+    tube = patches.Polygon(surface_hole_tube_list, ec='gray', linestyle='--', fill=False, linewidth=1, closed=False)
+    ax.add_patch(tube)
+
 
     # plotの保存
     plt.savefig(output_dir_path+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)

@@ -1,6 +1,4 @@
 import os
-from math import e
-from textwrap import fill
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -47,7 +45,7 @@ def plot_migration_result():
     plt.show()
 
     return plt
-#plot_migration_result()
+plot_migration_result()
 
 def plot_migration_and_geometry():
     fig = plt.figure(figsize=(15, 12), facecolor='w', edgecolor='w')
