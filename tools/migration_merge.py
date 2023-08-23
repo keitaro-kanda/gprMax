@@ -1,3 +1,4 @@
+import argparse
 import os
 
 import matplotlib.patches as patches
@@ -5,7 +6,12 @@ import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
 
-file_path = os.path.dirname('kanda/domain_550x270/rille_hole_tube/B_out/array/migration/migration_result_rx1.txt')
+parser = argparse.ArgumentParser(description='Plot migration',
+                                    usage='cd gprMax; python -m tools.migration_merge file_name')
+parser.add_argument('file_name', help='migration resutl txt file name')
+args = parser.parse_args()
+
+file_path = os.path.dirname(args.file_name)
 file_name = 'migration_result_rx'
 
 spatial_step = 1
