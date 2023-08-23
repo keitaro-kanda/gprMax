@@ -1,0 +1,26 @@
+{
+    "_comment": "input data file",
+    "input_data": "kanda/domain_550x270/no_hole/B_out/monostatic/monostatic_merged.out",
+    "_comment" : "radar type",
+    "monostatic": "yes",
+    "bistatic": "no",
+    "array": "no",
+
+    "_comment": "simulation box settings",
+    "geometry_matrix_axis0": 270,
+    "geometry_matrix_axis1": 550,
+    "spatial_step": 1,
+    "epsilon_ground_1": 6,
+
+    "_comment": "observation settings",
+    "antenna_zpoint": 34,
+    "antenna_hight": 1,
+    "tx_start": 250,
+    "rx_start": 250,
+    "tx_step": 1,
+    "rx_step": 1,
+    "monostatic_antenna_distance": 0.4,
+    "x_resolution": 1,
+    "total_trace_num": 50,
+    "wave_start_time": 0.1e-7
+}
