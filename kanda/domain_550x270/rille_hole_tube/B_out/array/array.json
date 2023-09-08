@@ -7,7 +7,7 @@
     "array": "yes",
 
     "_comment": "simulation box settings",
-    "geometry_matrix_axis0": 270,
+    "geometry_matrix_axis0": 300,
     "geometry_matrix_axis1": 550,
     "spatial_step": 1,
     "epsilon_ground_1": 6,
