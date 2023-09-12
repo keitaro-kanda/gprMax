@@ -100,5 +100,5 @@ for rx in range(rx_start, rx_end):
         if nrx == 1 or args.select_rx:
             plt.show()
         return plt
-    #plot()
+    plot()
 
