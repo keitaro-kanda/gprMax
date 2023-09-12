@@ -78,19 +78,27 @@ for rx in range(rx_start, rx_end):
 
         return correlation_power
     corr_data_power = calc_power_map()
-    
 
-    fig = plt.figure(figsize=(15, 12), facecolor='w', edgecolor='w')
-    plt.imshow(corr_data_power,
-               extent= [0, axis1_index_num, axis0_index_num*dt, 0], aspect='auto', cmap='rainbow',
-               vmin=-50, vmax=0)
-    plt.colorbar()
+    def save_txt():
+        # save txt
+        np.savetxt(output_dir_path + '/corr_data_rx' + str(rx) + '.txt', corr_data)
+    save_txt()
 
-    plt.title('Correlation rx' + str(rx), size=20)
-    plt.xlabel('Trace Number', size=15)
-    plt.ylabel('Time', size=15)
 
-    plt.savefig(output_dir_path + '/corr_map_rx' + str(rx) + '.png', dpi=150, format='png')
-    if nrx == 1 or args.select_rx:
-        plt.show()
+    def plot():
+        fig = plt.figure(figsize=(15, 12), facecolor='w', edgecolor='w')
+        plt.imshow(corr_data_power,
+                extent= [0, axis1_index_num, axis0_index_num*dt, 0], aspect='auto', cmap='rainbow',
+                vmin=-50, vmax=0)
+        plt.colorbar()
+
+        plt.title('Correlation rx' + str(rx), size=20)
+        plt.xlabel('Trace Number', size=15)
+        plt.ylabel('Time', size=15)
+
+        plt.savefig(output_dir_path + '/corr_map_rx' + str(rx) + '.png', dpi=150, format='png')
+        if nrx == 1 or args.select_rx:
+            plt.show()
+        return plt
+    #plot()
 
