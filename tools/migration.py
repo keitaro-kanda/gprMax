@@ -14,8 +14,9 @@ from tools.outputfiles_merge import get_output_data
 # ======load files=====
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing migration', 
-                                 usage='cd gprMax; python -m tools.migration jsonfile')
+                                 usage='cd gprMax; python -m tools.migration jsonfile file_type')
 parser.add_argument('jsonfile', help='json file name')
+parser.add_argument('file_type', choices=['out', 'txt'], help='file type')
 parser.add_argument('-select_rx', help='select specific rx number from array', default=False, action='store_true')
 args = parser.parse_args()
 
@@ -24,17 +25,13 @@ with open (args.jsonfile) as f:
     params = json.load(f)
 
 # Open output file and read number of outputs (receivers)
-file_name = params['input_data']
-output_data = h5py.File(file_name, 'r')
-nrx = output_data.attrs['nrx']
-output_data.close()
-input_dir_path = os.path.dirname(file_name)
+file_name_out = params['input_data_out']
+file_name_txt = params['input_data_txt']
+output_data_out = h5py.File(file_name_out, 'r')
+nrx = output_data_out.attrs['nrx']
+output_data_out.close()
+input_dir_path = os.path.dirname(file_name_out)
 # =====load files=====
-
-# make output directory
-output_dir_path = os.path.join(input_dir_path, 'migration')
-if not os.path.exists(output_dir_path):
-    os.mkdir(output_dir_path)
 
 
 
@@ -106,99 +103,10 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         else:
             recieve_power_array[k] = 0
 
-        """ correration
-        for l in range(k+1, total_trace_num):
-            # trace l
-            x_tx_l = x_tx + (l-k) * x_resolution
-            Lt_l = np.sqrt(np.abs(x_tx_l - x)**2 + (h + z)**2 ) # [m]
-
-            L_vacuum_l = np.sqrt(epsilon_1)*(Lt_l + Lr) * h / (z + h)   
-            L_ground_l = np.sqrt(epsilon_2)*(Lt_l + Lr) * z / (z + h) 
-
-            delta_t_l = (L_vacuum_l + L_ground_l) / c # [s]
-            recieved_time_l = delta_t_l + params["wave_start_time"] # [s]
-
-            #recieve_power_array[k] = outputdata[int(recieved_time / dt), k]
-            l_array = np.zeros(total_trace_num-k)
-            l_array[l-k-1] = (Lt_k + Lr) * outputdata[int(recieved_time_k / dt), k] \
-                * (Lt_l + Lr) * outputdata[int(recieved_time_l / dt), l]
-            recieve_power_array[k] = np.sum(l_array)
-        """
-        
     
     # recieve_power_arrayの要素の和をとる
     outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
     return outputdata_mig
-
-"""
-        # ===Xiao et al.,(2019)の式(5)===
-
-        # d_Rを求める、d_R: 電波の地中侵入地点とrxの水平距離
-        d_R_array = np.arange(0, xgrid_num*x_resolution, spatial_step) # 間隔は空間ステップにしたがう
-
-        # (x, z)が地表面にいる場合、ゼロ徐算を避ける
-        if z == 0:
-            #d_R = np.sqrt((x_rx - x)**2 + h**2)
-            d_R = np.sqrt(((x_tx - x_rx)/2)**2 + h**2)
-        else:
-            d_R_left = np.sqrt(epsilon_2) * d_R_array / np.sqrt(h**2 + d_R_array**2)
-            d_R_right = np.sqrt(epsilon_1) \
-                * (np.abs(x - x_rx) - d_R_array) \
-                / np.sqrt(z**2 + (np.abs(x_rx - x) - d_R_array)**2)
-
-            # d_R_leftとd_R_rightの差が最小になるd_Rarrayをd_Rとする
-            d_R = np.argmin(np.abs(d_R_left - d_R_right)) / 100 # [m] 
-            #print(d_R) 
-
-
-
-        # d_Tを求める、d_T：電波の地中侵入地点とtxの水平距離
-        d_T_array = np.arange(0, xgrid_num*x_resolution, spatial_step)
-
-        # (x, z)が地表面にいる場合、ゼロ徐算を避ける
-        if z == 0:
-            #d_T = np.sqrt((x_tx - x)**2 + h**2)
-            d_T = d_R
-        else:
-            d_T_left = np.sqrt(epsilon_2) * d_T_array / np.sqrt(h**2 + d_T_array**2)
-            d_T_right = np.sqrt(epsilon_1) \
-                * (np.abs(x - x_tx) - d_T_array) \
-                / np.sqrt(z**2 + (np.abs(x_tx - x) - d_T_array)**2)
-
-            # d_T_leftとd_T_rightの差が最小になるd_T_arrayをd_Tとする
-            d_T = np.argmin(np.abs(d_T_left - d_T_right)) / 100 # [m]
-            #print(d_T)
-
-        
-        # ===Xiao et al.,(2019)の式(4)===
-        if z == 0:
-            R_1 = d_T # 送信点から地面までの距離
-            R_2 = 0 # 地面から(x, z)までの距離
-            R_3 = 0 # (x, z)から地面までの距離
-            R_4 = d_R # 地面から受信点までの距離
-
-        else:
-            R_1 = np.sqrt(h**2 + d_T**2) # 送信点から地面までの距離
-            R_2 = np.sqrt(z**2 + (np.abs(x_tx - x) - d_T)**2) # 地面から(x, z)までの距離
-            R_3 = np.sqrt(z**2 + (np.abs(x_rx - x) - d_R)**2) # (x, z)から地面までの距離
-            R_4 = np.sqrt(h**2 + d_R**2) # 地面から受信点までの距離
-
-
-        # ===伝搬時間、到来時間の計算===
-        total_propagating_distance = (np.sqrt(epsilon_1)*(R_1 + R_4) + np.sqrt(epsilon_2) * (R_2 + R_3))
-        delta_t = total_propagating_distance / c # 伝搬時間
-        recieve_time = 0.1e-8 + delta_t # 伝搬時間
-
-
-        # ===それぞれのアンテナ位置rxに対し、位置(x, z)における反射強度を保存===
-        recieve_power_array[k] = outputdata[int(recieve_time / dt), k] \
-        #* (4 * np.pi)**2 * (R_1 + epsilon_2*R_2)**2 * (R_4 + epsilon_2*R_3)**2 # 受信点の電力を配列に格納
-        
-    # recieve_power_arrayの要素の和をとる
-    outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
-"""
-
-
 
 
 # migration処理関数の実行しまくって地下構造を推定する
@@ -216,14 +124,28 @@ rx_num_start =  1
 rx_num_end =  nrx + 1
 # arrayから一点を取り出したい場合は手動で設定
 if args.select_rx == True:
-    rx_num_start = 1
+    rx_num_start = 25
     rx_num_end = rx_num_start + 1
 
+txt_dir_path = os.path.dirname(file_name_txt)
+
+# make output directory
+output_dir_path_out = os.path.join(input_dir_path, 'migration_out')
+if not os.path.exists(output_dir_path_out):
+    os.mkdir(output_dir_path_out)
+output_dir_path_txt = os.path.join(input_dir_path, 'migration_txt')
+if not os.path.exists(output_dir_path_txt):
+    os.mkdir(output_dir_path_txt)
+
 for rx in range(rx_num_start, rx_num_end):
-    outputdata, dt = get_output_data(file_name, rx, 'Ez')
+    outputdata, dt = get_output_data(file_name_out, rx, 'Ez') # dtが必要なのでこちらはif文内に入れない
     migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
-    # migration_resultをtxtファイルに保存
-    np.savetxt(output_dir_path+'/migration_result_rx' + str(rx) + '.txt', migration_result)
+    np.savetxt(output_dir_path_out+'/migration_result_rx' + str(rx) + '.txt', migration_result)
+    if args.file_type == 'txt':
+        load_txt_name = os.path.join(txt_dir_path, 'corr_data_rx' + str(rx) + '.txt')
+        outputdata = np.loadtxt(load_txt_name)
+        migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
+        np.savetxt(output_dir_path_txt+'/migration_result_rx' + str(rx) + '.txt', migration_result)
 
 
     # プロット
@@ -271,7 +193,10 @@ for rx in range(rx_num_start, rx_num_end):
 
 
     # plotの保存
-    plt.savefig(output_dir_path+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+    if args.file_type == 'out':
+        plt.savefig(output_dir_path_out+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+    elif args.file_type == 'txt':
+        plt.savefig(output_dir_path_txt+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
 
     if params['monostatic'] == "yes" or params['bistatic'] == "yes":
         plt.show()
