@@ -52,8 +52,8 @@ antenna_zpoint = params['antenna_zpoint'] # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
 antenna_distance = params["monostatic_antenna_distance"]# [m], アンテナ間隔
 
-outputdata_mig = np.zeros([params['geometry_matrix_axis0'], 
-                           params['geometry_matrix_axis1']]) # grid数で定義、[m]じゃないよ！！
+outputdata_mig = np.zeros([params['geometry_matrix_axis0']/params['spatial_step'], 
+                           params['geometry_matrix_axis1']/params['x_resolution']]) # grid数で定義、[m]じゃないよ！！
 
 xgrid_num = outputdata_mig.shape[1] # x
 zgrid_num = outputdata_mig.shape[0] # z
@@ -124,6 +124,7 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
                 * (Lt_l + Lr) * outputdata[int(recieved_time_l / dt), l]
             recieve_power_array[k] = np.sum(l_array)
         """
+
     
     # recieve_power_arrayの要素の和をとる
     outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
