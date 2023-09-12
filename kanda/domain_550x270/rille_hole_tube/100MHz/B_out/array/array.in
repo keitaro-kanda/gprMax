@@ -1,4 +1,4 @@
-#domain: 550 270 0.2
+#domain: 550 270 0.1
 
 #dx_dy_dz: 0.1 0.1 0.1
 
@@ -13,7 +13,7 @@
 
 =====B-scan用=====
 ＜波源設定＞
-#waveform: ricker 1 50e6 my_src 
+#waveform: ricker 1 100e6 my_src 
 
 #hertzian_dipole: z 250 193 0 my_src
 #rx_array: 250 193 0 300 193 0 1 0 0 
