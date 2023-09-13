@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description='Processing migration',
                                  usage='cd gprMax; python -m tools.pulse_compression out_file source_file')
 parser.add_argument('out_file', help='.out file name')
 parser.add_argument('source_file', help='source file name')
-parser.add_argument('-select_rx', help='option: elect rx number', default=False, action='store_true')
+parser.add_argument('-select_rx', help='option: select rx number', default=False, action='store_true')
 args = parser.parse_args()
 
 

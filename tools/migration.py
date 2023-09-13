@@ -44,16 +44,17 @@ epsilon_ground_1 = params['epsilon_ground_1']
 tx_step = params['tx_step'] # [m]
 rx_step = params['rx_step'] # [m]
 x_resolution = params['x_resolution'] # [m]
-spatial_step = params['spatial_step'] # [m]
+z_resolution = params['z_resolution'] # [m]
 antenna_zpoint = params['antenna_zpoint'] # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
 antenna_distance = params["monostatic_antenna_distance"]# [m], アンテナ間隔
 
-outputdata_mig = np.zeros([params['geometry_matrix_axis0'], 
-                           params['geometry_matrix_axis1']]) # grid数で定義、[m]じゃないよ！！
 
-xgrid_num = outputdata_mig.shape[1] # x
-zgrid_num = outputdata_mig.shape[0] # z
+
+xgrid_num = int(params['geometry_matrix_axis1'] / x_resolution) # x
+zgrid_num = int(params['geometry_matrix_axis0'] / z_resolution) # z
+
+outputdata_mig = np.zeros([zgrid_num, xgrid_num]) # grid数で定義、[m]じゃないよ！！
 
 
 
@@ -119,43 +120,69 @@ def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
     return outputdata_mig
 
 
-# 関数の実行
+
+# =====rxの指定=====
 rx_num_start =  1
 rx_num_end =  nrx + 1
-# arrayから一点を取り出したい場合は手動で設定
+
+# -select_rx用の用の手動設定
 if args.select_rx == True:
     rx_num_start = 25
     rx_num_end = rx_num_start + 1
+# ==================
 
 txt_dir_path = os.path.dirname(file_name_txt)
 
-# make output directory
+# =====make output directory=====
 output_dir_path_out = os.path.join(input_dir_path, 'migration_out')
 if not os.path.exists(output_dir_path_out):
     os.mkdir(output_dir_path_out)
 output_dir_path_txt = os.path.join(input_dir_path, 'migration_txt')
 if not os.path.exists(output_dir_path_txt):
     os.mkdir(output_dir_path_txt)
+# ==============================
+
 
 for rx in range(rx_num_start, rx_num_end):
-    outputdata, dt = get_output_data(file_name_out, rx, 'Ez') # dtが必要なのでこちらはif文内に入れない
-    migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
-    np.savetxt(output_dir_path_out+'/migration_result_rx' + str(rx) + '.txt', migration_result)
-    if args.file_type == 'txt':
+    # from .out file
+    if args.file_type == 'out':
+        outputdata, dt = get_output_data(file_name_out, rx, 'Ez') 
+
+        migration_result = calc_subsurface_structure(rx, tx_step, rx_step, z_resolution)
+        migration_result_standardize = migration_result / np.amax(migration_result) * 100
+        np.savetxt(output_dir_path_out+'/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
+
+    # from .txt file
+    elif args.file_type == 'txt':
         load_txt_name = os.path.join(txt_dir_path, 'corr_data_rx' + str(rx) + '.txt')
         outputdata = np.loadtxt(load_txt_name)
-        migration_result = calc_subsurface_structure(rx, tx_step, rx_step, spatial_step)
-        np.savetxt(output_dir_path_txt+'/migration_result_rx' + str(rx) + '.txt', migration_result)
 
+        no_use, dt = get_output_data(file_name_out, rx, 'Ez') # dtを取り出すため必要
+        migration_result = calc_subsurface_structure(rx, tx_step, rx_step, z_resolution)
+        
+        migration_result_standardize = np.zeros_like(migration_result)
+        for i in range(xgrid_num):
+            for j in range(zgrid_num):
+                if migration_result[j, i] == 0:
+                    migration_result_standardize[j, i] = 10 * np.log10(1e-10 / np.amax(migration_result))
+                else:
+                    migration_result_standardize[j, i] = 10 * \
+                        np.log10(np.abs(migration_result[j, i]) / np.abs(np.amax(migration_result)))
 
-    # プロット
-    migration_result_percent = migration_result / np.amax(migration_result) * 100
+        np.savetxt(output_dir_path_txt+'/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
     
     
+    # =====plot=====
     fig = plt.figure(figsize=(13, 14), facecolor='w', edgecolor='w')
     ax = fig.add_subplot(211)
-    plt.imshow(migration_result_percent,
-            aspect=spatial_step/x_resolution, cmap='seismic', vmin=-10, vmax=10)
+    if args.file_type == 'out':
+        plt.imshow(migration_result_standardize,
+                extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
+                aspect=z_resolution/x_resolution, cmap='seismic', vmin=-10, vmax=10)
+    elif args.file_type == 'txt':
+        plt.imshow(migration_result_standardize,
+                extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
+                cmap='rainbow', vmin=-40, vmax=0)
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
@@ -169,8 +196,14 @@ for rx in range(rx_num_start, rx_num_end):
 
 
     ax = fig.add_subplot(212)
-    plt.imshow(migration_result_percent,
-            aspect=spatial_step/x_resolution, cmap='seismic', vmin=-10, vmax=10)
+    if args.file_type == 'out':
+        plt.imshow(migration_result_standardize,
+                extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
+                aspect=z_resolution/x_resolution, cmap='seismic', vmin=-10, vmax=10)
+    elif args.file_type == 'txt':
+        plt.imshow(migration_result_standardize,
+                extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
+                cmap='rainbow', vmin=-40, vmax=0)
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
@@ -182,13 +215,18 @@ for rx in range(rx_num_start, rx_num_end):
     #ax.set_yticks(np.linspace(0, zgrid_num, 10), np.linspace(0, zgrid_num*spatial_step, 11))
     ax.set_title('Migration result rx' + str(rx), size=20)
     # 地形のプロット
-    rille_apex_list = [(0, 10), (25, 10), (125, 260), (425, 260), (525, 10), (550, 10)]
-    rille = patches.Polygon(rille_apex_list, ec='gray', linestyle='--', fill=False, linewidth=1, closed=False)
+    rille_apex_list = [(0, 10), (25, 10), 
+                    (125, 260), (425, 260),
+                    (525, 10), (550, 10)]
+    rille = patches.Polygon(rille_apex_list, ec='white', linestyle='--', fill=False, linewidth=1, closed=False)
     ax.add_patch(rille)
 
-    surface_hole_tube_list = [(35, 35), (250, 35), (250, 60), (175, 60), (175, 77),
-                            (375, 77), (375, 60), (300, 60), (300, 35), (515, 35)]
-    tube = patches.Polygon(surface_hole_tube_list, ec='gray', linestyle='--', fill=False, linewidth=1, closed=False)
+    surface_hole_tube_list = [(35, 35), (250, 35),
+                            (250, 60), (175, 60),
+                            (175, 77), (375, 77),
+                            (375, 60), (300, 60),
+                            (300, 35), (515, 35)]
+    tube = patches.Polygon(surface_hole_tube_list, ec='white', linestyle='--', fill=False, linewidth=1, closed=False)
     ax.add_patch(tube)
 
 

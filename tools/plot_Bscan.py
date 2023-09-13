@@ -71,7 +71,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     if closeup:
 
         closeup_start = 0
-        closeup_end = 0.25e-7
+        closeup_end = 0.5e-8
 
         # カラーバー範囲の設定
         max_value = np.amax(np.abs(outputdata_norm[int(closeup_start/dt): int(closeup_end/dt)]))
