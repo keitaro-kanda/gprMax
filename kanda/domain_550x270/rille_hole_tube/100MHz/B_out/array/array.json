@@ -10,7 +10,7 @@
     "_comment": "simulation box settings",
     "geometry_matrix_axis0": 300,
     "geometry_matrix_axis1": 550,
-    "z_resolution": 2,
+    "z_resolution": 1,
     "epsilon_ground_1": 6,
 
     "_comment": "observation settings",
