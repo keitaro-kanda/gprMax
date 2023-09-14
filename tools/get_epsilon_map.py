@@ -33,9 +33,12 @@ def get_ID():
 #get_ID()
 
 def get_epsilon_map():
+    permittivity_map = np.zeros([300, 550])
+    print(permittivity_map.shape)
     # read epsilon_r
-    permittivity_map = h5file['data'][:, :, 0]
-    permittivity_map = np.rot90(permittivity_map)
+    h5_data = h5file['data'][:, :, 0]
+    h5_data = np.rot90(h5_data)
+    print(h5_data.shape)
 
     z_num = permittivity_map.shape[0]
     x_num = permittivity_map.shape[1]
@@ -43,12 +46,16 @@ def get_epsilon_map():
     # convert epsilon_r map
     for i in tqdm(range(z_num)):
         for j in range(x_num):
-            if permittivity_map[i, j] == 1:
+            if i*10 >= h5_data.shape[0] or j*10 >= h5_data.shape[1]:
+                break
+            elif h5_data[i*10, j*10] == 1:
                 permittivity_map[i, j] = 1
-            elif permittivity_map[i, j] == 2:
+            elif h5_data[i*10, j*10] == 2:
                 permittivity_map[i, j] = 4
-            elif permittivity_map[i, j] == 3:
+            elif h5_data[i*10, j*10] == 3:
                 permittivity_map[i, j] = 6
+            else:
+                print('error')
     
     return permittivity_map, z_num, x_num
 
@@ -60,7 +67,8 @@ def plot(map, z_num, x_num):
     np.savetxt(output_path+'/epsilon_map.txt', map, fmt='%.3f')
 
     plt.imshow(map,
-            extent=[0, x_num * 0.1, z_num * 0.1, 0], cmap='binary')
+            #extent=[0, x_num * 0.1, z_num * 0.1, 0],
+            cmap='binary')
     plt.colorbar()
     plt.show()
 

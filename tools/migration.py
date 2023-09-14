@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
+from PIL import Image, ImageDraw
 from tqdm import tqdm  # プログレスバーに必要
 
 from tools.outputfiles_merge import get_output_data
@@ -127,8 +128,8 @@ rx_num_end =  nrx + 1
 
 # -select_rx用の用の手動設定
 if args.select_rx == True:
-    rx_num_start = 20
-    rx_num_end = rx_num_start + 10
+    rx_num_start = 25
+    rx_num_end = rx_num_start + 1
 # ==================
 
 txt_dir_path = os.path.dirname(file_name_txt)
@@ -183,6 +184,9 @@ for rx in range(rx_num_start, rx_num_end):
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
                 cmap='rainbow', vmin=-40, vmax=0)
+    
+    epsilon_map_path = params['epsilon_map']
+    epsilon_map = np.loadtxt(epsilon_map_path)
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
