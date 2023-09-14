@@ -1,0 +1,27 @@
+{
+    "_comment": "input data file",
+    "input_data_out": "kanda/domain_550x270/rille_hole_tube/100MHz_smooth/B/array/array_merged.out",
+    "input_data_txt": "kanda/domain_550x270/rille_hole_tube/100MHz_smooth/B/array/pulse_compression_map/corr_data_rx1.txt",
+    "_comment" : "radar type",
+    "monostatic": "no",
+    "bistatic": "no",
+    "array": "yes",
+
+    "_comment": "simulation box settings",
+    "geometry_matrix_axis0": 300,
+    "geometry_matrix_axis1": 550,
+    "z_resolution": 1,
+    "epsilon_ground_1": 6,
+
+    "_comment": "observation settings",
+    "antenna_zpoint": 77,
+    "antenna_hight": 1,
+    "tx_start": 250,
+    "rx_start": 250,
+    "tx_step": 1,
+    "rx_step": 0,
+    "monostatic_antenna_distance": 0.4,
+    "x_resolution": 1,
+    "total_trace_num": 50,
+    "wave_start_time": 0.5e-8
+}
