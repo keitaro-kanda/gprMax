@@ -127,8 +127,8 @@ rx_num_end =  nrx + 1
 
 # -select_rx用の用の手動設定
 if args.select_rx == True:
-    rx_num_start = 25
-    rx_num_end = rx_num_start + 1
+    rx_num_start = 20
+    rx_num_end = rx_num_start + 10
 # ==================
 
 txt_dir_path = os.path.dirname(file_name_txt)
