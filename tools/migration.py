@@ -51,7 +51,6 @@ h = params['antenna_hight'] # [m], アンテナの高さ
 antenna_distance = params["monostatic_antenna_distance"]# [m], アンテナ間隔
 
 
-
 xgrid_num = int(params['geometry_matrix_axis1'] / x_resolution) # x
 zgrid_num = int(params['geometry_matrix_axis0'] / z_resolution) # z
 
@@ -66,6 +65,14 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
     tx_start = params["tx_start"] # txの初期位置
     rx_start = params["rx_start"] # rxの初期位置
 
+    # get epsilon distribution
+    epsilon_map_path = params['epsilon_map']
+    epsilon_map = np.loadtxt(epsilon_map_path)
+
+    x = x_index * x_resolution # [m]
+    z = z_index * spatial_step # [m]
+
+
     for k in range(total_trace_num): 
         if params['monostatic'] == "yes" and params['bistatic'] == "no" and params['array'] == "no":
             x_rx = k * rx_step + rx_start # rxの位置
@@ -79,10 +86,10 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
         else:
             print("input correct antenna type")
             break
+        
+        
 
-        x = x_index * x_resolution # [m]
-        z = z_index * spatial_step # [m]
-
+        """
         # trace k
         Lr = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
         if x == x_rx and z == antenna_zpoint:
@@ -104,6 +111,7 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
             recieve_power_array[k] = outputdata[int(recieved_time_k / dt), k]
         else:
             recieve_power_array[k] = 0
+        """
 
     
     # recieve_power_arrayの要素の和をとる
@@ -184,10 +192,6 @@ for rx in range(rx_num_start, rx_num_end):
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
                 cmap='rainbow', vmin=-40, vmax=0)
-    
-    #epsilon_map_path = params['epsilon_map']
-    #epsilon_map = np.loadtxt(epsilon_map_path)
-    
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
     plt.colorbar(cax=cax)
