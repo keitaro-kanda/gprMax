@@ -185,8 +185,8 @@ for rx in range(rx_num_start, rx_num_end):
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
                 cmap='rainbow', vmin=-40, vmax=0)
     
-    epsilon_map_path = params['epsilon_map']
-    epsilon_map = np.loadtxt(epsilon_map_path)
+    #epsilon_map_path = params['epsilon_map']
+    #epsilon_map = np.loadtxt(epsilon_map_path)
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
