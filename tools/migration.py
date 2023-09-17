@@ -1,6 +1,8 @@
 import argparse
-import json  # jsonの取り扱いに必要
+import json
 import os
+from math import e
+from weakref import ref  # jsonの取り扱いに必要
 
 import h5py
 import matplotlib.patches as patches
@@ -34,6 +36,9 @@ output_data_out.close()
 input_dir_path = os.path.dirname(file_name_out)
 # =====load files=====
 
+# get epsilon distribution
+epsilon_map_path = params['epsilon_map']
+epsilon_map = np.loadtxt(epsilon_map_path)
 
 
 # 定数の設定
@@ -46,6 +51,8 @@ tx_step = params['tx_step'] # [m]
 rx_step = params['rx_step'] # [m]
 x_resolution = params['x_resolution'] # [m]
 z_resolution = params['z_resolution'] # [m]
+tx_start = params["tx_start"] # txの初期位置
+rx_start = params["rx_start"] # rxの初期位置
 antenna_zpoint = params['antenna_zpoint'] # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
 antenna_distance = params["monostatic_antenna_distance"]# [m], アンテナ間隔
@@ -57,40 +64,139 @@ zgrid_num = int(params['geometry_matrix_axis0'] / z_resolution) # z
 outputdata_mig = np.zeros([zgrid_num, xgrid_num]) # grid数で定義、[m]じゃないよ！！
 
 
-
 # migration処理関数の作成
-def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
+def migration(rx, x_index, z_index, x, z):
     recieve_power_array = np.zeros(xgrid_num) # rxの数だけ0を並べた配列を作成
     total_trace_num =  params["total_trace_num"] # rxの数
-    tx_start = params["tx_start"] # txの初期位置
-    rx_start = params["rx_start"] # rxの初期位置
-
-    # get epsilon distribution
-    epsilon_map_path = params['epsilon_map']
-    epsilon_map = np.loadtxt(epsilon_map_path)
-
-    x = x_index * x_resolution # [m]
-    z = z_index * spatial_step # [m]
 
 
-    for k in range(total_trace_num): 
-        if params['monostatic'] == "yes" and params['bistatic'] == "no" and params['array'] == "no":
-            x_rx = k * rx_step + rx_start # rxの位置
-            x_tx = x_rx + antenna_distance # txの位置
-        elif params['bistatic'] == "yes" and params['monostatic'] == "no" and params['array'] == "no":
-            x_rx = rx_start + k * rx_step
+
+    if params['monostatic'] == "yes" and params['bistatic'] == "no" and params['array'] == "no":
+        x_rx = k * rx_step + rx_start # rxの位置
+        x_tx = x_rx + antenna_distance # txの位置
+    else:
+        x_rx = rx_start + (rx-1) * x_resolution
+
+
+    """　using epsilon_map version
+    # =====make pass array: reflector -> rx=====
+    diff_x_ref2rx = x_rx - x
+    diff_z_ref2rx = -(antenna_zpoint - z)
+    
+    
+    if diff_z_ref2rx == 0:
+        pass_ref2rx_z = z * np.ones(np.abs(diff_x_ref2rx))
+        pass_ref2rx_z = pass_ref2rx_z.astype(int)
+        pass_ref2rx_x = np.arange(x, x_rx, np.sign(diff_x_ref2rx))
+    else:
+        grad_ref2rx = np.abs(diff_x_ref2rx / diff_z_ref2rx)
+        pass_ref2rx_z = z * np.ones(np.abs(diff_z_ref2rx)) \
+            - np.sign(diff_z_ref2rx) * np.arange(np.abs(diff_z_ref2rx))
+        pass_ref2rx_z = pass_ref2rx_z.astype(int)
+        pass_ref2rx_x = x * np.ones(np.abs(diff_z_ref2rx)) \
+            + np.sign(diff_x_ref2rx) * grad_ref2rx * np.arange(np.abs(diff_z_ref2rx))
+        pass_ref2rx_x = pass_ref2rx_x.astype(int)
+
+    pass_ref2rx = list(zip(pass_ref2rx_z, pass_ref2rx_x))
+
+    #print(epsilon_map.shape)
+    print('pass_ref2rx:')
+    print(pass_ref2rx)
+    print(z, x)
+    print(antenna_zpoint, x_rx)
+    print(diff_z_ref2rx, diff_x_ref2rx)
+    print(' ')
+
+    # =====calculate recieved time=====
+    L_ref2rx = np.sqrt(np.abs(diff_x_ref2rx)**2 + np.abs(diff_z_ref2rx)**2)
+    if diff_z_ref2rx == 0 and diff_x_ref2rx == 0:
+        pass_len_ref2rx = 0
+    elif diff_z_ref2rx == 0:
+        pass_len_ref2rx = L_ref2rx / len(pass_ref2rx) * epsilon_map[pass_ref2rx]
+        pass_len_ref2rx = pass_len_ref2rx.astype(int)
+    else:
+        pass_len_ref2rx = L_ref2rx / len(pass_ref2rx) * epsilon_map[pass_ref2rx]
+        pass_len_ref2rx = pass_len_ref2rx.astype(int)
+    t_ref2rx = np.sum(pass_len_ref2rx) / c
+
+
+    # for tx 
+    diff_z_tx2ref = -(z - antenna_zpoint)
+    pass_tx2ref_z = antenna_zpoint * np.ones(np.abs(diff_z_tx2ref)) \
+            - np.sign(diff_z_tx2ref) * np.arange(np.abs(diff_z_tx2ref))
+    pass_tx2ref_z = pass_tx2ref_z.astype(int)
+
+    for k in range(total_trace_num):
+        # ATTENTION!! この中にはkが絡む計算しか記述しない！！（計算時間削減のため）
+        if params['bistatic'] == "yes" and params['monostatic'] == "no" and params['array'] == "no":
             x_tx = tx_start + k * tx_step
         elif params['array'] == "yes" and params['monostatic'] == "no" and params['bistatic'] == "no":
-            x_rx = rx_start + (rx-1) * x_resolution
             x_tx = tx_start + k * tx_step
         else:
             print("input correct antenna type")
             break
-        
-        
 
-        """
-        # trace k
+
+        # =====make pass array: tx -> reflector=====
+        diff_x_tx2ref = x - x_tx
+        if diff_z_tx2ref == 0:
+            pass_tx2ref_z = x * np.ones(np.abs(diff_x_tx2ref)) 
+            pass_tx2ref_z = pass_tx2ref_z.astype(int)
+            pass_tx2ref_x = np.arange(x_tx, x, -1 if np.sign(diff_x_tx2ref) < 0 else 1)
+        else:
+            grad_tx2ref = np.abs(diff_x_tx2ref / diff_z_tx2ref)
+            pass_tx2ref = z * np.ones(np.abs(diff_z_tx2ref)) \
+            - np.sign(diff_z_tx2ref) * np.arange(np.abs(diff_z_tx2ref))
+            pass_tx2ref = pass_tx2ref.astype(int)
+            pass_tx2ref_x = x_tx * np.ones(np.abs(diff_z_tx2ref)) \
+                + np.sign(diff_x_tx2ref) * grad_tx2ref * np.arange(np.abs(diff_z_tx2ref))
+            pass_tx2ref_x = pass_tx2ref_x.astype(int)
+
+        pass_tx2ref = list(zip(pass_tx2ref_z, pass_tx2ref_x))
+
+        # get epsilon info
+        #epsilon_tx2ref = epsilon_map[pass_tx2ref]
+
+        print('pass_tx2ref:')
+
+        print(pass_tx2ref)
+        print(z, x)
+        print(k)
+        print(antenna_zpoint, x_tx)
+        print(diff_z_tx2ref, diff_x_tx2ref)
+        print(' ')
+        # =====calculate recieved time=====
+        L_tx2ref = np.sqrt(np.abs(diff_x_tx2ref)**2 + np.abs(diff_z_tx2ref)**2)
+        if diff_z_tx2ref == 0 and diff_x_tx2ref == 0:
+            pass_len_tx2ref = 0
+        elif diff_z_tx2ref == 0:
+            pass_len_tx2ref = L_tx2ref / np.abs(diff_x_tx2ref) * epsilon_map[pass_tx2ref]
+        else:
+            pass_len_tx2ref = L_tx2ref / np.abs(diff_z_tx2ref) * epsilon_map[pass_tx2ref]
+        t_rx2ref = np.sum(pass_len_tx2ref) / c
+
+
+        # =====calculate recieved power=====
+        recieved_time = t_rx2ref + t_ref2rx + params["wave_start_time"] # [s]
+        if recieved_time/dt <= outputdata.shape[0]:
+            recieve_power_array[k] = outputdata[int(recieved_time / dt), k]
+        else:
+            recieve_power_array[k] = 0
+    """
+
+    # old　version
+    # trace k
+    for k in range(total_trace_num):
+        # ATTENTION!! この中にはkが絡む計算しか記述しない！！（計算時間削減のため）
+        if params['bistatic'] == "yes" and params['monostatic'] == "no" and params['array'] == "no":
+            x_tx = tx_start + k * tx_step
+        elif params['array'] == "yes" and params['monostatic'] == "no" and params['bistatic'] == "no":
+            x_tx = tx_start + k * tx_step
+        else:
+            print("input correct antenna type")
+            break
+
+
         Lr = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
         if x == x_rx and z == antenna_zpoint:
             recieved_time_k = 0
@@ -111,8 +217,7 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
             recieve_power_array[k] = outputdata[int(recieved_time_k / dt), k]
         else:
             recieve_power_array[k] = 0
-        """
-
+    
     
     # recieve_power_arrayの要素の和をとる
     outputdata_mig[z_index, x_index] = np.sum(recieve_power_array)
@@ -121,10 +226,15 @@ def migration(rx, tx_step, rx_step, spatial_step, x_index, z_index):
 
 # migration処理関数の実行しまくって地下構造を推定する
 def calc_subsurface_structure(rx, tx_step, rx_step, spatial_step):
+    
     for i in tqdm(range(xgrid_num), desc="rx" + str(rx)): # x
-        for j in range(zgrid_num): # z
+    #i = 250   
+        ref_x = i * x_resolution # [m]
+        for j in tqdm(range(zgrid_num), desc='x=' + str(i)): # z
+        #j = np.arange(0, zgrid_num, 1)
+            ref_z = j * z_resolution # [m]
+            migration(rx, i, j, ref_x, ref_z)
 
-            migration(rx, tx_step, rx_step, spatial_step, i, j)
     
     return outputdata_mig
 

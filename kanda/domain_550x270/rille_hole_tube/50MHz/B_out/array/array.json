@@ -2,6 +2,7 @@
     "_comment": "input data file",
     "input_data_out": "kanda/domain_550x270/rille_hole_tube/50MHz/B_out/array/array_merged.out",
     "input_data_txt": "kanda/domain_550x270/rille_hole_tube/50MHz/B_out/array/pulse_compression_map/corr_data_rx1.txt",
+    "epsilon_map": "kanda/domain_550x270/rille_hole_tube/50MHz/epsilon_map.txt",
     "_comment" : "radar type",
     "monostatic": "no",
     "bistatic": "no",
