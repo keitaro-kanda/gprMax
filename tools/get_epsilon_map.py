@@ -3,13 +3,16 @@ import os
 
 import h5py
 import matplotlib.pyplot as plt
+import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
+from matplotlib import figure
 from tqdm import tqdm
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file', 
-                                 usage='cd gprMax; python -m tools.get_epsilon_map file_name')
+                                 usage='cd gprMax; python -m tools.get_epsilon_map file_name resolution')
 parser.add_argument('file_name', help='.h5 file name')
+parser.add_argument('resolution', help='geometry model resolution', type=float)
 args = parser.parse_args()
 
 # read .h5 file
@@ -34,25 +37,28 @@ def get_ID():
 
 def get_epsilon_map():
     permittivity_map = np.zeros([300, 550])
+    print('permittivity_map shape:')
     print(permittivity_map.shape)
     # read epsilon_r
     h5_data = h5file['data'][:, :, 0]
     h5_data = np.rot90(h5_data)
+    print('h5_data shape:')
     print(h5_data.shape)
 
     z_num = permittivity_map.shape[0]
     x_num = permittivity_map.shape[1]
 
     # convert epsilon_r map
+    resolution_ratio = int(1/args.resolution)
     for i in tqdm(range(z_num)):
         for j in range(x_num):
-            if i*10 >= h5_data.shape[0] or j*10 >= h5_data.shape[1]:
+            if i*resolution_ratio >= h5_data.shape[0] or j*resolution_ratio >= h5_data.shape[1]:
                 break
-            elif h5_data[i*10, j*10] == 1:
+            elif h5_data[i*resolution_ratio, j*resolution_ratio] == 1:
                 permittivity_map[i, j] = 1
-            elif h5_data[i*10, j*10] == 2:
+            elif h5_data[i*resolution_ratio, j*resolution_ratio] == 2:
                 permittivity_map[i, j] = 4
-            elif h5_data[i*10, j*10] == 3:
+            elif h5_data[i*resolution_ratio, j*resolution_ratio] == 3:
                 permittivity_map[i, j] = 6
             else:
                 print('error')
@@ -60,16 +66,31 @@ def get_epsilon_map():
     return permittivity_map, z_num, x_num
 
 epsilon_map, axis0_index_num, axis1_index_num = get_epsilon_map()
+print('epsilon_map shape:')
+print(epsilon_map.shape)
 
 def plot(map, z_num, x_num):
     #save epsilon_r map as txt file
     output_path = os.path.dirname(h5_file_name)
     np.savetxt(output_path+'/epsilon_map.txt', map, fmt='%.3f')
 
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111)
+
     plt.imshow(map,
             #extent=[0, x_num * 0.1, z_num * 0.1, 0],
             cmap='binary')
-    plt.colorbar()
+    
+    plt.xlabel('x (m)')
+    plt.ylabel('z (m)')
+    plt.title('epsilon_r distribution')
+    
+    delvider = axgrid1.make_axes_locatable(ax)
+    cax = delvider.append_axes('right', size='5%', pad=0.1)
+    plt.colorbar(cax=cax)
+
+    plt.savefig(output_path+'/epsilon_map.png')
+
     plt.show()
 
 plot(epsilon_map, axis0_index_num, axis1_index_num)
