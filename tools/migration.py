@@ -307,10 +307,9 @@ for rx in range(rx_num_start, rx_num_end):
 
         no_use, dt = get_output_data(file_name_out, rx, 'Ez') # dtを取り出すため必要
         migration_calc, time_calc = calc_subsurface_structure(rx)
-        print(np.amax(migration_calc))
         
         migration_result_standardize = np.zeros_like(migration_calc)
-        for i in range(xgrid_num):
+        for i in tqdm(range(xgrid_num), desc = 'calculate power'):
             for j in range(zgrid_num):
                 if migration_calc[j, i] == 0:
                     migration_result_standardize[j, i] = 10 * np.log10(1e-10 / np.amax(migration_calc))
