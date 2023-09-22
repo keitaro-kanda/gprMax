@@ -14,15 +14,18 @@ from tools.outputfiles_merge import get_output_data
 # ======load files=====
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing migration', 
-                                 usage='cd gprMax; python -m tools.migration jsonfile file_type')
+                                 usage='cd gprMax; python -m tools.migration jsonfile file_type migration_type')
 parser.add_argument('jsonfile', help='json file name')
-parser.add_argument('file_type', choices=['out', 'txt'], help='file type')
+parser.add_argument('file_type', choices=['raw', 'pulse_comp'], help='file type')
+parser.add_argument('migration_type', choices=['y', 'n'], help='whether consider about epsilon distribution or not')
 parser.add_argument('-select_rx', help='select specific rx number from array', default=False, action='store_true')
 args = parser.parse_args()
+
 
 # load json file
 with open (args.jsonfile) as f:
     params = json.load(f)
+
 
 # Open output file and read number of outputs (receivers)
 file_name_out = params['input_data_out']
@@ -32,6 +35,7 @@ nrx = output_data_out.attrs['nrx']
 output_data_out.close()
 input_dir_path = os.path.dirname(file_name_out)
 # =====load files=====
+
 
 # =====load epsilon map======
 epsilon_map_path = params['epsilon_map']
@@ -69,15 +73,6 @@ delay_time = np.zeros([zgrid_num, xgrid_num]) # grid数で定義、[m]じゃな�
 
 
 txt_dir_path = os.path.dirname(file_name_txt)
-
-# =====make output directory=====
-output_dir_path_out = os.path.join(input_dir_path, 'migration_out')
-if not os.path.exists(output_dir_path_out):
-    os.mkdir(output_dir_path_out)
-output_dir_path_txt = os.path.join(input_dir_path, 'migration_txt')
-if not os.path.exists(output_dir_path_txt):
-    os.mkdir(output_dir_path_txt)
-# ==============================
 
 
 # migration処理関数の作成
@@ -198,7 +193,9 @@ def migration(rx, x_index, z_index, x, z):
                 recieve_power_array[k] = 0
         
         return recieve_power_array, delay_time
-    migration_epsilon_map()
+    
+    if args.migration_type == 'y':
+        migration_epsilon_map()
     
 
     # old　version
@@ -242,7 +239,9 @@ def migration(rx, x_index, z_index, x, z):
                 recieve_power_array[k] = 0
             
         return recieve_power_array
-    #migration_simple()
+    
+    if args.migration_type == 'n':
+        migration_simple()
     
     
     # recieve_power_arrayの要素の和をとる
@@ -254,10 +253,8 @@ def migration(rx, x_index, z_index, x, z):
 def calc_subsurface_structure(rx):
     
     for i in tqdm(range(xgrid_num), desc="rx" + str(rx)): # x
-    #for i in tqdm(range(300, 301, 1), desc="rx" + str(rx)): # x
         ref_x = i * x_resolution # [m]
-        for j in tqdm(range(zgrid_num), desc='x=' + str(i)): # z
-        #j = np.arange(0, zgrid_num, 1)
+        for j in range(zgrid_num): # z
             ref_z = j * z_resolution # [m]
             migration_result , delay_time_array = migration(rx, i, j, ref_x, ref_z)
 
@@ -274,19 +271,30 @@ if args.select_rx == True:
     rx_num_start = 25
     rx_num_end = rx_num_start + 1
 # ==================
-
+# =====make output directory=====
+output_dir_path_raw = os.path.join(input_dir_path, 'migration_raw')
+if not os.path.exists(output_dir_path_raw):
+    os.mkdir(output_dir_path_raw)
+output_dir_path_pulsecomp = os.path.join(input_dir_path, 'migration_pulsecomp')
+if not os.path.exists(output_dir_path_pulsecomp):
+    os.mkdir(output_dir_path_pulsecomp)
+# ==============================
 
 for rx in range(rx_num_start, rx_num_end):
     # from .out file
-    if args.file_type == 'out':
+    if args.file_type == 'raw':
         outputdata, dt = get_output_data(file_name_out, rx, 'Ez') 
 
         migration_calc, time_calc = calc_subsurface_structure(rx)
         migration_result_standardize = migration_calc / np.amax(migration_calc) * 100
-        np.savetxt(output_dir_path_out+'/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
+
+        if args.migration_type == 'y':
+            np.savetxt(output_dir_path_raw+'_y/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
+        elif args.migration_type == 'n':
+            np.savetxt(output_dir_path_raw+'_n/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
 
     # from .txt file
-    elif args.file_type == 'txt':
+    elif args.file_type == 'pulse_comp':
         load_txt_name = os.path.join(txt_dir_path, 'corr_data_rx' + str(rx) + '.txt')
         outputdata = np.loadtxt(load_txt_name)
 
@@ -303,18 +311,21 @@ for rx in range(rx_num_start, rx_num_end):
                     migration_result_standardize[j, i] = 10 * \
                         np.log10(np.abs(migration_calc[j, i]) / np.abs(np.amax(migration_calc)))
 
-        np.savetxt(output_dir_path_txt+'/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
+        if args.migration_type == 'y':
+            np.savetxt(output_dir_path_pulsecomp+'_y/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
+        elif args.migration_type == 'n':
+            np.savetxt(output_dir_path_pulsecomp+'_n/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
     
     
     # =====plot=====
     fig = plt.figure(figsize=(13, 12), facecolor='w', edgecolor='w')
     ax = fig.add_subplot(211)
     
-    if args.file_type == 'out':
+    if args.file_type == 'raw':
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
                 aspect=z_resolution/x_resolution, cmap='seismic', vmin=-10, vmax=10)
-    elif args.file_type == 'txt':
+    elif args.file_type == 'pulse_comp':
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
                 cmap='rainbow', vmin=-40, vmax=0)
@@ -326,9 +337,9 @@ for rx in range(rx_num_start, rx_num_end):
     ax.set_xlabel('Horizontal distance [m]', size=20)
     ax.set_ylabel('Depth form surface [m]', size=20)
 
-    if args.file_type == 'out':
+    if args.file_type == 'raw':
         edge_color = 'gray'
-    elif args.file_type == 'txt':
+    elif args.file_type == 'pulse_comp':
         edge_color = 'white'
 
     ax.set_title('Migration result rx' + str(rx), size=20)
@@ -348,6 +359,7 @@ for rx in range(rx_num_start, rx_num_end):
     ax.add_patch(tube)
 
     
+    """"
     ax = fig.add_subplot(212)
     plt.imshow(time_calc,
             extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
@@ -359,14 +371,21 @@ for rx in range(rx_num_start, rx_num_end):
 
     ax.set_xlabel('Horizontal distance [m]', size=20)
     ax.set_ylabel('Depth form surface [m]', size=20)
-    ax.set_title('Delay time time', size=20)
+    ax.set_title('Delay time', size=20)
+    """
 
 
     # plotの保存
-    if args.file_type == 'out':
-        plt.savefig(output_dir_path_out+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
-    elif args.file_type == 'txt':
-        plt.savefig(output_dir_path_txt+'/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+    if args.file_type == 'raw':
+        if args.migration_type == 'y':
+            plt.savefig(output_dir_path_pulsecomp+'_y/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+        elif args.migration_type == 'n':
+            plt.savefig(output_dir_path_pulsecomp+'_n/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+    elif args.file_type == 'pulse_comp':
+        if args.migration_type == 'y':
+            plt.savefig(output_dir_path_pulsecomp+'_n/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+        elif args.migration_type == 'n':
+            plt.savefig(output_dir_path_pulsecomp+'_n/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
 
     if args.select_rx == True:
         plt.show()
