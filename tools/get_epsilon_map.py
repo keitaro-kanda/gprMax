@@ -1,5 +1,6 @@
 import argparse
 import os
+from cProfile import label
 
 import h5py
 import matplotlib.pyplot as plt
@@ -74,20 +75,20 @@ def plot(map, z_num, x_num):
     output_path = os.path.dirname(h5_file_name)
     np.savetxt(output_path+'/epsilon_map.txt', map, fmt='%.3f')
 
-    fig = plt.figure(figsize=(10, 7))
+    fig = plt.figure(figsize=(10, 6))
     ax = fig.add_subplot(111)
 
     plt.imshow(map,
             #extent=[0, x_num * 0.1, z_num * 0.1, 0],
             cmap='binary')
     
-    plt.xlabel('x (m)')
-    plt.ylabel('z (m)')
-    plt.title('epsilon_r distribution')
+    plt.xlabel('x (m)', size=14)
+    plt.ylabel('z (m)', size=14)
+    plt.title('epsilon_r distribution', size=18)
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
-    plt.colorbar(cax=cax)
+    plt.colorbar(cax=cax, label='epsilon_r')
 
     plt.savefig(output_path+'/epsilon_map.png')
 
