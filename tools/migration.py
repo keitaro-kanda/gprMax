@@ -14,10 +14,10 @@ from tools.outputfiles_merge import get_output_data
 # ======load files=====
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing migration', 
-                                 usage='cd gprMax; python -m tools.migration jsonfile file_type migration_type')
+                                 usage='cd gprMax; python -m tools.migration jsonfile file_type epsilon_map')
 parser.add_argument('jsonfile', help='json file name')
 parser.add_argument('file_type', choices=['raw', 'pulse_comp'], help='file type')
-parser.add_argument('migration_type', choices=['y', 'n'], help='whether consider about epsilon distribution or not')
+parser.add_argument('epsilon_map', choices=['y', 'n'], help='whether consider about epsilon distribution or not')
 parser.add_argument('-select_rx', help='select specific rx number from array', default=False, action='store_true')
 args = parser.parse_args()
 
@@ -194,12 +194,12 @@ def migration(rx, x_index, z_index, x, z):
         
         return recieve_power_array, delay_time
     
-    if args.migration_type == 'y':
+    if args.epsilon_map == 'y':
         migration_epsilon_map()
     
 
     # old　version
-    def migration_simple():
+    def migration_mapN():
         if radar_type =='bistatic' or 'array':
             x_rx = rx_start + (rx-1) * x_resolution
         
@@ -216,6 +216,7 @@ def migration(rx, x_index, z_index, x, z):
 
 
             pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
+
             if x == x_rx and z == antenna_zpoint:
                 recieved_time_k = 0
             
@@ -227,8 +228,8 @@ def migration(rx, x_index, z_index, x, z):
             else:
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
 
-                L_vacuum_k = np.sqrt(epsilon_0)*(pass_len_tx2ref + pass_len_tx2ref) * h / np.abs(antenna_zpoint - z)
-                L_ground_k = np.sqrt(epsilon_ground_1)*(pass_len_tx2ref + pass_len_tx2ref) * np.abs(antenna_zpoint - z - h) / np.abs(antenna_zpoint - z)
+                L_vacuum_k = np.sqrt(epsilon_0)*(pass_len_tx2ref + pass_len_ref2rx) * h / np.abs(antenna_zpoint - z)
+                L_ground_k = np.sqrt(epsilon_ground_1)*(pass_len_tx2ref + pass_len_ref2rx) * np.abs(antenna_zpoint - z - h) / np.abs(antenna_zpoint - z)
 
                 delta_t = (L_vacuum_k + L_ground_k) / c # [s]
                 recieved_time_k = delta_t + params["wave_start_time"] # [s]
@@ -240,8 +241,8 @@ def migration(rx, x_index, z_index, x, z):
             
         return recieve_power_array
     
-    if args.migration_type == 'n':
-        migration_simple()
+    if args.epsilon_map == 'n':
+        migration_mapN()
     
     
     # recieve_power_arrayの要素の和をとる
@@ -271,29 +272,35 @@ if args.select_rx == True:
     rx_num_start = 25
     rx_num_end = rx_num_start + 1
 # ==================
-# =====make output directory=====
-output_dir_path_raw = os.path.join(input_dir_path, 'migration_raw')
-if not os.path.exists(output_dir_path_raw):
-    os.mkdir(output_dir_path_raw)
-output_dir_path_pulsecomp = os.path.join(input_dir_path, 'migration_pulsecomp')
-if not os.path.exists(output_dir_path_pulsecomp):
-    os.mkdir(output_dir_path_pulsecomp)
-# ==============================
+
 
 for rx in range(rx_num_start, rx_num_end):
-    # from .out file
+
+    # make output directory path
+    if args.file_type == 'raw':
+        if args.epsilon_map == 'y':
+            output_dir_path = os.path.join(input_dir_path, 'migration_raw_mapY')
+        elif args.epsilon_map == 'n':
+            output_dir_path = os.path.join(input_dir_path, 'migration_raw_mapN')
+    elif args.file_type == 'pulse_comp':
+        if args.epsilon_map == 'y':
+            output_dir_path = os.path.join(input_dir_path, 'migration_plscomp_mapY')
+        elif args.epsilon_map == 'n':
+            output_dir_path = os.path.join(input_dir_path, 'migration_plscomp_mapN')
+
+    if not os.path.exists(output_dir_path):
+        os.mkdir(output_dir_path)
+
+    
+    # from raw file
     if args.file_type == 'raw':
         outputdata, dt = get_output_data(file_name_out, rx, 'Ez') 
 
         migration_calc, time_calc = calc_subsurface_structure(rx)
         migration_result_standardize = migration_calc / np.amax(migration_calc) * 100
 
-        if args.migration_type == 'y':
-            np.savetxt(output_dir_path_raw+'_y/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
-        elif args.migration_type == 'n':
-            np.savetxt(output_dir_path_raw+'_n/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
 
-    # from .txt file
+    # from pulse_comp file
     elif args.file_type == 'pulse_comp':
         load_txt_name = os.path.join(txt_dir_path, 'corr_data_rx' + str(rx) + '.txt')
         outputdata = np.loadtxt(load_txt_name)
@@ -311,14 +318,15 @@ for rx in range(rx_num_start, rx_num_end):
                     migration_result_standardize[j, i] = 10 * \
                         np.log10(np.abs(migration_calc[j, i]) / np.abs(np.amax(migration_calc)))
 
-        if args.migration_type == 'y':
-            np.savetxt(output_dir_path_pulsecomp+'_y/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
-        elif args.migration_type == 'n':
-            np.savetxt(output_dir_path_pulsecomp+'_n/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
+
+    # =====save migration_result txt file=====
+    np.savetxt(output_dir_path + '/migration_result_rx' + str(rx) + '.txt', migration_result_standardize)
     
     
+
+
     # =====plot=====
-    fig = plt.figure(figsize=(13, 12), facecolor='w', edgecolor='w')
+    fig = plt.figure(figsize=(10, 7), facecolor='w', edgecolor='w')
     ax = fig.add_subplot(211)
     
     if args.file_type == 'raw':
@@ -375,17 +383,8 @@ for rx in range(rx_num_start, rx_num_end):
     """
 
 
-    # plotの保存
-    if args.file_type == 'raw':
-        if args.migration_type == 'y':
-            plt.savefig(output_dir_path_pulsecomp+'_y/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
-        elif args.migration_type == 'n':
-            plt.savefig(output_dir_path_pulsecomp+'_n/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
-    elif args.file_type == 'pulse_comp':
-        if args.migration_type == 'y':
-            plt.savefig(output_dir_path_pulsecomp+'_n/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
-        elif args.migration_type == 'n':
-            plt.savefig(output_dir_path_pulsecomp+'_n/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+    # =====seve plot=====
+    plt.savefig(output_dir_path + '/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
 
     if args.select_rx == True:
         plt.show()
