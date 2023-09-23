@@ -1,0 +1,11 @@
+#domain: 10 10 0.1
+#dx_dy_dz: 0.1 0.1 0.1
+#time_window: 4e-6
+
+#waveform: ricker 1 50e6 my_src 
+#hertzian_dipole: z 4 5 0 my_src
+#rx: 4 5 0
+
+#src_steps: 0.2 0 0 
+#rx_steps: 0.2 0 0
+n回数：10
