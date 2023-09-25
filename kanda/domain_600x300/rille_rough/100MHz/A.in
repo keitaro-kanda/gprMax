@@ -1,0 +1,85 @@
+#domain: 550 300 0.1
+
+#dx_dy_dz: 0.1 0.1 0.1
+
+#time_window: 4e-6
+
+#material: 4 0 1 0 regolith
+#material: 6 0 1 0 basalt_6
+
+
+
+
+
+＜ベースのバサルト＞
+#box: 0 0 0 550 275 0.1 basalt_6
+#box: 0 0 0 25 300 0.1 basalt_6
+#box: 525 0 0 550 300 0.1 basalt_6
+
+
+＜リル壁面＞
+#python:
+from gprMax.input_cmd_funcs import *
+import numpy as np
+
+for z in range(40, 290, 1):
+    roughness_factor_left = np.random.randint(0, 1)
+    left_1 = - 3 / 5 * z + 205
+    left_2 = z
+    left_4 = left_1 + 1 + roughness_factor_left
+    left_5 = z + 1
+    box(left_1, left_2, 0, left_4, left_5, 0.1, 'regolith')
+
+
+    roughness_factor_right = np.random.randint(0, 1)
+    right_1 = 3 / 5 * z + 345
+    right_2 = z
+    right_4 = right_1 + 1 + roughness_factor_right
+    right_5 = z + 1
+    box(right_1, right_2, 0, right_4, right_5, 0.1, 'regolith')
+#end_python:
+
+
+＜リル床＞
+#box: 175 50 0 375 51 0.1 regolith
+
+
+＜縦孔＞
+#fractal_box: 250 200 0 300 235 0.1 1.5 1 1 1 1 free_space hole
+#add_surface_roughness: 250 200 0 250 235 0.1 1.5 1 1 249 251 hole
+#add_surface_roughness: 300 200 0 300 235 0.1 1.5 1 1 299 301 hole
+＜チューブ＞
+#fractal_box: 175 192 0 375 209 0.1 1.5 1 1 1 1 free_space tube_fractal
+#add_surface_roughness: 175 209 0 375 209 0.1 1.5 1 1 208 210 tube_fractal
+#add_surface_roughness: 175 192 0 375 192 0.1 1.5 1 1 191 193 tube_fractal
+
+
+
+
+
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 550 300 0.1 0.1 0.1 0.1 rille_rough n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 550 300 0.1 rille_rough
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 100e6 my_src 
+
+#hertzian_dipole: z 275 193 0 my_src
+#rx: 274 193 0
+
+<snapshot作成>
+#python:
+for i in range(1, 80):
+    print('#snapshot: 0 0 0 550 270 0.1 0.1 0.1 0.1 {} snapshot{}'.format(i*0.05e-6, i))
+#end_python:
+
+output_dir: A-scan
+==========

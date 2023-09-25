@@ -42,7 +42,7 @@ def get_epsilon_map():
     print(h5_data.shape)
 
 
-    migration_grid_size = 0.5
+    migration_grid_size = 1
     resolution_ratio = int(migration_grid_size / args.resolution)
 
     geometry_size_z = 300

@@ -113,7 +113,7 @@ def migration(rx, x_index, z_index, x, z):
         #print('pass_ref2rx:')
         #print(pass_ref2rx)
         #print(antenna_zpoint, x_rx)
-        print(diff_z_ref2rx, diff_x_ref2rx)
+        #print(diff_z_ref2rx, diff_x_ref2rx)
         #print(' ')
 
         # =====calculate recieved time=====
