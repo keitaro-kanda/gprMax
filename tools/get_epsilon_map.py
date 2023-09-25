@@ -1,13 +1,10 @@
 import argparse
 import os
-from cProfile import label
-from operator import ge
 
 import h5py
 import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
-from matplotlib import figure
 from tqdm import tqdm
 
 # Parse command line arguments
@@ -71,22 +68,26 @@ def get_epsilon_map():
             else:
                 print('error')
     
-    return permittivity_map, z_num, x_num
+    return h5_data, permittivity_map, migration_grid_size
 
-epsilon_map, axis0_index_num, axis1_index_num = get_epsilon_map()
+geometry_data, epsilon_map, migration_step = get_epsilon_map()
 print('epsilon_map shape:')
 print(epsilon_map.shape)
 
-def plot(map, z_num, x_num):
+def plot(map, x_resolution, z_resolution, file_name):
     #save epsilon_r map as txt file
-    output_path = os.path.dirname(h5_file_name)
-    np.savetxt(output_path+'/epsilon_map.txt', map, fmt='%.3f')
+    input_path = os.path.dirname(h5_file_name)
+    output_path = os.path.join(input_path, 'map_fig')
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
+
+    np.savetxt(output_path+'/' + file_name + '.txt', map, fmt='%.3f')
 
     fig = plt.figure(figsize=(10, 6))
     ax = fig.add_subplot(111)
 
     plt.imshow(map,
-            #extent=[0, x_num * 0.1, z_num * 0.1, 0],
+            extent=[0, map.shape[1] * x_resolution, map.shape[0] * z_resolution, 0],
             cmap='binary')
     
     plt.xlabel('x (m)', size=14)
@@ -97,8 +98,9 @@ def plot(map, z_num, x_num):
     cax = delvider.append_axes('right', size='5%', pad=0.1)
     plt.colorbar(cax=cax, label='epsilon_r')
 
-    plt.savefig(output_path+'/epsilon_map.png')
+    plt.savefig(output_path+'/' + file_name + '.png')
 
     plt.show()
 
-plot(epsilon_map, axis0_index_num, axis1_index_num)
+plot(epsilon_map, migration_step, migration_step, 'epsilon_map4mig')
+plot(geometry_data, args.resolution, args.resolution, 'epsilon_map_from_h5')

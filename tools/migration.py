@@ -113,7 +113,7 @@ def migration(rx, x_index, z_index, x, z):
         #print('pass_ref2rx:')
         #print(pass_ref2rx)
         #print(antenna_zpoint, x_rx)
-        #print(diff_z_ref2rx, diff_x_ref2rx)
+        print(diff_z_ref2rx, diff_x_ref2rx)
         #print(' ')
 
         # =====calculate recieved time=====
@@ -130,7 +130,7 @@ def migration(rx, x_index, z_index, x, z):
 
 
         # for tx 
-        diff_z_tx2ref = z - antenna_zpoint
+        diff_z_tx2ref = np.int(z - antenna_zpoint)
         pass_tx2ref_z = antenna_zpoint * np.ones(np.abs(diff_z_tx2ref)) \
                 - np.sign(diff_z_tx2ref) * np.arange(np.abs(diff_z_tx2ref))
         pass_tx2ref_z = pass_tx2ref_z.astype(int)
