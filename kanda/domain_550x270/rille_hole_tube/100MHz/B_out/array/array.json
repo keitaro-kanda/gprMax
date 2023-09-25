@@ -7,13 +7,13 @@
     "_comment": "monostatic / bistatic / array", 
     "radar_type": "array",
 
-    "_comment": "simulation box settings",
+    "_comment": "simulation box settings, unit: [m]",
     "geometry_matrix_axis0": 300,
     "geometry_matrix_axis1": 550,
-    "z_resolution": 1,
+    "z_resolution": 0.5,
     "epsilon_ground_1": 6,
 
-    "_comment": "observation settings",
+    "_comment": "observation settings, unit: [m]",
     "antenna_zpoint": 77,
     "antenna_hight": 1,
     "tx_start": 250,
@@ -21,7 +21,8 @@
     "tx_step": 1,
     "rx_step": 0,
     "monostatic_antenna_distance": 0.4,
-    "x_resolution": 1,
+    "array_interval": 1,
+    "x_resolution": 0.5,
     "total_trace_num": 50,
     "wave_start_time": 0.5e-8
 }

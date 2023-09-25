@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+from cProfile import label
 
 import h5py
 import matplotlib.patches as patches
@@ -56,11 +57,12 @@ tx_step = params['tx_step'] # [m]
 rx_step = params['rx_step'] # [m]
 x_resolution = params['x_resolution'] # [m]
 z_resolution = params['z_resolution'] # [m]
-tx_start = params["tx_start"] # txの初期位置 
-rx_start = params["rx_start"] # rxの初期位置
+tx_start = np.int(params["tx_start"]) # txの初期位置 
+rx_start = np.int(params["rx_start"]) # rxの初期位置
 antenna_zpoint = params['antenna_zpoint'] # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
-antenna_distance = params["monostatic_antenna_distance"]# [m], アンテナ間隔
+antenna_distance = np.int(params["monostatic_antenna_distance"]) # [m], アンテナ間隔
+array_interval = params['array_interval'] # [m] array antenna distance
 total_trace_num =  params["total_trace_num"] # rxの数
 # =====load jason settings=====
 
@@ -84,10 +86,10 @@ def migration(rx, x_index, z_index, x, z):
     def migration_epsilon_map():
     # =====make pass array: reflector -> rx=====
         if radar_type =='bistatic' or 'array':
-            x_rx = rx_start + (rx-1) * x_resolution
+            x_rx = rx_start + (rx-1) * array_interval
         
-        diff_x_ref2rx = x_rx - x
-        diff_z_ref2rx = -(antenna_zpoint - z)
+        diff_x_ref2rx = np.int(x_rx - x)
+        diff_z_ref2rx = np.int(-(antenna_zpoint - z))
         
         if diff_x_ref2rx == 0 and diff_z_ref2rx == 0:
             pass_ref2rx_z = (z * np.ones(1)).astype(int)
@@ -146,7 +148,7 @@ def migration(rx, x_index, z_index, x, z):
 
 
             # =====make pass array: tx -> reflector=====
-            diff_x_tx2ref = x - x_tx
+            diff_x_tx2ref = np.int(x - x_tx)
             if diff_x_ref2rx == 0 and diff_z_ref2rx == 0:
                 pass_tx2ref_z = (z * np.ones(1)).astype(int)
                 pass_tx2ref_x = (x * np.ones(1)).astype(int)
@@ -201,13 +203,15 @@ def migration(rx, x_index, z_index, x, z):
     # old　version
     def migration_mapN():
         if radar_type =='bistatic' or 'array':
-            x_rx = rx_start + (rx-1) * x_resolution
+            x_rx = rx_start + (rx-1) * array_interval
+            pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
         
         for k in range(total_trace_num):
             # ATTENTION!! この中にはkが絡む計算しか記述しない！！（計算時間削減のため）
             if radar_type == 'monostatic':
                 x_rx = k * rx_step + rx_start # rxの位置
                 x_tx = x_rx + antenna_distance # txの位置
+                pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
             elif radar_type =='bistatic' or 'array':
                 x_tx = tx_start + k * tx_step
             else:
@@ -215,17 +219,15 @@ def migration(rx, x_index, z_index, x, z):
                 break
 
 
-            pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
-
             if x == x_rx and z == antenna_zpoint:
                 recieved_time_k = 0
             
-            elif z <= antenna_zpoint:
+            elif z <= antenna_zpoint: # assume that epsiron_r = 1
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
                 t_ref2rx = (pass_len_ref2rx + pass_len_tx2ref) / c # [s]
                 recieved_time_k = t_ref2rx + params["wave_start_time"] # [s]
             
-            else:
+            else: # assume that epsiron_r is that of ground
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
 
                 L_vacuum_k = np.sqrt(epsilon_0)*(pass_len_tx2ref + pass_len_ref2rx) * h / np.abs(antenna_zpoint - z)
@@ -339,17 +341,17 @@ for rx in range(rx_num_start, rx_num_end):
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
-    plt.colorbar(cax=cax)
+    plt.colorbar(cax=cax, label = 'power [dB]')
 
-    ax.set_xlabel('Horizontal distance [m]', size=20)
-    ax.set_ylabel('Depth form surface [m]', size=20)
+    ax.set_xlabel('Horizontal distance [m]', size=14)
+    ax.set_ylabel('Depth form surface [m]', size=14)
 
     if args.file_type == 'raw':
         edge_color = 'gray'
     elif args.file_type == 'pulse_comp':
         edge_color = 'white'
 
-    ax.set_title('Migration result rx' + str(rx), size=20)
+    ax.set_title('Migration result rx' + str(rx), size=18)
     # 地形のプロット
     rille_apex_list = [(0, 10), (25, 10), 
                     (125, 260), (425, 260),

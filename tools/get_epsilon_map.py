@@ -1,6 +1,7 @@
 import argparse
 import os
 from cProfile import label
+from operator import ge
 
 import h5py
 import matplotlib.pyplot as plt
@@ -37,20 +38,26 @@ def get_ID():
 #get_ID()
 
 def get_epsilon_map():
-    permittivity_map = np.zeros([300, 550])
-    print('permittivity_map shape:')
-    print(permittivity_map.shape)
     # read epsilon_r
     h5_data = h5file['data'][:, :, 0]
     h5_data = np.rot90(h5_data)
     print('h5_data shape:')
     print(h5_data.shape)
 
+
+    migration_grid_size = 0.5
+    resolution_ratio = int(migration_grid_size / args.resolution)
+
+    geometry_size_z = 300
+    geometry_size_x = 550
+    permittivity_map = np.zeros([np.int(geometry_size_z/migration_grid_size), np.int(geometry_size_x/migration_grid_size)])
+    print('permittivity_map shape:')
+    print(permittivity_map.shape)
+
     z_num = permittivity_map.shape[0]
     x_num = permittivity_map.shape[1]
 
     # convert epsilon_r map
-    resolution_ratio = int(1/args.resolution)
     for i in tqdm(range(z_num)):
         for j in range(x_num):
             if i*resolution_ratio >= h5_data.shape[0] or j*resolution_ratio >= h5_data.shape[1]:
