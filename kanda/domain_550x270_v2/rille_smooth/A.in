@@ -47,7 +47,7 @@ for z in z_list:
 ＜縦孔＞
 #box: 250 192 0 300 235 0.1 free_space
 ＜チューブ＞
-#box: 200 192 0 350 218 0.1 free_space
+#box: 200 192 0 350 209 0.1 free_space
 
 
 

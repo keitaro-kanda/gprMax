@@ -337,7 +337,7 @@ for rx in range(rx_num_start, rx_num_end):
     elif args.file_type == 'pulse_comp':
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
-                cmap='rainbow', vmin=-40, vmax=0)
+                cmap='rainbow', vmin=-50, vmax=0)
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
@@ -354,16 +354,16 @@ for rx in range(rx_num_start, rx_num_end):
     ax.set_title('Migration result rx' + str(rx), size=18)
     # 地形のプロット
     rille_apex_list = [(0, 10), (25, 10), 
-                    (125, 260), (425, 260),
-                    (525, 10), (550, 10)]
+                (175, 260), (375, 260),
+                (525, 10), (550, 10)]
     rille = patches.Polygon(rille_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
     ax.add_patch(rille)
 
-    surface_hole_tube_list = [(35, 35), (250, 35),
-                            (250, 60), (175, 60),
-                            (175, 77), (375, 77),
-                            (375, 60), (300, 60),
-                            (300, 35), (515, 35)]
+    surface_hole_tube_list = [(40, 35), (250, 35),
+                        (250, 60), (200, 60),
+                        (200, 77), (350, 77),
+                        (350, 60), (300, 60),
+                        (300, 35), (515, 35)]
     tube = patches.Polygon(surface_hole_tube_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
     ax.add_patch(tube)
 

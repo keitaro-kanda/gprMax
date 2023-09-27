@@ -62,11 +62,24 @@ def get_epsilon_map():
             elif h5_data[i*resolution_ratio, j*resolution_ratio] == 1:
                 permittivity_map[i, j] = 1
             elif h5_data[i*resolution_ratio, j*resolution_ratio] == 2:
-                permittivity_map[i, j] = 4
+                permittivity_map[i, j] = 6
             elif h5_data[i*resolution_ratio, j*resolution_ratio] == 3:
                 permittivity_map[i, j] = 6
             else:
                 print('error')
+    
+    for i in tqdm(range(h5_data.shape[1])):
+        for j in range(h5_data.shape[0]):
+            if h5_data[j, i] == 1:
+                h5_data[j, i] = 1
+            elif h5_data[j, i] == 2:
+                h5_data[j, i] = 4
+            elif h5_data[j, i] == 3:
+                h5_data[j, i] = 6
+            else:
+                print('error')
+    
+    # extract boudary
     
     return h5_data, permittivity_map, migration_grid_size
 
@@ -104,3 +117,25 @@ def plot(map, x_resolution, z_resolution, file_name):
 
 plot(epsilon_map, migration_step, migration_step, 'epsilon_map4mig')
 plot(geometry_data, args.resolution, args.resolution, 'epsilon_map_from_h5')
+
+
+"""
+def plot_background_img(map, x_resolution, z_resolution, file_name):
+    input_path = os.path.dirname(h5_file_name)
+    output_path = os.path.join(input_path, 'map_fig')
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = fig.add_subplot(111)
+
+    ax.imshow(map,
+            extent=[0, map.shape[1] * x_resolution, map.shape[0] * z_resolution, 0],
+            cmap='binary')
+    
+    ax.axis('off')
+
+    plt.savefig(output_path+'/' + file_name + '.png',
+                bbox_inches='tight', pad_inches=0)
+    plt.show()
+
+plot_background_img(geometry_data, args.resolution, args.resolution, 'epsilon_map4backimg')
+"""
