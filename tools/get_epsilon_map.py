@@ -9,9 +9,9 @@ from tqdm import tqdm
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file', 
-                                 usage='cd gprMax; python -m tools.get_epsilon_map file_name resolution')
+                                 usage='cd gprMax; python -m tools.get_epsilon_map file_name -closeup')
 parser.add_argument('file_name', help='.h5 file name')
-parser.add_argument('resolution', help='geometry model resolution', type=float)
+parser.add_argument('-closeup', action='store_true', help='resolution of migration grid', default=False)
 args = parser.parse_args()
 
 # read .h5 file
@@ -43,7 +43,8 @@ def get_epsilon_map():
 
 
     migration_grid_size = 1
-    resolution_ratio = int(migration_grid_size / args.resolution)
+    resolution = 0.1
+    resolution_ratio = int(migration_grid_size / resolution)
 
     geometry_size_z = 300
     geometry_size_x = 550
@@ -81,9 +82,9 @@ def get_epsilon_map():
     
     # extract boudary
     
-    return h5_data, permittivity_map, migration_grid_size
+    return h5_data, permittivity_map, migration_grid_size, resolution
 
-geometry_data, epsilon_map, migration_step = get_epsilon_map()
+geometry_data, epsilon_map, migration_step, resolution = get_epsilon_map()
 print('epsilon_map shape:')
 print(epsilon_map.shape)
 
@@ -106,17 +107,24 @@ def plot(map, x_resolution, z_resolution, file_name):
     plt.xlabel('x (m)', size=14)
     plt.ylabel('z (m)', size=14)
     plt.title('epsilon_r distribution', size=18)
+
+    if args.closeup == True:
+        plt.xlim(150, 200)
+        plt.ylim(270, 200)
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
     plt.colorbar(cax=cax, label='epsilon_r')
 
-    plt.savefig(output_path+'/' + file_name + '.png')
+    if args.closeup == True:
+        plt.savefig(output_path+'/' + file_name + ' _closeup.png')
+    else:
+        plt.savefig(output_path+'/' + file_name + '.png')
 
     plt.show()
 
 plot(epsilon_map, migration_step, migration_step, 'epsilon_map4mig')
-plot(geometry_data, args.resolution, args.resolution, 'epsilon_map_from_h5')
+plot(geometry_data, resolution, resolution, 'epsilon_map_from_h5')
 
 
 """
