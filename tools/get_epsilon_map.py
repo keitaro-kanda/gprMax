@@ -48,7 +48,7 @@ def get_epsilon_map():
 
     geometry_size_z = 300
     geometry_size_x = 550
-    permittivity_map = np.zeros([np.int(geometry_size_z/migration_grid_size), np.int(geometry_size_x/migration_grid_size)])
+    permittivity_map = 6 * np.ones([np.int(geometry_size_z/migration_grid_size), np.int(geometry_size_x/migration_grid_size)])
     print('permittivity_map shape:')
     print(permittivity_map.shape)
 
@@ -110,7 +110,7 @@ def plot(map, x_resolution, z_resolution, file_name):
 
     if args.closeup == True:
         plt.xlim(150, 200)
-        plt.ylim(270, 200)
+        plt.ylim(265, 220)
     
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
