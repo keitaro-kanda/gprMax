@@ -1,0 +1,28 @@
+{
+    "_comment": "input data file",
+    "input_data_out": "kanda/domain_550x270_v2/rille_rough_1m/100MHz/array/array_merged.out",
+    "input_data_txt": "kanda/domain_550x270_v2/rille_rough_1m/50MHz/array/pulse_compression_map/corr_data_rx1.txt",
+    "epsilon_map": "kanda/domain_550x270_v2/rille_rough_1m/map_fig/epsilon_map4mig.txt",
+
+    "_comment": "monostatic / bistatic / array", 
+    "radar_type": "array",
+
+    "_comment": "simulation box settings, unit: [m]",
+    "geometry_matrix_axis0": 300,
+    "geometry_matrix_axis1": 550,
+    "z_resolution": 1,
+    "epsilon_ground_1": 6,
+
+    "_comment": "observation settings, unit: [m]",
+    "antenna_zpoint": 77,
+    "antenna_hight": 1,
+    "tx_start": 250,
+    "rx_start": 250,
+    "tx_step": 1,
+    "rx_step": 0,
+    "monostatic_antenna_distance": 0.4,
+    "array_interval": 1,
+    "x_resolution": 1,
+    "total_trace_num": 50,
+    "wave_start_time": 0.5e-8
+}
