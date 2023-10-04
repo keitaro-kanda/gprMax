@@ -86,7 +86,7 @@ for rx in range(rx_start, rx_end):
 
 
     def plot():
-        fig = plt.figure(figsize=(15, 12), facecolor='w', edgecolor='w')
+        fig = plt.figure(figsize=(16, 8), facecolor='w', edgecolor='w')
         plt.imshow(corr_data_power,
                 extent= [0, axis1_index_num, axis0_index_num*dt, 0], aspect='auto', cmap='rainbow',
                 vmin=-50, vmax=0)
