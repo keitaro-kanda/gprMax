@@ -210,12 +210,12 @@ def migration(rx, x_index, z_index, x, z):
             # ATTENTION!! この中にはkが絡む計算しか記述しない！！（計算時間削減のため）
             if radar_type == 'monostatic':
                 x_rx = k * rx_step + rx_start # rxの位置
-                x_tx = x_rx + antenna_distance # txの位置
+                x_tx = k * tx_step + tx_start # txの位置
                 pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
             elif radar_type =='bistatic' or 'array':
                 x_tx = tx_start + k * tx_step
             else:
-                print("input correct antenna type")
+                print("WARNING!! input correct antenna type")
                 break
 
 
@@ -257,7 +257,7 @@ def calc_subsurface_structure(rx):
     
     for i in tqdm(range(xgrid_num), desc="rx" + str(rx)): # x
         ref_x = i * x_resolution # [m]
-        for j in range(zgrid_num): # z
+        for j in range(antenna_zpoint, zgrid_num, 1): # z
             ref_z = j * z_resolution # [m]
             migration_result , delay_time_array = migration(rx, i, j, ref_x, ref_z)
 
