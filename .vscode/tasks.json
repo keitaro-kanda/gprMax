@@ -6,12 +6,12 @@
         {
             "label": "gprMax rough 2layer_array",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/rille_2layers/100MHz/array/array.in -n 50"
+            "command": "python -m gprMax kanda/domain_550x270_v2/rille_2layers/rille_2layers_v2/100MHz/array/array.in -n 50"
         },
         {
             "label": "gprMax rough 2layer_mono",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/rille_2layers/100MHz/monostatic/monostatic.in -n 50"
+            "command": "python -m gprMax kanda/domain_550x270_v2/rille_2layers/rille_2layers_v2/100MHz/monostatic/monostatic.in -n 50"
         },
         {
             "label": "task sequence",

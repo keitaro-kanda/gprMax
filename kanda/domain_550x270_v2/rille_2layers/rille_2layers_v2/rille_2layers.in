@@ -1,0 +1,87 @@
+#domain: 550 270 0.1
+
+#dx_dy_dz: 0.1 0.1 0.1
+
+#time_window: 4e-6
+
+#material: 4 0 1 0 regolith
+#material: 6 0 1 0 basalt_6
+
+
+＜ベースのバサルト＞
+#box: 0 0 0 550 235 0.1 basalt_6
+#box: 0 0 0 25 260 0.1 basalt_6
+#box: 525 0 0 550 260 0.1 basalt_6
+
+
+＜リル壁面 & 2nd layer＞
+
+#triangle: 25 260 0 25 10 0 175 10 0 0.1 basalt_6
+#triangle: 525 260 0 375 10 0 525 10 0 0.1 basalt_6
+
+#python:
+from gprMax.input_cmd_funcs import *
+import numpy as np
+
+z_list = np.arange(10, 260, 0.1)
+for z in z_list:
+    left_1 = - 3 / 5 * z + 181
+    left_2 = z
+    left_4 = left_1 + 1
+    left_5 = z + 0.1
+    box(left_1, left_2, 0, left_4, left_5, 0.1, 'regolith', 'n')
+
+
+    right_1 = 3 / 5 * z + 369
+    right_2 = z
+    right_4 = right_1 + 1
+    right_5 = z + 0.1
+    box(right_1, right_2, 0, right_4, right_5, 0.1, 'regolith', 'n')
+
+
+# 2nd layer
+x_left = - 0.6 * 70 + 181
+x_right = 0.6 * 71 + 369
+box(x_left, 70, 0, x_right, 71, 0.1, 'regolith', 'n')
+#end_python:
+
+
+＜リル床＞
+#box: 175 10 0 375 11 0.1 regolith
+
+
+＜縦孔＞
+#box: 250 192 0 300 235 0.1 free_space
+＜チューブ＞
+#box: 200 192 0 350 209 0.1 free_space
+
+
+
+
+
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 550 270 0.1 0.1 0.1 0.1 rille_2lapyers n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 550 270 0.1 rille_layers
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 100e6 my_src 
+
+#hertzian_dipole: z 275 223 0 my_src
+#rx: 274 223 0
+
+<snapshot作成>
+#python:
+for i in range(1, 80):
+    print('#snapshot: 0 0 0 550 270 0.1 0.1 0.1 0.1 {} snapshot{}'.format(i*0.05e-6, i))
+#end_python:
+
+output_dir: A-scan
+==========
