@@ -4,28 +4,22 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "gprMax rough 100_array",
+            "label": "gprMax rough 2layer_array",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/rille_rough?/100MHz/array/array.in -n 50"
+            "command": "python -m gprMax kanda/domain_550x270_v2/rille_2layers/100MHz/array/array.in -n 50"
         },
         {
-            "label": "gprMax rough 100_mono",
+            "label": "gprMax rough 2layer_mono",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/rille_rough?/100MHz/monostic/monostatic.in -n 50"
-        },
-        {
-            "label": "gprMax rough 50_array",
-            "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/rille_rough?/50MHz/array/array.in -n 50"
+            "command": "python -m gprMax kanda/domain_550x270_v2/rille_2layers/100MHz/monostatic/monostatic.in -n 50"
         },
         {
             "label": "task sequence",
             "type": "shell",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "gprMax rough 100_array",
-                "gprMax rough 100_mono",
-                "gprMax rough 50_array"
+                "gprMax rough 2layer_array",
+                "gprMax rough 2layer_mono",
             ]
         }
     ]

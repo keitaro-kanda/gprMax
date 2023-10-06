@@ -7,7 +7,7 @@
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 kanda/domain_550x270_v2/rille_rough?/rille_rough_1m.h5 kanda/domain_550x270_v2/rille_rough?/rille_rough_1m_materials.txt
+#geometry_objects_read: 0 0 0 kanda/domain_550x270_v2/rille_rough?/rille_rough_1m.h5 kanda/domain_550x270_v2/rille_smooth/rille_smooth_materials.txt
 ==========
 
 
