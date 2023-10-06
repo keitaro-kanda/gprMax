@@ -257,7 +257,7 @@ def calc_subsurface_structure(rx):
     
     for i in tqdm(range(xgrid_num), desc="rx" + str(rx)): # x
         ref_x = i * x_resolution # [m]
-        for j in range(antenna_zpoint, zgrid_num, 1): # z
+        for j in range(zgrid_num): # z
             ref_z = j * z_resolution # [m]
             migration_result , delay_time_array = migration(rx, i, j, ref_x, ref_z)
 
@@ -366,6 +366,11 @@ for rx in range(rx_num_start, rx_num_end):
                         (300, 35), (515, 35)]
     tube = patches.Polygon(surface_hole_tube_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
     ax.add_patch(tube)
+
+    
+    #layer2_apex_list = [(100, 135), (450, 135)]
+    #layer2 = patches.Polygon(layer2_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
+    #ax.add_patch(layer2)
 
     
     """"
