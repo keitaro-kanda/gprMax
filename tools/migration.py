@@ -369,8 +369,9 @@ for rx in range(rx_num_start, rx_num_end):
 
     
     #layer2_apex_list = [(100, 135), (450, 135)]
-    #layer2 = patches.Polygon(layer2_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
-    #ax.add_patch(layer2)
+    layer2_apex_list = [(139, 200), (411, 200)]
+    layer2 = patches.Polygon(layer2_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
+    ax.add_patch(layer2)
 
     
     """"

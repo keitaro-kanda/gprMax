@@ -1,7 +1,7 @@
 {
     "_comment": "input data file",
-    "input_data_out": "kanda/domain_550x270_v2/rille_rough?/100MHz/monostic/monostatic_merged.out",
-    "input_data_txt": "kanda/domain_550x270_v2/rille_rough?/100MHz/monostic/pulse_compression_map/corr_data_rx1.txt",
+    "input_data_out": "kanda/domain_550x270_v2/rille_2layers/rille_2layers_v2/100MHz/monostatic/monostatic_merged.out",
+    "input_data_txt": "kanda/domain_550x270_v2/rille_2layers/rille_2layers_v2/100MHz/monostatic/pulse_compression_map/corr_data_rx1.txt",
     "epsilon_map": "kanda/domain_550x270_v2/rille_rough?/map_fig/epsilon_map4mig.txt",
 
     "_comment": "monostatic / bistatic / array", 
