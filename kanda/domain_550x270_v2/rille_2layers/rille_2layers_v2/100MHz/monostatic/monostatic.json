@@ -19,7 +19,7 @@
     "tx_start": 249,
     "rx_start": 250,
     "tx_step": 1,
-    "rx_step": 0,
+    "rx_step": 1,
     "monostatic_antenna_distance": 0.4,
     "array_interval": 1,
     "x_resolution": 1,
