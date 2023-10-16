@@ -267,9 +267,15 @@ def calc_subsurface_structure(rx):
 
 # =====rxの指定=====
 if params['radar_type'] == 'monostatic' or 'bistatic':
-    rx_num_start =  1
+    rx_num_start =   25
 elif params['radar_type'] == 'array':
     rx_num_start  = 25
+else:
+    print('input correct radar type')
+    exit()
+
+
+print('rx_num_start:', rx_num_start)
 rx_num_end =  rx_num_start + 1
 
 # -select_rx用の用の手動設定
