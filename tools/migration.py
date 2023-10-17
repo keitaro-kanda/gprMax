@@ -266,10 +266,12 @@ def calc_subsurface_structure(rx):
 
 
 # =====rxの指定=====
-if params['radar_type'] == 'monostatic' or 'bistatic':
-    rx_num_start =   25
+if params['radar_type'] == 'monostatic':
+    rx_num_start = 1
+elif params['radar_type'] == 'bistatic':
+    rx_num_start = 1
 elif params['radar_type'] == 'array':
-    rx_num_start  = 25
+    rx_num_start = 25
 else:
     print('input correct radar type')
     exit()
@@ -342,15 +344,21 @@ for rx in range(rx_num_start, rx_num_end):
     if args.file_type == 'raw':
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
-                aspect=z_resolution/x_resolution, cmap='seismic', vmin=-10, vmax=10)
+                aspect=z_resolution/x_resolution, cmap='seismic', vmin=-2.5, vmax=2.5)
+        
+        delvider = axgrid1.make_axes_locatable(ax)
+        cax = delvider.append_axes('right', size='5%', pad=0.1)
+        plt.colorbar(cax=cax, label = 'Ex intensity [%]')
+
+
     elif args.file_type == 'pulse_comp':
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
                 cmap='rainbow', vmin=-50, vmax=0)
     
-    delvider = axgrid1.make_axes_locatable(ax)
-    cax = delvider.append_axes('right', size='5%', pad=0.1)
-    plt.colorbar(cax=cax, label = 'power [dB]')
+        delvider = axgrid1.make_axes_locatable(ax)
+        cax = delvider.append_axes('right', size='5%', pad=0.1)
+        plt.colorbar(cax=cax, label = 'power [dB]')
 
     ax.set_xlabel('Horizontal distance [m]', size=14)
     ax.set_ylabel('Depth form surface [m]', size=14)
