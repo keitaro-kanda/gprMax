@@ -202,7 +202,7 @@ def migration(rx, x_index, z_index, x, z):
 
     # old　version
     def migration_mapN():
-        if radar_type =='bistatic' or 'array':
+        if radar_type == 'array':
             x_rx = rx_start + (rx-1) * array_interval
             pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
         
@@ -212,7 +212,11 @@ def migration(rx, x_index, z_index, x, z):
                 x_rx = k * rx_step + rx_start # rxの位置
                 x_tx = k * tx_step + tx_start # txの位置
                 pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
-            elif radar_type =='bistatic' or 'array':
+            elif radar_type =='bistatic':
+                x_rx = k * rx_step + rx_start # rxの位置
+                x_tx = k * tx_step + tx_start # txの位置
+                pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
+            elif radar_type =='array':
                 x_tx = tx_start + k * tx_step
             else:
                 print("WARNING!! input correct antenna type")
