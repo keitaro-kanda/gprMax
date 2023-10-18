@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description='Processing migration',
 parser.add_argument('jsonfile', help='json file name')
 parser.add_argument('file_type', choices=['raw', 'pulse_comp'], help='file type')
 parser.add_argument('epsilon_map', choices=['y', 'n'], help='whether consider about epsilon distribution or not')
-parser.add_argument('-select_rx', help='select specific rx number from array', default=False, action='store_true')
+parser.add_argument('-all_rx', help='migrate all rx for array configuration', default=False, action='store_true')
 args = parser.parse_args()
 
 
@@ -57,11 +57,11 @@ tx_step = params['tx_step'] # [m]
 rx_step = params['rx_step'] # [m]
 x_resolution = params['x_resolution'] # [m]
 z_resolution = params['z_resolution'] # [m]
-tx_start = np.int(params["tx_start"]) # txの初期位置 
-rx_start = np.int(params["rx_start"]) # rxの初期位置
+tx_start = int(params["tx_start"]) # txの初期位置 
+rx_start = int(params["rx_start"]) # rxの初期位置
 antenna_zpoint = params['antenna_zpoint'] # [m]
 h = params['antenna_hight'] # [m], アンテナの高さ
-antenna_distance = np.int(params["monostatic_antenna_distance"]) # [m], アンテナ間隔
+antenna_distance = int(params["monostatic_antenna_distance"]) # [m], アンテナ間隔
 array_interval = params['array_interval'] # [m] array antenna distance
 total_trace_num =  params["total_trace_num"] # rxの数
 # =====load jason settings=====
@@ -202,7 +202,7 @@ def migration(rx, x_index, z_index, x, z):
 
     # old　version
     def migration_mapN():
-        if radar_type =='bistatic' or 'array':
+        if radar_type == 'array':
             x_rx = rx_start + (rx-1) * array_interval
             pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
         
@@ -212,7 +212,11 @@ def migration(rx, x_index, z_index, x, z):
                 x_rx = k * rx_step + rx_start # rxの位置
                 x_tx = k * tx_step + tx_start # txの位置
                 pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
-            elif radar_type =='bistatic' or 'array':
+            elif radar_type =='bistatic':
+                x_rx = k * rx_step + rx_start # rxの位置
+                x_tx = k * tx_step + tx_start # txの位置
+                pass_len_ref2rx = np.sqrt(np.abs(x_rx - x)**2 + np.abs(antenna_zpoint - z)**2 )
+            elif radar_type =='array':
                 x_tx = tx_start + k * tx_step
             else:
                 print("WARNING!! input correct antenna type")
@@ -266,13 +270,24 @@ def calc_subsurface_structure(rx):
 
 
 # =====rxの指定=====
-rx_num_start =  1
-rx_num_end =  nrx + 1
+if params['radar_type'] == 'monostatic':
+    rx_num_start = 1
+elif params['radar_type'] == 'bistatic':
+    rx_num_start = 1
+elif params['radar_type'] == 'array':
+    rx_num_start = 25
+else:
+    print('input correct radar type')
+    exit()
+
+
+print('rx_num_start:', rx_num_start)
+rx_num_end =  rx_num_start + 1
 
 # -select_rx用の用の手動設定
-if args.select_rx == True:
-    rx_num_start = 25
-    rx_num_end = rx_num_start + 1
+if args.all_rx == True:
+    rx_num_start = 1
+    rx_num_end = nrx + 1
 # ==================
 
 
@@ -333,15 +348,21 @@ for rx in range(rx_num_start, rx_num_end):
     if args.file_type == 'raw':
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
-                aspect=z_resolution/x_resolution, cmap='seismic', vmin=-10, vmax=10)
+                aspect=z_resolution/x_resolution, cmap='seismic', vmin=-2.5, vmax=2.5)
+        
+        delvider = axgrid1.make_axes_locatable(ax)
+        cax = delvider.append_axes('right', size='5%', pad=0.1)
+        plt.colorbar(cax=cax, label = 'Ex intensity [%]')
+
+
     elif args.file_type == 'pulse_comp':
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
                 cmap='rainbow', vmin=-50, vmax=0)
     
-    delvider = axgrid1.make_axes_locatable(ax)
-    cax = delvider.append_axes('right', size='5%', pad=0.1)
-    plt.colorbar(cax=cax, label = 'power [dB]')
+        delvider = axgrid1.make_axes_locatable(ax)
+        cax = delvider.append_axes('right', size='5%', pad=0.1)
+        plt.colorbar(cax=cax, label = 'power [dB]')
 
     ax.set_xlabel('Horizontal distance [m]', size=14)
     ax.set_ylabel('Depth form surface [m]', size=14)
@@ -369,9 +390,9 @@ for rx in range(rx_num_start, rx_num_end):
 
     
     #layer2_apex_list = [(100, 135), (450, 135)]
-    layer2_apex_list = [(139, 200), (411, 200)]
-    layer2 = patches.Polygon(layer2_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
-    ax.add_patch(layer2)
+    #layer2_apex_list = [(139, 200), (411, 200)]
+    #layer2 = patches.Polygon(layer2_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
+    #ax.add_patch(layer2)
 
     
     """"
@@ -393,5 +414,5 @@ for rx in range(rx_num_start, rx_num_end):
     # =====seve plot=====
     plt.savefig(output_dir_path + '/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
 
-    if args.select_rx == True:
-        plt.show()
+    
+    plt.show()

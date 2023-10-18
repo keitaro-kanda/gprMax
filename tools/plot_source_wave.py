@@ -111,12 +111,12 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False):
             pltrange = np.where(freqs > 4 * w.freq)[0][0]
         pltrange = np.s_[0:pltrange]
 
-        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num=w.type, figsize=(20, 10), facecolor='w', edgecolor='w')
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num=w.type, figsize=(16, 8), facecolor='w', edgecolor='w')
 
         # Plot waveform
         ax1.plot(time, waveform, 'r', lw=2)
-        ax1.set_xlabel('Time [s]', size=20)
-        ax1.set_ylabel('Amplitude', size=20)
+        ax1.set_xlabel('Time [s]', size=16)
+        ax1.set_ylabel('Amplitude', size=16)
 
         # Plot frequency spectra
         markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.', use_line_collection=True)
@@ -124,17 +124,17 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False):
         plt.setp(stemlines, 'color', 'r')
         plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
         ax2.plot(freqs[pltrange], power[pltrange], 'r', lw=2)
-        ax2.set_xlabel('Frequency [Hz]', size=20)
-        ax2.set_ylabel('Power [dB]', size=20)
+        ax2.set_xlabel('Frequency [Hz]', size=16)
+        ax2.set_ylabel('Power [dB]', size=16)
 
         # メモリサイズの変更
-        ax1.tick_params(labelsize=18)
-        ax2.tick_params(labelsize=18)
+        ax1.tick_params(labelsize=15)
+        ax2.tick_params(labelsize=15)
 
         
 
     else:
-        fig, ax1 = plt.subplots(num=w.type, figsize=(20, 10), facecolor='w', edgecolor='w')
+        fig, ax1 = plt.subplots(num=w.type, figsize=(16, 8), facecolor='w', edgecolor='w')
 
         # Plot waveform
         ax1.plot(time, waveform, 'r', lw=2)
