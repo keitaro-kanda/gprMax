@@ -15,8 +15,8 @@
 ＜波源設定＞
 #waveform: ricker 1 100e6 my_src 
 
-#hertzian_dipole: z 249 236 0 my_src
-#rx: 250 236 0 
+#hertzian_dipole: z 282 236 0 my_src
+#rx: 283 236 0 
 
 ＜moving pass＞
 #src_steps: 1 0 0
