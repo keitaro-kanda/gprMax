@@ -7,7 +7,7 @@
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 kanda/domain_550x270_v2/surface_obs/surface_obs.h5 kanda/domain_550x270_v2/surface_obs/surface_obs_materials.txt
+#geometry_objects_read: 0 0 0 kanda/domain_550x270_v2/surface_obs_2/surface_obs.h5 kanda/domain_550x270_v2/surface_obs_2/surface_obs_materials.txt
 ==========
 
 
