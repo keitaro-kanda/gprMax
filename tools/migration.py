@@ -65,6 +65,8 @@ h = params['antenna_hight'] # [m], アンテナの高さ
 antenna_distance = int(params["monostatic_antenna_distance"]) # [m], アンテナ間隔
 array_interval = params['array_interval'] # [m] array antenna distance
 total_trace_num =  params["total_trace_num"] # rxの数
+
+wave_duration_half = params["wave_duration"] / 2 # [s]
 # =====load jason settings=====
 
 
@@ -108,14 +110,6 @@ def migration(rx, x_index, z_index, x, z):
             pass_ref2rx_x = pass_ref2rx_x.astype(int)
 
 
-        #pass_ref2rx = list(zip(pass_ref2rx_z, pass_ref2rx_x))
-
-        #print(z, x)
-        #print('pass_ref2rx:')
-        #print(pass_ref2rx)
-        #print(antenna_zpoint, x_rx)
-        #print(diff_z_ref2rx, diff_x_ref2rx)
-        #print(' ')
 
         # =====calculate recieved time=====
         L_ref2rx = np.sqrt(np.abs(diff_x_ref2rx)**2 + np.abs(diff_z_ref2rx)**2)
@@ -165,14 +159,6 @@ def migration(rx, x_index, z_index, x, z):
                     + np.sign(diff_x_tx2ref) * grad_tx2ref * np.arange(np.abs(diff_z_tx2ref))
                 pass_tx2ref_x = pass_tx2ref_x.astype(int)
 
-
-            #print(z, x)
-            #print('pass_tx2ref:')
-            #print(pass_tx2ref)
-            #print(k)
-            #print(antenna_zpoint, x_tx)
-            #print(diff_z_tx2ref, diff_x_tx2ref)
-            #print(' ')
 
 
             # =====calculate recieved time=====
@@ -227,12 +213,12 @@ def migration(rx, x_index, z_index, x, z):
             if x == x_rx and z == antenna_zpoint:
                 recieved_time_k = 0
             
-            #elif z <= antenna_zpoint: # assume that epsiron_r = 1
-            pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
-            delay_time = np.sqrt(epsilon_ground_1) * (pass_len_ref2rx + pass_len_tx2ref) / c # [s]
-            recieved_time_k = delay_time + params["wave_start_time"] # [s]
+            elif z <= antenna_zpoint: # assume that epsiron_r = 1
+                pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
+                delay_time = np.sqrt(epsilon_ground_1) * (pass_len_ref2rx + pass_len_tx2ref) / c # [s]
+                recieved_time_k = delay_time + params["wave_start_time"] # [s]
             
-            """
+
             else: # assume that epsiron_r is that of ground
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
 
@@ -241,12 +227,21 @@ def migration(rx, x_index, z_index, x, z):
 
                 delta_t = (L_vacuum_k + L_ground_k) / c # [s]
                 recieved_time_k = delta_t + params["wave_start_time"] # [s]
-            """
             
+            t_index_start = int((recieved_time_k - wave_duration_half) / dt)
+            t_index_end = int((recieved_time_k + wave_duration_half) / dt)
+
             if recieved_time_k/dt <= outputdata.shape[0]:
                 recieve_power_array[k] = outputdata[int(recieved_time_k / dt), k]
             else:
                 recieve_power_array[k] = 0
+            """"
+            if 0 <= t_index_start and t_index_end <= outputdata.shape[0]:
+                recieved_power_list = outputdata[t_index_start:t_index_end, k]
+                max_power_index = np.argmax(np.abs(recieved_power_list))
+                recieve_power_array[k] = recieved_power_list[max_power_index]
+            """
+
             
         return recieve_power_array
     
@@ -372,10 +367,12 @@ for rx in range(rx_num_start, rx_num_end):
 
     ax.set_title('Migration result rx' + str(rx), size=18)
 
+
     # closeup option
     if args.closeup == True:
         ax.set_xlim(200, 350)
-        ax.set_ylim(300, 170)
+        ax.set_ylim(250, 150)
+
 
     if args.file_type == 'raw':
         edge_color = 'gray'
