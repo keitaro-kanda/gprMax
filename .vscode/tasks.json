@@ -6,12 +6,12 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/rille_smooth_shallow/monostatic/monostatic.in -n 50"
+            "command": "python -m gprMax kanda/domain_550x270_v2/rille_smooth_shallow/bistatic2/bistatic.in -n 25"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/surface_obs/bistatic/bistatic.in -n 25"
+            "command": "python -m gprMax kanda/domain_550x270_v2/rille_smooth_shallow/bistatic3/bistatic.in -n 25"
         },
         {
             "label": "task sequence",
