@@ -372,8 +372,8 @@ for rx in range(rx_num_start, rx_num_end):
 
     # closeup option
     if args.closeup == True:
-        ax.set_xlim(200, 350)
-        ax.set_ylim(250, 150)
+        ax.set_xlim(275, 400)
+        ax.set_ylim(150, 50)
 
     if args.file_type == 'raw':
         edge_color = 'gray'
