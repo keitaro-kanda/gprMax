@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "input_data_out": "kanda/domain_550x270_v2/surface_obs/bistatic/bistatic_merged.out",
+    "input_data_out": "kanda/domain_550x270_v2/surface_obs_2/bistatic/bistatic_merged.out",
     "input_data_txt": "kanda/domain_550x270_v2/rille_smooth/100MHz/monostatic/pulse_compression_map/corr_data_rx1.txt",
     "epsilon_map": "kanda/domain_550x270_v2/rille_smooth/map_fig_smooth/epsilon_map4mig.txt",
 
@@ -24,5 +24,9 @@
     "array_interval": 1,
     "x_resolution": 1,
     "total_trace_num": 25,
-    "wave_start_time": 0.5e-8
+    "wave_start_time": 0.5e-8,
+
+    "_comment": "geometry patched settings",
+    "hole": "n", 
+    "2nd_layer": "n"
 }

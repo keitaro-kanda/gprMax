@@ -24,5 +24,9 @@
     "array_interval": 1,
     "x_resolution": 1,
     "total_trace_num": 25,
-    "wave_start_time": 0.5e-8
+    "wave_start_time": 0.5e-8,
+
+    "_comment": "geometry patched settings",
+    "hole": "y", 
+    "2nd_layer": "n"
 }

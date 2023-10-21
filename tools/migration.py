@@ -374,25 +374,42 @@ for rx in range(rx_num_start, rx_num_end):
 
     ax.set_title('Migration result rx' + str(rx), size=18)
     # 地形のプロット
+    # shallow rille wall & floor
     rille_apex_list = [(0, 10), (25, 10), 
-                (175, 260), (375, 260),
+                (139, 200), (411, 200),
                 (525, 10), (550, 10)]
     rille = patches.Polygon(rille_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
     ax.add_patch(rille)
 
-    surface_hole_tube_list = [(40, 35), (250, 35),
-                        (250, 60), (200, 60),
-                        (200, 77), (350, 77),
-                        (350, 60), (300, 60),
-                        (300, 35), (515, 35)]
-    tube = patches.Polygon(surface_hole_tube_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
-    ax.add_patch(tube)
 
-    
-    #layer2_apex_list = [(100, 135), (450, 135)]
-    layer2_apex_list = [(139, 200), (411, 200)]
-    layer2 = patches.Polygon(layer2_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
-    ax.add_patch(layer2)
+    # hole
+    if params['hole'] == 'y':
+        hole_list = [(40, 35), (250, 35),
+                            (250, 60), (200, 60),
+                            (200, 77), (350, 77),
+                            (350, 60), (300, 60),
+                            (300, 35), (515, 35)]
+        tube = patches.Polygon(hole_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
+        ax.add_patch(tube)
+    elif params['hole'] == 'n':
+        surface_list = [(40, 35), (515, 35)]
+        surface = patches.Polygon(surface_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
+        ax.add_patch(surface)
+
+        cave_list = [(200, 60),(200, 77), 
+                        (350, 77), (350, 60)]
+        cave = patches.Polygon(cave_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=True)
+        ax.add_patch(cave)
+
+
+    # 2nd layer
+    if params['2nd_layer'] == 'y':
+        layer2_apex_list = [(139, 200),(175, 260), (375, 260), (411, 200)]
+        layer2 = patches.Polygon(layer2_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
+        ax.add_patch(layer2)
+    elif params['2nd_layer'] == 'n':
+        pass
+
 
     
     """"
