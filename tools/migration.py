@@ -227,11 +227,12 @@ def migration(rx, x_index, z_index, x, z):
             if x == x_rx and z == antenna_zpoint:
                 recieved_time_k = 0
             
-            elif z <= antenna_zpoint: # assume that epsiron_r = 1
-                pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
-                t_ref2rx = (pass_len_ref2rx + pass_len_tx2ref) / c # [s]
-                recieved_time_k = t_ref2rx + params["wave_start_time"] # [s]
+            #elif z <= antenna_zpoint: # assume that epsiron_r = 1
+            pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
+            t_ref2rx = np.sqrt(epsilon_ground_1) * (pass_len_ref2rx + pass_len_tx2ref) / c # [s]
+            recieved_time_k = t_ref2rx + params["wave_start_time"] # [s]
             
+            """
             else: # assume that epsiron_r is that of ground
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
 
@@ -240,6 +241,7 @@ def migration(rx, x_index, z_index, x, z):
 
                 delta_t = (L_vacuum_k + L_ground_k) / c # [s]
                 recieved_time_k = delta_t + params["wave_start_time"] # [s]
+            """
             
             if recieved_time_k/dt <= outputdata.shape[0]:
                 recieve_power_array[k] = outputdata[int(recieved_time_k / dt), k]
@@ -372,8 +374,8 @@ for rx in range(rx_num_start, rx_num_end):
 
     # closeup option
     if args.closeup == True:
-        ax.set_xlim(275, 400)
-        ax.set_ylim(150, 50)
+        ax.set_xlim(50, 150)
+        ax.set_ylim(225, 50)
 
     if args.file_type == 'raw':
         edge_color = 'gray'
