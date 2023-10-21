@@ -20,6 +20,7 @@ parser.add_argument('jsonfile', help='json file name')
 parser.add_argument('file_type', choices=['raw', 'pulse_comp'], help='file type')
 parser.add_argument('epsilon_map', choices=['y', 'n'], help='whether consider about epsilon distribution or not')
 parser.add_argument('-all_rx', help='migrate all rx for array configuration', default=False, action='store_true')
+parser.add_argument('-closeup', help='closeup option', default=False, action='store_true')
 args = parser.parse_args()
 
 
@@ -367,12 +368,17 @@ for rx in range(rx_num_start, rx_num_end):
     ax.set_xlabel('Horizontal distance [m]', size=14)
     ax.set_ylabel('Depth form surface [m]', size=14)
 
+    ax.set_title('Migration result rx' + str(rx), size=18)
+
+    # closeup option
+    if args.closeup == True:
+        ax.set_xlim(200, 350)
+        ax.set_ylim(250, 150)
+
     if args.file_type == 'raw':
         edge_color = 'gray'
     elif args.file_type == 'pulse_comp':
         edge_color = 'white'
-
-    ax.set_title('Migration result rx' + str(rx), size=18)
     # 地形のプロット
     # shallow rille wall & floor
     rille_apex_list = [(0, 10), (25, 10), 
@@ -429,7 +435,10 @@ for rx in range(rx_num_start, rx_num_end):
 
 
     # =====seve plot=====
-    plt.savefig(output_dir_path + '/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+    if args.closeup == False:
+        plt.savefig(output_dir_path + '/migration_result' + str(rx) + '.png', bbox_inches='tight', dpi=300)
+    if args.closeup == True:
+        plt.savefig(output_dir_path + '/migration_result' + str(rx) + '_closeup.png', bbox_inches='tight', dpi=300)
 
     
     plt.show()
