@@ -222,7 +222,7 @@ def migration(rx, x_index, z_index, x, z):
             else: # assume that epsiron_r is that of ground
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
 
-                
+                """
                 L_vacuum_k = np.sqrt(epsilon_0)*(pass_len_tx2ref + pass_len_ref2rx) * h / np.abs(antenna_zpoint - z)
                 L_ground_k = np.sqrt(epsilon_ground_1)*(pass_len_tx2ref + pass_len_ref2rx) * np.abs(antenna_zpoint - z - h) / np.abs(antenna_zpoint - z)
                 recieved_time_k = (L_vacuum_k + L_ground_k) / c # [s]
@@ -230,7 +230,7 @@ def migration(rx, x_index, z_index, x, z):
 
                 delta_t = np.sqrt(epsilon_ground_1) * (pass_len_tx2ref + pass_len_ref2rx) / c
                 recieved_time_k = delta_t + params["wave_start_time"] # [s]
-                """
+                
             
             t_index_start = int((recieved_time_k - wave_duration_half) / dt)
             t_index_end = int((recieved_time_k + wave_duration_half) / dt)
@@ -350,7 +350,7 @@ for rx in range(rx_num_start, rx_num_end):
     if args.file_type == 'raw':
         plt.imshow(migration_result_standardize,
                 extent=[0, xgrid_num*x_resolution, zgrid_num*z_resolution, 0],
-                aspect=z_resolution/x_resolution, cmap='seismic', vmin=-2.5, vmax=2.5)
+                aspect=z_resolution/x_resolution, cmap='seismic', vmin=-5, vmax=5)
         
         delvider = axgrid1.make_axes_locatable(ax)
         cax = delvider.append_axes('right', size='5%', pad=0.1)
@@ -375,7 +375,7 @@ for rx in range(rx_num_start, rx_num_end):
     # closeup option
     if args.closeup == True:
         ax.set_xlim(200, 350)
-        ax.set_ylim(300, 170)
+        ax.set_ylim(300, 150)
 
 
     if args.file_type == 'raw':

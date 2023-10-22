@@ -72,13 +72,13 @@ box(x_left, 70, 0, x_right, 71, 0.1, 'regolith', 'n')
 ＜波源設定＞
 #waveform: ricker 1 100e6 my_src 
 
-#hertzian_dipole: z 275 223 0 my_src
-#rx: 275 223 0
+#hertzian_dipole: z 275 193 0 my_src
+#rx: 275 193 0
 
 <snapshot作成>
 #python:
-for i in range(1, 160):
-    print('#snapshot: 0 0 0 550 270 0.1 0.1 0.1 0.1 {} snapshot{}'.format(i*0.025e-6, i))
+for i in range(1, 80):
+    print('#snapshot: 0 0 0 550 270 0.1 0.1 0.1 0.1 {} snapshot{}'.format(i*0.05e-6, i))
 #end_python:
 
 output_dir: A-scan
