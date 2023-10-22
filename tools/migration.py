@@ -222,14 +222,15 @@ def migration(rx, x_index, z_index, x, z):
             else: # assume that epsiron_r is that of ground
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
 
-                """"
+                
                 L_vacuum_k = np.sqrt(epsilon_0)*(pass_len_tx2ref + pass_len_ref2rx) * h / np.abs(antenna_zpoint - z)
                 L_ground_k = np.sqrt(epsilon_ground_1)*(pass_len_tx2ref + pass_len_ref2rx) * np.abs(antenna_zpoint - z - h) / np.abs(antenna_zpoint - z)
-                delta_t = (L_vacuum_k + L_ground_k) / c # [s]
+                recieved_time_k = (L_vacuum_k + L_ground_k) / c # [s]
                 """
 
                 delta_t = np.sqrt(epsilon_ground_1) * (pass_len_tx2ref + pass_len_ref2rx) / c
                 recieved_time_k = delta_t + params["wave_start_time"] # [s]
+                """
             
             t_index_start = int((recieved_time_k - wave_duration_half) / dt)
             t_index_end = int((recieved_time_k + wave_duration_half) / dt)
