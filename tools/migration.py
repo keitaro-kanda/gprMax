@@ -374,7 +374,7 @@ for rx in range(rx_num_start, rx_num_end):
     # closeup option
     if args.closeup == True:
         ax.set_xlim(200, 350)
-        ax.set_ylim(250, 150)
+        ax.set_ylim(300, 170)
 
 
     if args.file_type == 'raw':
