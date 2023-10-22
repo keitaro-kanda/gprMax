@@ -215,7 +215,7 @@ def migration(rx, x_index, z_index, x, z):
             
             elif z <= antenna_zpoint: # assume that epsiron_r = 1
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
-                delay_time = np.sqrt(epsilon_ground_1) * (pass_len_ref2rx + pass_len_tx2ref) / c # [s]
+                delay_time = (pass_len_ref2rx + pass_len_tx2ref) / c # [s]
                 recieved_time_k = delay_time + params["wave_start_time"] # [s]
             
 
