@@ -43,7 +43,7 @@ def get_epsilon_map():
 
 
     migration_grid_size = 1
-    resolution = 0.1
+    resolution = 0.01
     resolution_ratio = int(migration_grid_size / resolution)
 
     geometry_size_z = 300
