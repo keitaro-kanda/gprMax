@@ -11,9 +11,9 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file', 
                                  usage='cd gprMax; python -m tools.get_epsilon_map file_name -closeup')
 parser.add_argument('file_name', help='.h5 file name')
-parser.add_argument('-closeup', action='store_true', help='resolution of migration grid', default=False)
 args = parser.parse_args()
 
+"""
 # read .h5 file
 h5_file_name = args.file_name
 h5file = h5py.File(h5_file_name, 'r') 
@@ -32,62 +32,88 @@ def get_ID():
     print(ID.shape)
     print(ID)
 
+
 #get_ID()
+"""
 
-def get_epsilon_map():
-    # read epsilon_r
-    h5_data = h5file['data'][:, :, 0]
-    h5_data = np.rot90(h5_data)
-    print('h5_data shape:')
-    print(h5_data.shape)
-
-
-    migration_grid_size = 1
-    resolution = 0.01
-    resolution_ratio = int(migration_grid_size / resolution)
-
-    geometry_size_z = 300
-    geometry_size_x = 550
-    permittivity_map = 6 * np.ones([np.int(geometry_size_z/migration_grid_size), np.int(geometry_size_x/migration_grid_size)])
-    print('permittivity_map shape:')
-    print(permittivity_map.shape)
-
-    z_num = permittivity_map.shape[0]
-    x_num = permittivity_map.shape[1]
-
-    # convert epsilon_r map
-    for i in tqdm(range(z_num)):
-        for j in range(x_num):
-            if i*resolution_ratio >= h5_data.shape[0] or j*resolution_ratio >= h5_data.shape[1]:
-                break
-            elif h5_data[i*resolution_ratio, j*resolution_ratio] == 1:
-                permittivity_map[i, j] = 1
-            elif h5_data[i*resolution_ratio, j*resolution_ratio] == 2:
-                permittivity_map[i, j] = 6
-            elif h5_data[i*resolution_ratio, j*resolution_ratio] == 3:
-                permittivity_map[i, j] = 6
-            else:
-                print('error')
+class epsilon_map():
+    def __init__(self):
+        self.h5_file_name = ''
     
-    for i in tqdm(range(h5_data.shape[1])):
-        for j in range(h5_data.shape[0]):
-            if h5_data[j, i] == 1:
-                h5_data[j, i] = 1
-            elif h5_data[j, i] == 2:
-                h5_data[j, i] = 4
-            elif h5_data[j, i] == 3:
-                h5_data[j, i] = 6
-            else:
-                print('error')
-    
-    # extract boudary
-    
-    return h5_data, permittivity_map, migration_grid_size, resolution
+    # read .h5 file
+    def read_h5_file(self):
+        self.h5file = h5py.File(self.h5_file_name, 'r') 
 
-geometry_data, epsilon_map, migration_step, resolution = get_epsilon_map()
-print('epsilon_map shape:')
-print(epsilon_map.shape)
+        # read ID
+        ID = self.h5file['ID'][:, 0, 0, 0]
+    
+    def get_epsilon_map(self):
+        # read epsilon_r
+        self.h5_data = self.h5file['data'][:, :, 0]
+        self.h5_data = np.rot90(self.h5_data)
 
+
+        z_num = self.h5_data.shape[0] # number of grids in z axis
+        x_num = self.h5_data.shape[1] # number of grids in x axis
+        self.epsilon_map = np.zeros((z_num, x_num))
+
+        # get epsilon_r map
+        self.epsilon_vacuum = 1 # epsilon_r of vacuum
+        self.epsilon_regolith = 4 # epsilon_r of regolith
+        self.epsilon_basalt6 = 6 # epsilon_r of basalt
+
+        for i in tqdm(range(self.h5_data.shape[1])):
+            for j in range(self.h5_data.shape[0]):
+                if self.h5_data[j, i] == 1:
+                    self.epsilon_map[j, i] = self.epsilon_vacuum
+                elif self.h5_data[j, i] == 2:
+                    self.epsilon_map[j, i] = self.epsilon_regolith
+                elif self.h5_data[j, i] == 3:
+                    self.epsilon_map[j, i] = self.epsilon_basalt6
+                else:
+                    print('error, input correct ID')
+
+map = epsilon_map()
+map.h5_file_name = args.file_name
+map.read_h5_file()
+map.get_epsilon_map()
+
+
+# =====output dir path=====
+input_path = os.path.dirname(map.h5_file_name)
+output_path = os.path.join(input_path, 'map')
+if not os.path.exists(output_path):
+    os.mkdir(output_path)
+
+
+# =====save map as txt file=====
+np.savetxt(output_path+'/' + 'h5_data.txt', map.h5_data, fmt='%.3f')
+np.savetxt(output_path+'/' + 'epsilon_map.txt', map.epsilon_map, fmt='%.3f')
+
+
+# =====plot map=====
+spatial_grid =  0.05 # spatial grid size [m]
+
+
+fig = plt.figure(figsize=(10, 6))
+ax = fig.add_subplot(111)
+
+plt.imshow(map.epsilon_map,
+        extent=[0, map.epsilon_map.shape[1] * spatial_grid, map.epsilon_map.shape[0] * spatial_grid, 0],
+        cmap='binary')
+
+plt.xlabel('x (m)', size=14)
+plt.ylabel('z (m)', size=14)
+ax.set_title('epsilon_r distribution', size=18)
+
+delvider = axgrid1.make_axes_locatable(ax)
+cax = delvider.append_axes('right', size='5%', pad=0.1)
+plt.colorbar(cax=cax, label='epsilon_r')
+
+plt.savefig(output_path+'/' + 'epsilon_map.png')
+plt.show()
+
+"""
 def plot(map, x_resolution, z_resolution, file_name):
     #save epsilon_r map as txt file
     input_path = os.path.dirname(h5_file_name)
@@ -125,7 +151,7 @@ def plot(map, x_resolution, z_resolution, file_name):
 
 plot(epsilon_map, migration_step, migration_step, 'epsilon_map4mig')
 plot(geometry_data, resolution, resolution, 'epsilon_map_from_h5')
-
+"""
 
 """
 def plot_background_img(map, x_resolution, z_resolution, file_name):
