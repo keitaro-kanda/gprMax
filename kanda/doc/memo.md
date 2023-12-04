@@ -17,3 +17,16 @@ $$
 - 最も高い誘電率の媒質でもグリッド分散が起きないように空間グリッドを設定する必要がある
 
 参考：https://docs.gprmax.com/en/latest/gprmodelling.html#spatial-discretization
+
+
+# Su methodの簡約化
+Su+(2022)での相互相関イメージング手法（式７）：
+$$
+I (\vec{r}) = \sum_{i=1}^{N} \sum_{j \neq i}^{N} \sum_{\tau=0}^{\tau_m} \frac{ \omega_i(\vec{r}) \cdot S_i(t_i(\vec{r}) + \tau) \times \omega_j(\vec{r}) \cdot S_j^*(t_j(\vec{r}) + \tau) }{N(N-1) \tau_m} 
+$$
+
+
+これを，減衰補正$\omega_k(\vec{r})$とパルス幅$\tau_m$を考慮しない形式で簡約化する．
+$$
+I (\vec{r}) = \sum_{i=1}^{N} \sum_{j \neq i}^{N} \frac{S_i(t_i(\vec{r})) \times \cdot S_j^*(t_j(\vec{r})) }{N(N-1)} 
+$$
