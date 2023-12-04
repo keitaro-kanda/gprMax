@@ -13,28 +13,6 @@ parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file',
 parser.add_argument('file_name', help='.h5 file name')
 args = parser.parse_args()
 
-"""
-# read .h5 file
-h5_file_name = args.file_name
-h5file = h5py.File(h5_file_name, 'r') 
-
-# check h5 file dataset
-def check_file_structure():
-    def PrintAllObjects(name):
-        print(name)
-
-    h5file.visit(PrintAllObjects)
-#check_file_structure()
-
-def get_ID():
-    # read ID
-    ID = h5file['ID'][:, 0, 0, 0]
-    print(ID.shape)
-    print(ID)
-
-
-#get_ID()
-"""
 
 class epsilon_map():
     def __init__(self):
@@ -61,6 +39,7 @@ class epsilon_map():
         self.epsilon_vacuum = 1 # epsilon_r of vacuum
         self.epsilon_regolith = 4 # epsilon_r of regolith
         self.epsilon_basalt6 = 6 # epsilon_r of basalt
+        self.epsilon_basalt7 = 7 # epsilon_r of basalt
 
         for i in tqdm(range(self.h5_data.shape[1])):
             for j in range(self.h5_data.shape[0]):
@@ -70,6 +49,8 @@ class epsilon_map():
                     self.epsilon_map[j, i] = self.epsilon_regolith
                 elif self.h5_data[j, i] == 3:
                     self.epsilon_map[j, i] = self.epsilon_basalt6
+                elif self.h5_data[j, i] == 4:
+                    self.epsilon_map[j, i] = self.epsilon_basalt7
                 else:
                     print('error, input correct ID')
 
@@ -112,64 +93,3 @@ plt.colorbar(cax=cax, label='epsilon_r')
 
 plt.savefig(output_path+'/' + 'epsilon_map.png')
 plt.show()
-
-"""
-def plot(map, x_resolution, z_resolution, file_name):
-    #save epsilon_r map as txt file
-    input_path = os.path.dirname(h5_file_name)
-    output_path = os.path.join(input_path, 'map_fig')
-    if not os.path.exists(output_path):
-        os.mkdir(output_path)
-
-    np.savetxt(output_path+'/' + file_name + '.txt', map, fmt='%.3f')
-
-    fig = plt.figure(figsize=(10, 6))
-    ax = fig.add_subplot(111)
-
-    plt.imshow(map,
-            extent=[0, map.shape[1] * x_resolution, map.shape[0] * z_resolution, 0],
-            cmap='binary')
-    
-    plt.xlabel('x (m)', size=14)
-    plt.ylabel('z (m)', size=14)
-    plt.title('epsilon_r distribution', size=18)
-
-    if args.closeup == True:
-        plt.xlim(150, 200)
-        plt.ylim(265, 220)
-    
-    delvider = axgrid1.make_axes_locatable(ax)
-    cax = delvider.append_axes('right', size='5%', pad=0.1)
-    plt.colorbar(cax=cax, label='epsilon_r')
-
-    if args.closeup == True:
-        plt.savefig(output_path+'/' + file_name + ' _closeup.png')
-    else:
-        plt.savefig(output_path+'/' + file_name + '.png')
-
-    plt.show()
-
-plot(epsilon_map, migration_step, migration_step, 'epsilon_map4mig')
-plot(geometry_data, resolution, resolution, 'epsilon_map_from_h5')
-"""
-
-"""
-def plot_background_img(map, x_resolution, z_resolution, file_name):
-    input_path = os.path.dirname(h5_file_name)
-    output_path = os.path.join(input_path, 'map_fig')
-
-    fig = plt.figure(figsize=(10, 6))
-    ax = fig.add_subplot(111)
-
-    ax.imshow(map,
-            extent=[0, map.shape[1] * x_resolution, map.shape[0] * z_resolution, 0],
-            cmap='binary')
-    
-    ax.axis('off')
-
-    plt.savefig(output_path+'/' + file_name + '.png',
-                bbox_inches='tight', pad_inches=0)
-    plt.show()
-
-plot_background_img(geometry_data, args.resolution, args.resolution, 'epsilon_map4backimg')
-"""

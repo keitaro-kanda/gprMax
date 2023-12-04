@@ -140,6 +140,7 @@ if __name__ == "__main__":
     # Open output file and read number of outputs (receivers)
     f = h5py.File(args.outputfile, 'r') # outファイルの読み込み？
     nrx = f.attrs['nrx'] # Attribute(属性)の読み取り？、nrx:レシーバーの総数
+    print(nrx)
     f.close()
 
     # Check there are any receivers
