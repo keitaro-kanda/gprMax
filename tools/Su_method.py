@@ -48,7 +48,9 @@ domain_array = np.zeros((domain_z, domain_x))
 
 
 # =====load data=====
-data_list = []
+# それぞれのrxにおいてB-scanデータがある
+# 複数のB-scanデータを順番にdata_listに格納していき，全てのrxにおけるB-scanデータをまとめた3次元リストを作成する
+data_list = [] 
 for i in range(1, nrx+1):
     data, dt = get_output_data(data_path, i, 'Ez')
     data_list.append(data)
@@ -114,8 +116,12 @@ def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
     
     for src in range(antenna_num):
         # i番目のrxにおける，src番目のsrcで送信したときの振幅を取得
+        Amp_array[src] = data_list[i-1][tau_index[src], src]
+
+        """
         rx_data, dt = get_output_data(data_path, i+1, 'Ez')
         Amp_array[src] = rx_data[tau_index, src]
+        """
     return Amp_array
 
 def calc_corr():
