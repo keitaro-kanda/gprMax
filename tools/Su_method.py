@@ -159,7 +159,12 @@ def calc_corr():
     return corr_xz
 
 corr = calc_corr()
-np.savetxt(data_dir_path + '/corr.csv', corr, delimiter=',')
+
+# data_dir_pathの下にimagingディレクトリを作成し，それをoutput_dir_pathとする
+output_dir_path = data_dir_path + '/imaging'
+if not os.path.exists(output_dir_path):
+    os.mkdir(output_dir_path)
+np.savetxt(output_dir_path + '/imaging_result.csv', corr, delimiter=',')
 
 """"
 def calc_corr_rx1():
@@ -212,7 +217,7 @@ delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax, label='Cross-correlation')
 
-plt.savefig(data_dir_path + '/cross_corr.png')
+plt.savefig(output_dir_path + '/imaging_result.png')
 plt.show()
 
 """
