@@ -46,11 +46,14 @@ antenna_height = params['antenna_height']
 domain_z = ground_depth + antenna_height # アンテナ高さをz=0とする
 domain_array = np.zeros((domain_z, domain_x))
 
-class get_data:
-    def __init__(self):
-        self.rx_posi = int()
 
+# =====load data=====
+data_list = []
+for i in range(1, nrx+1):
+    data, dt = get_output_data(data_path, i, 'Ez')
+    data_list.append(data)
 
+"""
 rx1, dt = get_output_data(data_path, 1, 'Ez') # shape=(29679, 10)
 rx2, dt = get_output_data(data_path, 2, 'Ez')
 rx3, dt = get_output_data(data_path, 3, 'Ez')
@@ -61,6 +64,7 @@ rx7, dt = get_output_data(data_path, 7, 'Ez')
 rx8, dt = get_output_data(data_path, 8, 'Ez')
 rx9, dt = get_output_data(data_path, 9, 'Ez')
 rx10, dt = get_output_data(data_path, 10, 'Ez')
+"""
 
 
 # number of tx and rx
