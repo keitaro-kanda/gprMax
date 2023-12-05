@@ -114,7 +114,7 @@ cross_corr = np.zeros((domain_z, domain_x))
 def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
     # i番目のrxにおける遅れ時間配列（1D）を作成
     # 簡単のため，i番目のsrcで送信してi番目のrxで受診するのもOKとする
-    tau = 4e-9 + tau_src2ref[z, x, :] + tau_ref2rx[z, x, i] # i番目のrxで受信する場合の遅れ時間[s]
+    tau = 8.73e-9 + tau_src2ref[z, x, :] + tau_ref2rx[z, x, i] # i番目のrxで受信する場合の遅れ時間[s]
     tau_index = (tau / dt).astype(int) # tauをインデックス番号に変換
 
     # i番目のrxにおける振幅配列（1D）を作成
@@ -144,15 +144,6 @@ def calc_corr():
             corr_matrix = np.abs(Amp_at_xz[:, None] * Amp_at_xz)
             cross_corr[z, x] = np.sum(corr_matrix)
 
-            """
-            corr_list = [] # ここで毎回リストを初期化する
-            for rx in range(antenna_num):
-                Amp_at_xz[rx] = calc_Amp(z, x, rx)
-            # パスの組み合わせを取り出して積を計算
-            for pair in itertools.permutations(Amp_at_xz[:, :], 2):
-                corr_list.append(np.abs(pair[0]) * np.abs(pair[1]))
-                cross_corr[z, x] = np.sum(corr_list)
-            """
     path_num = antenna_num * (antenna_num - 1)
     corr_xz = cross_corr / path_num/ (path_num - 1) # 平均化
 

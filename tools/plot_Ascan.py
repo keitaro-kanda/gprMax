@@ -189,6 +189,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext) 
                     #ax.set_ylim([-3, 3])
                     #ax.set_xlim([0, 0.5e-8])
+                    ax.set_xscale('log')
                     ax.set_ylabel(outputtext + ' strength [%]', size=18)
                     ax.tick_params(labelsize=18)
 

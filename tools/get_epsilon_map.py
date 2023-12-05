@@ -76,7 +76,7 @@ np.savetxt(output_path+'/' + 'epsilon_map.txt', map.epsilon_map, fmt='%.3f')
 spatial_grid =  0.05 # spatial grid size [m]
 
 
-fig = plt.figure(figsize=(10, 6))
+fig = plt.figure(figsize=(5, 10))
 ax = fig.add_subplot(111)
 
 plt.imshow(map.epsilon_map,
