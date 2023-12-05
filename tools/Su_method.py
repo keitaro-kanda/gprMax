@@ -2,6 +2,7 @@ import argparse
 import itertools
 import json
 import os
+from pickle import NONE
 
 import h5py
 import matplotlib.pyplot as plt
@@ -122,14 +123,24 @@ def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
         rx_data, dt = get_output_data(data_path, i+1, 'Ez')
         Amp_array[src] = rx_data[tau_index, src]
         """
-    return Amp_array
+    return Amp_array # 1次元配列を返す
 
 def calc_corr():
     # forループの準備
     cross_corr = np.zeros((domain_z, domain_x))
-    Amp_at_xz = np.zeros((antenna_num, antenna_num))
-    for x in range(domain_x):
-        for z in tqdm(range(domain_z), desc='x='+str(x)):
+    #Amp_at_xz = np.zeros((antenna_num, antenna_num))
+    for x in tqdm(range(domain_x)):
+        for z in range(domain_z):
+
+            Amp_at_xz = np.array([calc_Amp(z, x, rx) for rx in range(antenna_num)])
+            # ↑Amp_at_xzは1次元配列Amp_arrayを結合した2次元配列
+            print(Amp_at_xz.shape)
+            print(Amp_at_xz[:, None].shape)
+
+            corr_matrix = np.abs(Amp_at_xz[:, None] * Amp_at_xz)
+            cross_corr[z, x] = np.sum(corr_matrix)
+
+            """
             corr_list = [] # ここで毎回リストを初期化する
             for rx in range(antenna_num):
                 Amp_at_xz[rx] = calc_Amp(z, x, rx)
@@ -137,6 +148,7 @@ def calc_corr():
             for pair in itertools.permutations(Amp_at_xz[:, :], 2):
                 corr_list.append(np.abs(pair[0]) * np.abs(pair[1]))
                 cross_corr[z, x] = np.sum(corr_list)
+            """
     path_num = antenna_num * (antenna_num - 1)
     corr_xz = cross_corr / path_num/ (path_num - 1) # 平均化
 
