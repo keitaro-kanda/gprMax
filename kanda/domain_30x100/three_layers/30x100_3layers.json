@@ -17,5 +17,8 @@
     "rx_step": 2.4,
 
     "_comment": "src moving times",
-    "src_move_times": 10
+    "src_move_times": 10,
+
+    "_comment": "imaging grid step [m]",
+    "imaging_resolution": 0.5 
 }

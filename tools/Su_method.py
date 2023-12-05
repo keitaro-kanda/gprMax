@@ -1,10 +1,10 @@
 import argparse
-import itertools
 import json
 import os
-from pickle import NONE
+from tkinter import font
 
 import h5py
+import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
@@ -83,17 +83,23 @@ for i in range(1, antenna_num+1):
     rx_position_list.append(rx_start + rx_step * (i-1))
     src_position_list.append(src_start + src_step * (i-1))
 
+imaging_resolution = params['imaging_resolution'] # [m]
+imaging_grid_x = int(domain_x / imaging_resolution) # number of grid in x direction
+imaging_grid_z = int(domain_z / imaging_resolution) # number of grid in z direction
 
-L_ref2rx = np.zeros((domain_z, domain_x, antenna_num)) 
-L_src2ref = np.zeros((domain_z, domain_x, antenna_num))
+
+L_ref2rx = np.zeros((imaging_grid_z, imaging_grid_x, antenna_num)) 
+L_src2ref = np.zeros((imaging_grid_z, imaging_grid_x, antenna_num))
 #print(L_rx2ref[1, 1, 1:])
 
-for x in tqdm(range(domain_x)):
-    for z in range(domain_z):
+for x_index in tqdm(range(imaging_grid_x)):
+    x = x_index * imaging_resolution
+    for z_index in range(imaging_grid_z):
+        z = z_index * imaging_resolution
         # calculate distance between rx and (x,z)
         for i in range(antenna_num):
-            L_ref2rx[z, x, i] = np.sqrt((rx_position_list[i]-x)**2 + (z**2))
-            L_src2ref[z, x, i] = np.sqrt((src_position_list[i]-x)**2 + (z**2))
+            L_ref2rx[z_index, x_index, i] = np.sqrt((rx_position_list[i]-x)**2 + (z**2))
+            L_src2ref[z_index, x_index, i] = np.sqrt((src_position_list[i]-x)**2 + (z**2))
 
 # L_src2ref, L_ref2rxは3次元の配列
 # i番目のsrcにおいて，位置(x,z)に対する距離をL_src2ref[z, x, i]に格納している
@@ -127,15 +133,13 @@ def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
 
 def calc_corr():
     # forループの準備
-    cross_corr = np.zeros((domain_z, domain_x))
+    cross_corr = np.zeros((imaging_grid_z, imaging_grid_x))
     #Amp_at_xz = np.zeros((antenna_num, antenna_num))
-    for x in tqdm(range(domain_x)):
-        for z in range(domain_z):
+    for x in tqdm(range(imaging_grid_x)):
+        for z in range(imaging_grid_z):
 
             Amp_at_xz = np.array([calc_Amp(z, x, rx) for rx in range(antenna_num)])
             # ↑Amp_at_xzは1次元配列Amp_arrayを結合した2次元配列
-            print(Amp_at_xz.shape)
-            print(Amp_at_xz[:, None].shape)
 
             corr_matrix = np.abs(Amp_at_xz[:, None] * Amp_at_xz)
             cross_corr[z, x] = np.sum(corr_matrix)
@@ -193,15 +197,16 @@ def calc_corr_rx1():
 """
 
 # plot
-fig = plt.figure(facecolor='w', edgecolor='w')
+fig = plt.figure(figsize=(5, 10) ,facecolor='w', edgecolor='w')
 ax = fig.add_subplot(111)
 plt.imshow(corr, 
-        extent=[0, corr.shape[1], corr.shape[0]-antenna_height, -antenna_height], 
-        aspect=1, cmap='jet')
+        extent=[0, corr.shape[1] * imaging_resolution, 
+                corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
+        aspect=1, cmap='jet', norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(corr)))
 
-ax.set_xlabel('x [m]')
-ax.set_ylabel('z [m]')
-ax.set_title('Cross-correlation')
+ax.set_xlabel('x [m]', fontsize=14)
+ax.set_ylabel('z [m]', fontsize=14)
+ax.set_title('Imaging by Su+(2022) method', fontsize=14)
 
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
