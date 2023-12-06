@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-from tkinter import font
 
 import h5py
 import matplotlib.colors as colors
