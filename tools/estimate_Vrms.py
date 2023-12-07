@@ -41,7 +41,7 @@ epsilon_0 = 1 # vacuum permittivity
 
 
 #* set calculation parameters
-RMS_velocity = np.arange(0.01, 1.01, 0.005) # percentage to speed of light, 0% to 100%
+RMS_velocity = np.arange(0.01, 1.01, 0.01) # percentage to speed of light, 0% to 100%
 vertical_delay_time = np.arange(0, 1501, 1) # 2-way travelt time in vertical direction, [ns]
 
 
@@ -49,6 +49,8 @@ vertical_delay_time = np.arange(0, 1501, 1) # 2-way travelt time in vertical dir
 antenna_step = 2.4 # antenna distance step, [m]
 rx_start = 3
 src_start = 3
+pulse_width = int(15e-9 / dt) # [data point]
+transmit_delay = int(2.5e-9 / dt) # [data point]
 #!!!!!!!!!!!!!!!!!!
 
 
@@ -64,12 +66,14 @@ def corr(Vrms_ind, tau_ver_ind, rx):
         src_posi = src_start + src * antenna_step # [m]
         offset = np.abs(rx_posi - src_posi) # [m]
 
-        total_delay = np.sqrt((offset / Vrms)**2 + tau_ver**2) # index number
-        total_delay = int(total_delay / dt)
-        if total_delay > len(data_list[rx]):
+        total_delay = np.sqrt((offset / Vrms)**2 + tau_ver**2) # [s]
+        total_delay = int(total_delay / dt) + transmit_delay # [data point]
+
+        if total_delay >= len(data_list[rx]):
             Amp_list.append(0)
         else:
-            #Amp = sum(np.abs(data_list[rx][total_delay-3: total_delay+3, src])) / 7
+            #Amp = np.sum(np.abs(data_list[rx][total_delay-int(pulse_width/2): total_delay+int(pulse_width/2), src])) \
+            #    / pulse_width
             Amp = np.abs(data_list[rx][total_delay, src])
             Amp_list.append(Amp)
 
@@ -90,16 +94,15 @@ for RX in range(nrx-1):
     for v in tqdm(range(len(RMS_velocity)), desc='RX' + str(RX+1)):
         for t in range(len(vertical_delay_time)):
             corr_map[t, v] = corr(v, t, RX)
-    print(np.amax(corr_map))
 
 
     #* plot
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(111)
 
-    plt.imshow(corr_map, cmap='viridis', aspect='auto', interpolation='nearest',
+    plt.imshow(corr_map, cmap='jet', aspect='auto', interpolation='nearest',
             extent=[RMS_velocity[0], RMS_velocity[-1], vertical_delay_time[-1], vertical_delay_time[0]],
-            norm=colors.LogNorm(vmin=np.min(corr_map), vmax=np.amax(corr_map)))
+            norm=colors.LogNorm(vmin=1e-5, vmax=1e3))
 
     ax.set_xlabel('RMS velocity [/c]')
     ax.set_ylabel('Vertical delay time [ns]')
@@ -111,6 +114,7 @@ for RX in range(nrx-1):
     plt.colorbar(cax=cax, label='Cross-correlation')
 
     plt.savefig(output_dir_path + '/corr_map_rx' + str(RX + 1) + '.png')
+    #plt.show()
 
 
 
