@@ -34,7 +34,6 @@ for i in range(1, nrx+1):
     data, dt = get_output_data(data_path, i, 'Ez')
     data_list.append(data)
 
-
 #* set physical constants
 c = 299792458 # [m/s], speed of light in vacuum
 epsilon_0 = 1 # vacuum permittivity
@@ -42,27 +41,25 @@ epsilon_0 = 1 # vacuum permittivity
 
 
 #* set calculation parameters
-RMS_velocity = np.arange(0.01, 1.01, 0.01) # percentage to speed of light, 0% to 100%
-vertical_delay_time = np.arange(0, 100, 0.1) # 2-way travelt time in vertical direction, [ns]
+RMS_velocity = np.arange(0.01, 1.01, 0.005) # percentage to speed of light, 0% to 100%
+vertical_delay_time = np.arange(0, 1501, 1) # 2-way travelt time in vertical direction, [ns]
 
 
 #! jsonに書いたほうがいいかも
 antenna_step = 2.4 # antenna distance step, [m]
 rx_start = 3
 src_start = 3
-#!!!!!!!!!!!
+#!!!!!!!!!!!!!!!!!!
 
-corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
 
-def corr(Vrms_ind, tau_ver_ind):
-    rx = 0 # rx1のこと
+def corr(Vrms_ind, tau_ver_ind, rx):
     rx_posi = rx_start + rx * antenna_step # [m]
 
     Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
     tau_ver = vertical_delay_time[tau_ver_ind] * 1e-9 # [s]
 
-    for src in range(10):
-        Amp_times = [] # 取り出した強度を入れる配列を用意しておく
+    Amp_list= [] # 取り出した強度を入れる配列を用意しておく
+    for src in range(nrx-1):
 
         src_posi = src_start + src * antenna_step # [m]
         offset = np.abs(rx_posi - src_posi) # [m]
@@ -70,38 +67,55 @@ def corr(Vrms_ind, tau_ver_ind):
         total_delay = np.sqrt((offset / Vrms)**2 + tau_ver**2) # index number
         total_delay = int(total_delay / dt)
         if total_delay > len(data_list[rx]):
-            Amp_times.append(0)
+            Amp_list.append(0)
         else:
-            Amp = (np.abs(data_list[rx][total_delay, src]) + np.abs(data_list[rx][total_delay+1, src]) \
-                + np.abs(data_list[rx][total_delay-1, src]))/3
-            Amp_times.append(np.abs(data_list[rx][total_delay, src]))
-    corr_map[tau_ver_ind, Vrms_ind] = np.sum(Amp_times)
+            #Amp = sum(np.abs(data_list[rx][total_delay-3: total_delay+3, src])) / 7
+            Amp = np.abs(data_list[rx][total_delay, src])
+            Amp_list.append(Amp)
+
+    # Amp_timesから2つ選んで積をとり，その和を求める
+    correlation =  sum(Amp1 * Amp2 for Amp1, Amp2 in itertools.combinations(Amp_list, 2))
+    return correlation
 
 
-    return corr_map
+#* make output directory
+output_dir_path = data_dir_path + '/corr'
+if not os.path.exists(output_dir_path):
+    os.makedirs(output_dir_path)
 
-for p in tqdm(range(len(RMS_velocity))):
-    for t in range(len(vertical_delay_time)):
-        corr_resutl = corr(p, t)
+
+#* caluculate and plot
+corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
+for RX in range(nrx-1):
+    for v in tqdm(range(len(RMS_velocity)), desc='RX' + str(RX+1)):
+        for t in range(len(vertical_delay_time)):
+            corr_map[t, v] = corr(v, t, RX)
+    print(np.amax(corr_map))
 
 
-#* plot
-fig = plt.figure(figsize=(8, 6))
-ax = fig.add_subplot(111)
+    #* plot
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111)
 
-plt.imshow(corr_map, cmap='viridis', aspect='auto', interpolation='nearest',
-           extent=[RMS_velocity[0], RMS_velocity[-1], vertical_delay_time[-1], vertical_delay_time[0]])
+    plt.imshow(corr_map, cmap='viridis', aspect='auto', interpolation='nearest',
+            extent=[RMS_velocity[0], RMS_velocity[-1], vertical_delay_time[-1], vertical_delay_time[0]],
+            norm=colors.LogNorm(vmin=np.min(corr_map), vmax=np.amax(corr_map)))
 
-ax.set_xlabel('RMS velocity [/c]')
-ax.set_ylabel('Vertical delay time [ns]')
-ax.set_title('Correlation map for rx1')
+    ax.set_xlabel('RMS velocity [/c]')
+    ax.set_ylabel('Vertical delay time [ns]')
+    ax.set_title('Correlation map for rx' + str(RX + 1))
+    ax.grid(color='gray', linestyle='--')
 
-delvider = axgrid1.make_axes_locatable(ax)
-cax = delvider.append_axes('right', size='5%', pad=0.1)
-plt.colorbar(cax=cax, label='Cross-correlation')
+    delvider = axgrid1.make_axes_locatable(ax)
+    cax = delvider.append_axes('right', size='5%', pad=0.1)
+    plt.colorbar(cax=cax, label='Cross-correlation')
 
-plt.savefig(data_dir_path + '/corr_map.png')
-plt.show()
+    plt.savefig(output_dir_path + '/corr_map_rx' + str(RX + 1) + '.png')
+
+
+
+
+
 
 
 #! ↓なにこれ
