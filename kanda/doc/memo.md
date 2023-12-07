@@ -30,3 +30,30 @@ $$
 $$
 I (\vec{r}) = \sum_{i=1}^{N} \sum_{j \neq i}^{N} \frac{S_i(t_i(\vec{r})) \times \cdot S_j^*(t_j(\vec{r})) }{N(N-1)} 
 $$
+
+
+# $V_{RMS}$の推定
+相互相関関数 $F(V_{RMS}^2, \tau_{ver})$ から，２乗平均速度 $V_{RMS}^2$ とn番目の地下層までの鉛直方向遅れ時間 $\tau_{ver}$を求めることができる：
+
+$$
+F(V_{RMS}^2, \tau_{ver}) = \sum_{i \neq j} f_i \Big( \sqrt{\tau_{ver}^2 + \frac{L_i^2}{V_{RMS}^2}} \Big) \cdot f_j \Big( \sqrt{\tau_{ver}^2 + \frac{L_j^2}{V_{RMS}^2}} \Big)
+$$
+
+ここで，$f_i$ と $f_j$ は異なるそう受信点の組み合わせで得られたA-scan，$L_i, L_j$ は送受信点間の距離．
+
+
+# $V_{RMS}$と$\tau_{ver}$のオーダー
+- $V_{RMS}$：光速$c$の0%~100%→$10^8$くらい
+- $\tau_{ver}$：（数十〜数百メートルの地下構造を考えるなら）数百ns→$10^{-7}$から$10^{-6}$くらい
+- $L_i$：数メートル→$10^0$から$10^1$くらい
+
+$$
+\begin{split}
+\Delta t &= \sqrt{\tau_{ver}^2 + \frac{L_i^2}{V_{RMS}^2}} \\
+&\simeq \sqrt{ (10^{-7})^2 + \left(\frac{1}{10^{8}} \right)^2 } \\
+&\simeq \sqrt{ 10^{-14} + 10^{-16}} \\
+&\simeq 10^{-7}
+\end{split}
+$$
+
+つまり，$L_i$が小さい場合，$\Delta t$はほとんど$\tau_{ver}$に支配されることになる．
