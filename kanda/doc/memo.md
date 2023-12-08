@@ -32,6 +32,27 @@ I (\vec{r}) = \sum_{i=1}^{N} \sum_{j \neq i}^{N} \frac{S_i(t_i(\vec{r})) \times 
 $$
 
 
+
+# Normal moveout theory
+[Castle(1994)]より．
+
+NMO方程式：
+$$
+t = \sqrt{t_0^2 + \frac{x^2}{V_{RMS}^2}}
+$$
+ただし，
+- $t_0$: 送信新規から地下境界までの垂直往復時間
+- $x$: オフセット距離
+- $V_{RMS}$:
+$$
+V_{RMS} = \sqrt{
+    \frac{\sum_{k=1}^{N} \Delta \tau_k V_K^2} {\sum_{k=1}^{N} \Delta \tau_k}
+    }
+$$
+- $V_k$: k番目の層内での速度
+- $\Delta \tau_k$: k番目の層内での垂直往復時間
+
+
 # $V_{RMS}$の推定
 相互相関関数 $F(V_{RMS}^2, \tau_{ver})$ から，２乗平均速度 $V_{RMS}^2$ とn番目の地下層までの鉛直方向遅れ時間 $\tau_{ver}$を求めることができる：
 
