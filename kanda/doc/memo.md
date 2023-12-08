@@ -22,7 +22,7 @@ $$
 # Su methodの簡約化
 Su+(2022)での相互相関イメージング手法（式７）：
 $$
-I (\vec{r}) = \sum_{i=1}^{N} \sum_{j \neq i}^{N} \sum_{\tau=0}^{\tau_m} \frac{ \omega_i(\vec{r}) \cdot S_i(t_i(\vec{r}) + \tau) \times \omega_j(\vec{r}) \cdot S_j^*(t_j(\vec{r}) + \tau) }{N(N-1) \tau_m} 
+I (\vec{r}) = \sum_{i=1}^{N} \sum_{j \neq i}^{N} \sum_{\tau=0}^{\tau_m} \frac{ \omega_i(\vec{r}) \cdot S_i(t_i(\vec{r}) + \tau) \times \omega_j(\vec{r}) \cdot S_j^*(t_j(\vec{r}) + \tau) }{N(N-1) \tau_m}
 $$
 
 
