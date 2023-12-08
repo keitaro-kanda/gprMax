@@ -20,7 +20,7 @@ class epsilon_map():
     
     # read .h5 file
     def read_h5_file(self):
-        self.h5file = h5py.File(self.h5_file_name, 'r') 
+        self.h5file = h5py.File(self.h5_file_name, 'r')
 
         # read ID
         ID = self.h5file['ID'][:, 0, 0, 0]
@@ -76,7 +76,7 @@ np.savetxt(output_path+'/' + 'epsilon_map.txt', map.epsilon_map, fmt='%.3f')
 spatial_grid =  0.05 # spatial grid size [m]
 
 
-fig = plt.figure(figsize=(5, 10))
+fig = plt.figure(figsize=(5, 5*map.epsilon_map.shape[0]/map.epsilon_map.shape[1]))
 ax = fig.add_subplot(111)
 
 plt.imshow(map.epsilon_map,

@@ -15,14 +15,19 @@ import itertools
 
 #* Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing Su method',
-                                 usage='cd gprMax; python -m tools.Su_method outfile')
-parser.add_argument('outfile', help='.out file path')
+                                 usage='cd gprMax; python -m tools.Su_method jsonfile')
+parser.add_argument('jsonfile', help='json file path')
 args = parser.parse_args()
+
+
+#* load jason data
+with open (args.jsonfile) as f:
+    params = json.load(f)
 
 
 #* Open output file and read number of outputs (receivers)
 #? h5pyを使ってデータを開ける意味はあまりないかも？nrx取得できるだけなのかな．
-data_path = args.outfile
+data_path = params['out_file']
 data = h5py.File(data_path, 'r')
 nrx = data.attrs['nrx']
 data.close()
@@ -45,13 +50,14 @@ RMS_velocity = np.arange(0.01, 1.01, 0.01) # percentage to speed of light, 0% to
 vertical_delay_time = np.arange(0, 1501, 1) # 2-way travelt time in vertical direction, [ns]
 
 
-#! jsonに書いたほうがいいかも？
-antenna_step = 2.4 # antenna distance step, [m]
-rx_start = 3
-src_start = 3
-pulse_width = int(15e-9 / dt) # [data point]
-transmit_delay = int(2.5e-9 / dt) # [data point]
-#!!!!!!!!!!!!!!!!!!
+
+#* load parameters from json file
+antenna_step = params['src_step'] # antenna distance step, [m]
+rx_start = params['rx_start'] # rx start position, [m]
+src_start = params['src_start'] # src start position, [m]
+pulse_width = int(params['pulse_length'] / dt) # [data point]
+transmit_delay = int(params['transmitting_delay'] / dt) # [data point]
+
 
 
 #* make corr function
@@ -85,7 +91,7 @@ def corr(Vrms_ind, tau_ver_ind, rx):
 
 
 #* make output directory
-output_dir_path = data_dir_path + '/corr'
+output_dir_path = data_dir_path + '/Vrms'
 if not os.path.exists(output_dir_path):
     os.makedirs(output_dir_path)
 
@@ -94,7 +100,7 @@ if not os.path.exists(output_dir_path):
 #* caluculate and plot
 def calc_corrmap_tarver():
     corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
-    for RX in range(1):
+    for RX in range(nrx-1):
         for v in tqdm(range(len(RMS_velocity)), desc='RX' + str(RX+1)):
             for t in range(len(vertical_delay_time)):
                 corr_map[t, v] = corr(v, t, RX)

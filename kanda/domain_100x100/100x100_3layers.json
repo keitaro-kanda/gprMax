@@ -1,0 +1,34 @@
+{
+    "_comment": "input data file",
+    "out_file": "kanda/domain_100x100/calcB_merged.out",
+
+    "_comment": "geometric size of the domain [m]",
+    "domain_x": 100,
+    "domain_z": 100,
+    "ground_depth": 90,
+
+    "_comment": "position of antenna [m]",
+    "antenna_height": 1,
+    "src_start": 5,
+    "src_end": 95,
+    "src_step": 5,
+    "rx_start": 5,
+    "rx_end": 95,
+    "rx_step": 5,
+
+    "_comment": "src moving times",
+    "src_move_times": 19,
+
+    "_comment": "imaging grid step [m]",
+    "imaging_resolution": 0.5,
+
+    "_comment": "pulse [s]",
+    "pulse_length": 15e-9,
+    "transmitting_delay": 2.5e-9,
+
+    "_comment": "V_MRS estimation result",
+    "V_RMS_1": 0.5,
+    "tau_ver_1": 200e-9,
+    "V_RMS_2": 0.4,
+    "tau_ver_2": 850e-9
+}

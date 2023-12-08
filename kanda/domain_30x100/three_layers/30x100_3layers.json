@@ -20,5 +20,9 @@
     "src_move_times": 10,
 
     "_comment": "imaging grid step [m]",
-    "imaging_resolution": 0.5
+    "imaging_resolution": 0.5,
+
+    "_comment": "pulse [s]",
+    "pulse_length": 15e-9,
+    "transmitting_delay": 2.5e-9
 }
