@@ -6,6 +6,7 @@
     "domain_x": 30,
     "domain_z": 100,
     "ground_depth": 90,
+    "grid_size": 0.05,
 
     "_comment": "position of antenna [m]",
     "antenna_height": 1,
@@ -24,5 +25,15 @@
 
     "_comment": "pulse [s]",
     "pulse_length": 15e-9,
-    "transmitting_delay": 2.5e-9
+    "transmitting_delay": 2.5e-9,
+
+    "_comment": "V_MRS estimation result",
+    "V_RMS_1": 0.5,
+    "tau_ver_1": 200e-9,
+    "V_RMS_2": 0.4,
+    "tau_ver_2": 850e-9,
+
+    "_comment": "for geometry-imaging comparison plot",
+    "geometry_txt": "kanda/domain_30x100/three_layers/geometry/map/epsilon_map.txt",
+    "imaging_result_csv": "kanda/domain_30x100/three_layers/imaging/imaging_result.csv"
 }
