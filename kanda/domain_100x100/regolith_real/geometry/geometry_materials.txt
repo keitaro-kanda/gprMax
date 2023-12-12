@@ -1,11 +1,6 @@
 #material: 1 inf 1 0 pec
 #material: 1 0 1 0 free_space
 #material: 4 0 1 0 regolith
+#material: 5 0 1 0 rock
 #material: 6 0 1 0 basalt_6
 #material: 7 0 1 0 basalt_7
-#material: 2.66301 0.00212872 1 0 |0.0003|
-#add_dispersion_debye: 1 0.00652934 9.231e-12 |0.0003|
-#material: 2.73549 0.00245551 1 0 |0.0008|
-#add_dispersion_debye: 1 0.0179602 9.231e-12 |0.0008|
-#material: 2.79617 0.00264739 1 0 |0.0012|
-#add_dispersion_debye: 1 0.0306071 9.231e-12 |0.0012|

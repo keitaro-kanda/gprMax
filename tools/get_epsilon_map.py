@@ -6,25 +6,45 @@ import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
 from tqdm import tqdm
+import json
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file', 
-                                 usage='cd gprMax; python -m tools.get_epsilon_map file_name -closeup')
-parser.add_argument('file_name', help='.h5 file name')
+#* Parse command line arguments
+parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file',
+                                 usage='cd gprMax; python -m tools.get_epsilon_map json_file -closeup')
+parser.add_argument('json_file', help='json file name')
 args = parser.parse_args()
+
+#* load json file
+with open (args.json_file) as f:
+    params = json.load(f)
+
+
+#* load epsilon from materials.txt file
+material_path = params['material_file']
+with open(material_path, 'r') as f:
+    epsilon_list = []
+
+    for line in f:
+        # 行を空白やタブなどで分割してリストにする
+        values = line.split()
+        
+        # 2列目の数字を取得してリストに追加
+        if len(values) >= 2:  # 行に少なくとも2つの要素があることを確認
+            epsilon_list.append(float(values[1]))  # 2番目の要素を取得し、floatに変換してリストに追加
+
 
 
 class epsilon_map():
     def __init__(self):
         self.h5_file_name = ''
     
-    # read .h5 file
+    #* read .h5 file
     def read_h5_file(self):
         self.h5file = h5py.File(self.h5_file_name, 'r')
 
         # read ID
         ID = self.h5file['ID'][:, 0, 0, 0]
-    
+
     def get_epsilon_map(self):
         # read epsilon_r
         self.h5_data = self.h5file['data'][:, :, 0]
@@ -43,6 +63,8 @@ class epsilon_map():
 
         for i in tqdm(range(self.h5_data.shape[1])):
             for j in range(self.h5_data.shape[0]):
+                self.epsilon_map[j, i] = epsilon_list[int(self.h5_data[j, i])]
+                """
                 if self.h5_data[j, i] == 1:
                     self.epsilon_map[j, i] = self.epsilon_vacuum
                 elif self.h5_data[j, i] == 2:
@@ -53,9 +75,10 @@ class epsilon_map():
                     self.epsilon_map[j, i] = self.epsilon_basalt7
                 else:
                     print('error, input correct ID')
+                """
 
 map = epsilon_map()
-map.h5_file_name = args.file_name
+map.h5_file_name = params['h5_file']
 map.read_h5_file()
 map.get_epsilon_map()
 
