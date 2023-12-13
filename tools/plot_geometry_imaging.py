@@ -8,8 +8,8 @@ import mpl_toolkits.axes_grid1 as axgrid1
 
 
 #* Parse command line arguments
-parser = argparse.ArgumentParser(description='Processing Su method',
-                                 usage='cd gprMax; python -m tools.Su_method jsonfile')
+parser = argparse.ArgumentParser(description='Plot geometry map and imaging result',
+                                 usage='cd gprMax; python -m tools.plot_geometry_imaging jsonfile')
 parser.add_argument('jsonfile', help='json file path')
 args = parser.parse_args()
 
