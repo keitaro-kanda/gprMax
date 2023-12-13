@@ -5,7 +5,7 @@
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 kanda/domain_100x100/geometry/geometry.h5 kanda/domain_100x100/geometry/geometry_materials.txt
+#geometry_objects_read: 0 0 0 kanda/domain_100x100/regolith_real/geometry/geometry.h5 kanda/domain_100x100/regolith_real/geometry/geometry_materials.txt
 ==========
 
 

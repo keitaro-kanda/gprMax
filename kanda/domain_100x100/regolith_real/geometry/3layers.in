@@ -33,7 +33,7 @@ def generate_rock():
 
     return cylinder_command
 
-for i in range(100): # range()は生成する岩石の数
+for i in range(150): # range()は生成する岩石の数
     cylinder = generate_rock()
     print(cylinder)
 #end_python:

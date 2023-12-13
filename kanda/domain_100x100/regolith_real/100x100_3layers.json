@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "out_file": "kanda/domain_100x100/ideal/calcB_merged.out",
+    "out_file": "kanda/domain_100x100/regolith_real/calcB_merged.out",
 
     "_comment": "for making epsilon map",
     "h5_file": "kanda/domain_100x100/regolith_real/geometry/geometry.h5",
