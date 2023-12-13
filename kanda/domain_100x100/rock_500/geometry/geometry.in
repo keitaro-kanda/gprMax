@@ -27,7 +27,7 @@ import random
 
 def generate_rock():
     x, y = random.randint(0, 1000) / 10, random.randint(820, 890) / 10
-    radius =  0.25 # radius, 0.05~0.5 [m]
+    radius =  0.25 # radius, [m]
 
     cylinder_command = f'#cylinder: {x} {y} {0} {x} {y} 0.05 {radius} rock'
 

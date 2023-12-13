@@ -100,7 +100,7 @@ if not os.path.exists(output_dir_path):
 #* caluculate and plot
 def calc_corrmap_tarver():
     corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
-    for RX in range(nrx-1):
+    for RX in range(9,10):
         for v in tqdm(range(len(RMS_velocity)), desc='RX' + str(RX+1)):
             for t in range(len(vertical_delay_time)):
                 corr_map[t, v] = corr(v, t, RX)
