@@ -1,0 +1,65 @@
+#domain: 100 100 0.05
+#dx_dy_dz: 0.05 0.05 0.05
+
+#time_window: 4e-6
+
+#material: 4 0 1 0 regolith
+#material: 5 0 1 0 rock
+#material: 6 0 1 0 basalt_6
+#material: 7 0 1 0 basalt_7
+
+
+=====地形=====
+＜誘電率6のバサルト＞
+#box: 0 0 0 100 81 0.05 basalt_6
+
+＜誘電率7のバサルト＞
+#fractal_box: 0 0 0 100 40 0.05 1.5 1 1 1 1 basalt_7 basalt7_fractal
+#add_surface_roughness: 0 40 0 100 40 0.05 1.5 1 1 39 41 basalt7_fractal
+
+＜レゴリス＞
+#fractal_box: 0 80 0 100 90 0.05 1.5 1 1 1 1 regolith regolith_fractal
+#add_surface_roughness: 0 80 0 100 80 0.05 1.5 1 1 79 81 regolith_fractal
+
+＜レゴリス中の岩石＞
+#python:
+import random
+
+def generate_rock():
+    x, y = random.randint(0, 1000) / 10, random.randint(820, 890) / 10
+    radius =  1 # radius, [m]
+
+    cylinder_command = f'#cylinder: {x} {y} {0} {x} {y} 0.05 {radius} rock'
+
+    return cylinder_command
+
+for i in range(100): # range()は生成する岩石の数
+    cylinder = generate_rock()
+    print(cylinder)
+#end_python:
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 100 100 0.05 0.05 0.05 0.05 3layers n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 100 100 0.05 geometry
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 150e6 my_src
+
+#hertzian_dipole: z  5 91 0 my_src
+#rx: 95 91 0
+
+<snapshot作成>
+#python:
+for i in range(1, 80):
+    print('#snapshot: 0 0 0 100 100 0.05 0.05 0.05 0.05 {} snapshot{}'.format(i*0.05e-6, i))
+#end_python:
+
+#output_dir: A-scan
+==========

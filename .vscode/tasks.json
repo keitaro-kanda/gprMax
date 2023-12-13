@@ -6,12 +6,12 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/rille_smooth_shallow/bistatic2/bistatic.in -n 25"
+            "command": "python -m gprMax kanda/domain_100x100/rock_2m/calcB.in -n 19"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_550x270_v2/rille_smooth_shallow/bistatic3/bistatic.in -n 25"
+            "command": "python -m gprMax kanda/domain_100x100/rock_01m/calcB.in -n 19"
         },
         {
             "label": "task sequence",
@@ -19,8 +19,9 @@
             "dependsOrder": "sequence",
             "dependsOn": [
                 "gprMax 1st run",
-                "gprMax 2nd run",
-            ]
+                "gprMax 2nd run"
+            ],
+            "problemMatcher": []
         }
     ]
 }
