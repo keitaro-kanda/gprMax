@@ -39,5 +39,8 @@
 
     "_comment": "for geometry-imaging comparison plot",
     "geometry_txt": "kanda/domain_100x100/rock_2m/geometry/map/epsilon_map.txt",
-    "imaging_result_csv": "kanda/domain_100x100/rock_2m/imaging/imaging_result.csv"
+    "imaging_result_csv": "kanda/domain_100x100/rock_2m/imaging/imaging_result.csv",
+
+    "_comment": "for V_RMS estimation plot",
+    "corr_map_txt": "kanda/domain_100x100/rock_2m/Vrms/corr_map.txt"
 }

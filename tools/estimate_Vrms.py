@@ -15,9 +15,9 @@ import itertools
 
 #* Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing Su method',
-                                 usage='cd gprMax; python -m tools.Su_method jsonfile -plot')
+                                 usage='cd gprMax; python -m tools.Su_method jsonfile plot_type')
 parser.add_argument('jsonfile', help='json file path')
-parser.add_argument('-plot', action='store_true', help='plot only')
+parser.add_argument('plot_type', choices=['plot', 'mask', 'calc'])
 args = parser.parse_args()
 
 
@@ -110,11 +110,27 @@ if not os.path.exists(output_dir_path):
 
 
 #* load only or calculate and save
-if args.plot == True:
+if args.plot_type == 'plot':
     Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',')
-else:
+    print(np.amax(Vt_map))
+    Vt_map = Vt_map / np.amax(Vt_map) # normalize
+
+elif args.plot_type == 'mask':
+    Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',')
+    Vt_map = Vt_map / np.amax(Vt_map) # normalize
+    for row in Vt_map:
+        indices_to_keep = np.argsort(row)[-5:]  # トップ5のインデックスを取得
+        row[~np.isin(np.arange(len(row)), indices_to_keep)] = 0  # top5以外の要素を0に置き換える
+    # 1e-6以下の値を0に置き換える
+    Vt_map[Vt_map < 1e-6] = 0
+    np.savetxt(output_dir_path + '/corr_map_mask.txt', Vt_map, delimiter=',')
+
+elif args.plot_type == 'calc':
     Vt_map = corr_roop()
+    Vt_map = Vt_map / np.amax(Vt_map) # normalize
     np.savetxt(output_dir_path + '/corr_map.txt', Vt_map, delimiter=',')
+else:
+    print('error, input plot, mask, or calc')
 
 
 #* plot
@@ -123,7 +139,7 @@ ax = fig.add_subplot(111)
 
 plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
         extent=[RMS_velocity[0], RMS_velocity[-1], vertical_delay_time[-1], vertical_delay_time[0]],
-        norm=colors.LogNorm(vmin=1e-8, vmax=1e-1))
+        norm=colors.LogNorm(vmin=1e-10, vmax=1e-4))
 
 ax.set_xlabel('RMS velocity [/c]')
 ax.set_ylabel('Vertical delay time [ns]')
@@ -133,7 +149,10 @@ delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax, label='Cross-correlation')
 
-plt.savefig(output_dir_path + '/corr_map.png')
+if args.plot_type == 'mask':
+    plt.savefig(output_dir_path + '/corr_map_mask.png')
+else:
+    plt.savefig(output_dir_path + '/corr_map.png')
 plt.show()
 
 
