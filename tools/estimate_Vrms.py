@@ -57,6 +57,7 @@ antenna_step = params['src_step'] # antenna distance step, [m]
 rx_start = params['rx_start'] # rx start position, [m]
 src_start = params['src_start'] # src start position, [m]
 src_end = params['src_end'] # src end position, [m]
+src_move_times = params['src_move_times'] # number of src moving times
 pulse_width = int(params['pulse_length'] / dt) # [data point]
 transmit_delay = int(params['transmitting_delay'] / dt) # [data point]
 
@@ -71,7 +72,7 @@ def corr(Vrms_ind, tau_ver_ind, i):
 
     Amp_array = np.zeros(nrx) # 取り出した強度を入れる配列を用意しておく
 
-    for src in range(nrx):
+    for src in range(src_move_times):
 
         src_posi = src_start + src * antenna_step # [m]
         offset = np.abs(rx_posi - src_posi) # [m]
@@ -85,13 +86,6 @@ def corr(Vrms_ind, tau_ver_ind, i):
 
 
     return Amp_array # 1D array
-
-    """
-    # Amp_timesから2つ選んで積をとり，その和を求める
-    correlation =  sum(Amp1 * Amp2 for Amp1, Amp2 in itertools.combinations(Amp_list, 2))
-    return correlation
-    """
-
 
 
 #* caluculate corr roop
