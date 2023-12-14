@@ -73,8 +73,7 @@ def corr(Vrms_ind, tau_ver_ind, rx):
         src_posi = src_start + src * antenna_step # [m]
         offset = np.abs(rx_posi - src_posi) # [m]
 
-        total_delay = np.sqrt((offset / Vrms)**2 + tau_ver**2) # [s]
-        total_delay = int(total_delay / dt) + transmit_delay # [data point]
+        total_delay = int(np.sqrt((offset / Vrms)**2 + tau_ver**2)) + transmit_delay # [data point]
 
         if total_delay >= len(data_list[rx]):
             Amp_list.append(0)
@@ -84,6 +83,7 @@ def corr(Vrms_ind, tau_ver_ind, rx):
             Amp = np.abs(data_list[rx][total_delay, src])
             Amp_list.append(Amp)
 
+    
     # Amp_timesから2つ選んで積をとり，その和を求める
     correlation =  sum(Amp1 * Amp2 for Amp1, Amp2 in itertools.combinations(Amp_list, 2))
     return correlation

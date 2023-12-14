@@ -108,6 +108,7 @@ elif args.velocity_structure == 'y':
     """
     Consider the results of V_RMS estimation
     """
+    #! ただし，２層分のV_RMSにしか対応していない
     layer1_Vrms = params['V_RMS_1'] * c # [m/s]
     layer1_thickness = int(params['tau_ver_1'] * layer1_Vrms / 2 / imaging_resolution) # grind number
     layer2_Vrms = params['V_RMS_2'] * c # [m/s]
