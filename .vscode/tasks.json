@@ -14,12 +14,24 @@
             "command": "python -m gprMax kanda/domain_100x100/rock_01m/calcB.in -n 19"
         },
         {
+            "label": "gprMax 3rd run",
+            "type": "shell",
+            "command": "python -m gprMax kanda/domain_100x100/ideal/interval_2m/calcB.in　-n 46"
+        },
+        {
+            "label": "gprMax 4th run",
+            "type": "shell",
+            "command": "python -m gprMax kanda/domain_100x100/ideal/interval_10m/calcB.in　-n 10"
+        },
+        {
             "label": "task sequence",
             "type": "shell",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "gprMax 1st run",
-                "gprMax 2nd run"
+                "gprMax 2nd run",
+                "gprMax 3rd run",
+                "gprMax 4th run"
             ],
             "problemMatcher": []
         }
