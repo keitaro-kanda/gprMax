@@ -13,7 +13,7 @@ from tools.outputfiles_merge import get_output_data
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing Su method',
-                                 usage='cd gprMax; python -m tools.Su_method jsonfile velocity_structure')
+                                 usage='cd gprMax; python -m tools.imaging jsonfile velocity_structure')
 parser.add_argument('jsonfile', help='name of json file')
 parser.add_argument('velocity_structure', choices=['y', 'n'], help='whether to use velocity structure or not')
 args = parser.parse_args()

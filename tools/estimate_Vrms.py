@@ -15,8 +15,9 @@ import itertools
 
 #* Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing Su method',
-                                 usage='cd gprMax; python -m tools.Su_method jsonfile')
+                                 usage='cd gprMax; python -m tools.Su_method jsonfile -plot')
 parser.add_argument('jsonfile', help='json file path')
+parser.add_argument('-plot', action='store_true', help='plot only')
 args = parser.parse_args()
 
 
@@ -46,7 +47,7 @@ epsilon_0 = 1 # vacuum permittivity
 
 
 #* set calculation parameters
-RMS_velocity = np.arange(0.01, 1.01, 0.01) # percentage to speed of light, 0% to 100%
+RMS_velocity = np.arange(0.01, 1.01, 0.02) # percentage to speed of light, 0% to 100%
 vertical_delay_time = np.arange(0, 1501, 1) # 2-way travelt time in vertical direction, [ns]
 
 
@@ -55,39 +56,57 @@ vertical_delay_time = np.arange(0, 1501, 1) # 2-way travelt time in vertical dir
 antenna_step = params['src_step'] # antenna distance step, [m]
 rx_start = params['rx_start'] # rx start position, [m]
 src_start = params['src_start'] # src start position, [m]
+src_end = params['src_end'] # src end position, [m]
 pulse_width = int(params['pulse_length'] / dt) # [data point]
 transmit_delay = int(params['transmitting_delay'] / dt) # [data point]
 
-
+path_num = nrx**2
 
 #* make corr function
-def corr(Vrms_ind, tau_ver_ind, rx):
-    rx_posi = rx_start + rx * antenna_step # [m]
+def corr(Vrms_ind, tau_ver_ind, i):
+    rx_posi = rx_start + i * antenna_step # [m]
 
     Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
     tau_ver = vertical_delay_time[tau_ver_ind] * 1e-9 # [s]
 
-    Amp_list= [] # 取り出した強度を入れる配列を用意しておく
-    for src in range(nrx-1):
+    Amp_array = np.zeros(nrx) # 取り出した強度を入れる配列を用意しておく
+
+    for src in range(nrx):
 
         src_posi = src_start + src * antenna_step # [m]
         offset = np.abs(rx_posi - src_posi) # [m]
 
-        total_delay = int(np.sqrt((offset / Vrms)**2 + tau_ver**2)) + transmit_delay # [data point]
+        total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay # [data point]
 
-        if total_delay >= len(data_list[rx]):
-            Amp_list.append(0)
+        if total_delay >= len(data_list[i]):
+            Amp_array[src] = 0
         else:
-            #Amp = np.sum(np.abs(data_list[rx][total_delay-int(pulse_width/2): total_delay+int(pulse_width/2), src])) \
-            #    / pulse_width
-            Amp = np.abs(data_list[rx][total_delay, src])
-            Amp_list.append(Amp)
+            Amp_array[src] = np.abs(data_list[i][total_delay, src])
 
-    
+
+    return Amp_array # 1D array
+
+    """
     # Amp_timesから2つ選んで積をとり，その和を求める
     correlation =  sum(Amp1 * Amp2 for Amp1, Amp2 in itertools.combinations(Amp_list, 2))
     return correlation
+    """
 
+
+
+#* caluculate corr roop
+def corr_roop():
+    corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
+
+    for v in tqdm(range(len(RMS_velocity))):
+        for t in range(len(vertical_delay_time)):
+            Amp_at_vt = np.array([corr(v, t, rx) for rx in range(nrx)]) # 2D array
+
+            corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
+            corr_map[t, v] = np.sum(corr_matrix)
+
+    corr_map = corr_map / path_num / (path_num - 1) # normalize
+    return corr_map
 
 
 #* make output directory
@@ -96,7 +115,35 @@ if not os.path.exists(output_dir_path):
     os.makedirs(output_dir_path)
 
 
+#* load only or calculate and save
+if args.plot == True:
+    Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',')
+else:
+    Vt_map = corr_roop()
+    np.savetxt(output_dir_path + '/corr_map.txt', Vt_map, delimiter=',')
 
+
+#* plot
+fig = plt.figure(figsize=(8, 6))
+ax = fig.add_subplot(111)
+
+plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
+        extent=[RMS_velocity[0], RMS_velocity[-1], vertical_delay_time[-1], vertical_delay_time[0]],
+        norm=colors.LogNorm(vmin=1e-8, vmax=1e-1))
+
+ax.set_xlabel('RMS velocity [/c]')
+ax.set_ylabel('Vertical delay time [ns]')
+ax.grid(color='gray', linestyle='--')
+
+delvider = axgrid1.make_axes_locatable(ax)
+cax = delvider.append_axes('right', size='5%', pad=0.1)
+plt.colorbar(cax=cax, label='Cross-correlation')
+
+plt.savefig(output_dir_path + '/corr_map.png')
+plt.show()
+
+
+"""
 #* caluculate and plot
 def calc_corrmap_tarver():
     corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
@@ -126,6 +173,7 @@ def calc_corrmap_tarver():
         plt.savefig(output_dir_path + '/corr_map_rx' + str(RX + 1) + '.png')
         #plt.show()
 calc_corrmap_tarver()
+"""
 
 
 

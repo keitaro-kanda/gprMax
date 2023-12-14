@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "out_file": "kanda/domain_100x100/ideal/calcB_merged.out",
+    "out_file": "kanda/domain_100x100/ideal/interval_5m/calcB_merged.out",
 
     "_comment": "for making epsilon map",
     "h5_file": "kanda/domain_100x100/ideal/geometry/geometry.h5",
@@ -38,6 +38,9 @@
     "tau_ver_2": 850e-9,
 
     "_comment": "for geometry-imaging comparison plot",
-    "geometry_txt": "kanda/domain_100x100/ideal/geometry/geometry_materials.txt",
-    "imaging_result_csv": "kanda/domain_100x100/ideal/imaging/imaging_result.csv"
+    "geometry_txt": "kanda/domain_100x100/ideal/geometry/map/epsilon_map.txt",
+    "imaging_result_csv": "kanda/domain_100x100/ideal/interval_5m/imaging/imaging_result.csv",
+
+    "_comment": "for V_RMS estimation plot",
+    "corr_map_txt": "kanda/domain_100x100/ideal/interval_5m/Vrms/corr_map.txt"
 }
