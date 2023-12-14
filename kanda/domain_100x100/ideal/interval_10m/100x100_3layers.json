@@ -16,10 +16,10 @@
     "antenna_height": 1,
     "src_start": 5,
     "src_end": 95,
-    "src_step": 5,
+    "src_step": 10,
     "rx_start": 5,
     "rx_end": 95,
-    "rx_step": 5,
+    "rx_step": 10,
 
     "_comment": "src moving times",
     "src_move_times": 9,
