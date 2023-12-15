@@ -78,3 +78,7 @@ $$
 $$
 
 つまり，$L_i$が小さい場合，$\Delta t$はほとんど$\tau_{ver}$に支配されることになる．
+
+
+# Source wave
+ricker wave form:
