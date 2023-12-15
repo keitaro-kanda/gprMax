@@ -74,7 +74,7 @@ def corr(Vrms_ind, tau_ver_ind, i):
 
     for src in range(src_move_times):
 
-        src_posi = src_start + src * antenna_step # [m]
+        src_posi = src_start + (src-1) * antenna_step # [m]
         offset = np.abs(rx_posi - src_posi) # [m]
 
         total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay # [data point]
