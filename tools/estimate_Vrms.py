@@ -159,9 +159,9 @@ delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax, label='Cross-correlation')
 
-if args.plot_type == 'mask':
+if args.plot_type == 'mask' and args.closeup == False:
     plt.savefig(output_dir_path + '/corr_map_mask.png')
-if args.closeup == True:
+elif args.closeup == True:
     plt.savefig(output_dir_path + '/corr_map_closeup' + str(y_start) + '-' + str(y_end) + '.png')
 else:
     plt.savefig(output_dir_path + '/corr_map.png')
