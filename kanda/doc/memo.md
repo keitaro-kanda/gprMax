@@ -82,3 +82,22 @@ $$
 
 # Source wave
 ricker wave form:
+$$
+W(t) = - \Big( 2 \xi (t - \chi)^2 - 1 \Big) e^{-\xi (t - \chi)^2}
+$$
+
+where
+- $\xi=\pi^2 f^2$
+- $\chi=\sqrt{2}/f$
+- $f$: frequency [Hz]
+
+パルス幅を解析的に解こうと思ったけど，わからんかった☆
+ただ，ピーク時刻は$t=\chi$になるらしいとわかった．
+
+Desmosに突っ込んだ結果，$f=150$MHzの場合，
+- statt: $t=2.27 $ ns
+- end: $t=16.6$ ns
+- pulse width: $16.6 - 2.27 \simeq 14.3$ ns
+らしい．
+plot_source_waveの結果とも整合的な気がする．
+
