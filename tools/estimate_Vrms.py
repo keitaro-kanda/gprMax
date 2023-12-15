@@ -15,9 +15,10 @@ import itertools
 
 #* Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing Su method',
-                                 usage='cd gprMax; python -m tools.Su_method jsonfile plot_type')
+                                 usage='cd gprMax; python -m tools.Su_method jsonfile plot_type -closeup')
 parser.add_argument('jsonfile', help='json file path')
 parser.add_argument('plot_type', choices=['plot', 'mask', 'calc'])
+parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
 args = parser.parse_args()
 
 
@@ -145,12 +146,23 @@ ax.set_xlabel('RMS velocity [/c]')
 ax.set_ylabel('Vertical delay time [ns]')
 ax.grid(color='gray', linestyle='--')
 
+#* closeup option
+if args.closeup == True:
+    x_start = 0.35
+    x_end = 0.6
+    y_start = 700
+    y_end = 900
+    plt.xlim(x_start, x_end)
+    plt.ylim(y_end, y_start)
+
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax, label='Cross-correlation')
 
 if args.plot_type == 'mask':
     plt.savefig(output_dir_path + '/corr_map_mask.png')
+if args.closeup == True:
+    plt.savefig(output_dir_path + '/corr_map_closeup' + str(y_start) + '-' + str(y_end) + '.png')
 else:
     plt.savefig(output_dir_path + '/corr_map.png')
 plt.show()
