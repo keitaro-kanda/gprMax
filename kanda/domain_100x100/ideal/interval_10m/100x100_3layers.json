@@ -29,7 +29,7 @@
 
     "_comment": "pulse [s]",
     "pulse_length": 15e-9,
-    "transmitting_delay": 2.5e-9,
+    "transmitting_delay": 2.25e-9,
 
     "_comment": "V_MRS estimation result",
     "V_RMS_1": 0.5,

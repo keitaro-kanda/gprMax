@@ -62,6 +62,68 @@ $$
 
 ここで，$f_i$ と $f_j$ は異なるそう受信点の組み合わせで得られたA-scan，$L_i, L_j$ は送受信点間の距離．
 
+# domain_100x100の$t_0, V_{RMS}$推定
+
+geometry：
+
+- vacuum layer: thickness of 1 m, $\varepsilon_r = 1$
+- legolith layer: thickness of 10 m, $\varepsilon_r = 4$
+- first basalt layer: thicknes of 50 m, $\varepsilon_r = 6$
+
+## $t_0$
+$$
+t_0 = \sum_{k=1}^N \frac{2 d_k}{V_k}
+$$
+
+where
+- $d_k$: thickness of k-th layer
+- $V_k$: interval velocity in the k-th layer
+
+### first interface:
+$$
+t_0 = \frac{1 \cdot 2}{c/ \sqrt{1}} + \frac{10 \cdot 2}{c/ \sqrt{4}} \simeq 140 \ \mathrm{[ns]}
+$$
+
+###  second interface:
+$$
+t_0 = \frac{1 \cdot 2}{c/ \sqrt{1}} + \frac{10 \cdot 2}{c/ \sqrt{4}} + \frac{50 \cdot 2}{c/ \sqrt{6}} \simeq 790 \ \mathrm{[ns]}
+$$
+
+## $V_{RMS}$
+[Castle, 1994]:
+
+$$
+V_{RMS} = \sqrt{
+    \frac{\displaystyle \sum_{k=1}^{N} \Delta t_k V_k^2}
+    {\displaystyle \sum_{k=1}^{N} \Delta t_k}
+}
+= \sqrt{
+    \frac{\displaystyle \sum_{k=1}^{N} 2 d_k V_k}
+    {\displaystyle \sum_{k=1}^{N} \Delta t_k}
+}
+$$
+
+where
+- $V_k$: intercal velocity in the k-th layer
+- $\Delta t_k$: vertical travel time in the k-th layer
+- $d_k$: thickness of k-th layer
+
+### first interface:
+$$
+\frac{V_{RMS}}{c} = \sqrt{
+     \frac{2 + 20 / \sqrt{4}}
+     {790 \mathrm{[ns]} \cdot c}
+     }
+    \simeq 0.53 \ \mathrm{[/c]}
+$$
+
+###  second interface:
+$$
+\frac{V_{RMS}}{c} = \sqrt{
+     \frac{2 + 20 / \sqrt{4} + 80 /{\sqrt{6}}}
+     {790 \mathrm{[ns]} \cdot c}
+     } \simeq 0.43 \ \mathrm{[/c]}
+$$
 
 # $V_{RMS}$と$\tau_{ver}$のオーダー
 - $V_{RMS}$：光速$c$の0%~100%→$10^8$くらい
@@ -95,7 +157,7 @@ where
 ただ，ピーク時刻は$t=\chi$になるらしいとわかった．
 
 Desmosに突っ込んだ結果，$f=150$MHzの場合，
-- statt: $t=2.27 $ ns
+- start: $t=2.27 $ ns
 - end: $t=16.6$ ns
 - pulse width: $16.6 - 2.27 \simeq 14.3$ ns
 らしい．

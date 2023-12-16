@@ -93,8 +93,8 @@ def corr(Vrms_ind, tau_ver_ind, i):
 def corr_roop():
     corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
 
-    for v in tqdm(range(len(RMS_velocity))):
-        for t in range(len(vertical_delay_time)):
+    for v in range(len(RMS_velocity)):
+        for t in tqdm(range(len(vertical_delay_time)), str(v*2/100) + 'c'):
             Amp_at_vt = np.array([corr(v, t, rx) for rx in range(nrx)]) # 2D array
 
             corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
@@ -146,7 +146,9 @@ ax.set_xlabel('RMS velocity [/c]')
 ax.set_ylabel('Vertical delay time [ns]')
 ax.grid(color='gray', linestyle='--')
 
-#* closeup option
+"""
+===== for closeup option =====
+"""
 if args.closeup == True:
     x_start = 0.35
     x_end = 0.6
