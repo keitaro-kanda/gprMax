@@ -169,6 +169,7 @@ def calc_corr():
 
 #* 関数の実行
 corr = calc_corr()
+corr = corr / np.amax(corr) # normalize
 
 
 #* make output dir and save data as txt file
@@ -185,11 +186,11 @@ ax = fig.add_subplot(111)
 plt.imshow(corr, 
         extent=[0, corr.shape[1] * imaging_resolution, 
                 corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
-        aspect=1, cmap='jet', norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(corr)))
+        aspect=1, cmap='jet', norm=colors.LogNorm(vmin=1e-4, vmax=np.amax(corr)))
 
 ax.set_xlabel('x [m]', fontsize=14)
 ax.set_ylabel('z [m]', fontsize=14)
-ax.set_title('Imaging by Su+(2022) method', fontsize=14)
+ax.set_title('Imaging result', fontsize=14)
 
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
