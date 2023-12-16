@@ -140,7 +140,7 @@ ax = fig.add_subplot(111)
 
 plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
         extent=[RMS_velocity[0], RMS_velocity[-1], vertical_delay_time[-1], vertical_delay_time[0]],
-        norm=colors.LogNorm(vmin=1e-10, vmax=5e-4))
+        norm=colors.LogNorm(vmin=1e-10, vmax=3e-4))
 
 ax.set_xlabel('RMS velocity [/c]')
 ax.set_ylabel('Vertical delay time [ns]')
@@ -150,10 +150,10 @@ ax.grid(color='gray', linestyle='--')
 ===== for closeup option =====
 """
 if args.closeup == True:
-    x_start = 0.4
-    x_end = 0.7
-    y_start = 100
-    y_end = 200
+    x_start = 0.35
+    x_end = 0.65
+    y_start = 700
+    y_end = 900
     plt.xlim(x_start, x_end)
     plt.ylim(y_end, y_start)
 
