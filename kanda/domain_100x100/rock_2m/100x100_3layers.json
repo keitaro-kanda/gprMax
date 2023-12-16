@@ -29,12 +29,12 @@
 
     "_comment": "pulse [s]",
     "pulse_length": 15e-9,
-    "transmitting_delay": 2.5e-9,
+    "transmitting_delay": 2.25e-9,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS_1": 0.5,
+    "V_RMS_1": 0.54,
     "tau_ver_1": 200e-9,
-    "V_RMS_2": 0.4,
+    "V_RMS_2": 0.46,
     "tau_ver_2": 850e-9,
 
     "_comment": "for geometry-imaging comparison plot",

@@ -186,7 +186,7 @@ ax = fig.add_subplot(111)
 plt.imshow(corr, 
         extent=[0, corr.shape[1] * imaging_resolution, 
                 corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
-        aspect=1, cmap='jet', norm=colors.LogNorm(vmin=1e-4, vmax=np.amax(corr)))
+        aspect=1, cmap='jet', norm=colors.LogNorm(vmin=1e-3, vmax=np.amax(corr)))
 
 ax.set_xlabel('x [m]', fontsize=14)
 ax.set_ylabel('z [m]', fontsize=14)

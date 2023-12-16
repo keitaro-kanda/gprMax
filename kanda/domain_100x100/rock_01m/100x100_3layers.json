@@ -29,17 +29,17 @@
 
     "_comment": "pulse [s]",
     "pulse_length": 15e-9,
-    "transmitting_delay": 2.5e-9,
+    "transmitting_delay": 2.25e-9,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS_1": 0.5,
+    "V_RMS_1": 0.54,
     "tau_ver_1": 200e-9,
-    "V_RMS_2": 0.4,
+    "V_RMS_2": 0.46,
     "tau_ver_2": 850e-9,
 
     "_comment": "for geometry-imaging comparison plot",
-    "geometry_txt": "kanda/domain_100x100/ideal/geometry/map/epsilon_map.txt",
-    "imaging_result_csv": "kanda/domain_100x100/ideal/interval_10m/imaging/imaging_result.csv",
+    "geometry_txt": "kanda/domain_100x100/rock_01m/geometry/map/epsilon_map.txt",
+    "imaging_result_csv": "kanda/domain_100x100/rock_01m/imaging/imaging_result.csv",
 
     "_comment": "for V_RMS estimation plot",
     "corr_map_txt": "kanda/domain_100x100/rock_01m/Vrms/corr_map.txt"
