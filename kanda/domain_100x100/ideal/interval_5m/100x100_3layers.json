@@ -23,8 +23,8 @@
 
     "_comment": "src moving times",
     "src_move_times": 19,
-
     "_comment": "imaging grid step [m]",
+
     "imaging_resolution": 0.5,
 
     "_comment": "pulse [s]",
@@ -32,7 +32,7 @@
     "transmitting_delay": 2.25e-9,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS_1": 0.53,
+    "V_RMS_1": 0.54,
     "tau_ver_1": 200e-9,
     "V_RMS_2": 0.46,
     "tau_ver_2": 850e-9,
