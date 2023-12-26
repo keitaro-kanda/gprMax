@@ -13,9 +13,10 @@ from tools.outputfiles_merge import get_output_data
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing Su method',
-                                 usage='cd gprMax; python -m tools.imaging jsonfile velocity_structure')
+                                 usage='cd gprMax; python -m tools.imaging jsonfile velocity_structure -plot')
 parser.add_argument('jsonfile', help='name of json file')
 parser.add_argument('velocity_structure', choices=['y', 'n'], help='whether to use velocity structure or not')
+parser.add_argument('-plot', action='store_true', help='option: plot only')
 args = parser.parse_args()
 
 
@@ -166,36 +167,42 @@ def calc_corr():
 
     return corr_xz
 
-
-#* 関数の実行
-corr = calc_corr()
-corr = corr / np.amax(corr) # normalize
-
-
 #* make output dir and save data as txt file
 output_dir_path = data_dir_path + '/imaging'
 if not os.path.exists(output_dir_path):
     os.mkdir(output_dir_path)
 
-np.savetxt(output_dir_path + '/imaging_result.csv', corr, delimiter=',')
+
+#* calculate and save as txt file
+if args.plot == False:
+    corr = calc_corr()
+    corr = corr / np.amax(corr) # normalize
+
+    #* save as txt file
+    np.savetxt(output_dir_path + '/imaging_result.csv', corr, delimiter=',')
+
+#* don't calculate, only plot
+elif args.plot == True:
+    corr = np.loadtxt(params['imaging_result_csv'], delimiter=',')
 
 
 #* plot
-fig = plt.figure(figsize=(5, 5*corr.shape[0]/corr.shape[1]) ,facecolor='w', edgecolor='w')
-ax = fig.add_subplot(111)
-plt.imshow(corr, 
-        extent=[0, corr.shape[1] * imaging_resolution, 
-                corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
-        aspect=1, cmap='jet', norm=colors.LogNorm(vmin=1e-3, vmax=np.amax(corr)))
+    fig = plt.figure(figsize=(5, 5*corr.shape[0]/corr.shape[1]) ,facecolor='w', edgecolor='w')
+    ax = fig.add_subplot(111)
+    plt.imshow(corr, 
+            extent=[0, corr.shape[1] * imaging_resolution, 
+                    corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
+            aspect=1,
+            cmap='gray', # recomended: 'jet', 'binary'
+            norm=colors.LogNorm(vmin=1e-3, vmax=np.amax(corr)))
 
-ax.set_xlabel('x [m]', fontsize=14)
-ax.set_ylabel('z [m]', fontsize=14)
-ax.set_title('Imaging result', fontsize=14)
+    ax.set_xlabel('x [m]', fontsize=14)
+    ax.set_ylabel('z [m]', fontsize=14)
+    ax.set_title('Imaging result', fontsize=14)
 
-delvider = axgrid1.make_axes_locatable(ax)
-cax = delvider.append_axes('right', size='5%', pad=0.1)
-plt.colorbar(cax=cax, label='Cross-correlation')
+    delvider = axgrid1.make_axes_locatable(ax)
+    cax = delvider.append_axes('right', size='5%', pad=0.1)
+    plt.colorbar(cax=cax, label='Cross-correlation')
 
-plt.savefig(output_dir_path + '/imaging_result.png')
-plt.show()
-
+    plt.savefig(output_dir_path + '/imaging_result.png')
+    plt.show()
