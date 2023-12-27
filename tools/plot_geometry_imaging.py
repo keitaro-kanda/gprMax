@@ -58,7 +58,8 @@ plt.colorbar(img1, cax=cax1, label='epsilon_r')
 img2 = ax[1].imshow(imaging_result,
                 extent = [0, imaging_result.shape[1]*params['imaging_resolution'],
                         imaging_result.shape[0]*params['imaging_resolution'], 0],
-                cmap='jet', aspect=1, norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(imaging_result)))
+                cmap='gray', # recommended: 'jet', 'gray'
+                aspect=1, norm=colors.LogNorm(vmin=1e-3, vmax=np.amax(imaging_result)))
 
 ax[1].set_title('imaging result', size=18)
 
