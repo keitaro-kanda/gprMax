@@ -1,0 +1,75 @@
+#domain: 100 300 0.05
+#dx_dy_dz: 0.05 0.05 0.05
+
+#time_window: 5e-6
+
+#material: 4 0 1 0 regolith
+#material: 6 0 1 0 basalt_6
+
+
+=====地形=====
+＜regolith1, thickness: 10m＞
+#box: 0 268 0 100 290 0.05 regolith
+
+＜basalt1, thickness: 20m＞
+#fractal_box: 0 0 0 100 270 0.05 1.5 1 1 1 1 basalt_6 basalt_fractal_1
+#add_surface_roughness: 0 270 0 100 270 0.05 1.5 1 1 268 272 basalt_fractal_1
+
+＜regolith2, thickness: max 5m＞
+#fractal_box: 0 245 0 100 250 0.05 1.5 1 1 1 1 regolith regolith_fractal_2
+#add_surface_roughness: 0 250 0 100 250 0.05 1.5 1 1 248 250 regolith_fractal_2
+#add_surface_roughness: 0 245 0 100 245 0.05 1.5 1 1 245 248 regolith_fractal_2
+
+<basalt2, thickness: nominal 20m, 225~245>
+
+＜regolith3, thickness: max 5m＞
+#fractal_box: 0 220 0 100 225 0.05 1.5 1 1 1 1 regolith regolith_fractal_3
+#add_surface_roughness: 0 225 0 100 225 0.05 1.5 1 1 223 225 regolith_fractal_3
+#add_surface_roughness: 0 220 0 100 220 0.05 1.5 1 1 220 222 regolith_fractal_3
+
+<basalt3, thickness: nominal 40m, 180~220>
+
+＜regolith4, thickness: max 5m＞
+#fractal_box: 0 175 0 100 180 0.05 1.5 1 1 1 1 regolith regolith_fractal_4
+#add_surface_roughness: 0 180 0 100 180 0.05 1.5 1 1 178 180 regolith_fractal_4
+#add_surface_roughness: 0 175 0 100 175 0.05 1.5 1 1 175 177 regolith_fractal_4
+
+<basalt4, thickness: nominal 40m, 135~175>
+
+＜regolith5, thickness: max 5m＞
+#fractal_box: 0 130 0 100 135 0.05 1.5 1 1 1 1 regolith regolith_fractal_5
+#add_surface_roughness: 0 135 0 100 135 0.05 1.5 1 1 133 135 regolith_fractal_5
+#add_surface_roughness: 0 130 0 100 130 0.05 1.5 1 1 130 132 regolith_fractal_5
+
+<basalt5, thickness: nominal 60m, 70~130>
+
+＜regolith6, thickness: max 5m＞
+#fractal_box: 0 65 0 100 70 0.05 1.5 1 1 1 1 regolith regolith_fractal_6
+#add_surface_roughness: 0 70 0 100 70 0.05 1.5 1 1 68 70 regolith_fractal_6
+#add_surface_roughness: 0 65 0 100 65 0.05 1.5 1 1 65 67 regolith_fractal_6
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 100 300 0.05 0.05 0.05 0.05 geometry n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 100 300 0.05 geometry
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 150e6 my_src
+
+#hertzian_dipole: z  5 291 0 my_src
+#rx: 95 291 0
+
+<snapshot作成>
+#python:
+for i in range(1, 100):
+    print('#snapshot: 0 0 0 100 300 0.05 0.05 0.05 0.05 {} snapshot{}'.format(i*0.05e-6, i))
+#end_python:
+
+#output_dir: A-scan
+==========
