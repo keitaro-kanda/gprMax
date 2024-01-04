@@ -49,7 +49,7 @@ epsilon_0 = 1 # vacuum permittivity
 
 #* set calculation parameters
 RMS_velocity = np.arange(0.01, 1.01, 0.02) # percentage to speed of light, 0% to 100%
-vertical_delay_time = np.arange(0, 1501, 1) # 2-way travelt time in vertical direction, [ns]
+vertical_delay_time = np.arange(0, 3001, 1) # 2-way travelt time in vertical direction, [ns]
 
 
 
@@ -140,7 +140,7 @@ ax = fig.add_subplot(111)
 
 plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
         extent=[RMS_velocity[0], RMS_velocity[-1], vertical_delay_time[-1], vertical_delay_time[0]],
-        norm=colors.LogNorm(vmin=1e-10, vmax=3e-4))
+        norm=colors.LogNorm(vmin=1e-8, vmax=5e-3))
 
 ax.set_xlabel('RMS velocity [/c]')
 ax.set_ylabel('Vertical delay time [ns]')
