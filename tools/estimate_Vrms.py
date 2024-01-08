@@ -17,7 +17,7 @@ import itertools
 parser = argparse.ArgumentParser(description='Processing Su method',
                                  usage='cd gprMax; python -m tools.Su_method jsonfile plot_type -closeup')
 parser.add_argument('jsonfile', help='json file path')
-parser.add_argument('plot_type', choices=['plot', 'mask', 'calc'])
+parser.add_argument('plot_type', choices=['plot', 'mask', 'select', 'calc'])
 parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
 args = parser.parse_args()
 
@@ -111,6 +111,13 @@ if not os.path.exists(output_dir_path):
 
 
 #* load only or calculate and save
+
+"""
+select area [ns]
+"""
+select_start = 3000
+select_end = 4000
+
 if args.plot_type == 'plot':
     Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',')
 
@@ -141,6 +148,19 @@ elif args.plot_type == 'mask':
     #! トップ5のみ残す
 
 
+elif args.plot_type == 'select':
+
+    # select Vt_map area
+    Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',')
+    Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), :]
+    Vt_map = Vt_map / np.amax(Vt_map)
+
+    # Vt_mapの最大値の50%以下の値を0に置き換える
+    max_val = np.amax(Vt_map)  # 各行の最大値を取得
+    for row in range(Vt_map.shape[0]):
+        Vt_map[row][Vt_map[row] < 0.5*max_val] = 0
+
+
 elif args.plot_type == 'calc':
     Vt_map = corr_roop()
     Vt_map = Vt_map / np.amax(Vt_map) # normalize
@@ -153,23 +173,27 @@ else:
 
 fig = plt.figure(figsize=(8, 6))
 ax = fig.add_subplot(111)
-
-plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
-        extent=[RMS_velocity[0], RMS_velocity[-1], vertical_delay_time[-1], vertical_delay_time[0]],
-        norm=colors.LogNorm(vmin=1e-7, vmax=0.1))
+if args.plot_type == 'select':
+    plt.imshow(Vt_map, cmap='inferno', aspect='auto', interpolation='nearest',
+        extent=[0, RMS_velocity[-1], select_end, select_start]
+)
+else:
+    plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
+            extent=[0, RMS_velocity[-1], Vt_map.shape[0]*params['time_step'], 0],
+            norm=colors.LogNorm(vmin=1e-7, vmax=0.1) #! default: vmin=1e-7, vmax=0.1
+            #norm=colors.LogNorm(vmin=1e-7, vmax=0.5)
+    )
 
 ax.set_xlabel('RMS velocity [/c]')
 ax.set_ylabel('Vertical delay time [ns]')
 ax.grid(color='gray', linestyle='--')
 
-"""
-===== for closeup option =====
-"""
+#* for closeup option
 if args.closeup == True:
-    x_start = 0.35
-    x_end = 0.65
-    y_start = 700
-    y_end = 900
+    x_start = 0
+    x_end = 1
+    y_start = 200
+    y_end = 400
     plt.xlim(x_start, x_end)
     plt.ylim(y_end, y_start)
 
@@ -177,9 +201,18 @@ delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax, label='Cross-correlation')
 
+#* save plot
 if args.plot_type == 'mask' and args.closeup == False:
     plt.savefig(output_dir_path + '/corr_map_mask.png')
+elif args.plot_type == 'select' and args.closeup == False:
+    output_dir_path = output_dir_path + '/select'
+    if not os.path.exists(output_dir_path):
+        os.makedirs(output_dir_path)
+    plt.savefig(output_dir_path + '/corr_map_select' + str(select_start) + '-' + str(select_end) + '.png')
 elif args.closeup == True:
+    output_dir_path = output_dir_path + '/closeup'
+    if not os.path.exists(output_dir_path):
+        os.makedirs(output_dir_path)
     plt.savefig(output_dir_path + '/corr_map_closeup' + str(y_start) + '-' + str(y_end) + '.png')
 else:
     plt.savefig(output_dir_path + '/corr_map.png')
