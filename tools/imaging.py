@@ -102,12 +102,37 @@ if args.velocity_structure == 'n':
     """
     assume that epsilon_r = 4 in all grid
     """
-    tau_ref2rx = L_ref2rx / (c / np.sqrt(4)) # tau: [s] from ref to rx
-    tau_src2ref = L_src2ref / (c / np.sqrt(4)) # tau: [s] from src to ref
+    tau_ref2rx = L_ref2rx / (c / np.sqrt(6)) # tau: [s] from ref to rx
+    tau_src2ref = L_src2ref / (c / np.sqrt(6)) # tau: [s] from src to ref
 
 elif args.velocity_structure == 'y':
     """
     Consider the results of V_RMS estimation
+    """
+    num_layers = len(params['V_RMS'])  # number of layers
+    layer_info = np.zeros((num_layers, 2))  # layer_info[i, 0]: V_RMS, layer_info[i, 1]: tau_ver
+    for i in range(num_layers):
+        V_rms_key = f'V_RMS_{i+1}'
+        tau_ver_key = f'tau_ver_{i+1}'
+        
+        layer_V_rms = params['V_RMS'][i] * c  # [m/s]
+        layer_thickness = int(params['tau_ver'][i] * layer_V_rms / 2 / imaging_resolution)  # grid number
+
+        layer_info[i, 0] = layer_V_rms
+        layer_info[i, 1] = layer_thickness
+
+    for i in range(num_layers):
+        if i == 0:
+            layer_V_rms = layer_info[i, 0]
+            layer_thickness = layer_info[i, 1]
+            tau_ref2rx = L_ref2rx[0:layer_thickness, :, :] / layer_V_rms
+            tau_src2ref = L_src2ref[0:layer_thickness, :, :] / layer_V_rms
+        else:
+            layer_V_rms = layer_info[i, 0]
+            layer_thickness = layer_info[i, 1]
+            tau_ref2rx = np.vstack((tau_ref2rx, L_ref2rx[0:layer_thickness, :, :] / layer_V_rms))
+            tau_src2ref = np.vstack((tau_src2ref, L_src2ref[0:layer_thickness, :, :] / layer_V_rms))
+
     """
     #! ただし，２層分のV_RMSにしか対応していない
     layer1_Vrms = params['V_RMS_1'] * c # [m/s]
@@ -119,6 +144,7 @@ elif args.velocity_structure == 'y':
                         L_ref2rx[layer1_thickness:, :, :] / layer2_Vrms)) # tau: [s] from ref to rx
     tau_src2ref = np.vstack((L_src2ref[0:layer1_thickness, :, :] / layer1_Vrms,
                         L_src2ref[layer1_thickness:, :, :] / layer2_Vrms))
+    """
 
 else:
     print('error, input y or n')
@@ -139,7 +165,10 @@ def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
 
     for src in range(antenna_num):
         # i番目のrxにおける，src番目のsrcで送信したときの振幅を取得
-        Amp_array[src] = data_list[i-1][tau_index[src], src]
+        if tau_index[src] < len(data_list[i-1]):
+            Amp_array[src] = data_list[i-1][tau_index[src], src]
+        elif tau_index[src] >= len(data_list[i-1]):
+            Amp_array[src] = 0
 
         """
         rx_data, dt = get_output_data(data_path, i+1, 'Ez')
@@ -193,8 +222,8 @@ elif args.plot == True:
             extent=[0, corr.shape[1] * imaging_resolution, 
                     corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
             aspect=1,
-            cmap='gray', # recomended: 'jet', 'binary'
-            norm=colors.LogNorm(vmin=1e-3, vmax=np.amax(corr)))
+            cmap='jet', # recomended: 'jet', 'binary'
+            norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(corr)))
 
     ax.set_xlabel('x [m]', fontsize=14)
     ax.set_ylabel('z [m]', fontsize=14)

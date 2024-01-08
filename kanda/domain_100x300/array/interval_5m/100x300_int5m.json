@@ -41,7 +41,7 @@
 
     "_comment": "for geometry-imaging comparison plot",
     "geometry_txt": "kanda/domain_100x300/geometry/map/epsilon_map.txt",
-    "imaging_result_csv": "kanda/domain_100x100/ideal/interval_5m/imaging/imaging_result.csv",
+    "imaging_result_csv": "kanda/domain_100x300/array/interval_5m/imaging/imaging_result.csv",
 
     "_comment": "for V_RMS estimation plot",
     "corr_map_txt": "kanda/domain_100x300/array/interval_5m/Vrms/corr_map.txt"

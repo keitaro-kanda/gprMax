@@ -5,6 +5,7 @@ import os
 import json
 import argparse
 import mpl_toolkits.axes_grid1 as axgrid1
+from tools.get_epsilon_map import epsilon_map
 
 
 #* Parse command line arguments
@@ -19,17 +20,23 @@ with open (args.jsonfile) as f:
     params = json.load(f)
 
 
+#! load geometry data
+map = epsilon_map()
+map.h5_file_name = params['h5_file']
+map.read_h5_file()
+map.get_epsilon_map()
+geometry = map.epsilon_map
+"""
 #* load geometry data
 path_geometry = params['geometry_txt']
 geometry = np.loadtxt(path_geometry, delimiter=',')
-
+"""
 
 # cut vacuum area
 antenna_hight = params['antenna_height']
 ground_depth = params['ground_depth']
 vacuum_thicness = int(geometry.shape[0] - (ground_depth + antenna_hight) / params['grid_size'])
 geometry = geometry[vacuum_thicness: , :]
-
 
 
 #* load imaging result data
@@ -58,8 +65,8 @@ plt.colorbar(img1, cax=cax1, label='epsilon_r')
 img2 = ax[1].imshow(imaging_result,
                 extent = [0, imaging_result.shape[1]*params['imaging_resolution'],
                         imaging_result.shape[0]*params['imaging_resolution'], 0],
-                cmap='gray', # recommended: 'jet', 'gray'
-                aspect=1, norm=colors.LogNorm(vmin=1e-3, vmax=np.amax(imaging_result)))
+                cmap='jet', # recommended: 'jet', 'gray'
+                aspect=1, norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(imaging_result)))
 
 ax[1].set_title('imaging result', size=18)
 
