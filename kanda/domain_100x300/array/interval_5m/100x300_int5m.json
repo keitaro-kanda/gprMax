@@ -36,10 +36,8 @@
     "time_step": 2,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS_1": 0.54,
-    "tau_ver_1": 200e-9,
-    "V_RMS_2": 0.46,
-    "tau_ver_2": 850e-9,
+    "V_RMS": [0.6, 0.44, 0.4, 0.42, 0.4, 0.38],
+    "tau_ver": [300e-9, 650e-9, 1030e-9, 1800e-9, 2560e-9, 3600e-9],
 
     "_comment": "for geometry-imaging comparison plot",
     "geometry_txt": "kanda/domain_100x300/geometry/map/epsilon_map.txt",
