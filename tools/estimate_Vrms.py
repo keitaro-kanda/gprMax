@@ -49,7 +49,7 @@ epsilon_0 = 1 # vacuum permittivity
 
 #* set calculation parameters
 RMS_velocity = np.arange(0.01, 1.01, 0.02) # percentage to speed of light, 0% to 100%
-vertical_delay_time = np.arange(0, params['time_window'], 1) # 2-way travelt time in vertical direction, [ns]
+vertical_delay_time = np.arange(0, params['time_window'], 2) # 2-way travelt time in vertical direction, [ns]
 
 
 
@@ -118,54 +118,18 @@ elif args.plot_type == 'mask':
     Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',')
     # 1e-6以下の値を0に置き換える
     #Vt_map[Vt_map < 1e-6] = 0
-    """
-    #np.savetxt(output_dir_path + '/corr_map_mask.txt', Vt_map, delimiter=',')
-    
-    max_Vrms = np.argmax(Vt_map, axis=1) / 50  # 各行で最大値となる列番号を取得
-    max_values = np.max(Vt_map, axis=1)  # 各行の最大値を取得
-    
-    # 各行で最大値の50%以上の列番号を調べる
-    # 各行の最大値の50%を求める
-    half_max_values = 0.5 * max_values
-    print(half_max_values.shape)
-    indices_above_half_max = []
-    for row in range(Vt_map.shape[0]):
-        if half_max_values[row] == 0:
-            indices = 0
-        else:
-            indices = np.where(Vt_map[row] >= half_max_values[row])[0]
-        #if len(indices) > 0:
-        #    indices_above_half_max.append([min(indices), max(indices)])
-        #else:
-        #    indices_above_half_max.append([0, 0])  # 条件を満たす要素がない場合、ダミーのペアを追加するなど適切な対処を行う
-    indices_above_half_max = np.array(indices_above_half_max) / 50  # 列番号をRMS速度に変換する
 
-    
-    #error_range = 0.5 * max_values   # 最大値の50%をエラー範囲とする
-
-    plt.figure(figsize=(8, 6))
-
-    for row, (max_col, y, error) in enumerate(zip(max_Vrms, range(Vt_map.shape[0]), indices_above_half_max)):
-        plt.plot(max_col, y, 'ro')  # 最大値の位置を赤色の点でプロット
-        xerr = [[max_col - error[0]], [error[1] - max_col]]  # X方向のエラーバー幅を設定
-        plt.errorbar(max_col, y, xerr=xerr, fmt='none', ecolor='black')  # エラーバーを表示
-
-    plt.xlabel('Column Index')
-    plt.ylabel('Max Value')
-    plt.ylim(Vt_map.shape[0], 0)
-    plt.title('Maximum Value per Row with Error Bars')
-    plt.grid(True)
-    plt.show()
-
-    """
     max_values_col = np.argmax(Vt_map, axis=1)  # 各行の最大値を取得
     max_val = np.max(Vt_map, axis=1)  # 各行の最大値を取得
-    threshold = 0.1 * max_val  # 最大値の50%
+    threshold = 0.5 * max_val  # 最大値の50%
     for row in range(Vt_map.shape[0]):
 
-        Vt_map[row][Vt_map[row] >= threshold[row]] = 1e-4  # 50%以下の値を0に置き換える
+        #Vt_map[row][Vt_map[row] >= threshold[row]] = 1e-4  # 50%以下の値を0に置き換える
         Vt_map[row][Vt_map[row] < threshold[row]] = 0  # 50%以下の値を0に置き換える
-        Vt_map[row][max_values_col[row]] = 1
+        #Vt_map[row][max_values_col[row]] = 1
+        #Vt_map[row][Vt_map[row] < max_val[row]] = 0  # 50%以下の値を0に置き換える
+    
+    #! トップ5のみ残す
     """
     for row in Vt_map:
         indices_to_keep = np.argsort(row)[-5:]  # トップ5のインデックスを取得
