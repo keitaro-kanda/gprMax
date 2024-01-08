@@ -33,6 +33,8 @@
 
     "_comment": "for Vrms estimation [ns]",
     "time_window": 5000,
+    "time_step": 2,
+
     "_comment": "V_MRS estimation result",
     "V_RMS_1": 0.54,
     "tau_ver_1": 200e-9,

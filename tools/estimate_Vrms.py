@@ -49,7 +49,7 @@ epsilon_0 = 1 # vacuum permittivity
 
 #* set calculation parameters
 RMS_velocity = np.arange(0.01, 1.01, 0.02) # percentage to speed of light, 0% to 100%
-vertical_delay_time = np.arange(0, params['time_window'], 2) # 2-way travelt time in vertical direction, [ns]
+vertical_delay_time = np.arange(0, params['time_window'], params['time_step']) # 2-way travelt time in vertical direction, [ns]
 
 
 
@@ -138,6 +138,7 @@ elif args.plot_type == 'mask':
     #Vt_map[Vt_map < 1e-6] = 0
     np.savetxt(output_dir_path + '/corr_map_mask.txt', Vt_map, delimiter=',')
     """
+    #! トップ5のみ残す
 
 
 elif args.plot_type == 'calc':
