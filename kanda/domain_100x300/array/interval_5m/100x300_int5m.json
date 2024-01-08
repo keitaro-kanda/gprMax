@@ -31,6 +31,8 @@
     "pulse_length": 15e-9,
     "transmitting_delay": 2.25e-9,
 
+    "_comment": "for Vrms estimation [ns]",
+    "time_window": 5000,
     "_comment": "V_MRS estimation result",
     "V_RMS_1": 0.54,
     "tau_ver_1": 200e-9,
