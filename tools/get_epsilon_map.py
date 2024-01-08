@@ -91,8 +91,9 @@ if not os.path.exists(output_path):
 
 
 # =====save map as txt file=====
+#! file size is too large, so don't save
 #np.savetxt(output_path+'/' + 'h5_data.csv', map.h5_data, delimiter=',')
-np.savetxt(output_path+'/' + 'epsilon_map.txt', map.epsilon_map, delimiter=',')
+#np.savetxt(output_path+'/' + 'epsilon_map.txt', map.epsilon_map, delimiter=',')
 
 
 # =====plot map=====
