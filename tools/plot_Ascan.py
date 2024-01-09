@@ -189,11 +189,12 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext) 
                     #ax.set_ylim([-3, 3])
                     #ax.set_xlim([0, 0.5e-8])
-                    ax.set_xscale('log')
+                    #ax.set_xscale('log')
                     ax.set_ylabel(outputtext + ' strength [%]', size=18)
                     ax.tick_params(labelsize=18)
 
                     # =====ピーク検出=====
+                    """
                     # detect peak and plot
                     # peak is the point where outputdata_norm is the largest in nerby 100 points
 
@@ -232,7 +233,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                                         ax.text(time[i], -0.8, '{:.4g}'.format(time[i]*10**7), fontsize=12)
                                     else:
                                         ax.text(time[i], outputdata_norm[i]-0.15, '{:.4g}'.format(time[i]*10**7), fontsize=12)
-
+"""
                     # =====ピーク検出=====
 
 
