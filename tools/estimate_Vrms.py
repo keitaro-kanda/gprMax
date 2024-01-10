@@ -115,8 +115,11 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 3000
-select_end = 4000
+select_start = 3500
+select_end = 3700
+"""
+select area [ns]
+"""
 
 if args.plot_type == 'plot':
     Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',')
@@ -150,15 +153,18 @@ elif args.plot_type == 'mask':
 
 elif args.plot_type == 'select':
 
-    # select Vt_map area
-    Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',')
-    Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), :]
-    Vt_map = Vt_map / np.amax(Vt_map)
+    #* select Vt_map area
+    Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',') # load data
+    Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), :] # select area
+    Vt_map = Vt_map / np.amax(Vt_map) # normalize by max value in selected area
 
+    """
     # Vt_mapの最大値の50%以下の値を0に置き換える
-    max_val = np.amax(Vt_map)  # 各行の最大値を取得
+    max_val = np.amax(Vt_map)  # get max value in selected area
     for row in range(Vt_map.shape[0]):
         Vt_map[row][Vt_map[row] < 0.5*max_val] = 0
+    """
+
 
 
 elif args.plot_type == 'calc':
@@ -174,9 +180,15 @@ else:
 fig = plt.figure(figsize=(8, 6))
 ax = fig.add_subplot(111)
 if args.plot_type == 'select':
-    plt.imshow(Vt_map, cmap='inferno', aspect='auto', interpolation='nearest',
-        extent=[0, RMS_velocity[-1], select_end, select_start]
+    plt.imshow(Vt_map, cmap='plasma', aspect='auto', interpolation='nearest',
+        extent=[0, RMS_velocity[-1], select_end, select_start],
+        norm=colors.LogNorm(vmin=1e-2, vmax=1)
 )
+    levels = np.linspace(0.1, 1, 10)
+    cont = ax.contour(Vt_map, 3, colors='k', linewidths=1, linestyles='--',
+            extent=[0, RMS_velocity[-1], select_start, select_end],)
+    ax.clabel(cont, inline=True, fontsize=10, fmt='%.2f')
+
 else:
     plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
             extent=[0, RMS_velocity[-1], Vt_map.shape[0]*params['time_step'], 0],
