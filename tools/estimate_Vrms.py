@@ -115,8 +115,8 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 3500
-select_end = 3700
+select_start = 1700
+select_end = 2000
 """
 select area [ns]
 """
@@ -184,7 +184,7 @@ if args.plot_type == 'select':
         extent=[0, RMS_velocity[-1], select_end, select_start],
         norm=colors.LogNorm(vmin=1e-2, vmax=1)
 )
-    levels = np.linspace(0.1, 1, 10)
+    # countour
     cont = ax.contour(Vt_map, 3, colors='k', linewidths=1, linestyles='--',
             extent=[0, RMS_velocity[-1], select_start, select_end],)
     ax.clabel(cont, inline=True, fontsize=10, fmt='%.2f')
