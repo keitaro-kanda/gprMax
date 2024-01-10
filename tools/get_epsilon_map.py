@@ -12,6 +12,7 @@ import json
 parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file',
                                  usage='cd gprMax; python -m tools.get_epsilon_map json_file -closeup')
 parser.add_argument('json_file', help='json file name')
+parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
 args = parser.parse_args()
 
 #* load json file
@@ -55,27 +56,11 @@ class epsilon_map():
         x_num = self.h5_data.shape[1] # number of grids in x axis
         self.epsilon_map = np.zeros((z_num, x_num))
 
-        # get epsilon_r map
-        self.epsilon_vacuum = 1 # epsilon_r of vacuum
-        self.epsilon_regolith = 4 # epsilon_r of regolith
-        self.epsilon_basalt6 = 6 # epsilon_r of basalt
-        self.epsilon_basalt7 = 7 # epsilon_r of basalt
 
         for i in tqdm(range(self.h5_data.shape[1])):
             for j in range(self.h5_data.shape[0]):
                 self.epsilon_map[j, i] = epsilon_list[int(self.h5_data[j, i])]
-                """
-                if self.h5_data[j, i] == 1:
-                    self.epsilon_map[j, i] = self.epsilon_vacuum
-                elif self.h5_data[j, i] == 2:
-                    self.epsilon_map[j, i] = self.epsilon_regolith
-                elif self.h5_data[j, i] == 3:
-                    self.epsilon_map[j, i] = self.epsilon_basalt6
-                elif self.h5_data[j, i] == 4:
-                    self.epsilon_map[j, i] = self.epsilon_basalt7
-                else:
-                    print('error, input correct ID')
-                """
+
 
 map = epsilon_map()
 map.h5_file_name = params['h5_file']
@@ -107,6 +92,11 @@ plt.imshow(map.epsilon_map,
         extent=[0, map.epsilon_map.shape[1] * spatial_grid, map.epsilon_map.shape[0] * spatial_grid, 0],
         cmap='binary')
 
+if args.closeup:
+    y_start = 9
+    y_end = 40
+    ax.set_ylim(y_end, y_start)
+
 plt.xlabel('x (m)', size=14)
 plt.ylabel('z (m)', size=14)
 ax.set_title('epsilon_r distribution', size=18)
@@ -116,4 +106,6 @@ cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax, label='epsilon_r')
 
 plt.savefig(output_path+'/' + 'epsilon_map.png')
+if args.closeup:
+    plt.savefig(output_path +'/closeup' + str(y_start) + '-' + str(y_end) + '.png')
 plt.show()
