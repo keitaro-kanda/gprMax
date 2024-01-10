@@ -32,10 +32,13 @@
     "transmitting_delay": 2.25e-9,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS_1": 0.54,
-    "tau_ver_1": 200e-9,
-    "V_RMS_2": 0.46,
-    "tau_ver_2": 850e-9,
+    "V_RMS": [0.54, 0.46],
+    "tau_ver": [200e-9, 850e-9],
+
+    "_comment": "for V_RMS theoretical estimation",
+    "_comment": "information about vacuum layer is needed",
+    "internal_permittivity": [1, 4, 6],
+    "layer_thickness": [1, 10, 40],
 
     "_comment": "for geometry-imaging comparison plot",
     "geometry_txt": "kanda/domain_100x100/ideal/geometry/map/epsilon_map.txt",

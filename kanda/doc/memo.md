@@ -112,7 +112,7 @@ where
 $$
 \frac{V_{RMS}}{c} = \sqrt{
      \frac{2 + 20 / \sqrt{4}}
-     {790 \mathrm{[ns]} \cdot c}
+     {140 \mathrm{[ns]} \cdot c}
      }
     \simeq 0.53 \ \mathrm{[/c]}
 $$

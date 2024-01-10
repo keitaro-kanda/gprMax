@@ -92,9 +92,8 @@ for x_index in tqdm(range(imaging_grid_x), desc='calculating path length'):
         z = z_index * imaging_resolution
         # calculate distance between rx and (x,z)
         for i in range(antenna_num):
-            L_ref2rx[z_index, x_index, i] = np.sqrt((rx_position_list[i]-x)**2 + (z**2))
-            L_src2ref[z_index, x_index, i] = np.sqrt((src_position_list[i]-x)**2 + (z**2))
-
+            L_ref2rx[z_index, x_index, i] = np.sqrt((rx_position_list[i]-x)**2 + (z**2)) # [m]
+            L_src2ref[z_index, x_index, i] = np.sqrt((src_position_list[i]-x)**2 + (z**2)) # [m]
 
 
 #* calculate propagation time for each sets of rx and src
@@ -109,30 +108,45 @@ elif args.velocity_structure == 'y':
     """
     Consider the results of V_RMS estimation
     """
+    # check the number of layers and load parameters of each layers
     num_layers = len(params['V_RMS'])  # number of layers
     layer_info = np.zeros((num_layers, 2))  # layer_info[i, 0]: V_RMS, layer_info[i, 1]: tau_ver
     for i in range(num_layers):
         V_rms_key = f'V_RMS_{i+1}'
         tau_ver_key = f'tau_ver_{i+1}'
-        
-        layer_V_rms = params['V_RMS'][i] * c  # [m/s]
-        layer_thickness = int(params['tau_ver'][i] * layer_V_rms / 2 / imaging_resolution)  # grid number
 
-        layer_info[i, 0] = layer_V_rms
-        layer_info[i, 1] = layer_thickness
+        area_Vrms = params['V_RMS'][i] * c  # [m/s]
+        #area_thickness = params['tau_ver'][i] * area_Vrms / 2
+        #print(f"Layer {i+1} - depth: {area_thickness}")
+        area_thickness = int(params['tau_ver'][i] * area_Vrms / 2 / imaging_resolution)  # grid number, 'grid' means imaging grid
 
+        layer_info[i, 0] = area_Vrms # [m/s]
+        layer_info[i, 1] = area_thickness # grid number, 'grid' means imaging grid
+
+    # calculate tau_ref2rx and tau_src2ref for each resion
+    tau_ref2rx = np.zeros((imaging_grid_z, imaging_grid_x, antenna_num)) # [s], size is same as imaging grid
+    tau_src2ref = np.zeros((imaging_grid_z, imaging_grid_x, antenna_num)) # [s], size is same as imaging grid
     for i in range(num_layers):
+        # from surface to first boundary
         if i == 0:
-            layer_V_rms = layer_info[i, 0]
-            layer_thickness = layer_info[i, 1]
-            tau_ref2rx = L_ref2rx[0:layer_thickness, :, :] / layer_V_rms
-            tau_src2ref = L_src2ref[0:layer_thickness, :, :] / layer_V_rms
+            area_depth = int(layer_info[i, 1]) # intをつけないとなぜか動かない
+            tau_ref2rx[0:area_depth, :, :] = L_ref2rx[0:area_depth, :, :] / layer_info[i, 0] # [s]
+            tau_src2ref[0:area_depth, :, :] = L_src2ref[0:area_depth, :, :] / layer_info[i, 0] #[s]
+        # where deeper than last boundary
+        elif i == num_layers-1:
+            area_depth = int(layer_info[i-1, 1]) # intをつけないとなぜか動かない
+            tau_ref2rx[area_depth:, :, :] = L_ref2rx[area_depth:, :, :] / layer_info[i, 0] # [s]
+            tau_src2ref[area_depth:, :, :] = L_src2ref[area_depth:, :, :] / layer_info[i, 0] #[s]
+        # others, between each boundaries
         else:
-            layer_V_rms = layer_info[i, 0]
-            layer_thickness = layer_info[i, 1]
-            tau_ref2rx = np.vstack((tau_ref2rx, L_ref2rx[0:layer_thickness, :, :] / layer_V_rms))
-            tau_src2ref = np.vstack((tau_src2ref, L_src2ref[0:layer_thickness, :, :] / layer_V_rms))
-
+            area_depth_start = int(np.sum(layer_info[i-1, 1])) # intをつけないとなぜか動かない
+            area_depth_end = int(np.sum(layer_info[i, 1])) # intをつけないとなぜか動かない
+            tau_ref2rx[area_depth_start:area_depth_end, :, :] \
+                = L_ref2rx[area_depth_start:area_depth_end, :, :] / layer_info[i, 0] #[s]
+            tau_src2ref[area_depth_start:area_depth_end, :, :] \
+                = L_src2ref[area_depth_start:area_depth_end, :, :] / layer_info[i, 0] #[s]
+    #tau_ref2rx[layer_info[num_layers]:, :, :] = L_ref2rx[layer_info[num_layers]:, :, :] / layer_info[num_layers, 0] #[s]
+    #tau_src2ref[layer_info[num_layers]:, :, :] = L_src2ref[layer_info[num_layers]:, :, :] / layer_info[num_layers, 0] #[s]
     """
     #! ただし，２層分のV_RMSにしか対応していない
     layer1_Vrms = params['V_RMS_1'] * c # [m/s]
@@ -150,7 +164,6 @@ else:
     print('error, input y or n')
 
 
-
 #* calculate cross-correlation
 cross_corr = np.zeros((domain_z, domain_x))
 
@@ -158,7 +171,7 @@ def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
     # i番目のrxにおける遅れ時間配列（1D）を作成
     # 簡単のため，i番目のsrcで送信してi番目のrxで受診するのもOKとする
     tau = 8.73e-9 + tau_src2ref[z, x, :] + tau_ref2rx[z, x, i] # i番目のrxで受信する場合の遅れ時間[s]
-    tau_index = (tau / dt).astype(int) # tauをインデックス番号に変換
+    tau_index = (tau / dt).astype(int) # convert tau[s] to index, 'index' means index of A-scan data
 
     # i番目のrxにおける振幅配列（1D）を作成
     Amp_array = np.zeros(antenna_num)# １次元配列, 行：rxインデックス, 列：srcインデックス
@@ -206,6 +219,7 @@ if not os.path.exists(output_dir_path):
 if args.plot == False:
     corr = calc_corr()
     corr = corr / np.amax(corr) # normalize
+
 
     #* save as txt file
     np.savetxt(output_dir_path + '/imaging_result.csv', corr, delimiter=',')
