@@ -88,14 +88,18 @@ spatial_grid =  0.05 # spatial grid size [m]
 fig = plt.figure(figsize=(5, 5*map.epsilon_map.shape[0]/map.epsilon_map.shape[1]))
 ax = fig.add_subplot(111)
 
+vacuum_thickness = params['domain_z'] - params['ground_depth']
 plt.imshow(map.epsilon_map,
-        extent=[0, map.epsilon_map.shape[1] * spatial_grid, map.epsilon_map.shape[0] * spatial_grid, 0],
+        extent=[0, map.epsilon_map.shape[1] * spatial_grid,
+                map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness, -vacuum_thickness],
         cmap='binary')
 
 if args.closeup:
     y_start = 9
     y_end = 40
     ax.set_ylim(y_end, y_start)
+
+ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 10))
 
 plt.xlabel('x (m)', size=14)
 plt.ylabel('z (m)', size=14)
