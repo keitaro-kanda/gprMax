@@ -98,11 +98,10 @@ for x_index in tqdm(range(imaging_grid_x), desc='calculating path length'):
 
 #* calculate propagation time for each sets of rx and src
 if args.velocity_structure == 'n':
-    """
-    assume that epsilon_r = 4 in all grid
-    """
-    tau_ref2rx = L_ref2rx / (c / np.sqrt(6)) # tau: [s] from ref to rx
-    tau_src2ref = L_src2ref / (c / np.sqrt(6)) # tau: [s] from src to ref
+    #! setting constant Vrms
+    constant_Vrms = 0.5 # [/c]
+    tau_ref2rx = L_ref2rx / (c * constant_Vrms) # tau: [s] from ref to rx
+    tau_src2ref = L_src2ref / (c * constant_Vrms) # tau: [s] from src to ref
 
 elif args.velocity_structure == 'y':
     """
@@ -222,7 +221,10 @@ if args.plot == False:
 
 
     #* save as txt file
-    np.savetxt(output_dir_path + '/imaging_result.csv', corr, delimiter=',')
+    if args.velocity_structure == 'n':
+        np.savetxt(output_dir_path + '/imaging_result_n'+str(constant_Vrms)+'.csv', corr, delimiter=',')
+    elif args.velocity_structure == 'y':
+        np.savetxt(output_dir_path + '/imaging_result_y.csv', corr, delimiter=',')
 
 #* don't calculate, only plot
 elif args.plot == True:
@@ -230,22 +232,25 @@ elif args.plot == True:
 
 
 #* plot
-    fig = plt.figure(figsize=(5, 5*corr.shape[0]/corr.shape[1]) ,facecolor='w', edgecolor='w')
-    ax = fig.add_subplot(111)
-    plt.imshow(corr, 
-            extent=[0, corr.shape[1] * imaging_resolution, 
-                    corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
-            aspect=1,
-            cmap='jet', # recomended: 'jet', 'binary'
-            norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(corr)))
+fig = plt.figure(figsize=(5, 5*corr.shape[0]/corr.shape[1]) ,facecolor='w', edgecolor='w')
+ax = fig.add_subplot(111)
+plt.imshow(corr, 
+        extent=[0, corr.shape[1] * imaging_resolution, 
+                corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
+        aspect=1,
+        cmap='jet', # recomended: 'jet', 'binary'
+        norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(corr)))
 
-    ax.set_xlabel('x [m]', fontsize=14)
-    ax.set_ylabel('z [m]', fontsize=14)
-    ax.set_title('Imaging result', fontsize=14)
+ax.set_xlabel('x [m]', fontsize=14)
+ax.set_ylabel('z [m]', fontsize=14)
+ax.set_title('Imaging result', fontsize=14)
 
-    delvider = axgrid1.make_axes_locatable(ax)
-    cax = delvider.append_axes('right', size='5%', pad=0.1)
-    plt.colorbar(cax=cax, label='Cross-correlation')
+delvider = axgrid1.make_axes_locatable(ax)
+cax = delvider.append_axes('right', size='5%', pad=0.1)
+plt.colorbar(cax=cax, label='Cross-correlation')
 
-    plt.savefig(output_dir_path + '/imaging_result.png')
-    plt.show()
+if args.velocity_structure == 'n':
+    plt.savefig(output_dir_path + '/imaging_result_n'+str(constant_Vrms)+'.png')
+elif args.velocity_structure == 'y':
+    plt.savefig(output_dir_path + '/imaging_result_y.png')
+plt.show()
