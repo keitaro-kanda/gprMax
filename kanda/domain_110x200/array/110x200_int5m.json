@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "out_file": "kanda/domain_100x300/array/interval_5m/calcB_merged.out",
+    "out_file": "kanda/domain_110x200/array/calcB_merged.out",
 
     "_comment": "for making epsilon map",
     "h5_file": "kanda/domain_110x200/geometry/geometry.h5",
@@ -15,14 +15,14 @@
     "_comment": "position of antenna [m]",
     "antenna_height": 1,
     "src_start": 5,
-    "src_end": 95,
+    "src_end": 105,
     "src_step": 5,
     "rx_start": 5,
-    "rx_end": 95,
+    "rx_end": 105,
     "rx_step": 5,
 
     "_comment": "src moving times",
-    "src_move_times": 19,
+    "src_move_times": 21,
     "_comment": "imaging grid step [m]",
 
     "imaging_resolution": 0.5,
