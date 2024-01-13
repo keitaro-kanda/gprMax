@@ -49,5 +49,5 @@
     "imaging_result_csv": "kanda/domain_100x300/array/interval_5m/imaging/imaging_result.csv",
 
     "_comment": "for V_RMS estimation plot",
-    "corr_map_txt": "kanda/domain_100x300/array/interval_5m/Vrms/corr_map.txt"
+    "corr_map_txt": "kanda/domain_110x200/array/Vrms/corr_map.txt"
 }
