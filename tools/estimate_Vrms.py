@@ -185,7 +185,7 @@ if args.plot_type == 'select':
         norm=colors.LogNorm(vmin=1e-2, vmax=1)
 )
     # countour
-    cont = ax.contour(Vt_map, 3, colors='k', linewidths=1, linestyles='--',
+    cont = ax.contour(Vt_map, 3, colors='k', linewidths=1, linestyles=['-', '--', '-.'],
             extent=[0, RMS_velocity[-1], select_start, select_end],)
     ax.clabel(cont, inline=True, fontsize=10, fmt='%.2f')
 
