@@ -54,6 +54,7 @@ img1 = ax[0].imshow(geometry,
                 extent=[0, geometry.shape[1]*params['grid_size'], geometry.shape[0]*params['grid_size'], 0],
                 cmap='binary', aspect=1)
 
+ax[0].set_yticks(np.arange(0, geometry.shape[0]*params['grid_size'], 10))
 ax[0].set_title('geometry', size=18)
 
 delvider = axgrid1.make_axes_locatable(ax[0])
@@ -68,6 +69,7 @@ img2 = ax[1].imshow(imaging_result,
                 cmap='jet', # recommended: 'jet', 'gray'
                 aspect=1, norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(imaging_result)))
 
+ax[1].set_yticks(np.arange(0, imaging_result.shape[0]*params['imaging_resolution'], 10))
 ax[1].set_title('imaging result', size=18)
 
 delvider = axgrid1.make_axes_locatable(ax[1])

@@ -45,8 +45,7 @@
     "layer_thickness": [1, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17],
 
     "_comment": "for geometry-imaging comparison plot",
-    "geometry_txt": "kanda/domain_100x300/geometry/map/epsilon_map.txt",
-    "imaging_result_csv": "kanda/domain_100x300/array/interval_5m/imaging/imaging_result.csv",
+    "imaging_result_csv": "kanda/domain_110x200/array/imaging/imaging_result_y.csv",
 
     "_comment": "for V_RMS estimation plot",
     "corr_map_txt": "kanda/domain_110x200/array/Vrms/corr_map.txt"

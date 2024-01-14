@@ -241,6 +241,8 @@ plt.imshow(corr,
         cmap='jet', # recomended: 'jet', 'binary'
         norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(corr)))
 
+ax.set_yticks(np.arange(0, corr.shape[0]*imaging_resolution, 10))
+
 ax.set_xlabel('x [m]', fontsize=14)
 ax.set_ylabel('z [m]', fontsize=14)
 ax.set_title('Imaging result', fontsize=14)
