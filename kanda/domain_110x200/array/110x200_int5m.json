@@ -36,7 +36,7 @@
     "time_step": 2,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS": [0.56, 0.48, 0.47, 0.47, 0.49, 0.51, 0.48, 0.47, 0.52],
+    "V_RMS": [0.54, 0.48, 0.47, 0.47, 0.49, 0.51, 0.48, 0.47, 0.52],
     "tau_ver": [500e-9, 800e-9, 1100e-9, 1450e-9, 1750e-9, 2100e-9, 2400e-9, 2750e-9, 3350e-9],
 
     "_comment": "for V_RMS theoretical estimation",
