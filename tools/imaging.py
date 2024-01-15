@@ -99,7 +99,9 @@ for x_index in tqdm(range(imaging_grid_x), desc='calculating path length'):
 #* calculate propagation time for each sets of rx and src
 if args.velocity_structure == 'n':
     #! setting constant Vrms
-    constant_Vrms = 0.42 # [/c]
+    constant_Vrms = 0.5 # [/c]
+    #! setting constant Vrms
+
     tau_ref2rx = L_ref2rx / (c * constant_Vrms) # tau: [s] from ref to rx
     tau_src2ref = L_src2ref / (c * constant_Vrms) # tau: [s] from src to ref
 
