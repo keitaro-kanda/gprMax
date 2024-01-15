@@ -10,7 +10,7 @@ import json
 
 #* Parse command line arguments
 parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file',
-                                 usage='cd gprMax; python -m tools.get_epsilon_map json_file -closeup')
+                                 usage='cd gprMax; python -m tools.plot_geometry json_file -closeup')
 parser.add_argument('json_file', help='json file name')
 parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
 args = parser.parse_args()

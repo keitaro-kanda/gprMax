@@ -5,7 +5,7 @@ import os
 import json
 import argparse
 import mpl_toolkits.axes_grid1 as axgrid1
-from tools.get_epsilon_map import epsilon_map
+from tools.plot_geometry import epsilon_map
 
 
 #* Parse command line arguments
@@ -20,17 +20,12 @@ with open (args.jsonfile) as f:
     params = json.load(f)
 
 
-#! load geometry data
+#* load geometry data
 map = epsilon_map()
 map.h5_file_name = params['h5_file']
 map.read_h5_file()
 map.get_epsilon_map()
 geometry = map.epsilon_map
-"""
-#* load geometry data
-path_geometry = params['geometry_txt']
-geometry = np.loadtxt(path_geometry, delimiter=',')
-"""
 
 # cut vacuum area
 antenna_hight = params['antenna_height']
@@ -42,6 +37,7 @@ geometry = geometry[vacuum_thicness: , :]
 #* load imaging result data
 path_imaging = params['imaging_result_csv']
 imaging_result = np.loadtxt(path_imaging, delimiter=',')
+
 
 
 
