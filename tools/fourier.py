@@ -57,11 +57,9 @@ ASD[ASD == 0] = 1e-12 # avoid log(0)
 ASD_norm = np.zeros_like(ASD)
 for i in range(nrx):
     ASD_norm[:, :, i] = ASD[:, :, i] / np.amax(ASD[:, :, i]) # normalize
-#print(np.amax(ASD_norm))
-
-# avoid log(0)
-#ASD_norm[ASD_norm == 0] = 1e-10
+    amax_list = np.amax(ASD[:, :, i], axis=0)
 PSD_norm = 10 * np.log10(ASD_norm) # normalized Power Spectrum Density
+
 
 #* make frequency axis
 frequency_axis = fft.fftfreq(data_list[0].shape[0], d=dt)
@@ -75,19 +73,49 @@ if not os.path.exists(output_dir):
 
 
 #* plot
+def plot():
+    for rx in range(nrx):
+        plt.figure(figsize=(10, 10))
+        for trace_num in tqdm(range(0, nrx), desc='plotting, rx' + str(rx+1)):
+            plt.plot(frequency_axis[1: int(N/2)], PSD_norm[trace_num, :, rx], label='trace No.' + str(trace_num+1))
+
+        #plt.yscale('log')
+        plt.title('Power Spectrum Density, rx' + str(rx+1), size=18)
+        plt.xlabel('frequency [Hz]', size=16)
+        plt.ylabel('Power Spectrum Density [dB]', size=16)
+        plt.xlim(0, 1e9)
+        plt.ylim(-70, 0)
+        plt.grid()
+        plt.legend(bbox_to_anchor=(1, 1), loc='upper right', borderaxespad=1, fontsize=12)
+
+        plt.savefig(output_dir + '/fourier_rx' + str(rx+1) + '.png')
+        #plt.show()
+#plot()
+
+
+#* cutoff PSD < -40dB
+PSD_norm[PSD_norm < -40] = -120
+print('PSD_norm shape: ', PSD_norm.shape)
+
+ASD_norm = 10 ** (PSD_norm / 10)
 for rx in range(nrx):
-    plt.figure(figsize=(10, 10))
-    for trace_num in tqdm(range(0, nrx), desc='plotting, rx' + str(rx+1)):
-        plt.plot(frequency_axis[1: int(N/2)], PSD_norm[trace_num, :, rx], label='trace No.' + str(trace_num+1))
+    ASD = ASD_norm[:, :, rx] * amax_list[rx]
+print('ASD shape: ', ASD.shape)
+Amp = ASD * np.sqrt(fs / N)
+print('Amp shape: ', Amp.shape)
 
-    #plt.yscale('log')
-    plt.title('Power Spectrum Density, rx' + str(rx+1), size=18)
-    plt.xlabel('frequency [Hz]', size=16)
-    plt.ylabel('Power Spectrum Density [dB]', size=16)
-    plt.xlim(0, 1e9)
-    plt.ylim(-70, 0)
-    plt.grid()
-    plt.legend(bbox_to_anchor=(1, 1), loc='upper right', borderaxespad=1, fontsize=12)
+#* inverse Fourier transform
+def inverse_fourier_transform():
+    inverse_fourier_data_list = []
+    for i in range(nrx):
+        inverse_fourier_data = fft.ifft(Amp[i], axis=0)
+        inverse_fourier_data_list.append(inverse_fourier_data)
+    return inverse_fourier_data_list
+IFFT_data = inverse_fourier_transform() # inverse_fourier_data_list is 3D array, (trace number, time, rx)
+IFFT_data = np.array(IFFT_data)
+print('inverse_fourier_data_list shape: ', IFFT_data.shape)
 
-    plt.savefig(output_dir + '/fourier_rx' + str(rx+1) + '.png')
-    #plt.show()
+plt.figure(figsize=(10, 10))
+plt.imshow(np.abs(IFFT_data), aspect='auto')
+plt.colorbar()
+plt.show()
