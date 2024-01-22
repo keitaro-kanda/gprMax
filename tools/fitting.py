@@ -55,7 +55,7 @@ def calc_hyperbola(tau_ver, rxnumber, txnumber, Vrms):
 
 t0 = 500e-9
 Vrms = c * 0.4
-src_positions = np.arange(0, nrx, 1)
+src_positions = np.arange(0, nrx+1, 1)
 
 #* plotting fuction
 def mpl_plot(outputdata, dt, rxnumber, rxcomponent):
@@ -67,8 +67,10 @@ def mpl_plot(outputdata, dt, rxnumber, rxcomponent):
     ax = fig.add_subplot(111)
 
     # plot hyperbola
-    ax.plot(src_positions, hyperbola / dt, color='orange', linestyle='--')
-    """
+    ax.plot(src_positions, hyperbola, color='orange', linestyle='--')
+    ax.invert_yaxis()
+    ax.set_ylim(outputdata_norm.shape[0] * dt, 0)
+
     #plot B-scan
     outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100 # normalize
     plt.imshow(outputdata_norm,
@@ -87,7 +89,7 @@ def mpl_plot(outputdata, dt, rxnumber, rxcomponent):
         cb.set_label('Field strength [A/m]')
     elif 'I' in rxcomponent:
         cb.set_label('Current [A]')
-    """
+
 
     # Save a PDF/PNG of the figure
     fig.savefig(outputdir + '/fitting_rx' + str(rxnumber+1) + '.png', dpi=150, format='png',
