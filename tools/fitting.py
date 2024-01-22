@@ -80,7 +80,7 @@ def mpl_plot(outputdata, dt, rxnumber, rxcomponent):
     plt.imshow(outputdata_norm,
              extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0],
             interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
-    plt.title('rx' + str(rxnumber+1) + ')')
+    plt.title('rx' + str(rxnumber+1))
     plt.xlabel('trace number')
     plt.ylabel('Time [s]')
     plt.legend()
