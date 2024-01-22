@@ -44,6 +44,10 @@
     "internal_permittivity": [1, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6],
     "layer_thickness": [1, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17, 3, 17],
 
+    "_comment": "result of V_RMS theoretical estimation",
+    "t0_theory": [324e-9, 642e-9, 960e-9, 1280e-9, 1600e-9, 1910e-9, 2230e-9, 2550e-9, 2870e-9, 3180e-9],
+    "V_RMS_theory": [0.441, 0.431, 0.428, 0.426, 0.426, 0.424, 0.424, 0.423, 0.423, 0.423],
+
     "_comment": "for geometry-imaging comparison plot",
     "imaging_result_csv": "kanda/domain_110x200/array/imaging/imaging_result_y.csv",
 

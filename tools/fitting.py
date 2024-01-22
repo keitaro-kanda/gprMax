@@ -48,36 +48,42 @@ def calc_hyperbola(tau_ver, rxnumber, txnumber, Vrms):
     offset = np.abs((rxnumber - txnumber)) * params['src_step'] # [m]
 
     delay_time = np.sqrt(
-        tau_ver **2 + (offset / Vrms) **2
+        tau_ver **2 + (offset / (c * Vrms)) **2
     )
 
     return delay_time
 
-t0 = 500e-9
-Vrms = c * 0.4
+t0 = params['t0_theory'] #[s]
+Vrms = params['V_RMS_theory'] # [/c]
+
 src_positions = np.arange(0, nrx+1, 1)
 
 #* plotting fuction
 def mpl_plot(outputdata, dt, rxnumber, rxcomponent):
     outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100 # normalize
 
-    hyperbola = calc_hyperbola(t0, rxnumber, src_positions, Vrms)
-    
-    fig = plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111)
 
     # plot hyperbola
-    ax.plot(src_positions, hyperbola, color='orange', linestyle='--')
-    ax.invert_yaxis()
-    ax.set_ylim(outputdata_norm.shape[0] * dt, 0)
+    for layers in tqdm(range(len(t0)), desc = 'rx' + str(rxnumber+1) + ' fitting'):
+        hyperbola = calc_hyperbola(t0[layers], rxnumber, src_positions, Vrms[layers],)
+
+        ax.plot(src_positions, hyperbola, linestyle='--',
+                label = 't0 = ' + str(t0[layers]) + 's, Vrms = ' + str(Vrms[layers]) + 'c')
+        ax.invert_yaxis()
+        ax.set_ylim(outputdata_norm.shape[0] * dt, 0)
+
 
     #plot B-scan
     outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100 # normalize
     plt.imshow(outputdata_norm,
              extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0],
             interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
+    plt.title('rx' + str(rxnumber+1) + ')')
     plt.xlabel('trace number')
     plt.ylabel('Time [s]')
+    plt.legend()
 
     # Grid properties
     ax.grid(which='both', axis='both', linestyle='-.')
@@ -97,7 +103,7 @@ def mpl_plot(outputdata, dt, rxnumber, rxcomponent):
 
     return plt
 
-for rx in range(nrx):
+for rx in tqdm(range(nrx)):
     mpl_plot(data_list[rx], dt, rx, 'Ez') # rx is inputted by 0 ~ nrx
     plt.close()
 
