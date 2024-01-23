@@ -41,8 +41,8 @@
 
     "_comment": "for V_RMS theoretical estimation",
     "_comment": "information about vacuum layer is needed",
-    "internal_permittivity": [1, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6],
-    "layer_thickness": [1, 20, 20, 5, 20, 5, 40, 5, 40, 5, 65],
+    "internal_permittivity": [1, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6, 4],
+    "layer_thickness": [1, 20, 20, 5, 20, 5, 40, 5, 40, 5, 60, 5],
 
 
     "_comment": "result of V_RMS theoretical estimation",
