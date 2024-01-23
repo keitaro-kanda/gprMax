@@ -48,7 +48,7 @@ for i in range (len(internal_velocity)):
 
 
 #* combine t0 and Vrms
-theoretical_estimation = np.column_stack((t0_theory, Vrms_theory))
+theoretical_estimation = np.column_stack((t0_theory, Vrms_theory, internal_permittivity))
 print(theoretical_estimation)
 
 #* make output dir

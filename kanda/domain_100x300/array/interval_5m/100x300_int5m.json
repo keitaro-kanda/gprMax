@@ -41,13 +41,13 @@
 
     "_comment": "for V_RMS theoretical estimation",
     "_comment": "information about vacuum layer is needed",
-    "internal_permittivity": [1, 4, 6, 6 ,4, 6, 6, 6],
-    "layer_thickness": [1, 20, 20, 20, 5, 45, 45, 65],
+    "internal_permittivity": [1, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6],
+    "layer_thickness": [1, 20, 20, 5, 20, 5, 40, 5, 40, 5, 65],
 
 
     "_comment": "result of V_RMS theoretical estimation",
-    "t0_theory": [274e-9, 600e-9, 927e-9, 1730e-9, 2260e-9, 3530e-9],
-    "V_RMS_theory": [0.518, 0.461, 0.443, 0.431, 0.425, 0.420],
+    "t0_theory": [274e-9, 600e-9, 667e-9, 993e-9, 1061e-9, 1714e-9, 1781e-9, 2435e-9, 2501e-9, 3564e-9],
+    "V_RMS_theory": [0.518, 0.461, 0.465, 0.447, 0.451, 0.435, 0.438, 0.430, 0.432, 0.425],
 
     "_comment": "for geometry-imaging comparison plot",
     "geometry_txt": "kanda/domain_100x300/geometry/map/epsilon_map.txt",
