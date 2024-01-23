@@ -44,6 +44,11 @@
     "internal_permittivity": [1, 4, 6, 6 ,4, 6, 6, 6],
     "layer_thickness": [1, 20, 20, 20, 5, 45, 45, 65],
 
+
+    "_comment": "result of V_RMS theoretical estimation",
+    "t0_theory": [274e-9, 600e-9, 927e-9, 1730e-9, 2260e-9, 3530e-9],
+    "V_RMS_theory": [0.518, 0.461, 0.443, 0.431, 0.425, 0.420],
+
     "_comment": "for geometry-imaging comparison plot",
     "geometry_txt": "kanda/domain_100x300/geometry/map/epsilon_map.txt",
     "imaging_result_csv": "kanda/domain_100x300/array/interval_5m/imaging/imaging_result.csv",
