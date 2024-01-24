@@ -36,8 +36,8 @@
     "time_step": 2,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS": [0.54, 0.48, 0.47, 0.47, 0.49, 0.51, 0.48, 0.47, 0.52],
-    "tau_ver": [500e-9, 800e-9, 1100e-9, 1450e-9, 1750e-9, 2100e-9, 2400e-9, 2750e-9, 3350e-9],
+    "V_RMS": [0.53, 0.48, 0.47, 0.46, 0.48, 0.52, 0.56, 0.55],
+    "tau_ver": [382e-9, 718e-9, 1042e-9, 1358e-9, 1698e-9, 2024e-9, 2348e-9, 2674e-9],
 
     "_comment": "for V_RMS theoretical estimation",
     "_comment": "information about vacuum layer is needed",
@@ -49,7 +49,7 @@
     "V_RMS_theory": [0.441, 0.431, 0.428, 0.426, 0.426, 0.424, 0.424, 0.423, 0.423, 0.423],
 
     "_comment": "for geometry-imaging comparison plot",
-    "imaging_result_csv": "kanda/domain_110x200/array/imaging/imaging_result_y.csv",
+    "imaging_result_csv": "kanda/domain_110x200/rough/array/imaging/imaging_result_y.csv",
 
     "_comment": "for V_RMS estimation plot",
     "corr_map_txt": "kanda/domain_110x200/rough/array/Vrms/corr_map.txt"
