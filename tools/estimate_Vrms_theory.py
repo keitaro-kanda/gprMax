@@ -31,7 +31,7 @@ t0_theory = []
 internal_2way_time = 2 * layer_thickness / internal_velocity
 for i in range (len(internal_velocity)):
     #t0 = 2 / c + np.sum(internal_2way_time[:i+1])
-    t0 = np.sum(internal_2way_time[:i+1]) + params['transmitting_delay']
+    t0 = np.sum(internal_2way_time[:i+1])
     t0_theory.append(t0)
 
 
@@ -46,6 +46,7 @@ for i in range (len(internal_velocity)):
     Vrms  = Vrms / c # normalize
     Vrms_theory.append(Vrms)
 
+t0_theory = np.array(t0_theory) + params['transmitting_delay']
 
 #* combine t0 and Vrms
 theoretical_estimation = np.column_stack((t0_theory, Vrms_theory, internal_permittivity))
