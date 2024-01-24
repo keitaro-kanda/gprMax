@@ -31,7 +31,7 @@ t0_theory = []
 internal_2way_time = 2 * layer_thickness / internal_velocity
 for i in range (len(internal_velocity)):
     #t0 = 2 / c + np.sum(internal_2way_time[:i+1])
-    t0 = np.sum(internal_2way_time[:i+1])
+    t0 = np.sum(internal_2way_time[:i+1]) + params['transmitting_delay']
     t0_theory.append(t0)
 
 
