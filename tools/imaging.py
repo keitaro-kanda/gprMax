@@ -96,6 +96,8 @@ for x_index in tqdm(range(imaging_grid_x), desc='calculating path length'):
             L_src2ref[z_index, x_index, i] = np.sqrt((src_position_list[i]-x)**2 + (z**2)) # [m]
 
 
+
+
 #* calculate propagation time for each sets of rx and src
 if args.velocity_structure == 'n':
     #! setting constant Vrms
@@ -218,6 +220,7 @@ if not os.path.exists(output_dir_path):
 
 #* calculate and save as txt file
 if args.plot == False:
+
     corr = calc_corr()
     corr = corr / np.amax(corr) # normalize
 
@@ -248,6 +251,8 @@ ax.set_yticks(np.arange(0, corr.shape[0]*imaging_resolution, 10))
 ax.set_xlabel('x [m]', fontsize=14)
 ax.set_ylabel('z [m]', fontsize=14)
 ax.set_title('Imaging result', fontsize=14)
+
+#ax.grid(which='major', color='white', linestyle='--')
 
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
