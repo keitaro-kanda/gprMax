@@ -1,0 +1,4 @@
+#material: 1 inf 1 0 pec
+#material: 1 0 1 0 free_space
+#material: 4 0 1 0 regolith
+#material: 6 0 1 0 basalt_6
