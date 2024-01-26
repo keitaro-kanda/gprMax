@@ -68,13 +68,13 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     if closeup:
 
         closeup_start = 0 # [ns]
-        closeup_end = 300 # [ns]
+        closeup_end = 20 # [ns]
 
         # カラーバー範囲の設定
 
         plt.imshow(outputdata_norm, 
              extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
-            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-100, vmax=100)
         #plt.xlim(35, 55)
         plt.ylim(closeup_end*10**(-9), closeup_start*10**(-9))
         plt.minorticks_on( )

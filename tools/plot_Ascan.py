@@ -132,13 +132,20 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
                 plt.show()
 
-            # Plotting if no FFT required
+            #* Plotting if no FFT required
             else:
-                fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [s]', ylabel=outputtext + ' field strength [V/m]'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
+                fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [s]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
+                outputdata = outputdata / np.amax(np.abs(outputdata)) # normalize
                 line = ax.plot(time, outputdata, 'r', lw=2, label=outputtext)
-                ax.set_xlim([0, np.amax(time)])
-                # ax.set_ylim([-15, 20])
+
+                if args.closeup:
+                    ax.set_xlim([closeup_x_start*10**(-9), closeup_x_end*10**(-9)])
+                    ax.set_ylim([closeup_y_start, closeup_y_end])
+                else:
+                    ax.set_xlim([0, np.amax(time)])
                 ax.grid(which='both', axis='both', linestyle='-.')
+                ax.minorticks_on()
+                ax.tick_params(labelsize=18)
 
                 if 'H' in output:
                     plt.setp(line, color='g')
@@ -186,59 +193,14 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 elif output == 'Ez':
                     outputdata_norm = outputdata/np.amax(np.abs(outputdata)) * 100
                     ax = plt.subplot(gs[2, 0])
-                    ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext) 
+                    ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext)
                     #ax.set_ylim([-3, 3])
                     ax.set_xlim([5e-8, 5e-6])
-                    ax.set_xscale('log')
+                    #ax.set_xscale('log')
                     ax.set_ylabel(outputtext + ' strength [%]', size=18)
                     ax.tick_params(labelsize=18)
 
-                    # =====ピーク検出=====
-                    """
-                    # detect peak and plot
-                    # peak is the point where outputdata_norm is the largest in nerby 100 points
 
-                    # 検出条件の設定（最大強度に対するパーセンテージ）
-                    peak_detection_condition = 0.05
-                    # peak_detection_conditionをtextで表示する
-                    ax.text(1e-7, 0.5, 'peak_detection_condition:'+str(peak_detection_condition)+'[%]', fontsize=12)
-                    for i in range(0, len(outputdata_norm)-50):
-
-                        if i<100:  
-                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[0:i+50])) and np.abs(outputdata_norm[i]) > peak_detection_condition:
-                                ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
-                                ax.set_ylim([-1, 1])
-
-                                # テキストの生成位置
-                                if outputdata_norm[i] > 0:
-                                    if outputdata_norm[i] > 1:
-                                        ax.text(time[i], 0.8, '{:.3g}'.format(time[i]*10**7), fontsize=12)
-                                    else:
-                                        ax.text(time[i], outputdata_norm[i]+0.05, '{:.3g}'.format(time[i]*10**7), fontsize=12)
-                                else:
-                                    if outputdata_norm[i] < -1:
-                                        ax.text(time[i], -0.8, '{:.3g}'.format(time[i]*10**7), fontsize=12)
-                                    else:
-                                        ax.text(time[i], outputdata_norm[i]-0.15, '{:.3g}'.format(time[i]*10**7), fontsize=12)
-                        else:
-                            if np.abs(outputdata_norm[i]) == np.amax(np.abs(outputdata_norm[i-50:i+50])) and np.abs(outputdata_norm[i]) > peak_detection_condition:
-                                ax.plot(time[i], outputdata_norm[i], 'bo', markersize=3)
-                                if outputdata_norm[i] > 0:
-                                    if outputdata_norm[i] > 1:
-                                        ax.text(time[i], 0.8, '{:.4g}'.format(time[i]*10**7), fontsize=12)
-                                    else:
-                                        ax.text(time[i], outputdata_norm[i]+0.05, '{:.4g}'.format(time[i]*10**7), fontsize=12)
-                                else:
-                                    if outputdata_norm[i] < -1:
-                                        ax.text(time[i], -0.8, '{:.4g}'.format(time[i]*10**7), fontsize=12)
-                                    else:
-                                        ax.text(time[i], outputdata_norm[i]-0.15, '{:.4g}'.format(time[i]*10**7), fontsize=12)
-"""
-                    # =====ピーク検出=====
-
-
-
-                # ax.set_ylim([-15, 20])
                 elif output == 'Hx':
                     ax = plt.subplot(gs[0, 1])
                     ax.plot(time, outputdata, 'g', lw=2, label=outputtext)
@@ -267,13 +229,21 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.plot(time, outputdata, 'b', lw=2, label=outputtext)
                     ax.set_ylabel(outputtext + ', current [A]')
             for ax in fig.axes:
-                ax.set_xlim([0, np.amax(time)])
+                if args.closeup:
+                    ax.set_xlim([closeup_x_start*10**(-9), closeup_x_end*10**(-9)])
+                else:
+                    ax.set_xlim([0, np.amax(time)])
                 ax.grid(which='both', axis='both', linestyle='--')
                 ax.minorticks_on()
 
         # Save a PDF/PNG of the figure
         # fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.pdf', dpi=None, format='pdf', bbox_inches='tight', pad_inches=0.1)
-        fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+        if args.fft:
+            fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fft.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+        elif args.closeup:
+            fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_closeup' + str(closeup_x_start) + '_' + str(closeup_x_end) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+        else:
+            fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
 
     f.close()
 
@@ -283,11 +253,19 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 if __name__ == "__main__":
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Plots electric and magnetic fields and currents from all receiver points in the given output file. Each receiver point is plotted in a new figure window.', usage='cd gprMax; python -m tools.plot_Ascan outputfile')
+    parser = argparse.ArgumentParser(description='Plots electric and magnetic fields and currents from all receiver points in the given output file. Each receiver point is plotted in a new figure window.',
+                                        usage='cd gprMax; python -m tools.plot_Ascan outputfile')
     parser.add_argument('outputfile', help='name of output file including path')
     parser.add_argument('--outputs', help='outputs to be plotted', default=Rx.defaultoutputs, choices=['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz', 'Ex-', 'Ey-', 'Ez-', 'Hx-', 'Hy-', 'Hz-', 'Ix-', 'Iy-', 'Iz-'], nargs='+')
     parser.add_argument('-fft', action='store_true', help='plot FFT (single output must be specified)', default=False)
+    parser.add_argument('-closeup', action='store_true', help='plot close up of time domain signal', default=False)
     args = parser.parse_args()
+
+    # for closeup option
+    closeup_x_start = 0 #[ns]
+    closeup_x_end = 10 #[ns]
+    closeup_y_start = -1 # normalized, -1~1
+    closeup_y_end = 1 # normalized, -1~1
 
     plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
     plthandle.show()
