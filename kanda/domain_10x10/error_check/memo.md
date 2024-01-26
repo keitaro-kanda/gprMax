@@ -16,5 +16,5 @@ $$
 Observed delay times is estimated to be about 90.38 ns.
 
 ## Result of delay time (at peak)
-- mesh_001: t=55.6 ns
-- mesh_005: t=55.9 ns -> error: 
+- mesh_001: t=90.6 ns
+- mesh_005: t=91.4 ns
