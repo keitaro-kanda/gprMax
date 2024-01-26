@@ -53,50 +53,37 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
                      figsize=(20, 10), facecolor='w', edgecolor='w')
     
 
-    # [%]に変換
+    # normalize
     outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
 
-    # 観測の方向
-    radar_direction = 'horizontal' # horizontal or vertical
 
-    # プロット
-    #if radar_direction == 'horizontal':
     plt.imshow(outputdata_norm, 
              extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
             interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
-    plt.xlabel('trace number')
-    plt.ylabel('Time [s]')
+    plt.xlabel('trace number', fontsize=20)
+    plt.ylabel('Time [s]', fontsize=20)
+    plt.tick_params(labelsize=16)
 
     # =====closeupオプション=====
     if closeup:
 
-        closeup_start = 0
-        closeup_end = 0.5e-8
+        closeup_start = 2900 # [ns]
+        closeup_end = 3300 # [ns]
 
         # カラーバー範囲の設定
-        max_value = np.amax(np.abs(outputdata_norm[int(closeup_start/dt): int(closeup_end/dt)]))
 
         plt.imshow(outputdata_norm, 
              extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
-            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-max_value, vmax=max_value)
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
         #plt.xlim(35, 55)
-        plt.ylim(closeup_end, closeup_start)
+        plt.ylim(closeup_end*10**(-9), closeup_start*10**(-9))
         plt.minorticks_on( )
-    """""
-    else:
-    # Create a plot rotated 90 degrees and then reversed up and down.
-        plt.imshow(outputdata_norm.T[::-1],
-                extent=[0, outputdata_norm.shape[0] * dt, 0, outputdata_norm.shape[1]], 
-                interpolation='nearest', aspect='auto', cmap='seismic', vmin=-10, vmax=10)
-        plt.xlabel('Time [s]')
-        plt.ylabel('Trace number')
-        """""
 
 
     if closeup:
-        plt.title('{}'.format(filename) + '_closeup_'+str(closeup_start)+'-'+str(closeup_end))
+        plt.title('rx' + str(rxnumber) + ' closeup: '+str(closeup_start)+'-'+str(closeup_end), fontsize=20)
     else:
-        plt.title('{}'.format(filename))
+        plt.title('rx' + str(rxnumber), fontsize=20)
 
     # Grid properties
     ax = fig.gca()
@@ -104,7 +91,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
     cb = plt.colorbar()
     if 'E' in rxcomponent:
-        cb.set_label('Field strength percentage [%]')
+        cb.set_label('Field strength percentage [%]', fontsize=20)
     elif 'H' in rxcomponent:
         cb.set_label('Field strength [A/m]')
     elif 'I' in rxcomponent:
@@ -129,12 +116,13 @@ if __name__ == "__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Plots a B-scan image.', 
-                                     usage='cd gprMax; python -m tools.plot_Bscan outputfile output')
+                                     usage='cd gprMax; python -m tools.plot_Bscan outputfile output -closeup --select-rx') 
     parser.add_argument('outputfile', help='name of output file including path')
     parser.add_argument('rx_component', help='name of output component to be plotted', 
                         choices=['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz'])
     # closeupのオプションを作る
     parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
+    parser.add_argument('--select-rx', action='store_true', help='select rx number', default=False)
     args = parser.parse_args()
 
     # Open output file and read number of outputs (receivers)
@@ -148,8 +136,12 @@ if __name__ == "__main__":
         raise CmdInputError('No receivers found in {}'.format(args.outputfile))
 
     # データの取得とプロットの作成を実行？
-    for rx in range(1, nrx + 1):
+    if args.select_rx:
+        rx = 11
         outputdata, dt = get_output_data(args.outputfile, rx, args.rx_component)
         plthandle = mpl_plot(args.outputfile, outputdata, dt, rx, args.rx_component, args.closeup)
-
+    else:
+        for rx in range(1, nrx + 1):
+            outputdata, dt = get_output_data(args.outputfile, rx, args.rx_component)
+            plthandle = mpl_plot(args.outputfile, outputdata, dt, rx, args.rx_component, args.closeup)
     plthandle.show()

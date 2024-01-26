@@ -41,6 +41,8 @@ for i in range(1, nrx+1):
     data, dt = get_output_data(data_path, i, 'Ez')
     data_list.append(data)
 
+
+
 #* set physical constants
 c = 299792458 # [m/s], speed of light in vacuum
 epsilon_0 = 1 # vacuum permittivity
@@ -65,7 +67,7 @@ transmit_delay = int(params['transmitting_delay'] / dt) # [data point]
 path_num = nrx**2
 
 #* make corr function
-def corr(Vrms_ind, tau_ver_ind, i):
+def calc_corr(Vrms_ind, tau_ver_ind, i):
     rx_posi = rx_start + i * antenna_step # [m]
 
     Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
@@ -78,24 +80,25 @@ def corr(Vrms_ind, tau_ver_ind, i):
         src_posi = src_start + (src-1) * antenna_step # [m]
         offset = np.abs(rx_posi - src_posi) # [m]
 
+        # calculate total delay time t
         total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay # [data point]
 
         if total_delay >= len(data_list[i]):
             Amp_array[src] = 0
         else:
-            Amp_array[src] = np.abs(data_list[i][total_delay, src])
+            Amp_array[src] = np.abs(data_list[i][total_delay, src]) # Ez intensity in (t, src) at i-th rx
 
 
     return Amp_array # 1D array
 
 
 #* caluculate corr roop
-def corr_roop():
+def roop_corr():
     corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
 
     for v in range(len(RMS_velocity)):
         for t in tqdm(range(len(vertical_delay_time)), str(v*2/100) + 'c'):
-            Amp_at_vt = np.array([corr(v, t, rx) for rx in range(nrx)]) # 2D array
+            Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 2D array
 
             corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
             corr_map[t, v] = np.sum(corr_matrix)
@@ -168,7 +171,7 @@ elif args.plot_type == 'select':
 
 
 elif args.plot_type == 'calc':
-    Vt_map = corr_roop()
+    Vt_map = roop_corr()
     Vt_map = Vt_map / np.amax(Vt_map) # normalize
     np.savetxt(output_dir_path + '/corr_map.txt', Vt_map, delimiter=',')
 else:
