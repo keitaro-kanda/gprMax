@@ -62,6 +62,18 @@ $$
 
 ここで，$f_i$ と $f_j$ は異なるそう受信点の組み合わせで得られたA-scan，$L_i, L_j$ は送受信点間の距離．
 
+
+# Estimate internal velocity from $t_0$ and $V_{RMS}$
+Internal velocity $v_i$ of i-th subsurface layer is estimated by
+
+$$
+v_i = \sqrt{
+\frac{V_{RMS, i}^2 \cdot t_{0, i-1} - V_{RMS, i-1}^2 \cdot t_{0, i}
+}
+{t_{0, i} - t_{s0, i-1}}
+}
+$$
+
 # domain_100x100の$t_0, V_{RMS}$推定
 
 geometry：
