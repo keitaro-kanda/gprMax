@@ -68,7 +68,7 @@ Internal velocity $v_i$ of i-th subsurface layer is estimated by
 
 $$
 v_i = \sqrt{
-\frac{V_{RMS, i}^2 \cdot t_{0, i-1} - V_{RMS, i-1}^2 \cdot t_{0, i}
+\frac{V_{RMS, i}^2 \cdot t_{0, i} - V_{RMS, i-1}^2 \cdot t_{0, i-1}
 }
 {t_{0, i} - t_{s0, i-1}}
 }
