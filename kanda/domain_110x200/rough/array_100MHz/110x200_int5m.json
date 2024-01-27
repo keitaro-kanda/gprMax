@@ -33,11 +33,11 @@
 
     "_comment": "for Vrms estimation [ns]",
     "time_window": 5000,
-    "time_step": 2,
+    "time_step": 5,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS": [0.53, 0.48, 0.47, 0.46, 0.48, 0.52, 0.56, 0.55],
-    "tau_ver": [382e-9, 718e-9, 1042e-9, 1358e-9, 1698e-9, 2024e-9, 2348e-9, 2674e-9],
+    "V_RMS": [0.52, 0.47, 0.45, 0.46, 0.48, 0.47, 0.51, 0.50],
+    "tau_ver": [370e-9, 704e-9, 1015e-9, 1347e-9, 1667e-9, 1989e-9, 2313e-9, 2632e-9],
 
     "_comment": "for V_RMS theoretical estimation",
     "_comment": "information about vacuum layer is needed",
