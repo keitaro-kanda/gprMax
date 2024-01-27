@@ -10,7 +10,6 @@ import mpl_toolkits.axes_grid1 as axgrid1
 from tqdm import tqdm
 
 from tools.outputfiles_merge import get_output_data
-import itertools
 
 
 #* Parse command line arguments
