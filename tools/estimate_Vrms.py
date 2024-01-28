@@ -82,6 +82,8 @@ def calc_corr(Vrms_ind, tau_ver_ind, i):
         # calculate total delay time t
         total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay # [data point]
 
+        # calculate shifted hyperbola
+
         if total_delay >= len(data_list[i]):
             Amp_array[src] = 0
         else:
