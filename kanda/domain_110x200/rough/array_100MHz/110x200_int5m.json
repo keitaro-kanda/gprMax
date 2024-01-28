@@ -36,8 +36,8 @@
     "time_step": 2,
 
     "_comment": "V_MRS estimation result",
-    "V_RMS": [0.52, 0.48, 0.46, 0.43, 0.47, 0.47, 0.46, 0.50],
-    "tau_ver": [372.5e-9, 707.5e-9, 1022.5e-9, 1342.5e-9, 1665e-9, 1987.5e-9, 2327.5e-9, 2637.5e-9],
+    "V_RMS": [0.52, 0.47, 0.39, 0.45, 0.39, 0.46, 0.39, 0.47, 0.39, 0.47, 0.50, 0.50],
+    "tau_ver": [372e-9, 702e-9, 996e-9, 1017e-9, 1330e-9, 1346e-9, 1645e-9, 1671e-9, 1963e-9, 1989e-9, 2313e-9, 2633e-9],
 
     "_comment": "for V_RMS theoretical estimation",
     "_comment": "information about vacuum layer is needed",
