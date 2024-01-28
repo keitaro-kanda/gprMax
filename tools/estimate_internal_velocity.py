@@ -33,7 +33,7 @@ t0_vacuum = params['antenna_height'] * 2 / c
 #* estimate internal velocity
 internal_velocities = []
 
-for i in range (len(Vrms)):
+for i in tqdm(range (len(Vrms)), desc='calculating Vint'):
     if i ==0:
         Vint = np.sqrt( \
             (Vrms[i]**2 * t0[i] - c**2 * t0_vacuum) \
