@@ -102,7 +102,7 @@ def roop_corr():
     for v in range(len(RMS_velocity)):
         for t in tqdm(range(len(vertical_delay_time)), str(v*2/100) + 'c'):
             Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 2D array
-
+            #corr_map[t, v] = np.sum(calc_corr(v, t, 11)) # 1D array
             corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
             corr_map[t, v] = np.sum(corr_matrix)
 
@@ -121,8 +121,8 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 2920
-select_end = 2970
+select_start = 1300
+select_end = 1500
 """
 select area [ns]
 """
