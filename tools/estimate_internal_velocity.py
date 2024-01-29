@@ -23,8 +23,8 @@ c = 299792458 # [m/s], speed of light in vacuum
 
 
 #* load parameters from json file
-Vrms = np.array(params['V_RMS']) * c # [m/s], Vrms in each layers
-t0 = np.array(params['tau_ver']) # [s], t0 in each layers
+Vrms = np.array(params['V_RMS_theory']) * c # [m/s], Vrms in each layers
+t0 = np.array(params['t0_theory']) # [s], t0 in each layers
 
 
 #* calculate t0 in vacuum

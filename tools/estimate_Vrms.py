@@ -61,7 +61,8 @@ src_start = params['src_start'] # src start position, [m]
 src_end = params['src_end'] # src end position, [m]
 src_move_times = params['src_move_times'] # number of src moving times
 pulse_width = int(params['pulse_length'] / dt) # [data point]
-transmit_delay = int(params['transmitting_delay'] / dt) # [data point]
+transmit_delay = params['transmitting_delay'] # [ns]
+transmit_delay_point = int(transmit_delay / dt) # [data point]
 
 path_num = nrx**2
 
@@ -80,9 +81,10 @@ def calc_corr(Vrms_ind, tau_ver_ind, i):
         offset = np.abs(rx_posi - src_posi) # [m]
 
         # calculate total delay time t
-        total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay # [data point]
+        total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay_point # [data point]
 
         # calculate shifted hyperbola
+        #Sx = (offset**2 / Vrms**2) - 2 * tau_ver * ()
 
         if total_delay >= len(data_list[i]):
             Amp_array[src] = 0
@@ -119,8 +121,8 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 2930
-select_end = 3000
+select_start = 2920
+select_end = 2970
 """
 select area [ns]
 """
