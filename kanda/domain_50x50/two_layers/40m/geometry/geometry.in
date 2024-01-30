@@ -1,0 +1,40 @@
+#domain: 50 50 0.02
+#dx_dy_dz: 0.02 0.02 0.02
+
+#time_window: 1.5e-6
+
+#material: 4 0 1 0 regolith
+#material: 6 0 1 0 basalt_6
+
+
+=====地形=====
+#box: 0 0 0 50 45 0.02 regolith
+
+#fractal_box: 0 0 0 50 5 0.02 1.5 1 1 1 1 basalt_6 basalt_fractal
+#add_surface_roughness: 0 5 0 50 5 0.02 1.5 1 1 4.5 5.5 basalt_fractal
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 50 50 0.02 0.02 0.02 0.02 geometry n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 50 50 0.02 geometry
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 300e6 my_src
+
+#hertzian_dipole: z  25 46 0 my_src
+#rx: 25 46 0
+
+<snapshot作成>
+#python:
+for i in range(1, 150):
+    print('#snapshot: 0 0 0 50 50 0.02 0.02 0.02 0.02 {} snapshot{}'.format(i*0.01e-6, i))
+#end_python:
+
+#output_dir: A-scan
+==========
