@@ -6,7 +6,7 @@
     "_comment": "input data file",
     "out_file": "kanda/domain_50x50/two_layers/30m/calc_merged.out",
     "_comment": "t0-Vrms plot file",
-    "corr_map_txt": "kanda/domain_110x200/rough/array_100MHz/Vrms/corr_map.txt",
+    "corr_map_txt": "kanda/domain_50x50/two_layers/30m/Vrms/corr_map.txt",
     "_comment": "for geometry-imaging comparison plot",
     "imaging_result_csv": "kanda/domain_110x200/rough/array/imaging/imaging_result_y.csv",
 
@@ -49,8 +49,8 @@
     "V_RMS_theory": [0.512],
 
     "_comment": "V_MRS estimation result",
-    "V_RMS": [0.53],
-    "tau_ver": [359e-9],
+    "V_RMS": [0.48],
+    "tau_ver": [407e-9],
 
     "_comment": "imaging grid step [m]",
     "imaging_resolution": 0.5

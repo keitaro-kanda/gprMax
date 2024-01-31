@@ -4,9 +4,9 @@
     "h5_file": "kanda/domain_50x50/two_layers/40m/geometry/geometry.h5",
     "material_file": "kanda/domain_50x50/two_layers/10m/geometry/geometry_materials.txt",
     "_comment": "input data file",
-    "out_file": "kanda/domain_110x200/rough/array_100MHz/calcB_merged.out",
+    "out_file": "kanda/domain_50x50/two_layers/40m/calc_merged.out",
     "_comment": "t0-Vrms plot file",
-    "corr_map_txt": "kanda/domain_110x200/rough/array_100MHz/Vrms/corr_map.txt",
+    "corr_map_txt": "kanda/domain_50x50/two_layers/40m/Vrms/corr_map.txt",
     "_comment": "for geometry-imaging comparison plot",
     "imaging_result_csv": "kanda/domain_110x200/rough/array/imaging/imaging_result_y.csv",
 
@@ -49,8 +49,8 @@
     "V_RMS_theory": [0.509],
 
     "_comment": "V_MRS estimation result",
-    "V_RMS": [0.52],
-    "tau_ver": [272e-9],
+    "V_RMS": [0.51],
+    "tau_ver": [548e-9],
 
     "_comment": "imaging grid step [m]",
     "imaging_resolution": 0.5
