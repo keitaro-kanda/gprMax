@@ -6,22 +6,22 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_100x100/rock_2m/calcB.in -n 19"
+            "command": "python -m gprMax kanda/domain_50x50/two_layers/10m/calc.in -n 21"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_100x100/rock_01m/calcB.in -n 19"
+            "command": "python -m gprMax kanda/domain_50x50/two_layers/20m/calc.in -n 21"
         },
         {
             "label": "gprMax 3rd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_100x100/ideal/interval_2m/calcB.in　-n 46"
+            "command": "python -m gprMax kanda/domain_50x50/two_layers/30m/calc.in -n 21"
         },
         {
             "label": "gprMax 4th run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_100x100/ideal/interval_10m/calcB.in　-n 10"
+            "command": "python -m gprMax kanda/domain_50x50/two_layers/40m/calc.in -n 21"
         },
         {
             "label": "task sequence",

@@ -121,8 +121,8 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 1300
-select_end = 1500
+select_start = 350
+select_end = 370
 """
 select area [ns]
 """
@@ -210,8 +210,8 @@ ax.grid(color='gray', linestyle='--')
 if args.closeup == True:
     x_start = 0
     x_end = 1
-    y_start = 200
-    y_end = 400
+    y_start = 260
+    y_end = 300
     plt.xlim(x_start, x_end)
     plt.ylim(y_end, y_start)
 
