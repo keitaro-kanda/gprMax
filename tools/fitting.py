@@ -48,12 +48,12 @@ def calc_hyperbola(tau_ver, rxnumber, txnumber, Vrms):
     offset = np.abs((rxnumber - txnumber)) * params['src_step'] # [m]
 
     delay_time = np.sqrt(
-        tau_ver **2 + (offset / (c * Vrms)) **2
+        (tau_ver * 10**(-9)) **2 + (offset / (c * Vrms)) **2
     )
 
     return delay_time
 
-t0 = params['t0_theory'] #[s]
+t0 = params['t0_theory'] #[ns]
 Vrms = params['V_RMS_theory'] # [/c]
 
 src_positions = np.arange(0, nrx+1, 1)
