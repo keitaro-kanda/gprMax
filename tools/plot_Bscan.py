@@ -67,8 +67,8 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     # =====closeupオプション=====
     if closeup:
 
-        closeup_start = 500 # [ns]
-        closeup_end = 600 # [ns]
+        closeup_start = 50 # [ns]
+        closeup_end = 150 # [ns]
 
         # カラーバー範囲の設定
 

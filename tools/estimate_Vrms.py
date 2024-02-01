@@ -121,8 +121,10 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 530
-select_end = 560
+select_start = 210
+select_end = 260
+select_startx = 0.35
+select_endx = 1
 """
 select area [ns]
 """
@@ -161,7 +163,7 @@ elif args.plot_type == 'select':
 
     #* select Vt_map area
     Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',') # load data
-    Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), :] # select area
+    Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), int(select_startx/0.02): int(select_endx/0.02)] # select area
     Vt_map = Vt_map / np.amax(Vt_map) # normalize by max value in selected area
 
     """
@@ -187,12 +189,12 @@ fig = plt.figure(figsize=(8, 6))
 ax = fig.add_subplot(111)
 if args.plot_type == 'select':
     plt.imshow(Vt_map, cmap='plasma', aspect='auto', interpolation='nearest',
-        extent=[0, RMS_velocity[-1], select_end, select_start],
+        extent=[select_startx, select_endx, select_end, select_start],
         norm=colors.LogNorm(vmin=1e-2, vmax=1)
 )
     # countour
     cont = ax.contour(Vt_map, 3, colors='k', linewidths=1, linestyles=['-', '--', '-.'],
-            extent=[0, RMS_velocity[-1], select_start, select_end],)
+            extent=[select_startx, select_endx, select_start, select_end],)
     ax.clabel(cont, inline=True, fontsize=10, fmt='%.2f')
 
 else:

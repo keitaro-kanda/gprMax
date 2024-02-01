@@ -7,6 +7,7 @@ import mpl_toolkits.axes_grid1 as axgrid1
 import numpy as np
 from tqdm import tqdm
 import json
+import matplotlib as mpl
 
 #* Parse command line arguments
 parser = argparse.ArgumentParser(description='get epsilon_r map from .h5 file',
@@ -89,10 +90,13 @@ fig = plt.figure(figsize=(5, 5*map.epsilon_map.shape[0]/map.epsilon_map.shape[1]
 ax = fig.add_subplot(111)
 
 vacuum_thickness = params['domain_z'] - params['ground_depth']
+
+
+#cmap = mpl.colors.ListedColormap([plt.cm.binary(int(255*i/len(epsilon_list))) for i in range(len(epsilon_list))])
 plt.imshow(map.epsilon_map,
         extent=[0, map.epsilon_map.shape[1] * spatial_grid,
                 map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness, -vacuum_thickness],
-        cmap='binary')
+        cmap='jet')
 
 if args.closeup:
     y_start = 9
