@@ -173,7 +173,7 @@ cross_corr = np.zeros((domain_z, domain_x))
 def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
     # i番目のrxにおける遅れ時間配列（1D）を作成
     # 簡単のため，i番目のsrcで送信してi番目のrxで受診するのもOKとする
-    tau = 8.73e-9 + tau_src2ref[z, x, :] + tau_ref2rx[z, x, i] # i番目のrxで受信する場合の遅れ時間[s]
+    tau = params['transmitting_delay'] + tau_src2ref[z, x, :] + tau_ref2rx[z, x, i] # i番目のrxで受信する場合の遅れ時間[s]
     tau_index = (tau / dt).astype(int) # convert tau[s] to index, 'index' means index of A-scan data
 
     # i番目のrxにおける振幅配列（1D）を作成
