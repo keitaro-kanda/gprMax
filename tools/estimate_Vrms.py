@@ -10,6 +10,7 @@ import mpl_toolkits.axes_grid1 as axgrid1
 from tqdm import tqdm
 
 from tools.outputfiles_merge import get_output_data
+from itertools import combinations
 
 
 #* Parse command line arguments
@@ -18,6 +19,7 @@ parser = argparse.ArgumentParser(description='Processing Su method',
 parser.add_argument('jsonfile', help='json file path')
 parser.add_argument('plot_type', choices=['plot', 'mask', 'select', 'calc'])
 parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
+parser.add_argument('-CMP', action='store_true', help='analyse as CMP observation', default=False)
 args = parser.parse_args()
 
 
@@ -67,51 +69,85 @@ transmit_delay_point = int(transmit_delay / dt) # [data point]
 path_num = nrx**2
 
 #* make corr function
-def calc_corr(Vrms_ind, tau_ver_ind, i):
-    rx_posi = rx_start + i * antenna_step # [m]
+def calc_corr(Vrms_ind, tau_ver_ind, i): # i: in range(nrx)
+    if args.CMP == True:
+        rx_ind = i # rx: 0 -> nrx-1
+        tx_ind = nrx - 1 - i # tx: nrx-1 -> 0
 
-    Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
-    tau_ver = vertical_delay_time[tau_ver_ind] * 1e-9 # [s]
+        # calculate offset
+        rx_posi = rx_ind * antenna_step # [m]
+        tx_posi = tx_ind * antenna_step # [m]
+        offset = np.abs(rx_posi - tx_posi) # [m]
 
-    Amp_array = np.zeros(nrx) # 取り出した強度を入れる配列を用意しておく
-
-    for src in range(src_move_times):
-
-        src_posi = src_start + (src-1) * antenna_step # [m]
-        offset = np.abs(rx_posi - src_posi) # [m]
+        Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
+        tau_ver = vertical_delay_time[tau_ver_ind] * 1e-9 # [s]
 
         # calculate total delay time t
         total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay_point # [data point]
-
-        # calculate shifted hyperbola
-        #Sx = (offset**2 / Vrms**2) - 2 * tau_ver * ()
-
-        if total_delay >= len(data_list[i]):
-            Amp_array[src] = 0
+        Amp_array = np.zeros(nrx) # 取り出した強度を入れる配列を用意しておく
+        if total_delay >= len(data_list[rx_ind]):
+                Amp_array[rx_ind] = 0
         else:
-            Amp_array[src] = np.abs(data_list[i][total_delay, src]) # Ez intensity in (t, src) at i-th rx
+            Amp_array[i] = np.abs(data_list[rx_ind][total_delay, tx_ind]) # Ez intensity in (t, src) at i-th rx
+
+        return Amp_array # 1D array
 
 
-    return Amp_array # 1D array
+    else:
+        rx_posi = rx_start + i * antenna_step # [m]
+
+        Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
+        tau_ver = vertical_delay_time[tau_ver_ind] * 1e-9 # [s]
+
+        Amp_array = np.zeros(nrx) # 取り出した強度を入れる配列を用意しておく
+
+        for src in range(src_move_times):
+
+            src_posi = src_start + (src-1) * antenna_step # [m]
+            offset = np.abs(rx_posi - src_posi) # [m]
+
+            # calculate total delay time t
+            total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay_point # [data point]
+
+            # calculate shifted hyperbola
+            #Sx = (offset**2 / Vrms**2) - 2 * tau_ver * ()
+
+            if total_delay >= len(data_list[i]):
+                Amp_array[src] = 0
+            else:
+                Amp_array[src] = np.abs(data_list[i][total_delay, src]) # Ez intensity in (t, src) at i-th rx
+
+
+        return Amp_array # 1D array
 
 
 #* caluculate corr roop
 def roop_corr():
     corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
 
-    for v in range(len(RMS_velocity)):
-        for t in tqdm(range(len(vertical_delay_time)), str(v*2/100) + 'c'):
-            Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 2D array
-            #corr_map[t, v] = np.sum(calc_corr(v, t, 11)) # 1D array
-            corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
+    for v in tqdm(range(len(RMS_velocity))):
+        for t in range(len(vertical_delay_time)):
+            if args.CMP == True:
+                Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 1D array
+                corr_matrix = np.abs([a *b for a, b in combinations(Amp_at_vt, 2)]) # 1D array
+
+            else:
+                Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 2D array
+                corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
+                #corr_map[t, v] = np.sum(calc_corr(v, t, 11)) # 1D array
+
             corr_map[t, v] = np.sum(corr_matrix)
+            #corr_map[t, v] = np.sum(Amp_at_vt)
 
     corr_map = corr_map / path_num / (path_num - 1) # normalize
     return corr_map
 
 
 #* make output directory
-output_dir_path = data_dir_path + '/Vrms'
+if args.CMP == True:
+    output_dir_path = data_dir_path + '/Vrms_CMP'
+else:
+    output_dir_path = data_dir_path + '/Vrms'
 if not os.path.exists(output_dir_path):
     os.makedirs(output_dir_path)
 
@@ -121,9 +157,9 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 210
-select_end = 260
-select_startx = 0.35
+select_start = 530
+select_end = 580
+select_startx = 0
 select_endx = 1
 """
 select area [ns]
@@ -146,37 +182,21 @@ elif args.plot_type == 'mask':
         Vt_map[row][Vt_map[row] < threshold[row]] = 0  # 50%以下の値を0に置き換える
         #Vt_map[row][max_values_col[row]] = 1
         #Vt_map[row][Vt_map[row] < max_val[row]] = 0  # 50%以下の値を0に置き換える
-    
-    #! トップ5のみ残す
-    """
-    for row in Vt_map:
-        indices_to_keep = np.argsort(row)[-5:]  # トップ5のインデックスを取得
-        row[~np.isin(np.arange(len(row)), indices_to_keep)] = 0  # top5以外の要素を0に置き換える
-    # 1e-6以下の値を0に置き換える
-    #Vt_map[Vt_map < 1e-6] = 0
-    np.savetxt(output_dir_path + '/corr_map_mask.txt', Vt_map, delimiter=',')
-    """
-    #! トップ5のみ残す
 
 
+#* select Vt_map area
 elif args.plot_type == 'select':
-
-    #* select Vt_map area
-    Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',') # load data
+    if args.CMP == True:
+        Vt_map = np.loadtxt(params['cmp_corr_map_txt'], delimiter=',')
+    else:
+        Vt_map = np.loadtxt(params['corr_map_txt'], delimiter=',') # load data
     Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), int(select_startx/0.02): int(select_endx/0.02)] # select area
     Vt_map = Vt_map / np.amax(Vt_map) # normalize by max value in selected area
-
-    """
-    # Vt_mapの最大値の50%以下の値を0に置き換える
-    max_val = np.amax(Vt_map)  # get max value in selected area
-    for row in range(Vt_map.shape[0]):
-        Vt_map[row][Vt_map[row] < 0.5*max_val] = 0
-    """
-
 
 
 elif args.plot_type == 'calc':
     Vt_map = roop_corr()
+    print(np.amax(Vt_map))
     Vt_map = Vt_map / np.amax(Vt_map) # normalize
     np.savetxt(output_dir_path + '/corr_map.txt', Vt_map, delimiter=',')
 else:

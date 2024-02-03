@@ -7,6 +7,8 @@
     "out_file": "kanda/domain_50x50/multiple_layers/no_loss/calc_merged.out",
     "_comment": "t0-Vrms plot file",
     "corr_map_txt": "kanda/domain_50x50/multiple_layers/no_loss/Vrms/corr_map.txt",
+    "_comment": "t0_vrms plot file in CMP observation",
+    "cmp_corr_map_txt": "kanda/domain_50x50/multiple_layers/no_loss/Vrms_CMP/corr_map.txt",
     "_comment": "for geometry-imaging comparison plot",
     "imaging_result_csv": "kanda/domain_110x200/rough/array/imaging/imaging_result_y.csv",
 
