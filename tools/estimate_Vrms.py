@@ -232,8 +232,8 @@ ax.grid(color='gray', linestyle='--')
 if args.closeup == True:
     x_start = 0
     x_end = 1
-    y_start = 260
-    y_end = 300
+    y_start = 210
+    y_end = 260
     plt.xlim(x_start, x_end)
     plt.ylim(y_end, y_start)
 

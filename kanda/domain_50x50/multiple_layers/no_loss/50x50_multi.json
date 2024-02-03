@@ -36,7 +36,7 @@
 
     "_comment": "for Vrms estimation [ns]",
     "time_window": 1500,
-    "time_step": 2,
+    "time_step": 1,
 
     "_comment": "for V_RMS theoretical estimation",
     "_comment": "information about vacuum layer is needed",
