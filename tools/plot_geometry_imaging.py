@@ -48,7 +48,8 @@ fig,ax = plt.subplots(1, 2,
 # plot geometry
 img1 = ax[0].imshow(geometry,
                 extent=[0, geometry.shape[1]*params['grid_size'], geometry.shape[0]*params['grid_size'], 0],
-                cmap='binary', aspect=1)
+                cmap='jet', # recommended: 'jet', 'binary'
+                aspect=1)
 
 ax[0].set_yticks(np.arange(0, geometry.shape[0]*params['grid_size'], 10))
 ax[0].set_title('geometry', size=18)
