@@ -17,6 +17,7 @@ parser = argparse.ArgumentParser(description='Processing Su method',
 parser.add_argument('jsonfile', help='name of json file')
 parser.add_argument('velocity_structure', choices=['y', 'n'], help='whether to use velocity structure or not')
 parser.add_argument('-plot', action='store_true', help='option: plot only')
+parser.add_argument('-theory', action='store_true', help='option: use theoretical value for t0 and Vrms')
 args = parser.parse_args()
 
 
@@ -115,13 +116,14 @@ elif args.velocity_structure == 'y':
     num_layers = len(params['V_RMS'])  # number of layers
     layer_info = np.zeros((num_layers, 2))  # layer_info[i, 0]: V_RMS, layer_info[i, 1]: tau_ver
     for i in range(num_layers):
-        #V_rms_key = f'V_RMS_{i+1}'
-        #tau_ver_key = f'tau_ver_{i+1}'
-
-        area_Vrms = params['V_RMS'][i] * c  # [m/s]
-        #area_thickness = params['tau_ver'][i] * area_Vrms / 2
-        #print(f"Layer {i+1} - depth: {area_thickness}")
-        area_thickness = int(params['tau_ver'][i] * area_Vrms / 2 / imaging_resolution)  # grid number, 'grid' means imaging grid
+        if args.theory == True:
+            area_Vrms = params['V_RMS_theory'][i] * c  # [m/s]
+            area_thickness = params['t0_theory'][i] * area_Vrms / 2
+        else:
+            area_Vrms = params['V_RMS'][i] * c  # [m/s]
+            #area_thickness = params['tau_ver'][i] * area_Vrms / 2
+            #print(f"Layer {i+1} - depth: {area_thickness}")
+            area_thickness = int(params['tau_ver'][i] * area_Vrms / 2 / imaging_resolution)  # grid number, 'grid' means imaging grid
 
         layer_info[i, 0] = area_Vrms # [m/s]
         layer_info[i, 1] = area_thickness # grid number, 'grid' means imaging grid
@@ -150,18 +152,6 @@ elif args.velocity_structure == 'y':
                 = L_src2ref[area_depth_start:area_depth_end, :, :] / layer_info[i, 0] #[s]
     #tau_ref2rx[layer_info[num_layers]:, :, :] = L_ref2rx[layer_info[num_layers]:, :, :] / layer_info[num_layers, 0] #[s]
     #tau_src2ref[layer_info[num_layers]:, :, :] = L_src2ref[layer_info[num_layers]:, :, :] / layer_info[num_layers, 0] #[s]
-    """
-    #! ただし，２層分のV_RMSにしか対応していない
-    layer1_Vrms = params['V_RMS_1'] * c # [m/s]
-    layer1_thickness = int(params['tau_ver_1'] * layer1_Vrms / 2 / imaging_resolution) # grind number
-    layer2_Vrms = params['V_RMS_2'] * c # [m/s]
-    layer2_thickness = params['tau_ver_2'] * layer2_Vrms / 2 # [m]
-
-    tau_ref2rx = np.vstack((L_ref2rx[0:layer1_thickness, :, :] / layer1_Vrms,
-                        L_ref2rx[layer1_thickness:, :, :] / layer2_Vrms)) # tau: [s] from ref to rx
-    tau_src2ref = np.vstack((L_src2ref[0:layer1_thickness, :, :] / layer1_Vrms,
-                        L_src2ref[layer1_thickness:, :, :] / layer2_Vrms))
-    """
 
 else:
     print('error, input y or n')
@@ -229,7 +219,10 @@ if args.plot == False:
     if args.velocity_structure == 'n':
         np.savetxt(output_dir_path + '/imaging_result_n'+str(constant_Vrms)+'.csv', corr, delimiter=',')
     elif args.velocity_structure == 'y':
-        np.savetxt(output_dir_path + '/imaging_result_y.csv', corr, delimiter=',')
+        if args.theory == True:
+            np.savetxt(output_dir_path + '/imaging_result_y_theory.csv', corr, delimiter=',')
+        else:
+            np.savetxt(output_dir_path + '/imaging_result_y.csv', corr, delimiter=',')
 
 #* don't calculate, only plot
 elif args.plot == True:
@@ -261,5 +254,8 @@ plt.colorbar(cax=cax, label='Cross-correlation')
 if args.velocity_structure == 'n':
     plt.savefig(output_dir_path + '/imaging_result_n'+str(constant_Vrms)+'.png')
 elif args.velocity_structure == 'y':
-    plt.savefig(output_dir_path + '/imaging_result_y.png')
+    if args.theory == True:
+        plt.savefig(output_dir_path + '/imaging_result_y_theory.png')
+    else:
+        plt.savefig(output_dir_path + '/imaging_result_y.png')
 plt.show()

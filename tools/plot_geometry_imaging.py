@@ -10,8 +10,9 @@ from tools.plot_geometry import epsilon_map
 
 #* Parse command line arguments
 parser = argparse.ArgumentParser(description='Plot geometry map and imaging result',
-                                 usage='cd gprMax; python -m tools.plot_geometry_imaging jsonfile')
+                                usage='cd gprMax; python -m tools.plot_geometry_imaging jsonfile -theory')
 parser.add_argument('jsonfile', help='json file path')
+parser.add_argument('-theory', action='store_true', help='option: use theoretical value for t0 and Vrms')
 args = parser.parse_args()
 
 
@@ -36,6 +37,8 @@ geometry = geometry[vacuum_thicness: , :]
 
 #* load imaging result data
 path_imaging = params['imaging_result_csv']
+if args.theory:
+    path_imaging = path_imaging.replace('.csv', '_theory.csv')
 imaging_result = np.loadtxt(path_imaging, delimiter=',')
 
 
@@ -77,6 +80,9 @@ fig.supxlabel('x (m)', size=14)
 fig.supylabel('z (m)', size=14)
 
 output_dir_path = os.path.dirname(path_imaging)
-plt.savefig(output_dir_path + '/imaging_result_geometry.png')
+if args.theory:
+    plt.savefig(output_dir_path + '/imaging_result_geometry_theory.png')
+else:
+    plt.savefig(output_dir_path + '/imaging_result_geometry.png')
 
 plt.show()
