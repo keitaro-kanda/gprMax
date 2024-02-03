@@ -44,12 +44,16 @@ c = 299792458 # [m/s], speed of light in vacuum
 
 
 #* calculate hyperbola function
-def calc_hyperbola(tau_ver, rxnumber, txnumber, Vrms):
+def calc_hyperbola(tau_ver, rxnumber, txnumber, Vrms, S):
     offset = np.abs((rxnumber - txnumber)) * params['src_step'] # [m]
 
-    delay_time = np.sqrt(
-        (tau_ver * 10**(-9)) **2 + (offset / (c * Vrms)) **2
-    )
+    #delay_time = np.sqrt(
+    #    (tau_ver * 10**(-9)) **2 + (offset / (c * Vrms)) **2)
+
+    #* by [Castle, 1994] eq.(28)
+    delay_time = \
+        tau_ver(1 - 1/S) + \
+        np.sqrt( (tau_ver/S)**2 + offset**2 / (S * Vrms**2 * c**2))
 
     return delay_time
 
@@ -67,7 +71,7 @@ def mpl_plot(outputdata, dt, rxnumber, rxcomponent):
 
     # plot hyperbola
     for layers in tqdm(range(len(t0)), desc = 'rx' + str(rxnumber+1) + ' fitting'):
-        hyperbola = calc_hyperbola(t0[layers], rxnumber, src_positions, Vrms[layers],)
+        hyperbola = calc_hyperbola(t0[layers], rxnumber, src_positions, Vrms[layers], 1.19e33)
 
         ax.plot(src_positions, hyperbola, linestyle='--',
                 label = 't0 = ' + str(t0[layers]) + 's, Vrms = ' + str(Vrms[layers]) + 'c')
