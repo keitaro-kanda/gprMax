@@ -28,7 +28,7 @@ layer_thickness = np.array(params['layer_thickness']) # [m], thickness of each l
 
 #* estimate theoretical value of t0
 t0_theory = []
-internal_2way_time = 2 * layer_thickness / internal_velocity
+internal_2way_time = 2 * layer_thickness / internal_velocity # [s]
 for i in range (len(internal_velocity)):
     #t0 = 2 / c + np.sum(internal_2way_time[:i+1])
     t0 = np.sum(internal_2way_time[:i+1])
@@ -40,16 +40,25 @@ Vrms_theory = []
 bunbo = 2 * layer_thickness * internal_velocity
 for i in range (len(internal_velocity)):
     Vrms = np.sqrt(
-        #np.sum(2 * c + bunbo[:i+1]) / t0_theory[i]
         np.sum(bunbo[:i+1]) / t0_theory[i]
     )
     Vrms  = Vrms / c # normalize
     Vrms_theory.append(Vrms)
 
+
+#* estimate mu4 in [castle, 1994] eq.(4)
+mu4 = []
+bunbo_mu4 = internal_2way_time * internal_velocity**4
+for i in range (len(internal_velocity)):
+    mu_4th_degree = \
+        np.sum(bunbo_mu4[:i+1])\
+        / t0_theory[i]
+    mu4.append(mu_4th_degree)
+
 t0_theory = np.array(t0_theory) + params['transmitting_delay']
 
 #* combine t0 and Vrms
-theoretical_estimation = np.column_stack((t0_theory, Vrms_theory, internal_permittivity))
+theoretical_estimation = np.column_stack((t0_theory, Vrms_theory, mu4, internal_permittivity))
 print(theoretical_estimation)
 
 #* make output dir
