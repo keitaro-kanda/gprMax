@@ -160,6 +160,8 @@ def roop_corr():
     corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
 
     for v in tqdm(range(len(RMS_velocity))):
+        corr_matrix = np.zeros((nrx**2, nrx**2))
+
         if args.Castle == True:
             for S in range(len(Castle_const)):
                 Amp_at_vt = np.array([calc_corr(v, S, rx) for rx in range(nrx)])
@@ -175,13 +177,22 @@ def roop_corr():
 
                 else:
                     Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 2D array
-                    corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
+                    #corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
                     #corr_map[t, v] = np.sum(calc_corr(v, t, 11)) # 1D array
-
-            corr_map[t, v] = np.sum(corr_matrix)
+                    corr_matrix += np.abs(np.outer(Amp_at_vt, Amp_at_vt))
+                    #print(corr_matrix)
+                #print(f"v: {v}, t: {t}, Amp_at_vt: {Amp_at_vt}")
+                corr_map[t, v] = np.sum(corr_matrix)
         #corr_map[t, v] = np.sum(Amp_at_vt)
 
-    corr_map = corr_map / path_num / (path_num - 1) # normalize
+    # normalize
+    corr_max_value = np.amax(corr_map)
+    #print(corr_map)
+    if corr_max_value != 0:
+        corr_map = corr_map / corr_max_value
+        print(f"max_value: {corr_max_value}")
+    else:
+        print('error: max_value is 0')
     return corr_map
 
 
@@ -240,8 +251,7 @@ elif args.plot_type == 'select':
 
 elif args.plot_type == 'calc':
     Vt_map = roop_corr()
-    print(np.amax(Vt_map))
-    Vt_map = Vt_map / np.amax(Vt_map) # normalize
+    #Vt_map = Vt_map / np.amax(Vt_map) # normalize
     np.savetxt(output_dir_path + '/corr_map.txt', Vt_map, delimiter=',')
 else:
     print('error, input plot, mask, or calc')
