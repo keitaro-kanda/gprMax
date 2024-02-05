@@ -20,7 +20,6 @@ parser.add_argument('jsonfile', help='json file path')
 parser.add_argument('plot_type', choices=['plot', 'mask', 'select', 'calc'])
 parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
 parser.add_argument('-CMP', action='store_true', help='analyse as CMP observation', default=False)
-parser.add_argument('-Castle', action='store_true', help='hyperbola aproxisimation in [Castle, 1994]', default=False)
 args = parser.parse_args()
 
 
@@ -54,7 +53,7 @@ epsilon_0 = 1 # vacuum permittivity
 #* set calculation parameters
 RMS_velocity = np.arange(0.01, 1.01, 0.02) # percentage to speed of light, 0% to 100%
 vertical_delay_time = np.arange(0, params['time_window'], params['time_step']) # 2-way travelt time in vertical direction, [ns]
-Castle_const = np.arange(1, 5, 0.1) # constant S=mu4/mu2^2 in [Castle, 1994] eq.(28)
+
 
 
 #* load parameters from json file
@@ -94,39 +93,6 @@ def calc_corr(Vrms_ind, tau_ver_ind, i): # i: in range(nrx)
         return Amp_array # 1D array
 
 
-    if args.Castle == True:
-        rx_posi = rx_start + i * antenna_step # [m]
-
-        Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
-        Castle_S = Castle_const[tau_ver_ind] # constant S=mu4/mu2^2 in [Castle, 1994] eq.(28)
-        t0s = params['t0']# [ns]
-
-        Amp_array = np.zeros(nrx) # 取り出した強度を入れる配列を用意しておく
-
-        for src in range(src_move_times):
-
-            src_posi = src_start + (src-1) * antenna_step
-            offset = np.abs(rx_posi - src_posi)
-
-            # calculate total delay time t
-            for t0 in t0s:
-                t0 = t0 * 10**(-9) # [s]
-                hyperbola_delay = t0 * (1 - 1/Castle_S) \
-                    + np.sqrt((t0 / Castle_S)**2 + \
-                    offset**2 / (Castle_S * Vrms**2)) # [s]
-                total_delay = int(hyperbola_delay / dt)  + transmit_delay_point
-                #print(hyperbola_delay)
-                #print('total_delay', total_delay)
-                
-                if total_delay < len(data_list[i][src]):
-                    Amp_array[src] = np.max(np.abs(data_list[i][total_delay: total_delay+pulse_width, src]))
-                else:
-                    Amp_array[src] = 0
-
-
-        return Amp_array
-
-
     else:
         rx_posi = rx_start + i * antenna_step # [m]
 
@@ -160,47 +126,26 @@ def roop_corr():
     corr_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
 
     for v in tqdm(range(len(RMS_velocity))):
-        corr_matrix = np.zeros((nrx**2, nrx**2))
+        for t in range(len(vertical_delay_time)):
+            if args.CMP == True:
+                Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 1D array
+                corr_matrix = np.abs([a *b for a, b in combinations(Amp_at_vt, 2)]) # 1D array
 
-        if args.Castle == True:
-            for S in range(len(Castle_const)):
-                Amp_at_vt = np.array([calc_corr(v, S, rx) for rx in range(nrx)])
-                #corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
-                corr_matrix = np.sum(Amp_at_vt)
+            else:
+                Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 2D array
+                corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
+                #corr_map[t, v] = np.sum(calc_corr(v, t, 11)) # 1D array
 
-            corr_map[S, v] = np.sum(corr_matrix)
-        else:
-            for t in range(len(vertical_delay_time)):
-                if args.CMP == True:
-                    Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 1D array
-                    corr_matrix = np.abs([a *b for a, b in combinations(Amp_at_vt, 2)]) # 1D array
+            corr_map[t, v] = np.sum(corr_matrix)
+            #corr_map[t, v] = np.sum(Amp_at_vt)
 
-                else:
-                    Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 2D array
-                    #corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
-                    #corr_map[t, v] = np.sum(calc_corr(v, t, 11)) # 1D array
-                    corr_matrix += np.abs(np.outer(Amp_at_vt, Amp_at_vt))
-                    #print(corr_matrix)
-                #print(f"v: {v}, t: {t}, Amp_at_vt: {Amp_at_vt}")
-                corr_map[t, v] = np.sum(corr_matrix)
-        #corr_map[t, v] = np.sum(Amp_at_vt)
-
-    # normalize
-    corr_max_value = np.amax(corr_map)
-    #print(corr_map)
-    if corr_max_value != 0:
-        corr_map = corr_map / corr_max_value
-        print(f"max_value: {corr_max_value}")
-    else:
-        print('error: max_value is 0')
+    corr_map = corr_map / path_num / (path_num - 1) # normalize
     return corr_map
 
 
 #* make output directory
 if args.CMP == True:
     output_dir_path = data_dir_path + '/Vrms_CMP'
-elif args.Castle == True:
-    output_dir_path = data_dir_path + '/Vrms_Castle'
 else:
     output_dir_path = data_dir_path + '/Vrms'
 if not os.path.exists(output_dir_path):
@@ -251,7 +196,8 @@ elif args.plot_type == 'select':
 
 elif args.plot_type == 'calc':
     Vt_map = roop_corr()
-    #Vt_map = Vt_map / np.amax(Vt_map) # normalize
+    print(np.amax(Vt_map))
+    Vt_map = Vt_map / np.amax(Vt_map) # normalize
     np.savetxt(output_dir_path + '/corr_map.txt', Vt_map, delimiter=',')
 else:
     print('error, input plot, mask, or calc')
@@ -286,8 +232,8 @@ ax.grid(color='gray', linestyle='--')
 if args.closeup == True:
     x_start = 0
     x_end = 1
-    y_start = 210
-    y_end = 260
+    y_start = 260
+    y_end = 300
     plt.xlim(x_start, x_end)
     plt.ylim(y_end, y_start)
 
@@ -308,9 +254,6 @@ elif args.closeup == True:
     if not os.path.exists(output_dir_path):
         os.makedirs(output_dir_path)
     plt.savefig(output_dir_path + '/corr_map_closeup' + str(y_start) + '-' + str(y_end) + '.png')
-elif args.Castle == True:
-    plt.savefig(output_dir_path + '/corr_map_Castle.png')
 else:
     plt.savefig(output_dir_path + '/corr_map.png')
 plt.show()
-
