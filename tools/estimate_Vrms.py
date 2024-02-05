@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from tools.outputfiles_merge import get_output_data
 from itertools import combinations
+import matplotlib as mpl
 
 
 #* Parse command line arguments
@@ -51,7 +52,7 @@ epsilon_0 = 1 # vacuum permittivity
 
 
 #* set calculation parameters
-RMS_velocity = np.arange(0.01, 1.01, 0.02) # percentage to speed of light, 0% to 100%
+RMS_velocity = np.arange(0.02, 1.02, 0.02) # percentage to speed of light, 0% to 100%
 vertical_delay_time = np.arange(0, params['time_window'], params['time_step']) # 2-way travelt time in vertical direction, [ns]
 
 
@@ -107,7 +108,11 @@ def calc_corr(Vrms_ind, tau_ver_ind, i): # i: in range(nrx)
             offset = np.abs(rx_posi - src_posi) # [m]
 
             # calculate total delay time t
-            total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay_point # [data point]
+            if Vrms == 0:
+                total_delay = transmit_delay_point
+            else:
+                total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  \
+                    + transmit_delay_point # [data point]
 
             # calculate shifted hyperbola
             #Sx = (offset**2 / Vrms**2) - 2 * tau_ver * ()
@@ -157,10 +162,10 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 530
-select_end = 580
+select_start = 60
+select_end = 100
 select_startx = 0
-select_endx = 1
+select_endx = 0.95
 """
 select area [ns]
 """
@@ -208,9 +213,13 @@ else:
 fig = plt.figure(figsize=(8, 6))
 ax = fig.add_subplot(111)
 if args.plot_type == 'select':
-    plt.imshow(Vt_map, cmap='plasma', aspect='auto', interpolation='nearest',
+    bounds = np.array([0, 0.1, 0.25, 0.50, 0.75, 1.0])
+    cmap = mpl.colors.ListedColormap([plt.cm.Blues(int(255*i/4)) for i in range(5)])
+    norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+    plt.imshow(Vt_map, cmap=cmap, aspect='auto', interpolation='nearest',
         extent=[select_startx, select_endx, select_end, select_start],
-        norm=colors.LogNorm(vmin=1e-2, vmax=1)
+        #norm=colors.LogNorm(vmin=1e-2, vmax=1)
+        norm=norm
 )
     # countour
     cont = ax.contour(Vt_map, 3, colors='k', linewidths=1, linestyles=['-', '--', '-.'],
@@ -232,8 +241,8 @@ ax.grid(color='gray', linestyle='--')
 if args.closeup == True:
     x_start = 0
     x_end = 1
-    y_start = 260
-    y_end = 300
+    y_start = 60
+    y_end = 100
     plt.xlim(x_start, x_end)
     plt.ylim(y_end, y_start)
 
