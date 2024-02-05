@@ -162,10 +162,10 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 60
-select_end = 100
+select_start = 530
+select_end = 580
 select_startx = 0
-select_endx = 0.95
+select_endx = 1.0
 """
 select area [ns]
 """
@@ -213,18 +213,19 @@ else:
 fig = plt.figure(figsize=(8, 6))
 ax = fig.add_subplot(111)
 if args.plot_type == 'select':
-    bounds = np.array([0, 0.1, 0.25, 0.50, 0.75, 1.0])
-    cmap = mpl.colors.ListedColormap([plt.cm.Blues(int(255*i/4)) for i in range(5)])
+    bounds = np.array([0, 0.25, 0.50, 0.75, 1.0])
+    cmap = mpl.colors.ListedColormap([plt.cm.Blues(int(255*i/3)) for i in range(4)])
     norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
     plt.imshow(Vt_map, cmap=cmap, aspect='auto', interpolation='nearest',
         extent=[select_startx, select_endx, select_end, select_start],
         #norm=colors.LogNorm(vmin=1e-2, vmax=1)
         norm=norm
-)
+    )
+    ax.minorticks_on()
     # countour
-    cont = ax.contour(Vt_map, 3, colors='k', linewidths=1, linestyles=['-', '--', '-.'],
-            extent=[select_startx, select_endx, select_start, select_end],)
-    ax.clabel(cont, inline=True, fontsize=10, fmt='%.2f')
+    #cont = ax.contour(Vt_map, 3, colors='k', linewidths=1, linestyles=['-', '--', '-.'],
+    #        extent=[select_startx, select_endx, select_start, select_end],)
+    #ax.clabel(cont, inline=True, fontsize=10, fmt='%.2f')
 
 else:
     plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
