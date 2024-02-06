@@ -162,9 +162,9 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 530
-select_end = 580
-select_startx = 0
+select_start = 210
+select_end = 250
+select_startx = 0.3
 select_endx = 1.0
 """
 select area [ns]
@@ -236,7 +236,7 @@ else:
 
 ax.set_xlabel('RMS velocity [/c]')
 ax.set_ylabel('Vertical delay time [ns]')
-ax.grid(color='gray', linestyle='--')
+ax.grid(color='gray', linestyle='--', which='both', linewidth=0.5)
 
 #* for closeup option
 if args.closeup == True:
