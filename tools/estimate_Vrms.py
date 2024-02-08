@@ -48,8 +48,8 @@ for i in range(1, nrx+1):
     data, dt = get_output_data(data_path, i, 'Ez')
     data_list.append(data)
 #elif args.select_points == True:
-point_num = 11
-start_point = 16 # the number of points to start
+point_num = 17
+start_point = 13 # the number of points to start
 end_point = start_point + point_num - 1
 #    for i in range(start_point, end_point +1, 1):
 #        data, dt = get_output_data(data_path, i, 'Ez')
@@ -203,8 +203,8 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 540
-select_end = 580
+select_start = 60
+select_end = 100
 select_startx = 0
 select_endx = 1.0
 """

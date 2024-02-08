@@ -87,7 +87,7 @@ subsurface_structure = np.column_stack((layer_num, internal_velocities_Dix, epsi
 
 
 #* make output dir
-output_dir_path = os.path.dirname(params['out_file']) + '/subsurface_structure'
+output_dir_path = os.path.dirname(params['corr_map_txt']) + '/subsurface_structure'
 if not os.path.exists(output_dir_path):
     os.makedirs(output_dir_path)
 
