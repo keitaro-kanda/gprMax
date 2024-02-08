@@ -25,13 +25,14 @@ c = 299792458 # [m/s], speed of light in vacuum
 #* load parameters from json file
 Vrms = np.array(params['V_RMS']) * c # [m/s], Vrms in each layers
 t0 = np.array(params['tau_ver']) * 10**(-9)# [s], t0 in each layers
+epsilon_r_model = np.array(params['internal_permittivity'][1:]) # epsilon_r in each layers, contains air layer
 
 
 #* calculate t0 in vacuum
 t0_vacuum = params['antenna_height'] * 2 / c
 
-#* estimate internal velocity
-internal_velocities = []
+#* estimate internal velocity by Dix formula
+internal_velocities_Dix = []
 
 for i in tqdm(range (len(Vrms)), desc='calculating Vint'):
     if i ==0:
@@ -44,19 +45,45 @@ for i in tqdm(range (len(Vrms)), desc='calculating Vint'):
             (Vrms[i]**2 * t0[i] -    Vrms[i-1]**2 * t0[i-1] ) \
             / (t0[i] - t0[i-1]) \
         )
-    internal_velocities.append(Vint)
+    internal_velocities_Dix.append(Vint)
 
-internal_velocities = np.array(internal_velocities)
+internal_velocities_Dix = np.array(internal_velocities_Dix)
+
+
+
+#* estimate internal permittivity from layer thickness and layer 2-way travel time
+internal_velocities_nonDix = []
+for i in range(len(t0)):
+    if i == 0:
+        #! Vnって命名はヤバす
+        Vn = (t0[i] * Vrms[i] - params['antenna_height'] * 2) \
+            / (t0[i] - t0_vacuum)
+    else:
+        Vn = (t0[i] * Vrms[i] - t0[i-1] * Vrms[i-1]) \
+            / (t0[i] - t0[i-1])
+    
+    internal_velocities_nonDix.append(Vn) # [m/s]
+
+internal_velocities_nonDix = np.array(internal_velocities_nonDix)
+
+
 
 #* estimate internal permittivity
-epsilon_r = c**2 / internal_velocities**2
+epsilon_r_Dix = c**2 / internal_velocities_Dix**2
+epsilon_r_nonDix = c**2 / internal_velocities_nonDix**2
+
+# calcculate relative error
+error_Dix = (epsilon_r_Dix - epsilon_r_model) / epsilon_r_model * 100
+error_nonDix = (epsilon_r_nonDix - epsilon_r_model) / epsilon_r_model * 100
 
 # normalize interna; velocity
-internal_velocities = internal_velocities / c
+internal_velocities_Dix = internal_velocities_Dix / c # [/c]
+internal_velocities_nonDix = internal_velocities_nonDix / c # [/c]
 
 #* combine t0 and Vrms
 layer_num = np.arange(1, len(Vrms)+1)
-subsurface_structure = np.column_stack((layer_num, internal_velocities, epsilon_r))
+subsurface_structure = np.column_stack((layer_num, internal_velocities_Dix, epsilon_r_Dix, error_Dix,
+                                        internal_velocities_nonDix, epsilon_r_nonDix, error_nonDix))
 
 
 #* make output dir
@@ -66,5 +93,6 @@ if not os.path.exists(output_dir_path):
 
 #* save data
 fmt = ['%d'] + ['%0.15f'] * (subsurface_structure.shape[1] - 1)
-np.savetxt(output_dir_path + '/subsurface_structure.txt', subsurface_structure,
-        fmt=fmt, delimiter=',', header='layer number, internal velocity [/c], epsilon_r')
+np.savetxt(output_dir_path + '/subsurface_structure.csv', subsurface_structure,
+        fmt=fmt, delimiter=',', header='layer number, internal velocity Dix[/c], epsilon_r, error [%], \
+        internal velocity non Dix [/c], epsilon_r non Dix, error non Dix [%]')
