@@ -251,7 +251,7 @@ else:
 
 #* plot
 
-fig = plt.figure(figsize=(8, 6))
+fig = plt.figure(figsize=(15, 15))
 ax = fig.add_subplot(111)
 if args.plot_type == 'select':
     bounds = np.array([0, 0.25, 0.50, 0.75, 1.0])
@@ -275,9 +275,10 @@ else:
             #norm=colors.LogNorm(vmin=1e-7, vmax=0.5)
     )
 
-ax.set_xlabel('RMS velocity [/c]')
-ax.set_ylabel('Vertical delay time [ns]')
+ax.set_xlabel('RMS velocity [/c]', fontsize=20)
+ax.set_ylabel('Vertical delay time [ns]', fontsize=20)
 ax.grid(color='gray', linestyle='--', which='both', linewidth=0.5)
+ax.tick_params(labelsize=18)
 
 #* for closeup option
 if args.closeup == True:
@@ -291,6 +292,7 @@ if args.closeup == True:
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax, label='Cross-correlation')
+cax.tick_params(labelsize=18)
 
 #* save plot
 if args.plot_type == 'mask' and args.closeup == False:

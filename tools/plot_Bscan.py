@@ -62,7 +62,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
             interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
     plt.xlabel('trace number', fontsize=20)
     plt.ylabel('Time [s]', fontsize=20)
-    plt.tick_params(labelsize=16)
+    plt.tick_params(labelsize=18)
 
     # =====closeupオプション=====
     if closeup:
@@ -96,7 +96,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         cb.set_label('Field strength [A/m]')
     elif 'I' in rxcomponent:
         cb.set_label('Current [A]')
-    cb.ax.tick_params(labelsize=16)
+    cb.ax.tick_params(labelsize=18)
 
     # Save a PDF/PNG of the figure
     savefile = os.path.splitext(filename)[0]
