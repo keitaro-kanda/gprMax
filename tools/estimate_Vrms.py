@@ -21,6 +21,7 @@ parser.add_argument('jsonfile', help='json file path')
 parser.add_argument('plot_type', choices=['plot', 'mask', 'select', 'calc'])
 parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
 parser.add_argument('-CMP', action='store_true', help='analyse as CMP observation', default=False)
+parser.add_argument('--select-points', action='store_true', help='select points', default=False)
 args = parser.parse_args()
 
 
@@ -33,15 +34,26 @@ with open (args.jsonfile) as f:
 #? h5pyを使ってデータを開ける意味はあまりないかも？nrx取得できるだけなのかな．
 data_path = params['out_file']
 data = h5py.File(data_path, 'r')
+#if args.select_points == False:
 nrx = data.attrs['nrx']
+#elif args.select_points == True:
+#    nrx = 9
 data.close()
 data_dir_path = os.path.dirname(data_path)
 
 #* load data
 data_list = []
+#if args.select_points == False:
 for i in range(1, nrx+1):
     data, dt = get_output_data(data_path, i, 'Ez')
     data_list.append(data)
+#elif args.select_points == True:
+point_num = 17
+start_point = 13 # the number of points to start
+end_point = start_point + point_num - 1
+#    for i in range(start_point, end_point +1, 1):
+#        data, dt = get_output_data(data_path, i, 'Ez')
+#        data_list.append(data)
 
 
 
@@ -62,7 +74,7 @@ antenna_step = params['src_step'] # antenna distance step, [m]
 rx_start = params['rx_start'] # rx start position, [m]
 src_start = params['src_start'] # src start position, [m]
 src_end = params['src_end'] # src end position, [m]
-src_move_times = params['src_move_times'] # number of src moving times
+src_move_times = nrx # the number of src move times
 pulse_width = int(params['pulse_length'] / dt) # [data point]
 transmit_delay = params['transmitting_delay'] # [ns]
 transmit_delay_point = int(transmit_delay / dt) # [data point]
@@ -100,30 +112,54 @@ def calc_corr(Vrms_ind, tau_ver_ind, i): # i: in range(nrx)
         Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
         tau_ver = vertical_delay_time[tau_ver_ind] * 1e-9 # [s]
 
-        Amp_array = np.zeros(nrx) # 取り出した強度を入れる配列を用意しておく
+        Amp_array = [] # 取り出した強度を入れる配列を用意しておく
 
-        for src in range(src_move_times):
+        #* use all observation points
+        if args.select_points == False:
+            for src in range(src_move_times):
 
-            src_posi = src_start + (src-1) * antenna_step # [m]
-            offset = np.abs(rx_posi - src_posi) # [m]
+                src_posi = src_start + (src-1) * antenna_step # [m]
+                offset = np.abs(rx_posi - src_posi) # [m]
 
-            # calculate total delay time t
-            if Vrms == 0:
-                total_delay = transmit_delay_point
-            else:
-                total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  \
-                    + transmit_delay_point # [data point]
+                # calculate total delay time t
+                if Vrms == 0:
+                    total_delay = transmit_delay_point
+                else:
+                    total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  \
+                        + transmit_delay_point # [data point]
 
-            # calculate shifted hyperbola
-            #Sx = (offset**2 / Vrms**2) - 2 * tau_ver * ()
+                # calculate shifted hyperbola
+                #Sx = (offset**2 / Vrms**2) - 2 * tau_ver * ()
 
-            if total_delay >= len(data_list[i]):
-                Amp_array[src] = 0
-            else:
-                Amp_array[src] = np.abs(data_list[i][total_delay, src]) # Ez intensity in (t, src) at i-th rx
+                if total_delay >= len(data_list[i]):
+                    Amp_array.append(0)
+                else:
+                    Amp_array.append(np.abs(data_list[i][total_delay, src])) # Ez intensity in (t, src) at i-th rx
 
 
-        return Amp_array # 1D array
+        #* use selected observation points
+        elif args.select_points == True:
+            for src in range(start_point, end_point + 1, 1):
+
+                src_posi = src_start + (src-1) * antenna_step
+                offset = np.abs(rx_posi - src_posi) # [m]
+
+                # calculate total delay time t
+                if Vrms == 0:
+                    total_delay = transmit_delay_point
+                else:
+                    total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  \
+                        + transmit_delay_point # [data point]
+
+                # calculate shifted hyperbola
+                #Sx = (offset**2 / Vrms**2) - 2 * tau_ver * ()
+
+                if total_delay >= len(data_list[i]):
+                    Amp_array.append(0)
+                else:
+                    Amp_array.append(np.abs(data_list[i][total_delay, src])) # Ez intensity in (t, src) at i-th rx
+
+        return np.array(Amp_array) # 1D array
 
 
 #* caluculate corr roop
@@ -137,7 +173,10 @@ def roop_corr():
                 corr_matrix = np.abs([a *b for a, b in combinations(Amp_at_vt, 2)]) # 1D array
 
             else:
-                Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 2D array
+                if args.select_points == False:
+                    Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)])
+                elif args.select_points == True:
+                    Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(start_point, end_point + 1, 1)]) # 1D array
                 corr_matrix = np.abs(Amp_at_vt[:, None] * Amp_at_vt)
                 #corr_map[t, v] = np.sum(calc_corr(v, t, 11)) # 1D array
 
@@ -151,6 +190,8 @@ def roop_corr():
 #* make output directory
 if args.CMP == True:
     output_dir_path = data_dir_path + '/Vrms_CMP'
+elif args.select_points == True:
+    output_dir_path = data_dir_path + '/Vrms_select_points'
 else:
     output_dir_path = data_dir_path + '/Vrms'
 if not os.path.exists(output_dir_path):
@@ -162,8 +203,8 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 530
-select_end = 580
+select_start = 60
+select_end = 100
 select_startx = 0
 select_endx = 1.0
 """
@@ -236,7 +277,7 @@ else:
 
 ax.set_xlabel('RMS velocity [/c]')
 ax.set_ylabel('Vertical delay time [ns]')
-ax.grid(color='gray', linestyle='--')
+ax.grid(color='gray', linestyle='--', which='both', linewidth=0.5)
 
 #* for closeup option
 if args.closeup == True:

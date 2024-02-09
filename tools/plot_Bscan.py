@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
     # データの取得とプロットの作成を実行？
     if args.select_rx:
-        rx = 5
+        rx = 11
         outputdata, dt = get_output_data(args.outputfile, rx, args.rx_component)
         plthandle = mpl_plot(args.outputfile, outputdata, dt, rx, args.rx_component, args.closeup)
     else:

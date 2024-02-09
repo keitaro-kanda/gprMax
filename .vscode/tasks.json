@@ -6,22 +6,12 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x50/two_layers/10m/calc.in -n 21"
+            "command": "python -m gprMax kanda/domain_50x50/multiple_layers/int05/calc.in -n 21"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x50/two_layers/20m/calc.in -n 21"
-        },
-        {
-            "label": "gprMax 3rd run",
-            "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x50/two_layers/30m/calc.in -n 21"
-        },
-        {
-            "label": "gprMax 4th run",
-            "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x50/two_layers/40m/calc.in -n 21"
+            "command": "python -m gprMax kanda/domain_50x50/multiple_layers/int1/n21/calc.in -n 21"
         },
         {
             "label": "task sequence",
@@ -30,8 +20,6 @@
             "dependsOn": [
                 "gprMax 1st run",
                 "gprMax 2nd run",
-                "gprMax 3rd run",
-                "gprMax 4th run"
             ],
             "problemMatcher": []
         }

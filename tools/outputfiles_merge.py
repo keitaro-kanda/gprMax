@@ -25,6 +25,7 @@ import numpy as np
 
 from gprMax._version import __version__
 from gprMax.exceptions import CmdInputError  # 追加
+from tqdm import tqdm
 
 
 def get_output_data(filename, rxnumber, rxcomponent):
@@ -81,7 +82,7 @@ def merge_files(basefilename, removefiles=False):
     fout = h5py.File(outputfile, 'w')
 
     # Add positional data for rxs
-    for model in range(modelruns):
+    for model in tqdm(range(modelruns)):
         fin = h5py.File(basefilename + str(model + 1) + '.out', 'r')
         nrx = fin.attrs['nrx']
 
