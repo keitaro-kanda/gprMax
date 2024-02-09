@@ -96,6 +96,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         cb.set_label('Field strength [A/m]')
     elif 'I' in rxcomponent:
         cb.set_label('Current [A]')
+    cb.ax.tick_params(labelsize=16)
 
     # Save a PDF/PNG of the figure
     savefile = os.path.splitext(filename)[0]
