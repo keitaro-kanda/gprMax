@@ -50,7 +50,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         os.mkdir(outputdir)
 
     fig = plt.figure(num=filename + ' - rx' + str(rxnumber), 
-                     figsize=(20, 10), facecolor='w', edgecolor='w')
+                     figsize=(15, 15), facecolor='w', edgecolor='w')
     
 
     # normalize
