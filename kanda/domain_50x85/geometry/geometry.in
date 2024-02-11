@@ -1,0 +1,73 @@
+#domain: 50 60 0.02
+#dx_dy_dz: 0.02 0.02 0.02
+
+#time_window: 2e-6
+
+#material: 4 0 1 0 regolith
+#material: 6 0 1 0 basalt_6
+#material: 6.2 0 1 0 basalt_62
+#material: 6.4 0 1 0 basalt_64
+
+
+=====地形=====
+#fractal_box: 0 0 0 50 5 0.02 1.5 1 1 1 1 basalt_64 fractal_0
+#add_surface_roughness: 0 5 0 50 5 0.02         1.5 1 1 5 5.5 fractal_0
+#fractal_box: 0 5 0 50 10 0.02         1.5 1 1 1 1 basalt_62 fractal_1
+#add_surface_roughness: 0 5 0 50 5 0.02         1.5 1 1 4.5 5 fractal_1
+#add_surface_roughness: 0 10 0 50 10 0.02         1.5 1 1 10 10.5 fractal_1
+#fractal_box: 0 10 0 50 15 0.02         1.5 1 1 1 1 basalt_6 fractal_2
+#add_surface_roughness: 0 10 0 50 10 0.02         1.5 1 1 9.5 10 fractal_2
+#add_surface_roughness: 0 15 0 50 15 0.02         1.5 1 1 15 15.5 fractal_2
+#fractal_box: 0 15 0 50 20 0.02         1.5 1 1 1 1 regolith fractal_3
+#add_surface_roughness: 0 15 0 50 15 0.02         1.5 1 1 14.5 15 fractal_3
+#add_surface_roughness: 0 20 0 50 20 0.02         1.5 1 1 20 20.5 fractal_3
+#fractal_box: 0 20 0 50 25 0.02         1.5 1 1 1 1 basalt_64 fractal_4
+#add_surface_roughness: 0 20 0 50 20 0.02         1.5 1 1 19.5 20 fractal_4
+#add_surface_roughness: 0 25 0 50 25 0.02         1.5 1 1 25 25.5 fractal_4
+#fractal_box: 0 25 0 50 30 0.02         1.5 1 1 1 1 basalt_62 fractal_5
+#add_surface_roughness: 0 25 0 50 25 0.02         1.5 1 1 24.5 25 fractal_5
+#add_surface_roughness: 0 30 0 50 30 0.02         1.5 1 1 30 30.5 fractal_5
+#fractal_box: 0 30 0 50 35 0.02         1.5 1 1 1 1 basalt_6 fractal_6
+#add_surface_roughness: 0 30 0 50 30 0.02         1.5 1 1 29.5 30 fractal_6
+#add_surface_roughness: 0 35 0 50 35 0.02         1.5 1 1 35 35.5 fractal_6
+#fractal_box: 0 35 0 50 40 0.02         1.5 1 1 1 1 regolith fractal_7
+#add_surface_roughness: 0 35 0 50 35 0.02         1.5 1 1 34.5 35 fractal_7
+#add_surface_roughness: 0 40 0 50 40 0.02         1.5 1 1 40 40.5 fractal_7
+#fractal_box: 0 40 0 50 45 0.02         1.5 1 1 1 1 basalt_64 fractal_8
+#add_surface_roughness: 0 40 0 50 40 0.02         1.5 1 1 39.5 40 fractal_8
+#add_surface_roughness: 0 45 0 50 45 0.02         1.5 1 1 45 45.5 fractal_8
+#fractal_box: 0 45 0 50 50 0.02         1.5 1 1 1 1 basalt_62 fractal_9
+#add_surface_roughness: 0 45 0 50 45 0.02         1.5 1 1 44.5 45 fractal_9
+#add_surface_roughness: 0 50 0 50 50 0.02         1.5 1 1 50 50.5 fractal_9
+#fractal_box: 0 50 0 50 55 0.02         1.5 1 1 1 1 basalt_6 fractal_10
+#add_surface_roughness: 0 50 0 50 50 0.02         1.5 1 1 49.5 50 fractal_10
+#add_surface_roughness: 0 55 0 50 55 0.02         1.5 1 1 55 55.5 fractal_10
+
+
+
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 50 60 0.02 0.02 0.02 0.02 geometry n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 50 60 0.02 geometry
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 300e6 my_src
+
+#hertzian_dipole: z  25 56 0 my_src
+#rx: 25 56 0
+
+<snapshot作成>
+#python:
+for i in range(1, 200):
+    print('#snapshot: 0 0 0 50 60 0.02 0.02 0.02 0.02 {} snapshot{}'.format(i*0.01e-6, i))
+#end_python:
+
+#output_dir: A-scan
+==========
