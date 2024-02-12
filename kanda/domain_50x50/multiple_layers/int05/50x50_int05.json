@@ -11,6 +11,8 @@
     "cmp_corr_map_txt": "kanda/domain_50x50/multiple_layers/no_loss/Vrms_CMP/corr_map.txt",
     "_comment": "for geometry-imaging comparison plot",
     "imaging_result_csv": "kanda/domain_50x50/multiple_layers/no_loss/imaging/imaging_result_y.csv",
+    "_comment": "estimated subsurface structure",
+    "subsurface_structure": "kanda/domain_50x50/multiple_layers/int05/subsurface_structure/subsurface_structure.txt",
 
     "_comment": "geometric size of the domain [m]",
     "domain_x": 50,
