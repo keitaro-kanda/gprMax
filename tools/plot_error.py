@@ -43,12 +43,12 @@ Vn_estimated = np.nan_to_num(subsurface_structure[:,1] * c) # [m/s]
 
 
 #* calculate error
-t0_error = np.abs(t0_true - t0_estimated) / t0_true * 100
-Vrms_error = np.abs(Vrms_true - Vrms_estimated) / Vrms_true * 100
-depth_error = np.abs(depth_true - depth_estimated) / depth_true * 100
-thickness_error = np.abs(thickness_true - thickness_estimated) / thickness_true * 100
-epsilon_error = np.abs(epsilon_true - epsilon_estimated) / epsilon_true * 100
-Vn_error = np.abs(Vn_true - Vn_estimated) / Vn_true * 100
+t0_error = (t0_estimated - t0_true) / t0_true * 100
+Vrms_error = (Vrms_estimated - Vrms_true) / Vrms_true * 100
+depth_error = (depth_estimated - depth_true) / depth_true * 100
+thickness_error = (thickness_estimated - thickness_true) / thickness_true * 100
+epsilon_error = (epsilon_estimated - epsilon_true) / epsilon_true * 100
+Vn_error = (Vn_estimated - Vn_true) / Vn_true * 100
 
 
 
@@ -68,7 +68,7 @@ ax.grid(which='both', axis='both', linestyle='--')
 ax.tick_params(labelsize=18)
 ax.legend(fontsize=18)
 
-ax.set_ylim(0, 105)
+ax.set_ylim(-105, 105)
 
 
 #* save and show
