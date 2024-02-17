@@ -12,6 +12,9 @@ from tqdm import tqdm
 from tools.outputfiles_merge import get_output_data
 import matplotlib as mpl
 from scipy.optimize import fsolve
+from multiprocessing import Pool
+from multiprocessing import freeze_support
+
 
 
 #* Parse command line arguments
@@ -97,7 +100,7 @@ def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(nrx)
 
         # calculate offset_ground
         offset_ground = np.linspace(0, offset, 100) # [m]
-        offset_ground_solution = fsolve(DePue_eq9, 0.1, args=(offset, antenna_height, depth, Vrms))
+        offset_ground_solution = fsolve(DePue_eq9, 0.1, args=(offset, antenna_height, depth, Vrms), maxfev=2000)
 
 
         # calculate delay time
@@ -117,13 +120,32 @@ def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(nrx)
 
 
 
+def calc_semblance_helper(args):
+    v, t, i = args
+    return calc_semblance(v, t, i)
+
+
+
 #* roop calc_semblance
 def roop():
     semblance_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
 
-    for v in tqdm(range(len(RMS_velocity)), desc='calc_semblance'):
-        for t in tqdm(range(len(vertical_delay_time)), desc='v=' + str(v)):
-            semblance_map[t, v] = (np.array([calc_semblance(v, t, i) for i in range(nrx)]).sum())**2
+    # Use multiprocessing to parallelize the outer loop
+    with Pool() as pool:
+        results = list(tqdm(pool.imap(calc_semblance_helper,
+                        [(v, t, i) for v in range(len(RMS_velocity)) for t in range(len(vertical_delay_time)) for i in range(nrx)]),
+                        total=len(RMS_velocity)*len(vertical_delay_time), desc='calc_semblance'))
+
+
+    # Reshape the results back into semblance_map
+    for v in range(len(RMS_velocity)):
+        for t in range(len(vertical_delay_time)):
+            index = v * len(vertical_delay_time) * nrx + t * nrx
+            semblance_map[t, v] = np.array(results[index:index + nrx]).sum() ** 2
+
+    #for v in tqdm(range(len(RMS_velocity)), desc='calc_semblance'):
+    #    for t in tqdm(range(len(vertical_delay_time)), desc='v=' + str(v)):
+    #        semblance_map[t, v] = (np.array([calc_semblance(v, t, i) for i in range(nrx)]).sum())**2
 
     return semblance_map
 
@@ -148,66 +170,69 @@ select_endx = 1.0
 select area [ns]
 """
 
-#* plot only
-if args.plot_type == 'plot':
-    Vt_map = np.loadtxt(params['semblance_txt'], delimiter=',')
+if __name__ == '__main__':
+    freeze_support()
+
+    #* plot only
+    if args.plot_type == 'plot':
+        Vt_map = np.loadtxt(params['semblance_txt'], delimiter=',')
 
 
-#* make select plot
-elif args.plot_type == 'select':
-    Vt_map = np.loadtxt(params['semblance_txt'], delimiter=',') # load data
-    Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), int(select_startx/0.02): int(select_endx/0.02)] # select area
-    Vt_map = Vt_map / np.amax(Vt_map) # normalize by max value in selected area
+    #* make select plot
+    elif args.plot_type == 'select':
+        Vt_map = np.loadtxt(params['semblance_txt'], delimiter=',') # load data
+        Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), int(select_startx/0.02): int(select_endx/0.02)] # select area
+        Vt_map = Vt_map / np.amax(Vt_map) # normalize by max value in selected area
 
-#* calculate and save as txt file
-elif args.plot_type == 'calc':
-    Vt_map = roop()
-    print(np.amax(Vt_map))
-    Vt_map = Vt_map / np.amax(Vt_map) # normalize
-    np.savetxt(output_dir_path + '/semblance_map.txt', Vt_map, delimiter=',')
-else:
-    print('error, input plot, mask, or calc')
-
-
-
-#* plot
-fig = plt.figure(figsize=(15, 15))
-ax = fig.add_subplot(111)
-if args.plot_type == 'select':
-    bounds = np.array([0, 0.25, 0.50, 0.75, 1.0])
-    cmap = mpl.colors.ListedColormap([plt.cm.Blues(int(255*i/3)) for i in range(4)])
-    norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
-    plt.imshow(Vt_map, cmap=cmap, aspect='auto', interpolation='nearest',
-        extent=[select_startx, select_endx, select_end, select_start],
-        norm=norm
-    )
-    ax.minorticks_on()
+    #* calculate and save as txt file
+    elif args.plot_type == 'calc':
+        Vt_map = roop()
+        print(np.amax(Vt_map))
+        Vt_map = Vt_map / np.amax(Vt_map) # normalize
+        np.savetxt(output_dir_path + '/semblance_map.txt', Vt_map, delimiter=',')
+    else:
+        print('error, input plot, mask, or calc')
 
 
-else:
-    plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
-            extent=[0, RMS_velocity[-1], Vt_map.shape[0]*params['time_step'], 0],
-            norm=colors.LogNorm(vmin=1e-7, vmax=0.1) #! default: vmin=1e-7, vmax=0.1
-            #norm=colors.LogNorm(vmin=1e-7, vmax=0.5)
-    )
 
-ax.set_xlabel('RMS velocity [/c]', fontsize=20)
-ax.set_ylabel('Vertical delay time [ns]', fontsize=20)
-ax.grid(color='gray', linestyle='--', which='both', linewidth=0.5)
-ax.tick_params(labelsize=18)
-
-delvider = axgrid1.make_axes_locatable(ax)
-cax = delvider.append_axes('right', size='5%', pad=0.1)
-plt.colorbar(cax=cax, label='Cross-correlation')
-cax.tick_params(labelsize=18)
+    #* plot
+    fig = plt.figure(figsize=(15, 15))
+    ax = fig.add_subplot(111)
+    if args.plot_type == 'select':
+        bounds = np.array([0, 0.25, 0.50, 0.75, 1.0])
+        cmap = mpl.colors.ListedColormap([plt.cm.Blues(int(255*i/3)) for i in range(4)])
+        norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+        plt.imshow(Vt_map, cmap=cmap, aspect='auto', interpolation='nearest',
+            extent=[select_startx, select_endx, select_end, select_start],
+            norm=norm
+        )
+        ax.minorticks_on()
 
 
-#* save plot
-if args.plot_type == 'select' and args.closeup == False:
-    output_dir_path = output_dir_path + '/select'
-    if not os.path.exists(output_dir_path):
-        os.makedirs(output_dir_path)
-    plt.savefig(output_dir_path + '/semblance_map_select' + str(select_start) + '-' + str(select_end) + '.png')
-else:
-    plt.savefig(output_dir_path + '/semblance_map.png')
-plt.show()
+    else:
+        plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
+                extent=[0, RMS_velocity[-1], Vt_map.shape[0]*params['time_step'], 0],
+                norm=colors.LogNorm(vmin=1e-7, vmax=0.1) #! default: vmin=1e-7, vmax=0.1
+                #norm=colors.LogNorm(vmin=1e-7, vmax=0.5)
+        )
+
+    ax.set_xlabel('RMS velocity [/c]', fontsize=20)
+    ax.set_ylabel('Vertical delay time [ns]', fontsize=20)
+    ax.grid(color='gray', linestyle='--', which='both', linewidth=0.5)
+    ax.tick_params(labelsize=18)
+
+    delvider = axgrid1.make_axes_locatable(ax)
+    cax = delvider.append_axes('right', size='5%', pad=0.1)
+    plt.colorbar(cax=cax, label='Cross-correlation')
+    cax.tick_params(labelsize=18)
+
+
+    #* save plot
+    if args.plot_type == 'select' and args.closeup == False:
+        output_dir_path = output_dir_path + '/select'
+        if not os.path.exists(output_dir_path):
+            os.makedirs(output_dir_path)
+        plt.savefig(output_dir_path + '/semblance_map_select' + str(select_start) + '-' + str(select_end) + '.png')
+    else:
+        plt.savefig(output_dir_path + '/semblance_map.png')
+    plt.show()
