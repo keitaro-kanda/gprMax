@@ -75,7 +75,7 @@ antenna_height = params['antenna_height'] # [m]
 
 
 #* difine equations to solve
-def DePue_eq9(y1, y0, z0, z1, v1):
+def DePue_eq9(y1, y0, z0, z1):
     sin0 = ((y0 - y1) / 2) / ((y0 - y1)**2 + z0**2) # De Pue eq(9b)
     sin1 = (y1 / 2) / (y1**2 + z1**2) # De Pue eq(9c)
 
@@ -99,8 +99,15 @@ def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(nrx)
         offset = np.abs(src_posi - rx_posi) # [m]
 
         # calculate offset_ground
-        offset_ground = np.linspace(0, offset, 100) # [m]
-        offset_ground_solution = fsolve(DePue_eq9, 0.1, args=(offset, antenna_height, depth, Vrms), maxfev=2000)
+        if offset == 0:
+            offset_ground_solution = 0
+            continue
+        else:
+            offset_ground = np.linspace(offset/100, offset, 100) # [m]
+            #print('y1: {}, y0: {}, z0: {}, z1: {}'.format(offset_ground, offset, antenna_height, depth))
+            #offset_ground_solution = fsolve(DePue_eq9, 0.1, args=(offset, antenna_height, depth, Vrms), maxfev=2000)
+            DePue_eq9_result = DePue_eq9(offset_ground, offset, antenna_height, depth)
+            offset_ground_solution = offset_ground[np.argmin(np.abs(DePue_eq9_result))]
 
 
         # calculate delay time
@@ -129,7 +136,7 @@ def calc_semblance_helper(args):
 #* roop calc_semblance
 def roop():
     semblance_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
-
+    """
     # Use multiprocessing to parallelize the outer loop
     with Pool() as pool:
         results = list(tqdm(pool.imap(calc_semblance_helper,
@@ -142,10 +149,10 @@ def roop():
         for t in range(len(vertical_delay_time)):
             index = v * len(vertical_delay_time) * nrx + t * nrx
             semblance_map[t, v] = np.array(results[index:index + nrx]).sum() ** 2
-
-    #for v in tqdm(range(len(RMS_velocity)), desc='calc_semblance'):
-    #    for t in tqdm(range(len(vertical_delay_time)), desc='v=' + str(v)):
-    #        semblance_map[t, v] = (np.array([calc_semblance(v, t, i) for i in range(nrx)]).sum())**2
+    """
+    for v in tqdm(range(len(RMS_velocity)), desc='calc_semblance'):
+        for t in tqdm(range(len(vertical_delay_time)), desc='v=' + str(v)):
+            semblance_map[t, v] = (np.array([calc_semblance(v, t, i) for i in range(nrx)]).sum())**2
 
     return semblance_map
 
@@ -212,7 +219,7 @@ if __name__ == '__main__':
     else:
         plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
                 extent=[0, RMS_velocity[-1], Vt_map.shape[0]*params['time_step'], 0],
-                norm=colors.LogNorm(vmin=1e-7, vmax=0.1) #! default: vmin=1e-7, vmax=0.1
+                norm=colors.LogNorm(vmin=1e-10, vmax=0.1) #! default: vmin=1e-7, vmax=0.1
                 #norm=colors.LogNorm(vmin=1e-7, vmax=0.5)
         )
 
