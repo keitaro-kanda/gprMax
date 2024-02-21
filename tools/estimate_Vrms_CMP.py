@@ -85,7 +85,7 @@ def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(obs_num)
 
     # calculate ground offset
     offset = antenna_step * 2 * (i + 1) # [m]
-    offset_ground = np.linspace(offset/100, offset, 100)
+    offset_ground = np.linspace(offset/200, offset, 200)
     DePue_eq9_result = DePue_eq9(offset_ground, offset, antenna_height, depth, Vrms)
     offset_ground_solution = offset_ground[np.argmin(np.abs(DePue_eq9_result))]
 
