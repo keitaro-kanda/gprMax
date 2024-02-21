@@ -10,7 +10,7 @@
     "_comment": "semblance map txt data",
     "semblance_txt": "kanda/domain_50x50/multiple_layers/int2/Vrms_DePue/semblance_map.txt",
     "_comment": "t0_vrms plot file in CMP observation",
-    "cmp_corr_map_txt": "kanda/domain_50x50/multiple_layers/no_loss/Vrms_CMP/corr_map.txt",
+    "cmp_corr_map_txt": "kanda/domain_50x50/multiple_layers/int2/Vrms_CMP/corr_map.txt",
     "_comment": "for geometry-imaging comparison plot",
     "imaging_result_csv": "kanda/domain_50x50/multiple_layers/no_loss/imaging/imaging_result_y.csv",
     "_comment": "estimated subsurface structure",

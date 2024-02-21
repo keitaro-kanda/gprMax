@@ -203,8 +203,8 @@ if not os.path.exists(output_dir_path):
 """
 select area [ns]
 """
-select_start = 60
-select_end = 100
+select_start = 530
+select_end = 580
 select_startx = 0
 select_endx = 1.0
 """
