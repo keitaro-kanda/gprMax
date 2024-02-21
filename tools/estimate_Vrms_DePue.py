@@ -19,9 +19,10 @@ from multiprocessing import freeze_support
 
 #* Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing estimate Vrms in De Pue et al. method',
-                                 usage='cd gprMax; python -m tools.estimate_Vrms_DePue jsonfile plot_type')
+                                usage='cd gprMax; python -m tools.estimate_Vrms_DePue jsonfile plot_type')
 parser.add_argument('jsonfile', help='json file path')
 parser.add_argument('plot_type', choices=['plot', 'mask', 'select', 'calc'])
+parser.add_argument('-CMP', action='store_true', help='option: analyse as CMP observation')
 args = parser.parse_args()
 
 
@@ -64,7 +65,7 @@ vertical_delay_time = np.arange(0, params['time_window'], params['time_step']) #
 #* load parameters from json file
 antenna_step = params['src_step'] # antenna distance step, [m]
 rx_start = params['rx_start'] # rx start position, [m]
-src_start = params['src_start'] # src start position, [m]
+tx_start = params['src_start'] # src start position, [m]
 src_end = params['src_end'] # src end position, [m]
 src_move_times = nrx # the number of src move times
 pulse_width = int(params['pulse_length'] / dt) # [data point]
@@ -75,53 +76,91 @@ antenna_height = params['antenna_height'] # [m]
 
 
 #* difine equations to solve
-def DePue_eq9(y1, y0, z0, z1):
-    sin0 = ((y0 - y1) / 2) / ((y0 - y1)**2 + z0**2) # De Pue eq(9b)
-    sin1 = (y1 / 2) / (y1**2 + z1**2) # De Pue eq(9c)
+def DePue_eq9(y1, y0, z0, z1, v1):
+    # De Pue eq(9b)
+    lateral_air = (y0 - y1) / 2
+    sin0 = lateral_air / (lateral_air**2 + z0**2)
+    # De Pue eq(9c)
+    lateral_ground = (y1 / 2)
+    sin1 = lateral_ground / (lateral_ground**2 + z1**2)
 
-    return sin0 / sin1 - c / 1
+    return sin0 / sin1 - c / v1
 
 
 
 #* make function to calcurate semblance
 def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(nrx)
-    rx_posi = rx_start + i * antenna_step
-
     Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
     t0 = vertical_delay_time[t0_ind] * 10**(-9) # [s]
-
-    semblance_array = []
     depth = Vrms * t0 / 2 # [m]
+    semblance_array = []
 
+    #* CMP observation
+    if args.CMP:
+        rx_ind = i
+        tx_ind = nrx - 1 - i
 
-    for src in range(src_move_times):
-        src_posi = src_start + src * antenna_step # [m]
-        offset = np.abs(src_posi - rx_posi) # [m]
+        # calculate offset
+        rx_posi = rx_start + rx_ind * antenna_step # [m]
+        tx_posi = tx_start + tx_ind * antenna_step # [m]
+        offset = np.abs(rx_posi - tx_posi) # [m]
+
 
         # calculate offset_ground
         if offset == 0:
             offset_ground_solution = 0
-            continue
         else:
-            offset_ground = np.linspace(offset/100, offset, 100) # [m]
-            #print('y1: {}, y0: {}, z0: {}, z1: {}'.format(offset_ground, offset, antenna_height, depth))
-            #offset_ground_solution = fsolve(DePue_eq9, 0.1, args=(offset, antenna_height, depth, Vrms), maxfev=2000)
-            DePue_eq9_result = DePue_eq9(offset_ground, offset, antenna_height, depth)
+            offset_ground = np.linspace(offset/100, offset, 100)
+            DePue_eq9_result = DePue_eq9(offset_ground, offset, antenna_height, depth, Vrms)
             offset_ground_solution = offset_ground[np.argmin(np.abs(DePue_eq9_result))]
 
 
         # calculate delay time
         delay_time = np.sqrt((offset - offset_ground_solution)**2 + 4 * antenna_height**2) / c \
-            + t0  + offset_ground_solution**2 / Vrms**2 # [s]
+            + t0  + offset_ground_solution**2 / Vrms**2
         total_delay_time = delay_time + transmit_delay * 10**(-9) # [s]
         total_delay_point = int(total_delay_time / dt) # data point
 
 
+        # search data
         if total_delay_point >= len(data_list[i]):
             semblance_array.append(0)
-            continue
         else:
-            semblance_array.append(data_list[i][total_delay_point, src])
+            semblance_array.append(np.abs(data_list[rx_ind][total_delay_point, tx_ind]))
+
+
+    #* array observation
+    else:
+        rx_posi = rx_start + i * antenna_step # [m]
+        for src in range(src_move_times):
+            src_posi = tx_start + src * antenna_step # [m]
+            offset = np.abs(src_posi - rx_posi) # [m]
+
+            # calculate offset_ground
+            if offset == 0:
+                offset_ground_solution = 0
+                continue
+            else:
+                offset_ground = np.linspace(offset/100, offset, 100) # [m]
+                #print('y1: {}, y0: {}, z0: {}, z1: {}'.format(offset_ground, offset, antenna_height, depth))
+                #offset_ground_solution = fsolve(DePue_eq9, 0.1, args=(offset, antenna_height, depth, Vrms), maxfev=2000)
+                DePue_eq9_result = DePue_eq9(offset_ground, offset, antenna_height, depth, Vrms)
+                offset_ground_solution = offset_ground[np.argmin(np.abs(DePue_eq9_result))]
+
+
+            # calculate delay time
+            delay_time = np.sqrt((offset - offset_ground_solution)**2 + 4 * antenna_height**2) / c \
+                + t0  + offset_ground_solution**2 / Vrms**2 # [s]
+            total_delay_time = delay_time + transmit_delay * 10**(-9) # [s]
+            total_delay_point = int(total_delay_time / dt) # data point
+
+
+            # search data
+            if total_delay_point >= len(data_list[i]):
+                semblance_array.append(0)
+                continue
+            else:
+                semblance_array.append(np.abs(data_list[i][total_delay_point, src]))
 
     return semblance_array
 
@@ -152,7 +191,16 @@ def roop():
     """
     for v in tqdm(range(len(RMS_velocity)), desc='calc_semblance'):
         for t in tqdm(range(len(vertical_delay_time)), desc='v=' + str(v)):
-            semblance_map[t, v] = (np.array([calc_semblance(v, t, i) for i in range(nrx)]).sum())**2
+            if args.CMP:
+                power_list = []
+                for i in range(int(nrx/2)):
+                    semblance_value = calc_semblance(v, t, i)
+                    power_list.append(np.sum(semblance_value))
+                #semblance_value = sum([sum(calc_semblance(v, t, i)) for i in range(int(nrx/2))])**2
+                #semblance_map[t, v] = semblance_value`
+                semblance_map[t, v] = np.sum(power_list)**2
+            else:
+                semblance_map[t, v] = (np.array([calc_semblance(v, t, i) for i in range(nrx)]).sum())**2
 
     return semblance_map
 
@@ -196,7 +244,10 @@ if __name__ == '__main__':
         Vt_map = roop()
         print(np.amax(Vt_map))
         Vt_map = Vt_map / np.amax(Vt_map) # normalize
-        np.savetxt(output_dir_path + '/semblance_map.txt', Vt_map, delimiter=',')
+        if args.CMP:
+            np.savetxt(output_dir_path + '/semblance_map_CMP.txt', Vt_map, delimiter=',')
+        else:
+            np.savetxt(output_dir_path + '/semblance_map.txt', Vt_map, delimiter=',')
     else:
         print('error, input plot, mask, or calc')
 
@@ -240,6 +291,8 @@ if __name__ == '__main__':
         if not os.path.exists(output_dir_path):
             os.makedirs(output_dir_path)
         plt.savefig(output_dir_path + '/semblance_map_select' + str(select_start) + '-' + str(select_end) + '.png')
+    elif args.CMP:
+        plt.savefig(output_dir_path + '/semblance_map_CMP.png')
     else:
         plt.savefig(output_dir_path + '/semblance_map.png')
     plt.show()
