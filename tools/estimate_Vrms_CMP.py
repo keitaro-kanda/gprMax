@@ -168,8 +168,8 @@ if __name__ == '__main__':
     """
     select area [ns]
     """
-    select_start = 5
-    select_end = 580
+    select_start = 70
+    select_end = 100
     select_startx = 0
     select_endx = 1
     """
@@ -202,6 +202,14 @@ if __name__ == '__main__':
     #* plot
     fig = plt.figure(figsize=(15, 15))
     ax = fig.add_subplot(111)
+
+    #* show true value points
+    Vrms_theory = params['Vrms_theory'] # [/c]
+    t0_theory = params['t0_theory'] # [ns]
+    plt.scatter(Vrms_theory, t0_theory, c='k', s=70, marker='P', edgecolors='w', label='Theoretical value')
+
+
+
     if args.plot_type == 'select':
         bounds = np.array([0, 0.25, 0.50, 0.75, 1.0])
         cmap = mpl.colors.ListedColormap([plt.cm.Blues(int(255*i/3)) for i in range(4)])
@@ -220,14 +228,13 @@ if __name__ == '__main__':
                 #norm=colors.LogNorm(vmin=1e-7, vmax=0.5)
         )
 
+
+
     ax.set_xlabel('RMS velocity [/c]', fontsize=20)
     ax.set_ylabel('Vertical delay time [ns]', fontsize=20)
     ax.grid(color='gray', linestyle='--', which='both', linewidth=0.5)
     ax.tick_params(labelsize=18)
-
-
-    #* show true value points
-    Vrms_theory = params['Vrms_theory']
+    plt.legend(fontsize=18, loc='lower right')
 
 
 
