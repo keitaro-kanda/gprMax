@@ -72,8 +72,8 @@ ax.grid(which='both', axis='both', linestyle='--', linewidth=0.5)
 #xticks = np.arange(params['src_step']*2, (data_lits_CMP.shape[1]+1)*params['src_step']*2, params['src_step']*2)
 xticks = np.arange(- int(data_list_CMP.shape[1] / 2) * params['src_step']*2,
                    int(data_list_CMP.shape[1] / 2) * params['src_step']*2 + 1,
-                    params['src_step']*2)
-ax.set_xticks(np.arange(0, data_lits_CMP.shape[1]*params['src_step']*2, params['src_step']*2))
+                    params['src_step']*4)
+ax.set_xticks(np.arange(0, data_lits_CMP.shape[1]*params['src_step']*2, params['src_step']*4))
 ax.set_xticklabels(xticks)
 
 delvider = axgrid1.make_axes_locatable(ax)

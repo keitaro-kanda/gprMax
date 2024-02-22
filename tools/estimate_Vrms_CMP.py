@@ -47,7 +47,8 @@ epsilon_0 = 1 # vacuum permittivity
 
 
 #* set calculation parameters
-RMS_velocity = np.arange(0.01, 1.01, 0.01) # percentage to speed of light, 0% to 100%
+v_interval = 0.01 # [/c]
+RMS_velocity = np.arange(0.01, 1.01, v_interval) # percentage to speed of light, 0% to 100%
 vertical_delay_time = np.arange(0, params['time_window'], params['time_step']) # 2-way travelt time in vertical direction, [ns]
 
 
@@ -167,10 +168,10 @@ if __name__ == '__main__':
     """
     select area [ns]
     """
-    select_start = 60
-    select_end = 100
+    select_start = 5
+    select_end = 580
     select_startx = 0
-    select_endx = 0.6
+    select_endx = 1
     """
     select area [ns]
     """
@@ -183,7 +184,8 @@ if __name__ == '__main__':
     #* make select plot
     elif args.plot_type == 'select':
         Vt_map = np.loadtxt(params['semblance_txt'], delimiter=',') # load data
-        Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']), int(select_startx/0.02): int(select_endx/0.02)] # select area
+        Vt_map = Vt_map[int(select_start/params['time_step']): int(select_end/params['time_step']),
+                        int(select_startx/v_interval): int(select_endx/v_interval)] # select area
         Vt_map = Vt_map / np.amax(Vt_map) # normalize by max value in selected area
 
     #* calculate and save as txt file
@@ -214,7 +216,7 @@ if __name__ == '__main__':
     else:
         plt.imshow(Vt_map, cmap='jet', aspect='auto', interpolation='nearest',
                 extent=[0, RMS_velocity[-1], Vt_map.shape[0]*params['time_step'], 0],
-                norm=colors.LogNorm(vmin=1e-10, vmax=0.1) #! default: vmin=1e-7, vmax=0.1
+                norm=colors.LogNorm(vmin=1e-7, vmax=0.1) #! default: vmin=1e-7, vmax=0.1
                 #norm=colors.LogNorm(vmin=1e-7, vmax=0.5)
         )
 
