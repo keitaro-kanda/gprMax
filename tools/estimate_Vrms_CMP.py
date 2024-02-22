@@ -9,8 +9,6 @@ import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
 from tqdm import tqdm
 
-from tools.outputfiles_merge import get_output_data
-from itertools import combinations
 import matplotlib as mpl
 
 
@@ -18,7 +16,7 @@ import matplotlib as mpl
 parser = argparse.ArgumentParser(description='Processing Su method',
                                  usage='cd gprMax; python -m tools.Su_method jsonfile plot_type -closeup')
 parser.add_argument('jsonfile', help='json file path')
-parser.add_argument('plot_type', choices=['plot', 'mask', 'select', 'calc'])
+parser.add_argument('plot_type', choices=['plot', 'select', 'calc'])
 args = parser.parse_args()
 
 
@@ -48,7 +46,7 @@ epsilon_0 = 1 # vacuum permittivity
 
 
 #* set calculation parameters
-RMS_velocity = np.arange(0.02, 1.02, 0.01) # percentage to speed of light, 0% to 100%
+RMS_velocity = np.arange(0.01, 1.01, 0.01) # percentage to speed of light, 0% to 100%
 vertical_delay_time = np.arange(0, params['time_window'], params['time_step']) # 2-way travelt time in vertical direction, [ns]
 
 
@@ -67,10 +65,10 @@ antenna_height = params['antenna_height'] # [m]
 def DePue_eq9(y1, y0, z0, z1, v1):
     # De Pue eq(9b)
     lateral_air = (y0 - y1) / 2
-    sin0 = lateral_air / (lateral_air**2 + z0**2)
+    sin0 = lateral_air / np.sqrt(lateral_air**2 + z0**2)
     # De Pue eq(9c)
     lateral_ground = (y1 / 2)
-    sin1 = lateral_ground / (lateral_ground**2 + z1**2)
+    sin1 = lateral_ground / np.sqrt(lateral_ground**2 + z1**2)
 
     return sin0 / sin1 - c / v1
 
@@ -85,7 +83,7 @@ def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(obs_num)
 
     # calculate ground offset
     offset = antenna_step * 2 * (i + 1) # [m]
-    offset_ground = np.linspace(offset/200, offset, 200)
+    offset_ground = np.linspace(offset/100, offset, 100)
     DePue_eq9_result = DePue_eq9(offset_ground, offset, antenna_height, depth, Vrms)
     offset_ground_solution = offset_ground[np.argmin(np.abs(DePue_eq9_result))]
 
@@ -138,7 +136,7 @@ select area [ns]
 select_start = 60
 select_end = 100
 select_startx = 0
-select_endx = 1.0
+select_endx = 0.6
 """
 select area [ns]
 """
@@ -157,7 +155,6 @@ elif args.plot_type == 'select':
 #* calculate and save as txt file
 elif args.plot_type == 'calc':
     Vt_map = roop()
-    print(np.amax(Vt_map))
     Vt_map = Vt_map / np.amax(Vt_map) # normalize
     np.savetxt(output_dir_path + '/semblance_map.txt', Vt_map, delimiter=',')
 else:
@@ -198,7 +195,7 @@ cax.tick_params(labelsize=18)
 
 
 #* save plot
-if args.plot_type == 'select' and args.closeup == False:
+if args.plot_type == 'select':
     output_dir_path = output_dir_path + '/select'
     if not os.path.exists(output_dir_path):
         os.makedirs(output_dir_path)

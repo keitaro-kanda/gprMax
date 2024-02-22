@@ -40,7 +40,7 @@ for i in range(1, nrx+1):
 
 #* reshepe data into CMP style
 data_list_CMP = []
-for i in range(int(nrx/2)):
+for i in range(nrx):
     rx_num = i
     tx_num = nrx - i - 1
 
