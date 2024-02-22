@@ -225,6 +225,13 @@ if __name__ == '__main__':
     ax.grid(color='gray', linestyle='--', which='both', linewidth=0.5)
     ax.tick_params(labelsize=18)
 
+
+    #* show true value points
+    Vrms_theory = params['Vrms_theory']
+
+
+
+    #* colorbar
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
     plt.colorbar(cax=cax, label='Cross-correlation')

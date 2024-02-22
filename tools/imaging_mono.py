@@ -117,7 +117,7 @@ elif args.velocity_structure == 'y':
     layer_info = np.zeros((num_layers, 2))  # layer_info[i, 0]: V_RMS, layer_info[i, 1]: tau_ver
     for i in range(num_layers):
         if args.theory == True:
-            area_Vrms = params['V_RMS_theory'][i] * c  # [m/s]
+            area_Vrms = params['Vrms_theory'][i] * c  # [m/s]
             area_thickness = params['t0_theory'][i] * area_Vrms / 2
         else:
             area_Vrms = params['V_RMS'][i] * c  # [m/s]

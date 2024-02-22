@@ -62,7 +62,7 @@ def calc_hyperbola(vertical_delay_time, rxnumber, txnumber, root_mean_square_vel
     return delay_time, S
 
 t0 = params['t0_theory'] #[ns]
-Vrms = params['V_RMS_theory'] # [/c]
+Vrms = params['Vrms_theory'] # [/c]
 mu_4th_degree = params['mu4']
 
 src_positions = np.arange(0, nrx+1, 1)

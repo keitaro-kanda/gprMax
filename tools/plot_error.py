@@ -22,7 +22,7 @@ c = 299792458 # [m/s], speed of light in vacuum
 
 #* true value
 t0_true = np.array(params['t0_theory']) * 10**(-9) # [s]
-Vrms_true = np.array(params['V_RMS_theory']) * c # [m/s]
+Vrms_true = np.array(params['Vrms_theory']) * c # [m/s]
 thickness_true = np.array(params['layer_thickness'][1:]) # [m], thickness of each layers, don't contains air layer
 depth_true = np.cumsum(thickness_true) # [m], depth of each layers, don't contains air layer
 epsilon_true = np.array(params['internal_permittivity'][1:]) # epsilon_r in each layers, don't contains air layer

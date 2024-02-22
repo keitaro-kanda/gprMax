@@ -46,7 +46,7 @@
 
     "_comment": "result of V_RMS theoretical estimation",
     "t0_theory": [326e-9, 366e-9, 642e-9, 684e-9, 960e-9, 1002e-9, 1280e-9, 1320e-9, 1600e-9, 1637e-9, 1910e-9, 1955e-9, 2230e-9, 2273e-9, 2550e-9, 2591e-9, 2870e-9, 2909e-9],
-    "V_RMS_theory": [0.441, 0.447, 0.431, 0.435, 0.428, 0.431, 0.426, 0.428, 0.425, 0.426, 0.424, 0.426, 0.424, 0.425, 0.423, 0.425, 0.423, 0.425],
+    "Vrms_theory": [0.441, 0.447, 0.431, 0.435, 0.428, 0.431, 0.426, 0.428, 0.425, 0.426, 0.424, 0.426, 0.424, 0.425, 0.423, 0.425, 0.423, 0.425],
 
     "_comment": "for geometry-imaging comparison plot",
     "imaging_result_csv": "kanda/domain_110x200/rough/array/imaging/imaging_result_y.csv",

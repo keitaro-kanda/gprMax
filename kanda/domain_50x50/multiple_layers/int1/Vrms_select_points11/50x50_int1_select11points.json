@@ -43,7 +43,7 @@
 
     "_comment": "result of V_RMS theoretical estimation, [ns] and [/c]",
     "t0_theory": [77.7, 159, 242],
-    "V_RMS_theory": [0.564, 0.488, 0.460],
+    "Vrms_theory": [0.564, 0.488, 0.460],
     "mu4": [1.19e33, 6.83e32, 5.18e32, 4.34e32, 4.46e32, 4.08e32, 3.78e32],
 
     "_comment": "V_MRS estimation result, [/c] and [ns]",
