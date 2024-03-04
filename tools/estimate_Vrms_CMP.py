@@ -72,7 +72,7 @@ def DePue_eq9(y1, y0, z0, z1, v1):
     lateral_ground = (y1 / 2)
     sin1 = lateral_ground / np.sqrt(lateral_ground**2 + z1**2)
 
-    return sin0 / sin1 - c / v1
+    return np.abs(sin0 / sin1 - c / v1)
 
 
 
@@ -81,7 +81,6 @@ def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(obs_num)
     Vrms = RMS_velocity[Vrms_ind] * c # [m/s]
     t0 = vertical_delay_time[t0_ind] * 10**(-9) # [s]
     depth = Vrms * t0 / 2 # [m]
-
 
     # calculate ground offset
     #offset = antenna_step * 2 * (i + 1) # [m]
@@ -93,13 +92,22 @@ def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(obs_num)
     else:
         offset_ground = np.linspace(offset/100, offset, 100)
         DePue_eq9_result = DePue_eq9(offset_ground, offset, antenna_height, depth, Vrms)
-        offset_ground_solution = offset_ground[np.argmin(np.abs(DePue_eq9_result))]
+        offset_ground_solution = offset_ground[np.argmin(DePue_eq9_result)]
+        #if np.min(DePue_eq9_result) > 0.5 and np.min(DePue_eq9_result) < 1.0:
+            #print('Error: DePue_eq9_result is too large at Vrms: {}, t0: {}, offset: {}, \
+            #    result is {}'.format(Vrms_ind, t0_ind, offset, np.min(DePue_eq9_result)))
 
     # calculate delay time
     delay_time = np.sqrt((offset - offset_ground_solution)**2 + 4 * antenna_height**2) / c \
             + t0  + offset_ground_solution**2 / Vrms**2
-    total_delay_time = delay_time + transmit_delay * 10**(-9) # [s]
-    total_delay_point = int(total_delay_time / dt) # data point
+    
+    # check if surface wave or not
+    delay_surface = np.sqrt(offset**2 + 4 * antenna_height**2) / c
+    if delay_time < delay_surface:
+        total_delay_point = 0
+    else:
+        total_delay_time = delay_time + transmit_delay * 10**(-9) # [s]
+        total_delay_point = int(total_delay_time / dt) # data point
 
 
     # search data
@@ -112,6 +120,8 @@ def calc_semblance(Vrms_ind, t0_ind, i): # i: in range(obs_num)
 
 
 
+"""
+#! Currently not used
 #* roop calc_semblance
 def roop():
     semblance_map = np.zeros((len(vertical_delay_time), len(RMS_velocity)))
@@ -127,11 +137,10 @@ def roop():
             semblance_map[t, v] = np.sum(power_list)**2
 
     return semblance_map
+"""
 
 
-"""
-Palarellel processing
-"""
+#* Palarellel processing
 def worker_func(args):
     v, t, RMS_velocity, vertical_delay_time, obs_num = args
     power_list = [np.sum(calc_semblance(v, t, i)) for i in range(obs_num)]
@@ -144,7 +153,7 @@ def calc_semblance_parallel(RMS_velocity, vertical_delay_time, obs_num):
 
     with Pool() as pool:
         results = list(tqdm(pool.imap(worker_func, args), total=len(args), desc='Calculating Semblance'))
-    
+
     for t, v, semblance_value in results:
         semblance_map[t, v] = semblance_value
 

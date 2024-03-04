@@ -20,7 +20,7 @@ def DePue_eq9(y1, y0, z0, z1, v1):
     return sin0 / sin1 - c / v1
 
 
-y0 = [1, 5, 10, 15, 20] # [m], antenna offset
+y0 = [1, 5, 10, 20, 30, 40] # [m], antenna offset
 z0 = 1 # [m], antenna height
 z1 = [5, 10, 20, 40] # [m], depth
 
@@ -32,18 +32,18 @@ for depth in range(len(z1)):
         v1_ind = 0.4
         v1 = v1_ind * c # [m/s], RMS velocity
         result = DePue_eq9(y1, y0[i], z0, z1[depth], v1)
-        offset_ground = np.argmin(np.abs(result))
+        offset_ground = np.argmin(np.abs(result)) # index of y1
 
         ax[depth].plot(y1, result, label=f'y0 = {y0[i]}')
         fig.supxlabel('y1 [m]', fontsize=18)
         fig.supylabel(r'$\frac{sin(\theta_0)}{sin(\theta_1)} - \frac{c}{v_1}$', fontsize=18)
         ax[depth].set_title('z1: {} [m], v1: {} [/c]'.format(z1[depth], v1_ind), fontsize=20)
         ax[depth].legend()
-        ax[depth].grid()
         ax[depth].set_yscale('symlog')
+        ax[depth].grid(True)
 
         # show DePue_eq9 get 0
-        text_y = [-0.8, -0.4, 0.2, 0.4, 0.8]
+        text_y = [-0.8, -0.4, -0.2, 0.2, 0.4, 0.8]
         ax[depth].scatter(y1[offset_ground], result[np.argmin(np.abs(result))], c='k', s=30, marker='x')
         ax[depth].text(y1[offset_ground], text_y[i],
                     f'({y1[offset_ground]:.2f}, {result[np.argmin(np.abs(result))]:.4e})', fontsize=14)
