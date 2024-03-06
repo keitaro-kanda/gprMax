@@ -1,3 +1,8 @@
+"""
+input: raw .out file, described in json file
+output: CMP B-scan plot and txt file
+"""
+
 import argparse
 
 import h5py
