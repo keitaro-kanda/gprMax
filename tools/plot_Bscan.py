@@ -59,7 +59,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
     plt.imshow(outputdata_norm, 
              extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
-            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-0.1, vmax=0.1)
+            interpolation='nearest', aspect='auto', cmap='seismic', vmin=-1, vmax=1)
     plt.xlabel('trace number', fontsize=20)
     plt.ylabel('Time [s]', fontsize=20)
     plt.tick_params(labelsize=18)
