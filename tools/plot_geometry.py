@@ -71,7 +71,7 @@ map.get_epsilon_map()
 
 # =====output dir path=====
 input_path = os.path.dirname(map.h5_file_name)
-output_path = os.path.join(input_path, 'map')
+output_path = input_path
 if not os.path.exists(output_path):
     os.mkdir(output_path)
 
