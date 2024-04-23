@@ -16,7 +16,7 @@
     "domain_x": 10,
     "domain_z": 10,
     "ground_depth": 8,
-    "grid_size": 0.01,
+    "grid_size": 0.005,
 
     "_comment": "position of antenna [m]",
     "antenna_height": 1,
