@@ -1,0 +1,64 @@
+#domain: 10 10 0.005
+#dx_dy_dz: 0.005 0.005 0.005
+
+#time_window: 5e-7
+
+#material: 4 0 1 0 ep4
+#material: 6 0 1 0 ep6
+#material: 9 0 1 0 ep9
+
+
+=====地形=====
+*regolith (thickness of 5m)*
+#box: 0 0 0 10 8 0.005 ep4 n
+
+*regolith (thickness of 5m)*
+#box: 0 0 0 10 2 0.005 ep9 n
+
+*rock fragments*
+#python:
+import numpy as np
+from gprMax.input_cmd_funcs import *
+
+rock_num = 1000
+for i in range(rock_num):
+    x = np.random.randint(0, 100) / 10 # boxの左下のx座標
+    y = 2 + np.random.randint(0, 97) / 100
+    y_rand = np.random.randint(-1, 1) / 100 # -0.2~0.2 m
+    width = 0.01 # 0.01-0.2 m
+    height = 0.01 / 100 # 0.01-0.2 m
+    peak_x = 0.005
+
+    if x + width < 10:
+        triangle(x, y, 0, x + width, y + y_rand, 0, x + peak_x, y + height, 0, 0.01, 'ep9', 'n')
+    else:
+        triangle(x, y, 0, 10, y + y_rand, 0, x + peak_x, y + height, 0, 0.005, 'ep9', 'n')
+#end_python:
+
+
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 10 10 0.005 0.005 0.005 0.005 geometry n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 10 10 0.005 geometry
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 500e6 my_src
+
+#hertzian_dipole: z  5 9 0 my_src
+#rx: 5 9 0
+
+<snapshot作成>
+#python:
+for i in range(1, 150):
+    print('#snapshot: 0 0 0 10 10 0.005 0.095 0.005 0.005 {} snapshot{}'.format(i*2.0e-9, i))
+#end_python:
+
+#output_dir: A-scan
+==========

@@ -99,8 +99,8 @@ plt.imshow(map.epsilon_map,
         cmap='binary')
 
 if args.closeup:
-    y_start = 9
-    y_end = 40
+    y_start =  5
+    y_end = 6
     ax.set_ylim(y_end, y_start)
 
 ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 1))

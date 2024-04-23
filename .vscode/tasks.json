@@ -6,12 +6,12 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x50/multiple_layers/int05/calc.in -n 21"
+            "command": "python -m gprMax kanda/domain_10x10/500MHz/rock_0.01m/calc.in -n 30"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x50/multiple_layers/int1/n21/calc.in -n 21"
+            "command": "python -m gprMax kanda/domain_10x10/500MHz/rock_0.05m/calc.in -n 30"
         },
         {
             "label": "task sequence",
