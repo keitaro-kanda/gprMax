@@ -91,6 +91,7 @@ We recommend using Miniconda to install Python and the required Python packages 
     $ git clone https://github.com/gprMax/gprMax.git
     $ cd gprMax
     $ conda env create -f conda_env.yml
+    # 神田による変更：condaを使わずvenv環境を使うので，conda系のコマンドは無視＆venv環境を作成する（2024/05/01）
 
 This will make sure conda is up-to-date, install Git, get the latest gprMax source code from GitHub, and create an environment for gprMax with all the necessary Python packages.
 

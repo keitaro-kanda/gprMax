@@ -123,7 +123,7 @@ elif sys.platform == 'darwin':
     cpuID = ' '.join(cpuID.split())
     if 'Apple' in cpuID:
         gccpath = glob.glob('/opt/homebrew/bin/gcc-[4-9]*')
-        gccpath += glob.glob('/opt/homebrew/bin/gcc-[10-11]*')
+        gccpath += glob.glob('/opt/homebrew/bin/gcc-[10-13]*')
         if gccpath:
             # Use newest gcc found
             os.environ['CC'] = gccpath[-1].split(os.sep)[-1]
@@ -140,8 +140,10 @@ elif sys.platform == 'darwin':
         else:
             raise('Cannot find gcc 4-10 in /usr/local/bin. gprMax requires gcc to be installed - easily done through the Homebrew package manager (http://brew.sh). Note: gcc with OpenMP support is required.')
     compile_args = ['-O3', '-w', '-fopenmp', '-march=native']  # Sometimes worth testing with '-fstrict-aliasing', '-fno-common'
-    linker_args = ['-fopenmp', '-Wl,-rpath,' + rpath]
-    libraries = ['iomp5', 'pthread']
+    #linker_args = ['-fopenmp', '-Wl,-rpath,' + rpath]
+    linker_args = ['-fopenmp', '-Wl,-rpath,/opt/homebrew/opt/libomp/lib']
+    #libraries = ['iomp5', 'pthread']
+    libraries = ['omp']
     extra_objects = []
 # Linux
 elif sys.platform == 'linux':
@@ -151,6 +153,7 @@ elif sys.platform == 'linux':
     libraries=[]
 
 # Build a list of all the extensions
+"""
 extensions = []
 for file in cythonfiles:
     tmp = os.path.splitext(file)
@@ -162,11 +165,34 @@ for file in cythonfiles:
                           [tmp[0] + fileext],
                           language='c',
                           include_dirs=[np.get_include()],
+                          #include_dirs=["/opt/homebrew/opt/libomp/include"],
                           libraries=libraries,
                           extra_compile_args=compile_args,
+                          #extra_compile_args=["-fopenmp"],
                           extra_link_args=linker_args,
+                          #extra_link_args=["-L/opt/homebrew/opt/libomp/lib", "-liomp5"],
                           extra_objects=extra_objects)
     extensions.append(extension)
+"""
+extensions = []
+for file in cythonfiles:
+    tmp = os.path.splitext(file)
+    fileext = '.c' if not USE_CYTHON else tmp[1]
+    extension = Extension(
+        tmp[0].replace(os.sep, '.'),
+        [tmp[0] + fileext],
+        language='c',
+        #include_dirs=[np.get_include(), '/opt/homebrew/opt/libomp/include'],
+        include_dirs=['/opt/homebrew/opt/libomp/include', np.get_include()],
+        libraries=libraries,
+        extra_compile_args=compile_args,
+        #extra_link_args=linker_args + ['-L/opt/homebrew/opt/libomp/lib'],
+        #extra_link_args=['-L/opt/homebrew/opt/libomp/lib', '/opt/homebrew/opt/libomp/lib/libiomp5.dylib'],
+        extra_link_args=['-L/opt/homebrew/opt/libomp/lib'],
+        extra_objects=extra_objects
+    )
+    extensions.append(extension)
+
 
 # Cythonize (build .c files)
 if USE_CYTHON:
