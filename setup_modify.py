@@ -16,6 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with gprMax.  If not, see <http://www.gnu.org/licenses/>.
 
+
+import os
+os.environ['CC'] = 'gcc-13' # セットアップやビルドが始まる前に配置
+os.environ['CXX'] = 'g++-13'  # If you're also using C++
+
 try:
     from setuptools import setup, Extension
 except ImportError:
@@ -28,12 +33,20 @@ except ImportError:
     raise ImportError('gprMax requires the NumPy package.')
 
 import glob
-import os
 import pathlib
 import re
 import subprocess
 import shutil
 import sys
+
+"追加"
+# Clear problematic flags from environment (if they exist)
+for var in ['CFLAGS', 'CPPFLAGS', 'LDFLAGS']:
+    os.environ[var] = ''
+# Base compile and link arguments
+compile_args = ['-O3', '-w', '-fopenmp']
+linker_args = ['-fopenmp']
+
 
 # Importing _version__.py before building can cause issues.
 with open('gprMax/_version.py', 'r') as fd:
@@ -48,7 +61,7 @@ with open('gprMax/__init__.py', 'r') as fd:
 packages = [packagename, 'tests', 'tools', 'user_libs']
 
 # Parse long_description from README.rst file.
-with open('README.rst', 'r', encoding='utf-8') as fd:
+with open('README.rst','r') as fd:
     long_description = fd.read()
 
 # Python version
@@ -70,11 +83,20 @@ else:
     USE_CYTHON = True
 
 # Build a list of all the files that need to be Cythonized looking in gprMax directory
+"""
 cythonfiles = []
 for root, dirs, files in os.walk(os.path.join(os.getcwd(), packagename), topdown=True):
     for file in files:
         if file.endswith('.pyx'):
             cythonfiles.append(os.path.relpath(os.path.join(root, file)))
+"""
+# Collect all .pyx files to be built
+cythonfiles = []
+for root, dirs, files in os.walk('gprMax', topdown=True):
+    for file in files:
+        if file.endswith('.pyx'):
+            cythonfiles.append(os.path.join(root, file))
+
 
 # Process 'cleanall' command line argument - cleanup Cython files
 if 'cleanall' in sys.argv:
@@ -139,10 +161,15 @@ elif sys.platform == 'darwin':
             rpath = '/usr/local/opt/gcc/lib/gcc/' + gccpath[-1].split(os.sep)[-1][-1] + '/'
         else:
             raise('Cannot find gcc 4-10 in /usr/local/bin. gprMax requires gcc to be installed - easily done through the Homebrew package manager (http://brew.sh). Note: gcc with OpenMP support is required.')
-    compile_args = ['-O3', '-w', '-fopenmp', '-march=native']  # Sometimes worth testing with '-fstrict-aliasing', '-fno-common'
-    linker_args = ['-fopenmp', '-Wl,-rpath,' + rpath]
+    #compile_args = ['-O3', '-w', '-fopenmp', '-march=native']  # Sometimes worth testing with '-fstrict-aliasing', '-fno-common'
+    #linker_args = ['-fopenmp', '-Wl,-rpath,' + rpath]
     libraries = ['iomp5', 'pthread']
     extra_objects = []
+
+    compile_args += ['-arch', 'arm64']  # Target ARM architecture
+    linker_args += ['-arch', 'arm64']
+
+
 # Linux
 elif sys.platform == 'linux':
     compile_args = ['-O3', '-w', '-fopenmp', '-march=native']
@@ -151,7 +178,21 @@ elif sys.platform == 'linux':
     libraries=[]
 
 # Build a list of all the extensions
-extensions = []
+"中身追加"
+extensions = [
+    Extension(name=filename.replace('/', '.').rsplit('.', 1)[0],
+              sources=[filename],
+              include_dirs=[np.get_include(), '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include'],
+              extra_compile_args=compile_args,
+              extra_link_args=linker_args,
+              language='c')
+    for filename in cythonfiles
+]
+# Use Cython to build extensions if enabled
+if '--no-cython' not in sys.argv:
+    from Cython.Build import cythonize
+    extensions = cythonize(extensions)
+
 for file in cythonfiles:
     tmp = os.path.splitext(file)
     if USE_CYTHON:
@@ -180,6 +221,9 @@ if USE_CYTHON:
                                'language_level': 3
                            },
                            annotate=False)
+
+# SetupTools Required to make package
+import setuptools
 
 setup(name=packagename,
       version=version,

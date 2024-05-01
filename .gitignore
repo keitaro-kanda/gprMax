@@ -32,3 +32,6 @@ dist/
 
 # .outファイルの除外
 *.out
+
+# .venvファイルの除外
+.venv/
