@@ -265,7 +265,7 @@ if __name__ == "__main__":
     closeup_x_start = 0 #[ns]
     closeup_x_end = 500 #[ns]
     closeup_y_start = -0.01 # normalized, -1~1
-    closeup_y_end = 0.0-out1 # normalized, -1~1
+    closeup_y_end = 0.0 # normalized, -1~1
 
     plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
     plthandle.show()
