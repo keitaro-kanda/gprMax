@@ -57,7 +57,7 @@ for i in range(rock_num):
 <snapshot作成>
 #python:
 for i in range(1, 150):
-    print('#snapshot: 0 0 0 10 10 0.005 0.095 0.005 0.005 {} snapshot{}'.format(i*2.0e-9, i))
+    print('#snapshot: 0 0 0 10 10 0.005 0.055 0.005 0.005 {} snapshot{}'.format(i*2.0e-9, i))
 #end_python:
 
 #output_dir: A-scan
