@@ -107,8 +107,8 @@ for x_index in tqdm(range(imaging_grid_x), desc='calculating path length'):
 #* calculate propagation time for each sets of rx and src
 if args.velocity_structure == 'n':
     #! setting constant Vrms
-    epsilon_r = 9
-    constant_Vrms = 1 / np.sqrt(epsilon_r) # [/c]
+    constant_epsilon_r = 10
+    constant_Vrms = 1 / np.sqrt(constant_epsilon_r) # [/c]
     #! setting constant Vrms
 
     tau_ref2rx = L_ref2rx / (c * constant_Vrms) # tau: [s] from ref to rx
@@ -222,7 +222,7 @@ if args.plot == False:
 
     #* save as txt file
     if args.velocity_structure == 'n':
-        np.savetxt(output_dir_path + '/imaging_result_n'+str(constant_Vrms)+'.csv', corr, delimiter=',')
+        np.savetxt(output_dir_path + '/imaging_result_epsilon_'+str(constant_epsilon_r)+'.csv', corr, delimiter=',')
     elif args.velocity_structure == 'y':
         if args.theory == True:
             np.savetxt(output_dir_path + '/imaging_result_y_theory.csv', corr, delimiter=',')
@@ -261,7 +261,7 @@ cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax).set_label('Cross-correlation', fontsize = fontsize_medium)
 
 if args.velocity_structure == 'n':
-    plt.savefig(output_dir_path + '/imaging_result_n'+str(constant_Vrms)+'.png')
+    plt.savefig(output_dir_path + '/imaging_result_epsilon_'+str(constant_epsilon_r)+'.png')
 elif args.velocity_structure == 'y':
     if args.theory == True:
         plt.savefig(output_dir_path + '/imaging_result_y_theory.png')
