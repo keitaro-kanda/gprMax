@@ -61,7 +61,7 @@ class epsilon_map():
         self.epsilon_map = np.zeros((z_num, x_num))
 
 
-        for i in tqdm(range(self.h5_data.shape[1])):
+        for i in tqdm(range(self.h5_data.shape[1]), desc='get epsilon_r distribution from material file'):
             for j in range(self.h5_data.shape[0]):
                 self.epsilon_map[j, i] = epsilon_list[int(self.h5_data[j, i])]
 
@@ -93,7 +93,7 @@ spatial_grid =  params['geometry_settings']['grid_size'] # spatial grid size [m]
 fig = plt.figure(figsize=(5, 5*map.epsilon_map.shape[0]/map.epsilon_map.shape[1]), tight_layout=True)
 ax = fig.add_subplot(111)
 
-vacuum_thickness = params['geometry_settings']['domain_z'] - params['geometry_settings']['ground_depth']
+vacuum_thickness = params['geometry_settings']['domain_z'] - params['geometry_settings']['ground_depth'] # [m]
 
 
 #cmap = mpl.colors.ListedColormap([plt.cm.binary(int(255*i/len(epsilon_list))) for i in range(len(epsilon_list))])
