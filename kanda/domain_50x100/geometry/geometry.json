@@ -1,0 +1,9 @@
+{
+    "h5_file": "kanda/domain_50x85/geometry/geometry.h5",
+    "material_file": "kanda/domain_50x85/geometry/geometry_materials.txt",
+    "_comment": "geometric size of the domain [m]",
+    "domain_x": 50,
+    "domain_z": 100,
+    "ground_depth": 92,
+    "grid_size": 0.02
+}

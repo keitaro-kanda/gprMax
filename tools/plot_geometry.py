@@ -86,7 +86,7 @@ if not os.path.exists(output_path):
 spatial_grid =  params['grid_size'] # spatial grid size [m]
 
 
-fig = plt.figure(figsize=(5, 5*map.epsilon_map.shape[0]/map.epsilon_map.shape[1]))
+fig = plt.figure(figsize=(5, 5*map.epsilon_map.shape[0]/map.epsilon_map.shape[1]), tight_layout=True)
 ax = fig.add_subplot(111)
 
 vacuum_thickness = params['domain_z'] - params['ground_depth']
@@ -103,15 +103,16 @@ if args.closeup:
     y_end = 6
     ax.set_ylim(y_end, y_start)
 
-ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 1))
+ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 5))
 
-plt.xlabel('x (m)', size=14)
-plt.ylabel('z (m)', size=14)
-ax.set_title('epsilon_r distribution', size=18)
+plt.xlabel('x (m)', size=18)
+plt.ylabel('z (m)', size=18)
+ax.set_title('epsilon_r distribution', size=20)
+ax.tick_params(labelsize=16)
 
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
-plt.colorbar(cax=cax, label='epsilon_r')
+plt.colorbar(cax=cax).set_label('epsilon_r', size=18)
 
 plt.savefig(output_path+'/' + 'epsilon_map.png')
 if args.closeup:

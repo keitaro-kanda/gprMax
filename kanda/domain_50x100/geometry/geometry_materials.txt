@@ -2,6 +2,5 @@
 #material: 1 0 1 0 free_space
 #material: 4 0 1 0 regolith
 #material: 6 0 1 0 basalt_6
-#material: 6.2 0 1 0 basalt_62
-#material: 6.4 0 1 0 basalt_64
+#material: 9 0 1 0 basalt_9
 #material: 2.5 0 1 0 free_space+free_space+regolith+regolith
