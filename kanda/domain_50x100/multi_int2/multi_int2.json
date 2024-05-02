@@ -1,5 +1,5 @@
 {
-    "geometry_data":
+    "geometry_settings":
     {
         "h5_file": "kanda/domain_50x100/geometry/geometry.h5",
         "material_file": "kanda/domain_50x100/geometry/geometry_materials.txt",
@@ -15,7 +15,7 @@
     "_comment": "t0_vrms plot file in CMP observation",
     "cmp_corr_map_txt": "kanda/domain_50x50/multiple_layers/no_loss/Vrms_CMP/corr_map.txt",
     "_comment": "for geometry-imaging comparison plot",
-    "imaging_result_csv": "kanda/domain_50x50/multiple_layers/no_loss/imaging/imaging_result_y.csv",
+    "imaging_result_csv": "kanda/domain_50x100/multi_int2/imaging/imaging_result_n0.5.csv",
     "antenna_settings":
     {
     "--comment": "unit: [m]",

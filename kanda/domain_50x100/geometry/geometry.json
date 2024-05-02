@@ -1,5 +1,5 @@
 {
-    "geometry_data":
+    "geometry_settings":
     {
         "h5_file": "kanda/domain_50x100/geometry/geometry.h5",
         "material_file": "kanda/domain_50x100/geometry/geometry_materials.txt",

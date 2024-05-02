@@ -29,8 +29,8 @@ map.get_epsilon_map()
 geometry = map.epsilon_map
 
 # cut vacuum area
-antenna_hight = params['antenna_height']
-ground_depth = params['ground_depth']
+antenna_hight = params['antenna_settings']['antenna_height']
+ground_depth = params['geometry_settings']['ground_depth']
 vacuum_thicness = int(geometry.shape[0] - (ground_depth + antenna_hight) / params['grid_size'])
 geometry = geometry[vacuum_thicness: , :]
 

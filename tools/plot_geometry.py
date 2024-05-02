@@ -22,7 +22,7 @@ with open (args.json_file) as f:
 
 
 #* load epsilon from materials.txt file
-material_path = params['geometry_data']['material_file']
+material_path = params['geometry_settings']['material_file']
 with open(material_path, 'r') as f:
     epsilon_list = []
 
@@ -36,7 +36,7 @@ with open(material_path, 'r') as f:
 
 
 # .h5ファイルを読み込む
-h5_file_path = params['geometry_data']['h5_file']
+h5_file_path = params['geometry_settings']['h5_file']
 
 
 class epsilon_map():
@@ -67,7 +67,7 @@ class epsilon_map():
 
 
 map = epsilon_map()
-map.h5_file_name = params['geometry_data']['h5_file']
+map.h5_file_name = params['geometry_settings']['h5_file']
 print(map.h5_file_name)
 map.read_h5_file()
 map.get_epsilon_map()
@@ -87,13 +87,13 @@ if not os.path.exists(output_path):
 
 
 # =====plot map=====
-spatial_grid =  params['geometry_data']['grid_size'] # spatial grid size [m]
+spatial_grid =  params['geometry_settings']['grid_size'] # spatial grid size [m]
 
 
 fig = plt.figure(figsize=(5, 5*map.epsilon_map.shape[0]/map.epsilon_map.shape[1]), tight_layout=True)
 ax = fig.add_subplot(111)
 
-vacuum_thickness = params['geometry_data']['domain_z'] - params['geometry_data']['ground_depth']
+vacuum_thickness = params['geometry_settings']['domain_z'] - params['geometry_settings']['ground_depth']
 
 
 #cmap = mpl.colors.ListedColormap([plt.cm.binary(int(255*i/len(epsilon_list))) for i in range(len(epsilon_list))])

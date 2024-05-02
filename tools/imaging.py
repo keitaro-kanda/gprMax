@@ -47,8 +47,8 @@ epsilon_0 = 1 # vacuum permittivity
 
 
 #* load setting from json file
-domain_x = params['geometry_data']['domain_x']
-ground_depth = params['geometry_data']['ground_depth']
+domain_x = params['geometry_settings']['domain_x']
+ground_depth = params['geometry_settings']['ground_depth']
 antenna_height = params['antenna_settings']['antenna_height']
 domain_z = ground_depth + antenna_height # アンテナ高さをz=0とする
 
