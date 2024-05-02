@@ -42,18 +42,18 @@ epsilon_0 = 1 # vacuum permittivity
 
 
 #* load setting from json file
-domain_x = params['domain_x']
-ground_depth = params['ground_depth']
-antenna_height = params['antenna_height']
+domain_x = params['geometry_data']['domain_x']
+ground_depth = params['geometry_data']['ground_depth']
+antenna_height = params['antenna_settings']['antenna_height']
 domain_z = ground_depth + antenna_height # アンテナ高さをz=0とする
-domain_array = np.zeros((domain_z, domain_x))
 
-# number of tx and rx
-antenna_num = params['src_move_times']
-rx_start = params['rx_start']
-rx_step = params['rx_step']
-src_start = params['src_start']
-src_step = params['src_step']
+
+#* number of tx and rx
+antenna_num = params['antenna_settings']['src_move_times']
+rx_start = params['antenna_settings']['rx_start']
+rx_step = params['antenna_settings']['rx_step']
+src_start = params['antenna_settings']['src_start']
+src_step = params['antenna_settings']['src_step']
 
 
 
@@ -158,8 +158,6 @@ else:
 
 
 #* calculate cross-correlation
-cross_corr = np.zeros((domain_z, domain_x))
-
 def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
     # i番目のrxにおける遅れ時間配列（1D）を作成
     # 簡単のため，i番目のsrcで送信してi番目のrxで受診するのもOKとする
@@ -230,26 +228,30 @@ elif args.plot == True:
 
 
 #* plot
-fig = plt.figure(figsize=(5, 5*corr.shape[0]/corr.shape[1]) ,facecolor='w', edgecolor='w')
+fig = plt.figure(figsize=(5, 5*corr.shape[0]/corr.shape[1]) ,tight_layout=True)
 ax = fig.add_subplot(111)
-plt.imshow(corr, 
-        extent=[0, corr.shape[1] * imaging_resolution, 
-                corr.shape[0]*imaging_resolution-antenna_height, -antenna_height], 
+fontsize_large = 20
+fontsize_medium = 18
+fontsize_small = 16
+
+plt.imshow(corr,
+        extent=[0, corr.shape[1] * imaging_resolution,
+                corr.shape[0]*imaging_resolution-antenna_height, -antenna_height],
         aspect=1,
         cmap='jet', # recomended: 'jet', 'binary'
         norm=colors.LogNorm(vmin=1e-5, vmax=np.amax(corr)))
 
 ax.set_yticks(np.arange(0, corr.shape[0]*imaging_resolution, 10))
 
-ax.set_xlabel('x [m]', fontsize=14)
-ax.set_ylabel('z [m]', fontsize=14)
-ax.set_title('Imaging result', fontsize=14)
-
+ax.set_xlabel('x [m]', fontsize = fontsize_medium)
+ax.set_ylabel('z [m]', fontsize = fontsize_medium)
+ax.set_title('Imaging result', fontsize = fontsize_large)
+ax.tick_params(labelsize=fontsize_medium)
 #ax.grid(which='major', color='white', linestyle='--')
 
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
-plt.colorbar(cax=cax, label='Cross-correlation')
+plt.colorbar(cax=cax).set_label('Cross-correlation', fontsize = fontsize_medium)
 
 if args.velocity_structure == 'n':
     plt.savefig(output_dir_path + '/imaging_result_n'+str(constant_Vrms)+'.png')
