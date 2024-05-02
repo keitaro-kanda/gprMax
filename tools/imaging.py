@@ -107,7 +107,8 @@ for x_index in tqdm(range(imaging_grid_x), desc='calculating path length'):
 #* calculate propagation time for each sets of rx and src
 if args.velocity_structure == 'n':
     #! setting constant Vrms
-    constant_Vrms = 0.5 # [/c]
+    epsilon_r = 9
+    constant_Vrms = 1 / np.sqrt(epsilon_r) # [/c]
     #! setting constant Vrms
 
     tau_ref2rx = L_ref2rx / (c * constant_Vrms) # tau: [s] from ref to rx
@@ -132,6 +133,7 @@ elif args.velocity_structure == 'y':
 
         layer_info[i, 0] = area_Vrms # [m/s]
         layer_info[i, 1] = area_thickness # grid number, 'grid' means imaging grid
+
 
     #* calculate tau_ref2rx and tau_src2ref for each resion
     tau_ref2rx = np.zeros((imaging_grid_z, imaging_grid_x, antenna_num)) # [s], size is same as imaging grid
