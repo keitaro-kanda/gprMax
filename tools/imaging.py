@@ -1,3 +1,7 @@
+"""
+Documentation: See 'kanda/doc/tools_memo/imaging.md'
+"""
+
 import argparse
 import json
 import os
@@ -11,7 +15,8 @@ from tqdm import tqdm
 
 from tools.outputfiles_merge import get_output_data
 
-# Parse command line arguments
+
+#* Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing Su method',
                                  usage='cd gprMax; python -m tools.imaging jsonfile velocity_structure -plot')
 parser.add_argument('jsonfile', help='name of json file')
@@ -112,7 +117,7 @@ elif args.velocity_structure == 'y':
     """
     Consider the results of V_RMS estimation
     """
-    # check the number of layers and load parameters of each layers
+    #* check the number of layers and load parameters of each layers
     num_layers = len(params['V_RMS'])  # number of layers
     layer_info = np.zeros((num_layers, 2))  # layer_info[i, 0]: V_RMS, layer_info[i, 1]: tau_ver
     for i in range(num_layers):
@@ -128,21 +133,21 @@ elif args.velocity_structure == 'y':
         layer_info[i, 0] = area_Vrms # [m/s]
         layer_info[i, 1] = area_thickness # grid number, 'grid' means imaging grid
 
-    # calculate tau_ref2rx and tau_src2ref for each resion
+    #* calculate tau_ref2rx and tau_src2ref for each resion
     tau_ref2rx = np.zeros((imaging_grid_z, imaging_grid_x, antenna_num)) # [s], size is same as imaging grid
     tau_src2ref = np.zeros((imaging_grid_z, imaging_grid_x, antenna_num)) # [s], size is same as imaging grid
     for i in range(num_layers):
-        # from surface to first boundary
+        #* from surface to first boundary
         if i == 0:
             area_depth = int(layer_info[i, 1]) # intをつけないとなぜか動かない
             tau_ref2rx[0:area_depth, :, :] = L_ref2rx[0:area_depth, :, :] / layer_info[i, 0] # [s]
             tau_src2ref[0:area_depth, :, :] = L_src2ref[0:area_depth, :, :] / layer_info[i, 0] #[s]
-        # where deeper than last boundary
+        #* where deeper than last boundary
         elif i == num_layers-1:
             area_depth = int(layer_info[i-1, 1]) # intをつけないとなぜか動かない
             tau_ref2rx[area_depth:, :, :] = L_ref2rx[area_depth:, :, :] / layer_info[i, 0] # [s]
             tau_src2ref[area_depth:, :, :] = L_src2ref[area_depth:, :, :] / layer_info[i, 0] #[s]
-        # others, between each boundaries
+        #* others, between each boundaries
         else:
             area_depth_start = int(np.sum(layer_info[i-1, 1])) # intをつけないとなぜか動かない
             area_depth_end = int(np.sum(layer_info[i, 1])) # intをつけないとなぜか動かない
@@ -159,16 +164,16 @@ else:
 
 #* calculate cross-correlation
 def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
-    # i番目のrxにおける遅れ時間配列（1D）を作成
-    # 簡単のため，i番目のsrcで送信してi番目のrxで受診するのもOKとする
+    #* i番目のrxにおける遅れ時間配列（1D）を作成
+    #* 簡単のため，i番目のsrcで送信してi番目のrxで受診するのもOKとする
     tau = params['transmitting_delay'] + tau_src2ref[z, x, :] + tau_ref2rx[z, x, i] # i番目のrxで受信する場合の遅れ時間[s]
     tau_index = (tau / dt).astype(int) # convert tau[s] to index, 'index' means index of A-scan data
 
-    # i番目のrxにおける振幅配列（1D）を作成
+    #* i番目のrxにおける振幅配列（1D）を作成
     Amp_array = np.zeros(antenna_num)# １次元配列, 行：rxインデックス, 列：srcインデックス
 
     for src in range(antenna_num):
-        # i番目のrxにおける，src番目のsrcで送信したときの振幅を取得
+        #* i番目のrxにおける，src番目のsrcで送信したときの振幅を取得
         if tau_index[src] < len(data_list[i-1]):
             Amp_array[src] = data_list[i-1][tau_index[src], src]
         elif tau_index[src] >= len(data_list[i-1]):
@@ -183,14 +188,14 @@ def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
 
 #* caluculate cross-correlation for each grids
 def calc_corr():
-    # forループの準備
+    #* forループの準備
     cross_corr = np.zeros((imaging_grid_z, imaging_grid_x))
     #Amp_at_xz = np.zeros((antenna_num, antenna_num))
     for x in tqdm(range(imaging_grid_x), desc='calculating cross-correlation'):
         for z in range(imaging_grid_z):
 
             Amp_at_xz = np.array([calc_Amp(z, x, rx) for rx in range(antenna_num)])
-            # ↑Amp_at_xzは1次元配列Amp_arrayを結合した2次元配列
+            #* ↑Amp_at_xzは1次元配列Amp_arrayを結合した2次元配列
 
             corr_matrix = np.abs(Amp_at_xz[:, None] * Amp_at_xz)
             cross_corr[z, x] = np.sum(corr_matrix)
