@@ -66,8 +66,9 @@ np.savetxt(outputdir + '/Bscan_CMP.txt', data_list_CMP, delimiter=',')
 fig = plt.figure(figsize=(10, 10), tight_layout=True)
 ax = fig.add_subplot(111)
 
+src_step = params['antenna_settings']['src_step']
 plt.imshow(data_lits_CMP, aspect='auto', cmap='seismic', interpolation='nearest',
-            extent=[0, data_lits_CMP.shape[1]*params['src_step']*2, data_lits_CMP.shape[0] * dt, 0],
+            extent=[0, data_lits_CMP.shape[1]*src_step*2, data_lits_CMP.shape[0] * dt, 0],
             vmin=-1, vmax=1)
 ax.set_title('CMP B-scan', fontsize=20)
 ax.set_xlabel('Tx - Rx [m]', fontsize=20)
@@ -75,10 +76,10 @@ ax.set_ylabel('Time [ns]', fontsize=20)
 ax.tick_params(labelsize=18)
 ax.grid(which='both', axis='both', linestyle='--', linewidth=0.5)
 #xticks = np.arange(params['src_step']*2, (data_lits_CMP.shape[1]+1)*params['src_step']*2, params['src_step']*2)
-xticks = np.arange(- int(data_list_CMP.shape[1] / 2) * params['src_step']*2,
-                   int(data_list_CMP.shape[1] / 2) * params['src_step']*2 + 1,
-                    params['src_step']*4)
-ax.set_xticks(np.arange(0, data_lits_CMP.shape[1]*params['src_step']*2, params['src_step']*4))
+xticks = np.arange(- int(data_list_CMP.shape[1] / 2) * src_step*2,
+                   int(data_list_CMP.shape[1] / 2) * src_step*2 + 1,
+                    src_step*4)
+ax.set_xticks(np.arange(0, data_lits_CMP.shape[1]*src_step*2, src_step*4))
 ax.set_xticklabels(xticks)
 
 delvider = axgrid1.make_axes_locatable(ax)

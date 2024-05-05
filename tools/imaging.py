@@ -64,11 +64,10 @@ src_step = params['antenna_settings']['src_step']
 
 #* load data
 data_list = []
-for i in range(1, nrx+1):
+for i in range(1, nrx+1): # i: rx index, 1~nrx
     data, dt = get_output_data(data_path, i, 'Ez')
     data_list.append(data)
-
-
+print(f'data loaded, data length is ', len(data_list))
 
 #* calc array position
 rx_position_list = []
@@ -107,7 +106,7 @@ for x_index in tqdm(range(imaging_grid_x), desc='calculating path length'):
 #* calculate propagation time for each sets of rx and src
 if args.velocity_structure == 'n':
     #! setting constant Vrms
-    constant_epsilon_r = 10
+    constant_epsilon_r = 6 # constant epsilon_r
     constant_Vrms = 1 / np.sqrt(constant_epsilon_r) # [/c]
     #! setting constant Vrms
 
@@ -165,7 +164,7 @@ else:
 
 
 #* calculate cross-correlation
-def calc_Amp(z, x, i): # i: 0~antenna_num-1を入力する
+def calc_Amp(z, x, i): # i: for ループで0~antenna_num-1を入力する
     #* i番目のrxにおける遅れ時間配列（1D）を作成
     #* 簡単のため，i番目のsrcで送信してi番目のrxで受診するのもOKとする
     tau = params['transmitting_delay'] + tau_src2ref[z, x, :] + tau_ref2rx[z, x, i] # i番目のrxで受信する場合の遅れ時間[s]
@@ -196,8 +195,12 @@ def calc_corr():
     for x in tqdm(range(imaging_grid_x), desc='calculating cross-correlation'):
         for z in range(imaging_grid_z):
 
-            Amp_at_xz = np.array([calc_Amp(z, x, rx) for rx in range(antenna_num)])
-            #* ↑Amp_at_xzは1次元配列Amp_arrayを結合した2次元配列
+            #* array観測の場合
+            if len(data_list) > 1:
+                Amp_at_xz = np.array([calc_Amp(z, x, rx) for rx in range(antenna_num)]) # ↑Amp_at_xzは1次元配列Amp_arrayを結合した2次元配列
+            #* common offset, multi offsetの場合
+            else:
+                Amp_at_xz = np.array([calc_Amp(z, x, 0)])
 
             corr_matrix = np.abs(Amp_at_xz[:, None] * Amp_at_xz)
             cross_corr[z, x] = np.sum(corr_matrix)

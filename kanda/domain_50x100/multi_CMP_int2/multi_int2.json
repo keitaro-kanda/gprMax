@@ -9,7 +9,7 @@
         "ground_depth": 92,
         "grid_size": 0.02
     },
-    "out_file": "kanda/domain_50x100/array_int2/calc_merged.out",
+    "out_file": "kanda/domain_50x100/multi_CMP_int2/calc_merged.out",
     "_comment": "t0-Vrms plot file",
     "corr_map_txt": "kanda/domain_50x50/multiple_layers/int1/Vrms/corr_map.txt",
     "_comment": "t0_vrms plot file in CMP observation",
@@ -20,13 +20,13 @@
     {
     "--comment": "unit: [m]",
     "antenna_height": 0.5,
-    "src_start": 5,
-    "src_end": 45,
-    "src_step": 2,
-    "rx_start": 5,
+    "src_start": 25,
+    "src_end": 5,
+    "src_step": -2,
+    "rx_start": 25,
     "rx_end": 45,
     "rx_step": 2,
-    "src_move_times": 21
+    "src_move_times": 11
     },
     "_comment": "pulse [s], transmitting_delay means peak time",
     "pulse_length": 13e-9,
