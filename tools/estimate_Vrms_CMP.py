@@ -35,6 +35,7 @@ data_path = params['out_file']
 data, dt = get_output_data(data_path, 1, 'Ez')
 
 
+#* prepare arrays
 time_window = params['time_window'] # [ns]
 time_step = params['time_step'] # [ns]
 t0_array_ns = np.arange(0 , time_window, time_step) # [ns], array for extent
@@ -44,11 +45,11 @@ Vrms_array_percent = np.arange(0.01, 1.01, 0.01) # [/c], array for extent
 Vrms_array = c * Vrms_array_percent # [m/s]
 
 
+#* need for calculation of  offset in get_apmlitude function
 src_start = params['antenna_settings']['src_start'] # [m]
 src_step = params['antenna_settings']['src_step'] # [m]
 rx_start = params['antenna_settings']['rx_start'] # [m]
 rx_step = params['antenna_settings']['rx_step'] # [m]
-
 def get_amplitude(Vrms_ind, t0_ind, trace_num):
     #* get value of Vrms and t0
     t0 = t0_array[t0_ind] # [s]
@@ -79,10 +80,12 @@ def calc_correration():
             correration_map[t, v] = np.sum(np.abs([a * b for a, b in combinations(Amp_vt, 2)]))
     return correration_map
 
-
+#* prepare output directory
 output_dir = os.path.dirname(data_path)
 output_dir_name = 'Vrms_estimation'
 output_dir_path = os.path.join(output_dir, output_dir_name)
+
+#* run the tool
 #* In case calculate and plot
 if args.plot_type == 'calc':
     corr_map = calc_correration()
@@ -97,7 +100,6 @@ elif args.plot_type == 'plot':
 #* In case invalid plot type
 else:
     raise ValueError('Invalid plot type')
-
 #* normalize
 corr_map = corr_map / np.max(corr_map)
 
