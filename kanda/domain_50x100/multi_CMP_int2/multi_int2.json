@@ -33,7 +33,7 @@
     "transmitting_delay": 4.3e-9,
 
     "_comment": "for Vrms estimation [ns]",
-    "time_window": 1500,
+    "time_window": 3000,
     "time_step": 1,
 
     "_comment": "for V_RMS theoretical estimation",

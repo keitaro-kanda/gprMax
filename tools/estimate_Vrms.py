@@ -70,22 +70,22 @@ vertical_delay_time = np.arange(0, params['time_window'], params['time_step']) #
 
 
 #* load parameters from json file
-antenna_step = params['src_step'] # antenna distance step, [m]
-rx_start = params['rx_start'] # rx start position, [m]
-src_start = params['src_start'] # src start position, [m]
-src_end = params['src_end'] # src end position, [m]
-src_move_times = nrx # the number of src move times
+antenna_step = params['antenna_settings']['src_step'] # antenna distance step, [m]
+rx_start = params['antenna_settings']['rx_start'] # rx start position, [m]
+src_start = params['antenna_settings']['src_start'] # src start position, [m]
+src_end = params['antenna_settings']['src_end'] # src end position, [m]
+src_move_times = params['antenna_settings']['src_move_times'] # the number of src move times
 pulse_width = int(params['pulse_length'] / dt) # [data point]
 transmit_delay = params['transmitting_delay'] # [ns]
 transmit_delay_point = int(transmit_delay / dt) # [data point]
 
-path_num = nrx**2
+#path_num = nrx**2
 
 #* make corr function
 def calc_corr(Vrms_ind, tau_ver_ind, i): # i: in range(nrx)
     if args.CMP == True:
         rx_ind = i # rx: 0 -> nrx-1
-        tx_ind = nrx - 1 - i # tx: nrx-1 -> 0
+        tx_ind = i # tx: nrx-1 -> 0
 
         # calculate offset
         rx_posi = rx_ind * antenna_step # [m]
@@ -98,7 +98,7 @@ def calc_corr(Vrms_ind, tau_ver_ind, i): # i: in range(nrx)
         # calculate total delay time t
         total_delay = int((np.sqrt((offset / Vrms)**2 + tau_ver**2) / dt))  + transmit_delay_point # [data point]
         Amp_array = np.zeros(nrx) # 取り出した強度を入れる配列を用意しておく
-        if total_delay >= len(data_list[rx_ind]):
+        if total_delay >= len(data_list):
                 Amp_array[rx_ind] = 0
         else:
             Amp_array[i] = np.abs(data_list[rx_ind][total_delay, tx_ind]) # Ez intensity in (t, src) at i-th rx
@@ -131,7 +131,7 @@ def calc_corr(Vrms_ind, tau_ver_ind, i): # i: in range(nrx)
                 # calculate shifted hyperbola
                 #Sx = (offset**2 / Vrms**2) - 2 * tau_ver * ()
 
-                if total_delay >= len(data_list[i]):
+                if total_delay >= len(data_list):
                     Amp_array.append(0)
                 else:
                     Amp_array.append(np.abs(data_list[i][total_delay, src])) # Ez intensity in (t, src) at i-th rx
@@ -169,7 +169,7 @@ def roop_corr():
     for v in tqdm(range(len(RMS_velocity))):
         for t in range(len(vertical_delay_time)):
             if args.CMP == True:
-                Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(nrx)]) # 1D array
+                Amp_at_vt = np.array([calc_corr(v, t, rx) for rx in range(src_move_times)]) # 1D array
                 corr_matrix = np.abs([a *b for a, b in combinations(Amp_at_vt, 2)]) # 1D array
 
             else:
@@ -183,7 +183,7 @@ def roop_corr():
             corr_map[t, v] = np.sum(corr_matrix)
             #corr_map[t, v] = np.sum(Amp_at_vt)
 
-    corr_map = corr_map / path_num / (path_num - 1) # normalize
+    #corr_map = corr_map / path_num / (path_num - 1) # normalize
     return corr_map
 
 
