@@ -115,7 +115,7 @@ fontsize_small = 16
 plt.imshow(corr_map,
             cmap = 'jet', aspect='auto',interpolation='nearest',
             extent=[Vrms_array_percent[0], Vrms_array_percent[-1], t0_array_ns[-1], t0_array_ns[0]],
-            norm = colors.LogNorm(vmin=1e-7, vmax=1)
+            norm = colors.LogNorm(vmin=1e-5, vmax=1)
             )
 
 
