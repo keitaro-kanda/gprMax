@@ -33,6 +33,7 @@ with open (args.jsonfile) as f:
 #* load data
 data_path = params['out_file']
 data, dt = get_output_data(data_path, 1, 'Ez')
+print(dt)
 
 
 #* prepare arrays

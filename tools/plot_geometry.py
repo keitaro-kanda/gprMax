@@ -99,7 +99,7 @@ vacuum_thickness = params['geometry_settings']['domain_z'] - params['geometry_se
 #cmap = mpl.colors.ListedColormap([plt.cm.binary(int(255*i/len(epsilon_list))) for i in range(len(epsilon_list))])
 plt.imshow(map.epsilon_map,
         extent=[0, map.epsilon_map.shape[1] * spatial_grid,
-                map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness, -vacuum_thickness],
+                map.epsilon_map.shape[0] * spatial_grid , 0],
         cmap='binary')
 
 if args.closeup:
@@ -107,7 +107,8 @@ if args.closeup:
     y_end = 6
     ax.set_ylim(y_end, y_start)
 
-ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 5))
+#ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 5))
+ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 5))
 
 plt.xlabel('x (m)', size=18)
 plt.ylabel('z (m)', size=18)
