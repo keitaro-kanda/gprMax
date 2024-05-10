@@ -1,15 +1,10 @@
 {
     "geometry_settings":
     {
-        "h5_file": "kanda/domain_50x100/geometry/geometry.h5",
-        "material_file": "kanda/domain_50x100/geometry/geometry_materials.txt",
-        "--comment": "unit: [m]",
-        "domain_x": 50,
-        "domain_z": 100,
-        "ground_depth": 92,
-        "grid_size": 0.02
+        "comment": "file path of geometry setting json file",
+        "geometry_json": "kanda/domain_50x100/loss/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_50x100/multi_CMP_int1/calc_merged.out",
+    "out_file": "kanda/domain_50x100/loss/multi_CMP_int1/calc_merged.out",
     "_comment": "t0-Vrms plot file",
     "corr_map_txt": "kanda/domain_50x100/multi_CMP_int1/Vrms_estimation/corr_map.txt",
     "_comment": "t0_vrms plot file in CMP observation",
@@ -33,7 +28,7 @@
     "transmitting_delay": 4.3e-9,
 
     "_comment": "for Vrms estimation [ns]",
-    "time_window":3000,
+    "time_window":2500,
     "time_step": 1,
 
     "_comment": "for V_RMS theoretical estimation",

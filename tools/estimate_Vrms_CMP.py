@@ -16,6 +16,7 @@ from tqdm import tqdm
 from tools.outputfiles_merge import get_output_data
 from itertools import combinations
 import matplotlib as mpl
+from tools.calc_Vrms_from_geometry import calc_Vrms
 
 
 #* Parse command line arguments
@@ -28,6 +29,9 @@ args = parser.parse_args()
 #* load jason data
 with open (args.jsonfile) as f:
     params = json.load(f)
+#* load geometry json file
+with open(params['geometry_settings']['geometry_json']) as f:
+    geometry_params = json.load(f)
 
 
 #* load data
@@ -105,6 +109,14 @@ else:
 corr_map = corr_map / np.max(corr_map)
 
 
+
+#* get theoretical value of Vrms and t0 from geometry
+calc_Vrms_geometry = calc_Vrms(params['geometry_settings']['geometry_json'])
+layer_thickness, internal_permittivity, internal_velovity = calc_Vrms_geometry.load_params_from_json()
+t0_theory = calc_Vrms_geometry.calc_t0(layer_thickness, internal_velovity) # [s]
+Vrms_theory = calc_Vrms_geometry.calc_Vrms(layer_thickness, internal_velovity, t0_theory) # [/c]
+
+
 #* plot
 fig = plt.figure(figsize=(12, 10), tight_layout=True)
 ax = fig.add_subplot(111)
@@ -113,6 +125,13 @@ fontsize_large = 20
 fontsize_medium = 18
 fontsize_small = 16
 
+#* show theoretical values
+ax.scatter(Vrms_theory, t0_theory * 1e9,
+        c = 'black', s = 70, marker = 'P', edgecolor = 'white',
+        label = 'Theoretical values')
+
+
+#* show correlation map
 plt.imshow(corr_map,
             cmap = 'jet', aspect='auto',interpolation='nearest',
             extent=[Vrms_array_percent[0], Vrms_array_percent[-1], t0_array_ns[-1], t0_array_ns[0]],
@@ -120,6 +139,7 @@ plt.imshow(corr_map,
             )
 
 
+ax.legend(fontsize=fontsize_small, loc='lower right')
 ax.set_xlabel('Vrms [/c]', fontsize=fontsize_medium)
 ax.set_ylabel('t0 [ns]', fontsize=fontsize_medium)
 ax.tick_params(labelsize=fontsize_small)

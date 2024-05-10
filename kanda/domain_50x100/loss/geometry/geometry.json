@@ -8,5 +8,11 @@
         "domain_z": 100,
         "ground_depth": 92,
         "grid_size": 0.02
+    },
+    "layering_structure_info":
+    {
+        "comment": "unit: [m], including vacuum layer",
+        "internal_permittivity": [1, 4, 6, 9, 6, 9],
+        "layer_thickness": [0.5, 10, 5, 40, 5, 40]
     }
 }
