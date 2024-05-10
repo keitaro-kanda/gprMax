@@ -22,7 +22,7 @@ from tools.calc_Vrms_from_geometry import calc_Vrms
 #* Parse command line arguments
 parser = argparse.ArgumentParser(usage='cd gprMax; python -m tools.estimate_Vrms_CMP jsonfile')
 parser.add_argument('jsonfile', help='json file path')
-parser.add_argument('plot_type', choices=['plot', 'calc'])
+parser.add_argument('plot_type', choices=['plot', 'calc', 'select']) # 'plot': plot only, 'calc': calculate and plot, 'select': plot only with selected data area
 args = parser.parse_args()
 
 
@@ -34,7 +34,7 @@ with open(params['geometry_settings']['geometry_json']) as f:
     geometry_params = json.load(f)
 
 
-#* load data
+#* load B-scan data
 data_path = params['out_file']
 data, dt = get_output_data(data_path, 1, 'Ez')
 print(dt)
@@ -85,12 +85,25 @@ def calc_correration():
             correration_map[t, v] = np.sum(np.abs([a * b for a, b in combinations(Amp_vt, 2)]))
     return correration_map
 
+
 #* prepare output directory
 output_dir = os.path.dirname(data_path)
-output_dir_name = 'Vrms_estimation'
+if args.plot_type == 'select':
+    output_dir_name = 'Vrms_estimation_selected'
+else:
+    output_dir_name = 'Vrms_estimation'
 output_dir_path = os.path.join(output_dir, output_dir_name)
+if not os.path.exists(output_dir_path):
+    os.makedirs(output_dir_path)
+
 
 #* run the tool
+#! =====select area-----
+select_t0_start = 1650 # [ns]
+select_t0_end = 1800 # [ns]
+select_Vrms_start = 0 # [/c]
+select_Vrms_end = 1 # [/c]
+#! ---------------------
 #* In case calculate and plot
 if args.plot_type == 'calc':
     corr_map = calc_correration()
@@ -102,12 +115,17 @@ if args.plot_type == 'calc':
 elif args.plot_type == 'plot':
     corr_map_file_path = params['corr_map_txt']
     corr_map = np.loadtxt(corr_map_file_path)
+#* In case plot only with selected data area
+elif args.plot_type == 'select':
+    corr_map = np.loadtxt(params['corr_map_txt'])
+    corr_map = corr_map[int(select_t0_start/time_step):int(select_t0_end/time_step)
+                        , int(select_Vrms_start/0.01):int(select_Vrms_end/0.01)] # select data area
+    corr_map = corr_map / np.max(corr_map) # normalize
 #* In case invalid plot type
 else:
     raise ValueError('Invalid plot type')
 #* normalize
 corr_map = corr_map / np.max(corr_map)
-
 
 
 #* get theoretical value of Vrms and t0 from geometry
@@ -132,11 +150,23 @@ ax.scatter(Vrms_theory, t0_theory * 1e9,
 
 
 #* show correlation map
-plt.imshow(corr_map,
-            cmap = 'jet', aspect='auto',interpolation='nearest',
-            extent=[Vrms_array_percent[0], Vrms_array_percent[-1], t0_array_ns[-1], t0_array_ns[0]],
-            norm = colors.LogNorm(vmin=1e-5, vmax=1)
+if args.plot_type == 'select':
+    bounds = np.array([0, 0.25, 0.50, 0.75, 1.0])
+    cmap = mpl.colors.ListedColormap([plt.cm.Blues(int(255*i/3)) for i in range(4)])
+    norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+    plt.imshow(corr_map,
+            cmap = cmap, aspect='auto', interpolation='nearest',
+            extent=[select_Vrms_start, select_Vrms_end, select_t0_end, select_t0_start],
+            norm = norm
             )
+    ax.minorticks_on()
+    ax.grid(which='both', linestyle='--', linewidth=0.5)
+else:
+    plt.imshow(corr_map,
+                cmap = 'jet', aspect='auto',interpolation='nearest',
+                extent=[Vrms_array_percent[0], Vrms_array_percent[-1], t0_array_ns[-1], t0_array_ns[0]],
+                norm = colors.LogNorm(vmin=1e-5, vmax=1)
+                )
 
 
 ax.legend(fontsize=fontsize_small, loc='lower right')
@@ -149,5 +179,9 @@ cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax).set_label('Amplitude', fontsize=18)
 cax.tick_params(labelsize=16)
 
-plt.savefig(os.path.join(output_dir_path, 'corr_map.png'))
+if args.plot_type == 'select':
+    plt.savefig(output_dir_path + '/corr_map_selected_' + str(select_t0_start) + '_' + str(select_t0_end) + '.png')
+    #plt.savefig(os.path.join(output_dir_path, 'corr_map_selected_',str(select_t0_start), str(select_t0_end), '.png' ))
+else:
+    plt.savefig(os.path.join(output_dir_path, 'corr_map.png'))
 plt.show()
