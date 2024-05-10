@@ -89,7 +89,7 @@ def calc_correration():
 #* prepare output directory
 output_dir = os.path.dirname(data_path)
 if args.plot_type == 'select':
-    output_dir_name = 'Vrms_estimation_selected'
+    output_dir_name = 'Vrms_estimation/selected'
 else:
     output_dir_name = 'Vrms_estimation'
 output_dir_path = os.path.join(output_dir, output_dir_name)
@@ -99,8 +99,8 @@ if not os.path.exists(output_dir_path):
 
 #* run the tool
 #! =====select area-----
-select_t0_start = 1650 # [ns]
-select_t0_end = 1800 # [ns]
+select_t0_start = 1675 # [ns]
+select_t0_end = 1725 # [ns]
 select_Vrms_start = 0 # [/c]
 select_Vrms_end = 1 # [/c]
 #! ---------------------

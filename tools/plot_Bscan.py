@@ -60,7 +60,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     plt.imshow(outputdata_norm, 
              extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
             interpolation='nearest', aspect='auto', cmap='seismic', 
-            vmin=-1e-5, vmax=1e-5)
+            vmin=-1, vmax=1)
     plt.xlabel('trace number', fontsize=20)
     plt.ylabel('Time [s]', fontsize=20)
     plt.tick_params(labelsize=18)
@@ -70,9 +70,6 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
         closeup_start = 540 # [ns]
         closeup_end = 590 # [ns]
-
-        # カラーバー範囲の設定
-
         plt.imshow(outputdata_norm,
              extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0],
             interpolation='nearest', aspect='auto', cmap='seismic',
@@ -131,7 +128,7 @@ if __name__ == "__main__":
     # Open output file and read number of outputs (receivers)
     f = h5py.File(args.outputfile, 'r') # outファイルの読み込み？
     nrx = f.attrs['nrx'] # Attribute(属性)の読み取り？、nrx:レシーバーの総数
-    print(nrx)
+    print('nrx: ', nrx)
     f.close()
 
     # Check there are any receivers
