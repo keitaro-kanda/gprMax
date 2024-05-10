@@ -6,12 +6,12 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x100/multi_CMP_int2/calc.in -n 11"
+            "command": "python -m gprMax kanda/domain_50x100/loss/multi_CMP_int2/calc.in -n 11"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x100/multi_CMP_int1/calc.in -n 21"
+            "command": "python -m gprMax kanda/domain_50x100/loss/multi_CMP_int1/calc.in -n 21"
         },
         {
             "label": "task sequence",
