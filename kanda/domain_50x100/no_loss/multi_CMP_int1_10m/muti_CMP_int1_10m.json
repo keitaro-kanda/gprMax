@@ -1,0 +1,29 @@
+{
+    "comment": "This json file is used to make extracted B-scan data",
+    "geometry_settings":
+    {
+        "comment": "file path of geometry setting json file",
+        "geometry_json": "kanda/domain_50x100/no_loss/geometry/geometry.json"
+    },
+    "original_info":
+    {
+        "original_out_file": "kanda/domain_50x100/no_loss/multi_CMP_int1_40m/calc_merged.out",
+        "original_json_file": "kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json"
+    },
+    "txt_Bscan_file": "kanda/domain_50x100/no_loss/multi_CMP_int1_10m/extracted_Bscan.txt",
+    "antenna_settings":
+    {
+        "comment": "unit: [m]",
+        "-comment": "extraction antenna step must be larger or same than original antenna step",
+        "antenna_height": 0.5,
+        "src_start": 25,
+        "src_end": 20,
+        "src_step": -1,
+        "rx_start": 25,
+        "rx_end": 30,
+        "rx_step": 1,
+        "src_move_times": 6
+    },
+    "time_window": 3000,
+    "time_step": 1
+}
