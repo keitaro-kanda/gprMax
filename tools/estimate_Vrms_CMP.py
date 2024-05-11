@@ -53,8 +53,8 @@ print('dt: ', dt)
 
 
 #* prepare arrays
-time_window = params['time_window'] # [ns]
-time_step = params['time_step'] # [ns]
+time_window = params['Vrms_estimation']['time_window'] # [ns]
+time_step = params['Vrms_estimation']['time_step'] # [ns]
 t0_array_ns = np.arange(0 , time_window, time_step) # [ns], array for extent
 t0_array = t0_array_ns * 1e-9 # [s]
 c = 3e8 # [m/s]
@@ -111,8 +111,9 @@ if not os.path.exists(output_dir_path):
 
 #* run the tool
 #! =====select area-----
-select_t0_start = 1675 # [ns]
-select_t0_end = 1725 # [ns]
+select_t0_array = np.array(params['Vrms_estimation']['select_time'])
+select_t0_start = select_t0_array[0, 0] # [ns]
+select_t0_end = select_t0_array[0, 1] # [ns]
 select_Vrms_start = 0 # [/c]
 select_Vrms_end = 1 # [/c]
 #! ---------------------
@@ -125,11 +126,11 @@ if args.plot_type == 'calc':
     np.savetxt(os.path.join(output_dir_path, 'corr_map.txt'), corr_map)
 #* In case plot only
 elif args.plot_type == 'plot':
-    corr_map_file_path = params['corr_map_txt']
+    corr_map_file_path = params['Vrms_estimation']['corr_map_txt']
     corr_map = np.loadtxt(corr_map_file_path)
 #* In case plot only with selected data area
 elif args.plot_type == 'select':
-    corr_map = np.loadtxt(params['corr_map_txt'])
+    corr_map = np.loadtxt(params['Vrms_estimation']['corr_map_txt'])
     corr_map = corr_map[int(select_t0_start/time_step):int(select_t0_end/time_step)
                         , int(select_Vrms_start/0.01):int(select_Vrms_end/0.01)] # select data area
     corr_map = corr_map / np.max(corr_map) # normalize

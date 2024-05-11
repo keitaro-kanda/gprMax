@@ -24,6 +24,14 @@
         "rx_step": 1,
         "src_move_times": 6
     },
-    "time_window": 3000,
-    "time_step": 1
+    "Vrms_estimation":
+    {
+        "corr_map_txt": "kanda/domain_50x100/no_loss/multi_CMP_int1_10m/Vrms_estimation/corr_map.txt",
+        "comment": "[ns]",
+        "time_window":3000,
+        "time_step": 1,
+        "select_time": [
+            [125, 175], [200, 250], [900, 950], [975, 1025], [1675, 1725]
+        ]
+    }
 }
