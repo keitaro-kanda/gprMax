@@ -67,7 +67,7 @@ class extract_Bscan:
         return f
     
 
-#* example usage
+#* usage
 extracted_Bscan = extract_Bscan(data)
 extracted_Bscan = extracted_Bscan.extract_Bscan(extracted_src_move_times)
 print('extracted_Bscan shape: ', extracted_Bscan.shape)
