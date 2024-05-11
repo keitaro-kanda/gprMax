@@ -35,9 +35,21 @@ with open(params['geometry_settings']['geometry_json']) as f:
 
 
 #* load B-scan data
-data_path = params['out_file']
-data, dt = get_output_data(data_path, 1, 'Ez')
-print(dt)
+#* Chech wheter if json file has 'out_file' key or 'txt_Bscan_file' key
+if 'out_file' in params:
+    data_path = params['out_file']
+    data, dt = get_output_data(data_path, 1, 'Ez')
+    print('input is out_file')
+elif 'txt_Bscan_file' in params:
+    data_path = params['original_info']['original_out_file']
+    data, dt = get_output_data(data_path, 1, 'Ez')
+    data = np.loadtxt(params['txt_Bscan_file'])
+    print('input is extracted B-scan data txt file')
+else:
+    raise ValueError('Invalid key: out_file or txt_Bscan_file')
+print('data shape: ', data.shape)
+print('dt: ', dt)
+
 
 
 #* prepare arrays
@@ -87,7 +99,7 @@ def calc_correration():
 
 
 #* prepare output directory
-output_dir = os.path.dirname(data_path)
+output_dir = os.path.dirname(args.jsonfile)
 if args.plot_type == 'select':
     output_dir_name = 'Vrms_estimation/selected'
 else:
@@ -165,7 +177,7 @@ else:
     plt.imshow(corr_map,
                 cmap = 'jet', aspect='auto',interpolation='nearest',
                 extent=[Vrms_array_percent[0], Vrms_array_percent[-1], t0_array_ns[-1], t0_array_ns[0]],
-                norm = colors.LogNorm(vmin=1e-10, vmax=1)
+                norm = colors.LogNorm(vmin=1e-5, vmax=1)
                 )
 
 
