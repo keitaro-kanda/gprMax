@@ -36,7 +36,11 @@
         "time_step": 1,
         "select_time": [
             [125, 175], [200, 250], [900, 950], [975, 1025], [1675, 1725]
-        ]
+        ],
+        "_comment": "[/c]",
+        "Vrms_results": [0.52, 0.47, 0.37, 0.36, 0.47],
+        "__comment": "[ns]",
+        "t0_results": [155, 238, 938, 1000, 1700]
     },
 
     "_comment": "result of V_RMS theoretical estimation, [ns] and [/c]",

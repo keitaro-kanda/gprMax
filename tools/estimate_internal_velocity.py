@@ -16,6 +16,8 @@ args = parser.parse_args()
 #* load jason data
 with open (args.jsonfile) as f:
     params = json.load(f)
+with open(params['geometry_settings']['geometry_json']) as f:
+    geometry_params = json.load(f)
 
 
 #* set physical constants
@@ -23,13 +25,16 @@ c = 299792458 # [m/s], speed of light in vacuum
 
 
 #* load parameters from json file
-Vrms = np.array(params['V_RMS']) * c # [m/s], Vrms in each layers
-t0 = np.array(params['tau_ver']) * 10**(-9)# [s], t0 in each layers
-epsilon_r_model = np.array(params['internal_permittivity'][1:]) # epsilon_r in each layers, contains air layer
+Vrms = np.array(params['Vrms_estimation']['Vrms_results']) * c # [m/s], Vrms in each layers
+t0 = np.array(params['Vrms_estimation']['t0_results']) * 10**(-9)# [s], t0 in each layers
+print('Vrms: ', Vrms)
+print('t0: ', t0)
+epsilon_r_model = np.array(geometry_params['layering_structure_info']['internal_permittivity'][1:]) # epsilon_r in each layers, contains air layer
 
 
 #* calculate t0 in vacuum
-t0_vacuum = params['antenna_height'] * 2 / c
+vacuum_thickness = params['antenna_settings']['antenna_height'] # [m]
+t0_vacuum = vacuum_thickness * 2 / c
 
 #* estimate internal velocity by Dix formula
 internal_velocities_Dix = []
@@ -56,7 +61,7 @@ internal_velocities_nonDix = []
 for i in range(len(t0)):
     if i == 0:
         #! Vnって命名はヤバす
-        Vn = (t0[i] * Vrms[i] - params['antenna_height'] * 2) \
+        Vn = (t0[i] * Vrms[i] - vacuum_thickness * 2) \
             / (t0[i] - t0_vacuum)
     else:
         Vn = (t0[i] * Vrms[i] - t0[i-1] * Vrms[i-1]) \
@@ -87,7 +92,7 @@ subsurface_structure = np.column_stack((layer_num, internal_velocities_Dix, epsi
 
 
 #* make output dir
-output_dir_path = os.path.dirname(params['corr_map_txt']) + '/subsurface_structure'
+output_dir_path = os.path.dirname(args.jsonfile) + '/subsurface_structure'
 if not os.path.exists(output_dir_path):
     os.makedirs(output_dir_path)
 
