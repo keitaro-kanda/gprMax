@@ -1,0 +1,28 @@
+#domain: 50 100 0.02
+#dx_dy_dz: 0.02 0.02 0.02
+#time_window: 2.5e-6
+
+
+=====地形読み込み=====
+<>
+#geometry_objects_read: 0 0 0 kanda/domain_50x100/conductivity_0001/geometry/geometry.h5 kanda/domain_50x100/conductivity_0001/geometry/geometry_materials.txt
+==========
+
+
+=====B-scan用=====
+＜波源設定＞
+#waveform: ricker 1 100e6 my_src
+
+#hertzian_dipole: z 25 92.5 0 my_src
+#rx: 25 92.5 0
+
+＜moving pass＞
+#src_steps: -2 0 0
+#rx_steps: 2 0 0
+中央から外側へ向けて動くCMP観測
+
+観測幅：40m
+n回数：11
+
+#output_dir: out_files
+==========
