@@ -6,12 +6,22 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x100/conductivity_0001/multi_CMP_int2/calc.in -n 11"
+            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json select"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x100/conductivity_0001/multi_CMP_int1/calc.in -n 21"
+            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_50x100/no_loss/multi_CMP_int1_20m/muti_CMP_int1_20m.json select"
+        },
+        {
+            "label": "gprMax 3rd run",
+            "type": "shell",
+            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_50x100/no_loss/multi_CMP_int1_10m/muti_CMP_int1_10m.json select"
+        },
+        {
+            "label": "gprMax 4th run",
+            "type": "shell",
+            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_50x100/no_loss/multi_CMP_int2/multi_int2.json select"
         },
         {
             "label": "task sequence",
@@ -20,6 +30,8 @@
             "dependsOn": [
                 "gprMax 1st run",
                 "gprMax 2nd run",
+                "gprMax 3rd run",
+                "gprMax 4th run"
             ],
             "problemMatcher": []
         }
