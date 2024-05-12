@@ -27,8 +27,6 @@
     "pulse_length": 13e-9,
     "transmitting_delay": 4.3e-9,
 
-    "_comment": "for Vrms estimation [ns]",
-
     "Vrms_estimation":
     {
         "comment": "[ns]",
