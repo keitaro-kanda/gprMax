@@ -34,8 +34,15 @@
             [125, 175], [200, 250], [900, 950], [975, 1025], [1675, 1725]
         ],
         "_comment": "[/c]",
-        "Vrms_results": [0.62, 1, 1, 1, 1],
+        "Vrms_results": [0.62],
         "__comment": "[ns]",
-        "t0_results": [157, 500, 1000, 1500, 2000]
+        "t0_results": [157]
+    },
+
+    "permittivity_structure_estimation":
+    {
+        "V_int_results": [0.609],
+        "comment": "need 0-padding for tools.plot_dielectric_structure",
+        "epsilon_r_results": [2.70]
     }
 }

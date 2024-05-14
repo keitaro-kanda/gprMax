@@ -1,0 +1,41 @@
+{
+    "comment": "This json file is used to make extracted B-scan data",
+    "geometry_settings":
+    {
+        "comment": "file path of geometry setting json file",
+        "geometry_json": "kanda/domain_50x100/no_loss/geometry/geometry.json"
+    },
+    "original_info":
+    {
+        "original_out_file": "kanda/domain_50x100/no_loss/multi_CMP_int1_40m/calc_merged.out",
+        "original_json_file": "kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json"
+    },
+    "txt_Bscan_file": "kanda/domain_50x100/no_loss/multi_int4_40m/extracted_Bscan.txt",
+    "antenna_settings":
+    {
+        "comment": "unit: [m]",
+        "-comment": "extraction antenna step must be larger or same than original antenna step",
+        "antenna_height": 0.5,
+        "src_start": 25,
+        "src_end": 5,
+        "src_step": -4,
+        "rx_start": 25,
+        "rx_end": 45,
+        "rx_step": 1,
+        "src_move_times": 5
+    },
+    "Vrms_estimation":
+    {
+        "corr_map_txt": "kanda/domain_50x100/no_loss/multi_int4_40m/Vrms_estimation/corr_map.txt",
+        "comment": "[ns]",
+        "time_window":3000,
+        "time_step": 1,
+        "select_time": [
+            [125, 175], [200, 250], [900, 950], [975, 1025], [1675, 1725]
+        ],
+        "_comment": "[/c]",
+        "Vrms_results": [0.62, 1, 1, 1, 1],
+        "__comment": "[ns]",
+        "t0_results": [157, 500, 1000, 1500, 2000]
+    }
+}
