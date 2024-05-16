@@ -98,8 +98,11 @@ collections_model = run_geometry('kanda/domain_50x100/no_loss/geometry/geometry.
 collections_40m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json')
 collections_20m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_20m/muti_CMP_int1_20m.json')
 collections_10m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_10m/muti_CMP_int1_10m.json')
+
+
 arrays = [collections_model, collections_40m, collections_20m, collections_10m]
 clors = ['k', 'c', 'm', 'y']
+line_styles = ['-', '--', '-.', ':']
 labels = ['Model', '40m', '20m', '10m']
 
 #* plot
@@ -115,6 +118,7 @@ for i in range(len(arrays)):
     lines = arrays[i]
     ax.add_collection(lines)
     lines.set_color(clors[i])
+    lines.set_linestyle(line_styles[i])
     lines.set_label(labels[i])
 
 ax.set_xlabel('Dielectric constant', fontsize=fontsize_medium)
@@ -122,7 +126,7 @@ ax.set_ylabel('Depth [m]', fontsize=fontsize_medium)
 ax.set_title('Dielectric structure', fontsize=fontsize_large)
 
 ax.autoscale()
-#ax.set_xlim(1, 15)
+ax.set_xlim(1, 15)
 ax.legend(fontsize=fontsize_medium, loc = 'lower right')
 ax.tick_params(labelsize=fontsize_medium)
 ax.grid()
