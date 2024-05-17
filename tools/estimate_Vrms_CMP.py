@@ -158,7 +158,7 @@ fontsize_small = 16
 #* show theoretical values
 ax.scatter(Vrms_theory, t0_theory * 1e9,
         c = 'black', s = 100, marker = 'P', edgecolor = 'white',
-        label = 'Theoretical values')
+        label = 'Model setting')
 
 
 #* show correlation map
