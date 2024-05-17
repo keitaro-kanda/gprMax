@@ -58,10 +58,10 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
 
     plt.imshow(outputdata_norm, 
-             extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0], 
+             extent=[0, outputdata_norm.shape[1] * 2, outputdata_norm.shape[0] * dt, 0], 
             interpolation='nearest', aspect='auto', cmap='seismic', 
             vmin=-1, vmax=1)
-    plt.xlabel('trace number', fontsize=20)
+    plt.xlabel('Offset distance [m]', fontsize=20)
     plt.ylabel('Time [s]', fontsize=20)
     plt.tick_params(labelsize=18)
 
@@ -71,7 +71,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         closeup_start = 540 # [ns]
         closeup_end = 590 # [ns]
         plt.imshow(outputdata_norm,
-             extent=[0, outputdata_norm.shape[1], outputdata_norm.shape[0] * dt, 0],
+             extent=[0, outputdata_norm.shape[1] * 2, outputdata_norm.shape[0] * dt, 0],
             interpolation='nearest', aspect='auto', cmap='seismic',
             vmin=-0.01, vmax=0.01)
         #plt.xlim(35, 55)
