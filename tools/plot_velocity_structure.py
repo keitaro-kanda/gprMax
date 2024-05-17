@@ -59,7 +59,7 @@ def calc_Vrms_geometry(jsonpath):
     layer_thickness, internal_permittivity, internal_velovity = calc_Vrms_geometry.load_params_from_json()
     t0_theory = calc_Vrms_geometry.calc_t0(layer_thickness, internal_velovity) # [ns], remove t0 in vacuum
     Vrms_theory = calc_Vrms_geometry.calc_Vrms(layer_thickness, internal_velovity, t0_theory) # [/c], remove Vrms in vacuum
-    
+
     t0_theory = t0_theory[1:]
     Vrms_theory = Vrms_theory[1:]
     t0_plot_geometry = np.zeros(len(t0_theory) * 2)
@@ -71,8 +71,12 @@ def calc_Vrms_geometry(jsonpath):
     Vrms_plot_geometry[1::2] = Vrms_theory
 
     plot_points_geometry = np.array([[Vrms_plot_geometry[i], t0_plot_geometry[i]*1e9] for i in range(len(t0_plot_geometry))])
-    return mc.LineCollection([plot_points_geometry], linewidths=2)
-geometry = calc_Vrms_geometry(geometry_json)
+    return t0_plot_geometry, Vrms_plot_geometry, mc.LineCollection([plot_points_geometry], linewidths=2)
+t0_plot_geometry, Vrms_plot_geometry, geometry = calc_Vrms_geometry(geometry_json)
+t0_plot_geometry = t0_plot_geometry * 1e9 # [ns]
+print('t0: ', t0_plot_geometry)
+print('Vrms: ', Vrms_plot_geometry)
+
 
 
 arrays = [geometry, max_40m, max_20m, max_10m]
@@ -97,9 +101,15 @@ for i in range(len(arrays)):
     lines.set_linestyle(line_styles[i])
     lines.set_label(labels[i])
 
+#* fill between
+Vrms_upper = Vrms_plot_geometry * 1.05
+Vrms_lower = Vrms_plot_geometry * 0.95
+for i in range(0, len(Vrms_upper), 2):
+    ax.fill_betweenx([t0_plot_geometry[i], t0_plot_geometry[i+1]], Vrms_lower[i], Vrms_upper[i], color='grey', alpha=0.3)
+
 ax.set_xlabel('Vrms [/c]', fontsize=fontsize_medium)
 ax.set_ylabel('t0 [ns]', fontsize=fontsize_medium)
-ax.set_title('Dielectric structure', fontsize=fontsize_large)
+ax.set_title('Average EM wave velocity structure', fontsize=fontsize_large)
 
 ax.autoscale()
 #ax.set_xlim(0, 1)

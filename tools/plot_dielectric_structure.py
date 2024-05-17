@@ -82,7 +82,7 @@ def run_geometry(json_path):
     depth = call_class.make_depth_array(thickness)
     permittivity = call_class.make_permittivity_array(permittivity)
     plot_points = call_class.make_plot_point_array(depth, permittivity)
-    return mc.LineCollection([plot_points], linewidths=2)
+    return depth, permittivity, mc.LineCollection([plot_points], linewidths=2)
 
 def run_estimation(json_path):
     call_class = make_plot_point_estimation(json_path)
@@ -94,12 +94,13 @@ def run_estimation(json_path):
 
 
 #* run the tool
-collections_model = run_geometry('kanda/domain_50x100/no_loss/geometry/geometry.json')
+depth_model, permittivity_model, collections_model = run_geometry('kanda/domain_50x100/no_loss/geometry/geometry.json')
 collections_40m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json')
 collections_20m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_20m/muti_CMP_int1_20m.json')
 collections_10m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_10m/muti_CMP_int1_10m.json')
 arrays = [collections_model, collections_40m, collections_20m, collections_10m]
 clors = ['k', 'c', 'm', 'y']
+line_styles = ['-', '--', '-.', ':']
 labels = ['Model', '40m', '20m', '10m']
 
 #* plot
@@ -115,14 +116,21 @@ for i in range(len(arrays)):
     lines = arrays[i]
     ax.add_collection(lines)
     lines.set_color(clors[i])
+    lines.set_linestyle(line_styles[i])
     lines.set_label(labels[i])
+
+#* fill between
+Vrms_upper = permittivity_model * 1.05
+Vrms_lower = permittivity_model * 0.95
+for i in range(0, len(Vrms_upper), 2):
+    ax.fill_betweenx([depth_model[i], depth_model[i+1]], Vrms_lower[i], Vrms_upper[i], color='grey', alpha=0.3)
 
 ax.set_xlabel('Dielectric constant', fontsize=fontsize_medium)
 ax.set_ylabel('Depth [m]', fontsize=fontsize_medium)
 ax.set_title('Dielectric structure', fontsize=fontsize_large)
 
 ax.autoscale()
-#ax.set_xlim(1, 15)
+ax.set_xlim(1, 15)
 ax.legend(fontsize=fontsize_medium, loc = 'lower right')
 ax.tick_params(labelsize=fontsize_medium)
 ax.grid()
