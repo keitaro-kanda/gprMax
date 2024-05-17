@@ -78,7 +78,7 @@ geometry = calc_Vrms_geometry(geometry_json)
 arrays = [geometry, max_40m, max_20m, max_10m]
 clors = ['k', 'c', 'm', 'y']
 line_styles = ['-', '--', '-.', ':']
-labels = ['Model', '40m', '20m', '10m']
+labels = ['model', '40m', '20m', '10m']
 
 
 #* plot
@@ -99,7 +99,7 @@ for i in range(len(arrays)):
 
 ax.set_xlabel('Vrms [/c]', fontsize=fontsize_medium)
 ax.set_ylabel('t0 [ns]', fontsize=fontsize_medium)
-ax.set_title('EM wave velocity structure', fontsize=fontsize_large)
+ax.set_title('Dielectric structure', fontsize=fontsize_large)
 
 ax.autoscale()
 #ax.set_xlim(0, 1)
