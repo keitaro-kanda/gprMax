@@ -157,7 +157,7 @@ fontsize_small = 16
 
 #* show theoretical values
 ax.scatter(Vrms_theory, t0_theory * 1e9,
-        c = 'black', s = 70, marker = 'P', edgecolor = 'white',
+        c = 'black', s = 100, marker = 'P', edgecolor = 'white',
         label = 'Theoretical values')
 
 
@@ -181,7 +181,7 @@ else:
                 )
 
 
-ax.legend(fontsize=fontsize_small, loc='lower right')
+ax.legend(fontsize=fontsize_medium, loc='lower right')
 ax.set_xlabel('Vrms [/c]', fontsize=fontsize_medium)
 ax.set_ylabel('t0 [ns]', fontsize=fontsize_medium)
 ax.tick_params(labelsize=fontsize_small)
