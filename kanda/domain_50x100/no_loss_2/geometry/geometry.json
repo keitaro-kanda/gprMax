@@ -1,0 +1,18 @@
+{
+    "geometry_settings":
+    {
+        "h5_file": "kanda/domain_50x100/no_loss_2/geometry/geometry.h5",
+        "material_file": "kanda/domain_50x100/no_loss_2/geometry/geometry_materials.txt",
+        "comment": "unit: [m]",
+        "domain_x": 50,
+        "domain_z": 100,
+        "ground_depth": 92,
+        "grid_size": 0.02
+    },
+    "layering_structure_info":
+    {
+        "comment": "unit: [m], including vacuum layer",
+        "internal_permittivity": [1, 4, 6, 9, 6, 9],
+        "layer_thickness": [0.5, 10, 5, 35, 5, 35]
+    }
+}

@@ -112,7 +112,7 @@ if not os.path.exists(output_dir_path):
 #* run the tool
 #! =====select area-----
 select_t0_array = np.array(params['Vrms_estimation']['select_time'])
-[select_t0_start, select_t0_end] = select_t0_array[0, :] # [ns]
+[select_t0_start, select_t0_end] = select_t0_array[4, :] # [ns]
 select_Vrms_start = 0 # [/c]
 select_Vrms_end = 1 # [/c]
 #! ---------------------
