@@ -29,7 +29,7 @@ Vrms = np.array(params['Vrms_estimation']['Vrms_results']) * c # [m/s], Vrms in 
 t0 = np.array(params['Vrms_estimation']['t0_results']) * 10**(-9)# [s], t0 in each layers
 print('Vrms: ', Vrms)
 print('t0: ', t0)
-epsilon_r_model = np.array(geometry_params['layering_structure_info']['internal_permittivity'][1:]) # epsilon_r in each layers, contains air layer
+epsilon_r_model = np.array(geometry_params['layering_structure_info']['internal_permittivity'][1:1+len(Vrms)]) # epsilon_r in each layers, contains air layer
 
 
 #* calculate t0 in vacuum

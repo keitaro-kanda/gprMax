@@ -49,7 +49,7 @@ def run(json_path):
 
 max_40m = run('kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json')
 max_20m = run('kanda/domain_50x100/no_loss/multi_CMP_int05_20m/multi_CMP_int05_20m.json')
-max_10m = run('kanda/domain_50x100/no_loss/multi_CMP_int1_10m/muti_CMP_int1_10m.json')
+max_10m = run('kanda/domain_50x100/no_loss/multi_CMP_int026_10.2m/multi_CMP_int026_10.2.json')
 
 
 #* get theoretical value of Vrms and t0 from geometry
@@ -82,7 +82,7 @@ print('Vrms: ', Vrms_plot_geometry)
 arrays = [geometry, max_40m, max_20m, max_10m]
 clors = ['k', 'c', 'm', 'y']
 line_styles = ['-', '--', '-.', ':']
-labels = ['model', '40m', '20m', '10m']
+labels = ['model', '40m', '20m', '10.2m']
 
 
 #* plot

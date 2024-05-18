@@ -31,14 +31,14 @@
             [125, 175], [200, 250], [900, 950], [975, 1025], [1675, 1725]
         ],
         "_comment": "[/c]",
-        "Vrms_results": [0.52, 0.47, 0.57],
+        "Vrms_results": [0.67],
         "__comment": "[ns]",
-        "t0_results": [156, 238, 938]
+        "t0_results": [156]
     },
 
     "permittivity_structure_estimation":
     {
-        "V_int_results": [0.504, 0.256, 0.600],
-        "epsilon_r_results": [3.93, 7.89, 2.78]
+        "V_int_results": [0.661],
+        "epsilon_r_results": [2.29]
     }
 }

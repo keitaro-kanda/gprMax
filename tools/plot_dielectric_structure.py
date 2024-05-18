@@ -97,12 +97,12 @@ def run_estimation(json_path):
 depth_model, permittivity_model, collections_model = run_geometry('kanda/domain_50x100/no_loss/geometry/geometry.json')
 collections_40m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json')
 collections_20m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int05_20m/multi_CMP_int05_20m.json')
-collections_10m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_10m/muti_CMP_int1_10m.json')
+collections_10m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int026_10.2m/multi_CMP_int026_10.2.json')
 #collections_40m_int2 = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int2_40m/muti_CMP_int2_40m.json')
 arrays = [collections_model, collections_40m, collections_20m, collections_10m]
 clors = ['k', 'c', 'm', 'y', 'r']
 line_styles = ['-', '--', '-.', ':']
-labels = ['Model', '40m', '20m', '10m']
+labels = ['Model', '40m', '20m', '10.2m']
 
 #* plot
 fig = plt.figure(figsize=(10, 8), tight_layout=True)
