@@ -48,7 +48,7 @@ def run(json_path):
     return mc.LineCollection([plot_points], linewidths=2)
 
 max_40m = run('kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json')
-max_20m = run('kanda/domain_50x100/no_loss/multi_CMP_int1_20m/muti_CMP_int1_20m.json')
+max_20m = run('kanda/domain_50x100/no_loss/multi_CMP_int05_20m/multi_CMP_int05_20m.json')
 max_10m = run('kanda/domain_50x100/no_loss/multi_CMP_int1_10m/muti_CMP_int1_10m.json')
 
 
