@@ -1,0 +1,56 @@
+{
+    "geometry_settings":
+    {
+        "comment": "file path of geometry setting json file",
+        "geometry_json": "kanda/domain_50x100/no_loss_2/geometry/geometry.json"
+    },
+    "out_file": "kanda/domain_50x100/no_loss_2/multi_CMP_int1_40m/calc_merged.out",
+    "antenna_settings":
+    {
+    "--comment": "unit: [m]",
+    "antenna_height": 0.5,
+    "src_start": 25,
+    "src_end": 5,
+    "src_step": -1,
+    "rx_start": 25,
+    "rx_end": 45,
+    "rx_step": 1,
+    "src_move_times": 21
+    },
+    "_comment": "pulse [s], transmitting_delay means peak time",
+    "pulse_length": 13e-9,
+    "transmitting_delay": 4.3e-9,
+
+    "Vrms_estimation":
+    {
+        "corr_map_txt": "kanda/domain_50x100/no_loss_2/multi_CMP_int1_40m/Vrms_estimation/corr_map.txt",
+        "comment": "[ns]",
+        "time_window":3000,
+        "time_step": 1,
+        "select_time": [
+            [125, 175], [290, 340], [890, 960], [1060, 1110], [1640, 1690]
+        ],
+        "_comment": "[/c]",
+        "Vrms_results": [0.52, 0.47, 0.37, 0.36, 0.47],
+        "__comment": "[ns]",
+        "t0_results": [155, 238, 938, 1000, 1700]
+    },
+
+    "permittivity_structure_estimation":
+    {
+        "V_int_results": [0.504, 0.358, 0.329, 0.128, 0.593],
+        "epsilon_r_results": [3.93, 7.78, 9.23, 52.2, 2.85]
+    },
+
+    "_comment": "result of V_RMS theoretical estimation, [ns] and [/c]",
+    "t0_theory": [77.7, 159, 242, 327, 394, 475, 558],
+    "Vrms_theory": [0.564, 0.488, 0.460, 0.444, 0.454, 0.446, 0.440],
+    "mu4": [1.19e33, 6.83e32, 5.18e32, 4.34e32, 4.46e32, 4.08e32, 3.78e32],
+
+    "_comment": "V_MRS estimation result, [/c] and [ns]",
+    "tau_ver": [80, 152.5, 237.5, 324.5, 396.5, 471, 564.5],
+    "V_RMS": [0.63, 0.51, 0.47, 0.46, 0.47, 0.45, 0.42],
+
+    "_comment": "imaging grid step [m]",
+    "imaging_resolution": 0.5
+}

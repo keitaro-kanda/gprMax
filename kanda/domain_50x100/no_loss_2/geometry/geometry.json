@@ -13,6 +13,6 @@
     {
         "comment": "unit: [m], including vacuum layer",
         "internal_permittivity": [1, 4, 6, 9, 6, 9],
-        "layer_thickness": [0.5, 10, 5, 35, 5, 35]
+        "layer_thickness": [0.5, 10, 10, 30, 10, 30]
     }
 }
