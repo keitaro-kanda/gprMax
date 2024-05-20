@@ -95,13 +95,16 @@ def run_estimation(json_path):
 
 #* run the tool
 depth_model, permittivity_model, collections_model = run_geometry('kanda/domain_50x100/no_loss/geometry/geometry.json')
+depth_model_2, permittivity_model_2, collections_model_2 = run_geometry('kanda/domain_50x100/no_loss_2/geometry/geometry.json')
 collections_40m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json')
+collections_40m_2 = run_estimation('kanda/domain_50x100/no_loss_2/multi_CMP_int1_40m/multi_CMP_int1_40m.json')
 collections_20m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int05_20m/multi_CMP_int05_20m.json')
 collections_10m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int026_10.2m/multi_CMP_int026_10.2.json')
-#collections_40m_int2 = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int2_40m/muti_CMP_int2_40m.json')
-arrays = [collections_model, collections_40m, collections_20m, collections_10m]
-clors = ['k', 'c', 'm', 'y', 'r']
-line_styles = ['-', '--', '-.', ':']
+collections_40m_int2 = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int2_40m/muti_CMP_int2_40m.json')
+#rrays = [collections_model, collections_40m, collections_20m, collections_10m]
+arrays = [collections_model_2, collections_40m_2]
+clors = ['k', 'c', 'm', 'y', 'r', 'g', 'b']
+line_styles = ['-', '--', '-.', ':', '--', '-.', ':']
 labels = ['Model', '40m', '20m', '10.2m']
 
 #* plot
@@ -121,10 +124,10 @@ for i in range(len(arrays)):
     lines.set_label(labels[i])
 
 #* fill between
-Vrms_upper = permittivity_model * 1.05
-Vrms_lower = permittivity_model * 0.95
+Vrms_upper = permittivity_model_2 * 1.05
+Vrms_lower = permittivity_model_2 * 0.95
 for i in range(0, len(Vrms_upper), 2):
-    ax.fill_betweenx([depth_model[i], depth_model[i+1]], Vrms_lower[i], Vrms_upper[i], color='grey', alpha=0.3)
+    ax.fill_betweenx([depth_model_2[i], depth_model_2[i+1]], Vrms_lower[i], Vrms_upper[i], color='grey', alpha=0.3)
 
 ax.set_xlabel('Dielectric constant', fontsize=fontsize_medium)
 ax.set_ylabel('Depth [m]', fontsize=fontsize_medium)
