@@ -1,0 +1,44 @@
+{
+    "geometry_settings":
+    {
+        "comment": "file path of geometry setting json file",
+        "geometry_json": "kanda/domain_50x100/no_loss_2/geometry/geometry.json"
+    },
+    "out_file": "kanda/domain_50x100/no_loss_2/multi_CMP_int1_40m/calc_merged.out",
+    "antenna_settings":
+    {
+    "--comment": "unit: [m]",
+    "antenna_height": 0.5,
+    "src_start": 25,
+    "src_end": 5,
+    "src_step": -1,
+    "rx_start": 25,
+    "rx_end": 45,
+    "rx_step": 1,
+    "src_move_times": 21
+    },
+    "_comment": "pulse [s], transmitting_delay means peak time",
+    "pulse_length": 13e-9,
+    "transmitting_delay": 4.3e-9,
+
+    "Vrms_estimation":
+    {
+        "corr_map_txt": "kanda/domain_50x100/no_loss_2/multi_CMP_int1_40m/Vrms_estimation/corr_map.txt",
+        "comment": "[ns]",
+        "time_window":3000,
+        "time_step": 1,
+        "select_time": [
+            [125, 175], [290, 340], [890, 960], [1060, 1110], [1640, 1690]
+        ],
+        "_comment": "[/c]",
+        "Vrms_results": [0.50, 0.45, 0.37, 0.40],
+        "__comment": "[ns]",
+        "t0_results": [142, 312, 921, 999]
+    },
+
+    "permittivity_structure_estimation":
+    {
+        "V_int_results": [0.482, 0.404, 0.321, 0.658],
+        "epsilon_r_results": [4.81, 6.14, 9.68, 2.31]
+    }
+}
