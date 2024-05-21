@@ -84,6 +84,9 @@ error_nonDix = (epsilon_r_nonDix - epsilon_r_model) / epsilon_r_model * 100
 # normalize interna; velocity
 internal_velocities_Dix = internal_velocities_Dix / c # [/c]
 internal_velocities_nonDix = internal_velocities_nonDix / c # [/c]
+print('internal velocities Dix: ', internal_velocities_Dix)
+print('internal epsilon_r Dix: ', epsilon_r_Dix)
+print('error Dix: ', error_Dix)
 
 #* combine t0 and Vrms
 layer_num = np.arange(1, len(Vrms)+1)

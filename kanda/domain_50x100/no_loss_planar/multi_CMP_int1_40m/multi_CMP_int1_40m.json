@@ -19,7 +19,7 @@
     },
     "_comment": "pulse [s], transmitting_delay means peak time",
     "pulse_length": 13e-9,
-    "transmitting_delay": 14.1e-9,
+    "transmitting_delay": 5.6e-9,
 
     "Vrms_estimation":
     {
@@ -31,9 +31,9 @@
             [125, 175], [200, 250], [900, 950], [990, 1040], [1690, 1740]
         ],
         "_comment": "[/c]",
-        "Vrms_results": [0.51, 0.47, 0.37, 0.37, 0.36],
+        "Vrms_results": [0.51, 0.48, 0.37, 0.37, 0.37],
         "__comment": "[ns]",
-        "t0_results": [138, 220, 922, 1004, 1705]
+        "t0_results": [147, 229, 931, 1012, 1713]
     },
 
     "permittivity_structure_estimation":

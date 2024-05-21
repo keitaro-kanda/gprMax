@@ -19,8 +19,7 @@
     },
     "_comment": "pulse [s], transmitting_delay means peak time",
     "pulse_length": 13e-9,
-    "transmitting_delay": 4.3e-9,
-
+    "transmitting_delay": 5.6e-9,
     "Vrms_estimation":
     {
         "corr_map_txt": "kanda/domain_50x100/no_loss/multi_CMP_int05_20m/Vrms_estimation/corr_map.txt",
@@ -31,9 +30,9 @@
             [125, 175], [200, 250], [900, 950], [975, 1025], [1675, 1725]
         ],
         "_comment": "[/c]",
-        "Vrms_results": [0.52, 0.47, 0.57],
+        "Vrms_results": [0.52, 0.47, 0.53],
         "__comment": "[ns]",
-        "t0_results": [156, 238, 938]
+        "t0_results": [151, 232, 933]
     },
 
     "permittivity_structure_estimation":

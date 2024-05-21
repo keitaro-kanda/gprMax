@@ -11,12 +11,12 @@
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_50x100/no_loss/multi_CMP_int1_20m/muti_CMP_int1_20m.json select"
+            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_50x100/no_loss/multi_CMP_int05_20m/multi_CMP_int05_20m.json select"
         },
         {
             "label": "gprMax 3rd run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_50x100/no_loss/multi_CMP_int1_10m/muti_CMP_int1_10m.json select"
+            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_50x100/no_loss/multi_CMP_int026_10.2m/multi_CMP_int026_10.2.json select"
         },
         {
             "label": "gprMax 4th run",
@@ -28,7 +28,6 @@
             "type": "shell",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "gprMax 1st run",
                 "gprMax 2nd run",
                 "gprMax 3rd run",
             ],
