@@ -6,12 +6,12 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x100/no_loss_planar/multi_CMP_int1_40m/multi_CMP_int1_40m.json -n 21"
+            "command": "python -m gprMax kanda/domain_50x100/no_loss_planar/multi_CMP_int1_40m/calc.in -n 21"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_50x100/no_loss_planar_2/multi_CMP_int1_40m/multi_CMP_int1_40m.json -n 21"
+            "command": "python -m gprMax kanda/domain_50x100/no_loss_planar_2/multi_CMP_int1_40m/calc.in -n 21"
         },
         {
             "label": "gprMax 3rd run",

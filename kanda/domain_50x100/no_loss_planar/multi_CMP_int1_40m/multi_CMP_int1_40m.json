@@ -2,9 +2,9 @@
     "geometry_settings":
     {
         "comment": "file path of geometry setting json file",
-        "geometry_json": "kanda/domain_50x100/no_loss_2/geometry/geometry.json"
+        "geometry_json": "kanda/domain_50x100/no_loss_planar/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_50x100/no_loss_2/multi_CMP_int1_40m/calc_merged.out",
+    "out_file": "kanda/domain_50x100/no_loss_planar/multi_CMP_int1_40m/calc_merged.out",
     "antenna_settings":
     {
     "--comment": "unit: [m]",
@@ -19,21 +19,21 @@
     },
     "_comment": "pulse [s], transmitting_delay means peak time",
     "pulse_length": 13e-9,
-    "transmitting_delay": 4.3e-9,
+    "transmitting_delay": 14.1e-9,
 
     "Vrms_estimation":
     {
-        "corr_map_txt": "kanda/domain_50x100/no_loss_2/multi_CMP_int1_40m/Vrms_estimation/corr_map.txt",
+        "corr_map_txt": "kanda/domain_50x100/no_loss_planar/multi_CMP_int1_40m/Vrms_estimation/corr_map.txt",
         "comment": "[ns]",
         "time_window":3000,
         "time_step": 1,
         "select_time": [
-            [125, 175], [290, 340], [890, 960], [1060, 1110], [1640, 1690]
+            [125, 175], [200, 250], [900, 950], [990, 1040], [1690, 1740]
         ],
         "_comment": "[/c]",
-        "Vrms_results": [0.50, 0.45, 0.37, 0.40],
+        "Vrms_results": [0.51, 0.47, 0.37, 0.37, 0.36],
         "__comment": "[ns]",
-        "t0_results": [142, 312, 921, 999]
+        "t0_results": [138, 220, 922, 1004, 1705]
     },
 
     "permittivity_structure_estimation":

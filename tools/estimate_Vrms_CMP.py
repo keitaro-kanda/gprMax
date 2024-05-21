@@ -60,6 +60,8 @@ t0_array = t0_array_ns * 1e-9 # [s]
 c = 3e8 # [m/s]
 Vrms_array_percent = np.arange(0.01, 1.01, 0.01) # [/c], array for extent
 Vrms_array = c * Vrms_array_percent # [m/s]
+#* 送信時のディレイの考慮
+trans_delay = params['transmitting_delay'] # [s]
 
 
 #* need for calculation of  offset in get_apmlitude function
@@ -69,7 +71,7 @@ rx_start = params['antenna_settings']['rx_start'] # [m]
 rx_step = params['antenna_settings']['rx_step'] # [m]
 def get_amplitude(Vrms_ind, t0_ind, trace_num):
     #* get value of Vrms and t0
-    t0 = t0_array[t0_ind] # [s]
+    t0 = t0_array[t0_ind] + trans_delay # [s]
     Vrms = Vrms_array[Vrms_ind]# [m/s]
 
     #* calculate offset
