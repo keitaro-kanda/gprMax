@@ -24,6 +24,9 @@
         "rx_step": 1,
         "src_move_times": 6
     },
+    "_comment": "pulse [s], transmitting_delay means peak time",
+    "pulse_length": 13e-9,
+    "transmitting_delay": 14.1e-9,
     "Vrms_estimation":
     {
         "corr_map_txt": "kanda/domain_50x100/no_loss/multi_CMP_int1_10m/Vrms_estimation/corr_map.txt",

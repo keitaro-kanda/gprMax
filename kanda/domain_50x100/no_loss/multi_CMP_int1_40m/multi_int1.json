@@ -23,7 +23,7 @@
     },
     "_comment": "pulse [s], transmitting_delay means peak time",
     "pulse_length": 13e-9,
-    "transmitting_delay": 4.3e-9,
+    "transmitting_delay": 14.1e-9,
 
     "Vrms_estimation":
     {
