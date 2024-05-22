@@ -109,7 +109,7 @@ arrays = [depth_model]
 #* load results
 for i in range(results_num):
     arrays.append(run_estimation(path['results'][i]))
-clors = ['k', 'c', 'm', 'y', 'r', 'g', 'b']
+clors = ['k', 'r', 'g', 'b', 'c', 'm', 'y']
 line_styles = ['-', '--', '-.', ':', '--', '-.', ':']
 labels = ['Model']
 for i in range(results_num):

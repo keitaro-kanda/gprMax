@@ -88,7 +88,7 @@ results_num = len(path['results'])
 for i in range(results_num):
     arrays.append(run(path['results'][i]))
 
-clors = ['k', 'c', 'm', 'y', 'r', 'g', 'b']
+clors = ['k', 'r', 'g', 'b', 'c', 'm', 'y']
 line_styles = ['-', '--', '-.', ':']
 labels = ['Model']
 for i in range(results_num):
