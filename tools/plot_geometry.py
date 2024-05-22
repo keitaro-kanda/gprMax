@@ -108,7 +108,7 @@ if args.closeup:
     ax.set_ylim(y_end, y_start)
 
 #ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 5))
-ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 5))
+ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 10))
 
 plt.xlabel('x (m)', size=18)
 plt.ylabel('z (m)', size=18)

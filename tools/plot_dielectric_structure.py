@@ -108,7 +108,7 @@ line_styles = ['-', '--', '-.', ':', '--', '-.', ':']
 labels = ['Model', '40m', '20m', '10.2m']
 
 #* plot
-fig = plt.figure(figsize=(10, 8), tight_layout=True)
+fig = plt.figure(figsize=(10, 10), tight_layout=True)
 ax = fig.add_subplot(111)
 
 fontsize_large = 20
@@ -124,8 +124,8 @@ for i in range(len(arrays)):
     lines.set_label(labels[i])
 
 #* fill between
-Vrms_upper = permittivity_model_2 * 1.05
-Vrms_lower = permittivity_model_2 * 0.95
+Vrms_upper = permittivity_model_2 * 1.1
+Vrms_lower = permittivity_model_2 * 0.9
 for i in range(0, len(Vrms_upper), 2):
     ax.fill_betweenx([depth_model_2[i], depth_model_2[i+1]], Vrms_lower[i], Vrms_upper[i], color='grey', alpha=0.3)
 

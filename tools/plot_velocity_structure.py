@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import json
 from matplotlib import collections as mc
 from calc_Vrms_from_geometry import calc_Vrms
+import os
 
 
 class make_plot_geometry:
@@ -54,6 +55,7 @@ max_10m = run('kanda/domain_50x100/no_loss/multi_CMP_int026_10.2m/multi_CMP_int0
 
 #* get theoretical value of Vrms and t0 from geometry
 geometry_json = 'kanda/domain_50x100/no_loss/geometry/geometry.json'
+output_dir = os.path.dirname(geometry_json)
 def calc_Vrms_geometry(jsonpath):
     calc_Vrms_geometry = calc_Vrms(geometry_json)
     layer_thickness, internal_permittivity, internal_velovity = calc_Vrms_geometry.load_params_from_json()
@@ -86,7 +88,7 @@ labels = ['model', '40m', '20m', '10.2m']
 
 
 #* plot
-fig = plt.figure(figsize=(10, 8), tight_layout=True)
+fig = plt.figure(figsize=(10, 10), tight_layout=True)
 ax = fig.add_subplot(111)
 
 fontsize_large = 20
@@ -102,8 +104,8 @@ for i in range(len(arrays)):
     lines.set_label(labels[i])
 
 #* fill between
-Vrms_upper = Vrms_plot_geometry * 1.05
-Vrms_lower = Vrms_plot_geometry * 0.95
+Vrms_upper = Vrms_plot_geometry * 1.1
+Vrms_lower = Vrms_plot_geometry * 0.9
 for i in range(0, len(Vrms_upper), 2):
     ax.fill_betweenx([t0_plot_geometry[i], t0_plot_geometry[i+1]], Vrms_lower[i], Vrms_upper[i], color='grey', alpha=0.3)
 
