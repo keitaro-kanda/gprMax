@@ -1,8 +1,8 @@
 {
     "geometry_settings":
     {
-        "h5_file": "kanda/domain_100x100_JpGU/geometry/geometry.h5",
-        "material_file": "kanda/domain_100x100_JpGU/geometry/geometry_materials.txt",
+        "h5_file": "kanda/domain_100x100_JpGU/geometry_rough/geometry.h5",
+        "material_file": "kanda/domain_100x100_JpGU/geometry_rough/geometry_materials.txt",
         "comment": "unit: [m]",
         "domain_x": 100,
         "domain_z": 100,

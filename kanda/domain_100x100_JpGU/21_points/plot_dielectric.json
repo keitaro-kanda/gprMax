@@ -1,0 +1,11 @@
+{
+    "model": "kanda/domain_100x100_JpGU/geometry/geometry.json",
+    "results":
+        ["kanda/domain_100x100_JpGU/21_points/max_offset_20m/max_offset_20m.json",
+        "kanda/domain_100x100_JpGU/21_points/max_offset_40m/max_offset_40m.json",
+        "kanda/domain_100x100_JpGU/21_points/max_offset_80m/max_offset_80m.json"],
+    "labels":
+        ["20m",
+        "40m",
+        "80m"]
+}

@@ -4,17 +4,17 @@
         "comment": "file path of geometry setting json file",
         "geometry_json": "kanda/domain_100x100_JpGU/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_100x100_JpGU/21_points/max_offset_10m/calc_merged.out",
+    "out_file": "kanda/domain_100x100_JpGU/21_points/max_offset_40m/calc_merged.out",
     "antenna_settings":
     {
     "--comment": "unit: [m]",
     "antenna_height": 0.5,
     "src_start": 50,
     "src_end": 5,
-    "src_step": -0.25,
+    "src_step": -1,
     "rx_start": 50,
     "rx_end": 45,
-    "rx_step": 0.25,
+    "rx_step": 1,
     "src_move_times": 21
     },
     "_comment": "pulse [s], transmitting_delay means peak time",
@@ -23,12 +23,12 @@
 
     "Vrms_estimation":
     {
-        "corr_map_txt": "kanda/domain_100x100_JpGU/21_points/max_offset_10m/Vrms_estimation/corr_map.txt",
+        "corr_map_txt": "kanda/domain_100x100_JpGU/21_points/max_offset_40m/Vrms_estimation/corr_map.txt",
         "comment": "[ns]",
         "time_window":3000,
         "time_step": 1,
         "select_time": [
-            [140, 190], [520, 570], [1130, 1180], [1460, 1530]
+            [140, 190], [520, 570], [1130, 1180], [1450, 1490], [1540, 1590]
         ],
         "_comment": "[/c]",
         "Vrms_results": [0.51, 0.48, 0.37, 0.37, 0.37],

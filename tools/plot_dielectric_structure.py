@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 from matplotlib import collections as mc
+import os
 
 
 class make_plot_point_geometry:
@@ -93,19 +94,26 @@ def run_estimation(json_path):
     return mc.LineCollection([plot_points], linewidths=2)
 
 
+
 #* run the tool
-depth_model, permittivity_model, collections_model = run_geometry('kanda/domain_50x100/no_loss/geometry/geometry.json')
-depth_model_2, permittivity_model_2, collections_model_2 = run_geometry('kanda/domain_50x100/no_loss_2/geometry/geometry.json')
-collections_40m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json')
-collections_40m_2 = run_estimation('kanda/domain_50x100/no_loss_2/multi_CMP_int1_40m/multi_CMP_int1_40m.json')
-collections_20m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int05_20m/multi_CMP_int05_20m.json')
-collections_10m = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int026_10.2m/multi_CMP_int026_10.2.json')
-collections_40m_int2 = run_estimation('kanda/domain_50x100/no_loss/multi_CMP_int2_40m/muti_CMP_int2_40m.json')
-#rrays = [collections_model, collections_40m, collections_20m, collections_10m]
-arrays = [collections_model_2, collections_40m_2]
+#* open json file to load path
+json_for_path = 'kanda/domain_100x100_JpGU/21_points/plot_dielectric.json'
+output_dir = os.path.dirname(json_for_path)
+with open (json_for_path) as f:
+            path = json.load(f)
+
+depth, permittivity, depth_model = run_geometry(path['model'])
+results_num = len(path['results'])
+arrays = [depth_model]
+
+#* load results
+for i in range(results_num):
+    arrays.append(run_estimation(path['results'][i]))
 clors = ['k', 'c', 'm', 'y', 'r', 'g', 'b']
 line_styles = ['-', '--', '-.', ':', '--', '-.', ':']
-labels = ['Model', '40m', '20m', '10.2m']
+labels = ['Model']
+for i in range(results_num):
+    labels.append(path['labels'][i])
 
 #* plot
 fig = plt.figure(figsize=(10, 10), tight_layout=True)
@@ -124,10 +132,10 @@ for i in range(len(arrays)):
     lines.set_label(labels[i])
 
 #* fill between
-Vrms_upper = permittivity_model_2 * 1.1
-Vrms_lower = permittivity_model_2 * 0.9
+Vrms_upper = permittivity * 1.1
+Vrms_lower = permittivity * 0.9
 for i in range(0, len(Vrms_upper), 2):
-    ax.fill_betweenx([depth_model_2[i], depth_model_2[i+1]], Vrms_lower[i], Vrms_upper[i], color='grey', alpha=0.3)
+    ax.fill_betweenx([depth[i], depth[i+1]], Vrms_lower[i], Vrms_upper[i], color='grey', alpha=0.3)
 
 ax.set_xlabel('Dielectric constant', fontsize=fontsize_medium)
 ax.set_ylabel('Depth [m]', fontsize=fontsize_medium)
@@ -140,4 +148,5 @@ ax.tick_params(labelsize=fontsize_medium)
 ax.grid()
 plt.gca().invert_yaxis()
 
+plt.savefig(output_dir + '/dielectric_structure.png')
 plt.show()

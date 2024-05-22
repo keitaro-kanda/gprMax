@@ -21,7 +21,7 @@
         {
             "label": "gprMax 4th run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_100x100_JpGU/21_points/max_offset_80m/calc.in -n 21"
+            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_100x100_JpGU/21_points/max_offset_10m/max_offset_10m.json select"
         },
         {
             "label": "task sequence",
@@ -30,7 +30,8 @@
             "dependsOn": [
                 "gprMax 1st run",
                 "gprMax 2nd run",
-                "gprMax 3rd run"
+                "gprMax 3rd run",
+                "gprMax 4th run"
             ],
             "problemMatcher": []
         }
