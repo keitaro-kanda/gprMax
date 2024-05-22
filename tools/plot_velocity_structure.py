@@ -48,14 +48,8 @@ def run(json_path):
     plot_points = call_class.make_plot_points(t0_plot, Vrms_plot)
     return mc.LineCollection([plot_points], linewidths=2)
 
-max_40m = run('kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json')
-max_20m = run('kanda/domain_50x100/no_loss/multi_CMP_int05_20m/multi_CMP_int05_20m.json')
-max_10m = run('kanda/domain_50x100/no_loss/multi_CMP_int026_10.2m/multi_CMP_int026_10.2.json')
-
 
 #* get theoretical value of Vrms and t0 from geometry
-geometry_json = 'kanda/domain_50x100/no_loss/geometry/geometry.json'
-output_dir = os.path.dirname(geometry_json)
 def calc_Vrms_geometry(jsonpath):
     calc_Vrms_geometry = calc_Vrms(geometry_json)
     layer_thickness, internal_permittivity, internal_velovity = calc_Vrms_geometry.load_params_from_json()
@@ -74,17 +68,31 @@ def calc_Vrms_geometry(jsonpath):
 
     plot_points_geometry = np.array([[Vrms_plot_geometry[i], t0_plot_geometry[i]*1e9] for i in range(len(t0_plot_geometry))])
     return t0_plot_geometry, Vrms_plot_geometry, mc.LineCollection([plot_points_geometry], linewidths=2)
+
+
+
+#* open json file to load path
+json_for_path = 'kanda/domain_100x100_JpGU/21_points/plot_dielectric.json'
+output_dir = os.path.dirname(json_for_path)
+with open (json_for_path) as f:
+            path = json.load(f)
+
+geometry_json = path['model']
 t0_plot_geometry, Vrms_plot_geometry, geometry = calc_Vrms_geometry(geometry_json)
 t0_plot_geometry = t0_plot_geometry * 1e9 # [ns]
 print('t0: ', t0_plot_geometry)
 print('Vrms: ', Vrms_plot_geometry)
+arrays = [geometry]
+#* load results
+results_num = len(path['results'])
+for i in range(results_num):
+    arrays.append(run(path['results'][i]))
 
-
-
-arrays = [geometry, max_40m, max_20m, max_10m]
-clors = ['k', 'c', 'm', 'y']
+clors = ['k', 'c', 'm', 'y', 'r', 'g', 'b']
 line_styles = ['-', '--', '-.', ':']
-labels = ['model', '40m', '20m', '10.2m']
+labels = ['Model']
+for i in range(results_num):
+    labels.append(path['labels'][i])
 
 
 #* plot
@@ -114,10 +122,11 @@ ax.set_ylabel('t0 [ns]', fontsize=fontsize_medium)
 ax.set_title('Average EM wave velocity structure', fontsize=fontsize_large)
 
 ax.autoscale()
-#ax.set_xlim(0, 1)
+ax.set_xlim(0.2, 0.7)
 ax.legend(fontsize=fontsize_medium, loc = 'lower right')
 ax.tick_params(labelsize=fontsize_medium)
 ax.grid()
 plt.gca().invert_yaxis()
 
+plt.savefig(output_dir + '/velocity_structure.png')
 plt.show()
