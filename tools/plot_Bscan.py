@@ -58,11 +58,11 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
 
     plt.imshow(outputdata_norm, 
-             extent=[0, outputdata_norm.shape[1] * 2, outputdata_norm.shape[0] * dt, 0], 
+             extent=[0, outputdata_norm.shape[1] * 4, outputdata_norm.shape[0] * dt, 0], 
             interpolation='nearest', aspect='auto', cmap='seismic', 
             vmin=-1, vmax=1)
     plt.xlabel('Offset distance [m]', fontsize=20)
-    plt.ylabel('Time [s]', fontsize=20)
+    plt.ylabel('Time [ns]', fontsize=20)
     plt.tick_params(labelsize=18)
 
     # =====closeupオプション=====
@@ -139,9 +139,11 @@ if __name__ == "__main__":
     if args.select_rx:
         rx = 1
         outputdata, dt = get_output_data(args.outputfile, rx, args.rx_component)
+        dt = dt * 1e9 # Convert to [ns]
         plthandle = mpl_plot(args.outputfile, outputdata, dt, rx, args.rx_component, args.closeup)
     else:
         for rx in range(1, nrx + 1):
             outputdata, dt = get_output_data(args.outputfile, rx, args.rx_component)
+            dt = dt * 1e9 # Convert to [ns]
             plthandle = mpl_plot(args.outputfile, outputdata, dt, rx, args.rx_component, args.closeup)
     plthandle.show()

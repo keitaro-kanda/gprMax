@@ -68,7 +68,7 @@ ax = fig.add_subplot(111)
 
 src_step = params['antenna_settings']['src_step']
 plt.imshow(data_lits_CMP, aspect='auto', cmap='seismic', interpolation='nearest',
-            extent=[0, data_lits_CMP.shape[1]*src_step*2, data_lits_CMP.shape[0] * dt, 0],
+            extent=[0, data_lits_CMP.shape[1]*src_step*4, data_lits_CMP.shape[0] * dt, 0],
             vmin=-1, vmax=1)
 ax.set_title('CMP B-scan', fontsize=20)
 ax.set_xlabel('Tx - Rx [m]', fontsize=20)
