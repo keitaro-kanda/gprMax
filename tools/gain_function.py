@@ -123,7 +123,7 @@ fig.supylabel('Time [ns]', fontsize=font_large)
 plt.show()
 """
 antenna_step = params['antenna_settings']['rx_step'] * 2
-fig, ax = plt.subplots(1, 2, figsize=(12, 6), sharex=True, sharey=True)
+fig, ax = plt.subplots(1, 2, figsize=(20, 10), sharex=True, sharey=True)
 
 color_max = 0.01
 color_min = -0.01
@@ -138,16 +138,18 @@ ax[0].tick_params(labelsize=font_medium)
 
 ax[1].imshow(gained_data, aspect='auto', cmap='seismic',
             vmin=color_min, vmax=color_max,
-            extent=[0, data.shape[1]*antenna_step, data.shape[0]*dt*1e9, 0])
+            #extent=[0, data.shape[1]*antenna_step, data.shape[0]*dt*1e9, 0]
+            )
 ax[1].set_title('Gain compensation', fontsize=font_large)
 ax[1].grid()
 ax[1].tick_params(labelsize=font_medium)
 
-
+"""
 fig.colorbar(ax[0].imshow(data, aspect='auto', cmap='seismic',
             vmin=color_min, vmax=color_max,
             extent=[0, data.shape[1]*antenna_step, data.shape[0]*dt*1e9, 0]), ax=ax[1],
             location='right', orientation='vertical', label='Normalized amplitude')
+"""
 
 
 fig.supxlabel('Offset [m]', fontsize=font_large)
