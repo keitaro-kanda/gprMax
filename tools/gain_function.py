@@ -76,21 +76,26 @@ def gain(Ascan):
 gained_data = np.zeros(data.shape)
 for i in tqdm(range(data.shape[1])):
     gained_data[:, i] = gain(data[:, i])
+output_dir = os.path.join(os.path.dirname(args.jsonfile), 'gain')
+if not os.path.exists(output_dir):
+    os.mkdir(output_dir)
+np.savetxt(output_dir + '/gained_data.txt', gained_data, delimiter=' ')
 
 
 #* Normalize
-data = data / np.amax(np.abs(data))
-gained_data = gained_data / np.amax(np.abs(gained_data))
+data = data / np.amax(np.abs(data)) * 100
+gained_data = gained_data / np.amax(np.abs(gained_data)) * 100
 print('original data shape: ', data.shape)
 print('gained data shape: ', gained_data.shape)
+print(np.amax(data))
 
 
 #* plot
 font_large = 20
 font_medium = 18
 font_small = 16
-color_max = 0.01
-color_min = -0.01
+color_max = 1 # [%]
+color_min = -1 # [%]
 """
 fig = plt.figure(figsize=(15, 7))
 grid = ImageGrid(fig, 111, nrows_ncols=(1, 2),
@@ -122,27 +127,33 @@ fig.supylabel('Time [ns]', fontsize=font_large)
 #plt.tight_layout()
 plt.show()
 """
-antenna_step = params['antenna_settings']['rx_step'] * 2
-fig, ax = plt.subplots(1, 2, figsize=(20, 10), sharex=True, sharey=True)
 
-color_max = 0.01
-color_min = -0.01
+grid_kw = dict(left=0.1, right=0.9, bottom=0.1, top=0.9)
+antenna_step = params['antenna_settings']['rx_step'] * 2
+fig, ax = plt.subplots(1, 2, figsize=(20, 10), sharex=True, sharey=True, gridspec_kw=grid_kw, tight_layout=True)
+
 
 ax[0].imshow(data, aspect='auto', cmap='seismic',
             vmin=color_min, vmax=color_max,
-            #extent=[0, data.shape[1]*antenna_step, data.shape[0]*dt*1e9, 0]
+            extent=[0, data.shape[1]*antenna_step, data.shape[0]*dt*1e9, 0],
             )
 ax[0].set_title('original data', fontsize=font_large)
-ax[0].grid()
+ax[0].grid(which='both', axis='both', linestyle='-.')
 ax[0].tick_params(labelsize=font_medium)
 
 ax[1].imshow(gained_data, aspect='auto', cmap='seismic',
             vmin=color_min, vmax=color_max,
-            #extent=[0, data.shape[1]*antenna_step, data.shape[0]*dt*1e9, 0]
+            extent=[0, data.shape[1]*antenna_step, data.shape[0]*dt*1e9, 0]
             )
 ax[1].set_title('Gain compensation', fontsize=font_large)
-ax[1].grid()
+ax[1].grid(which='both', axis='both', linestyle='-.')
 ax[1].tick_params(labelsize=font_medium)
+
+
+cax = fig.add_axes([0.92, 0.1, 0.02, 0.8]) # [left, bottom, width, height
+mappable = mpl.cm.ScalarMappable(cmap='seismic')
+fig.colorbar(mappable, cax=cax,  orientation='vertical',).set_label('Normalized amplitude', fontsize=font_large)
+cax.tick_params(labelsize=font_medium)
 
 """
 fig.colorbar(ax[0].imshow(data, aspect='auto', cmap='seismic',
@@ -154,5 +165,6 @@ fig.colorbar(ax[0].imshow(data, aspect='auto', cmap='seismic',
 
 fig.supxlabel('Offset [m]', fontsize=font_large)
 fig.supylabel('Time [ns]', fontsize=font_large)
-plt.tight_layout()
+
+plt.savefig(output_dir + '/gain_function.png')
 plt.show()

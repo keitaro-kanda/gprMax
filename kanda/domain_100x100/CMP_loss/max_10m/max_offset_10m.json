@@ -2,9 +2,9 @@
     "geometry_settings":
     {
         "comment": "file path of geometry setting json file",
-        "geometry_json": "kanda/domain_100x100_JpGU/geometry/geometry.json"
+        "geometry_json": "kanda/domain_100x100/CMP_loss/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_100x100_JpGU/21_points/max_offset_10m/calc_merged.out",
+    "out_file": "kanda/domain_100x100/CMP_loss/max_10m/calc_merged.out",
     "antenna_settings":
     {
     "--comment": "unit: [m]",
@@ -17,9 +17,13 @@
     "rx_step": 0.25,
     "src_move_times": 21
     },
-    "_comment": "pulse [s], transmitting_delay means peak time",
-    "pulse_length": 13e-9,
-    "transmitting_delay": 5.6e-9,
+    "pulse_info":
+    {
+        "comment": "unit: pulse_length & transmitting_delay->[s], center_frequency->[Hz]",
+        "pulse_length": 13e-9,
+        "transmitting_delay": 5.6e-9,
+        "center_frequency": 100e6
+    },
 
     "Vrms_estimation":
     {

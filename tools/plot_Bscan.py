@@ -55,6 +55,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
     # normalize
     outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
+    print(np.amax(outputdata_norm))
 
 
     plt.imshow(outputdata_norm, 
