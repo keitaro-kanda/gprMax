@@ -36,17 +36,17 @@ with open(params['geometry_settings']['geometry_json']) as f:
 
 #* load B-scan data
 #* Chech wheter if json file has 'out_file' key or 'txt_Bscan_file' key
-if 'out_file' in params:
-    data_path = params['out_file']
-    data, dt = get_output_data(data_path, 1, 'Ez')
-    print('input is out_file')
-elif 'txt_Bscan_file' in params:
+data_path = params['out_file']
+data, dt = get_output_data(data_path, 1, 'Ez')
+print('Load .out file: ', data_path)
+if 'txt_Bscan_file' in params:
     data_path = params['original_info']['original_out_file']
     data, dt = get_output_data(data_path, 1, 'Ez')
     data = np.loadtxt(params['txt_Bscan_file'])
     print('input is extracted B-scan data txt file')
-else:
-    raise ValueError('Invalid key: out_file or txt_Bscan_file')
+if 'gain_function' in params:
+    data = np.loadtxt(params['gain_function'])
+    print('Load gain function processed data: ', params['gain_function'])
 print('data shape: ', data.shape)
 print('dt: ', dt)
 
@@ -61,7 +61,7 @@ c = 3e8 # [m/s]
 Vrms_array_percent = np.arange(0.01, 1.01, 0.01) # [/c], array for extent
 Vrms_array = c * Vrms_array_percent # [m/s]
 #* 送信時のディレイの考慮
-trans_delay = params['transmitting_delay'] # [s]
+trans_delay = params['pulse_info']['transmitting_delay'] # [s]
 
 
 #* need for calculation of  offset in get_apmlitude function

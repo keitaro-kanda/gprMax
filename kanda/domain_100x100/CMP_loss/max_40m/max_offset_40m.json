@@ -5,17 +5,18 @@
         "geometry_json": "kanda/domain_100x100_JpGU/geometry/geometry.json"
     },
     "out_file": "kanda/domain_100x100/CMP_loss/max_40m/calc_merged.out",
+    "gain_function": "kanda/domain_100x100/CMP_loss/max_40m/gain/gained_data.txt",
     "antenna_settings":
     {
-    "--comment": "unit: [m]",
-    "antenna_height": 0.5,
-    "src_start": 50,
-    "src_end": 5,
-    "src_step": -1.0,
-    "rx_start": 50,
-    "rx_end": 45,
-    "rx_step": 1.0,
-    "src_move_times": 21
+        "comment": "unit: [m]",
+        "antenna_height": 0.5,
+        "src_start": 50,
+        "src_end": 5,
+        "src_step": -1.0,
+        "rx_start": 50,
+        "rx_end": 45,
+        "rx_step": 1.0,
+        "src_move_times": 21
     },
     "pulse_info":
     {
