@@ -5,7 +5,7 @@
         "geometry_json": "kanda/domain_100x100_JpGU/geometry/geometry.json"
     },
     "out_file": "kanda/domain_100x100/CMP_loss/max_20m/calc_merged.out",
-    "gain_function": "kanda/domain_100x100/CMP_loss/max_20m/gain/gained_data.txt",
+    "gain_function": "ka`nda/domain_100x100/CMP_loss/max_20m/gain/gained_data.txt`",
     "antenna_settings":
     {
     "--comment": "unit: [m]",
@@ -28,7 +28,7 @@
 
     "Vrms_estimation":
     {
-        "corr_map_txt": "kanda/domain_100x100_JpGU/21_points/max_offset_10m/Vrms_estimation/corr_map.txt",
+        "corr_map_txt": "kanda/domain_100x100/CMP_loss/max_20m/gain/gained_data.txt",
         "comment": "[ns]",
         "time_window":3000,
         "time_step": 1,

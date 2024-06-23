@@ -5,7 +5,7 @@
         "geometry_json": "kanda/domain_100x100_JpGU/geometry/geometry.json"
     },
     "out_file": "kanda/domain_100x100/CMP_loss/max_40m/calc_merged.out",
-    "gain_function": "kanda/domain_100x100/CMP_loss/max_40m/gain/gained_data.txt",
+    "gain_function": "kanda/domain_100x100/CMP_loss/max_40m/Vrms_estimation/corr_map.txt",
     "antenna_settings":
     {
         "comment": "unit: [m]",

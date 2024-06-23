@@ -26,7 +26,7 @@
 
     "Vrms_estimation":
     {
-        "corr_map_txt": "kanda/domain_100x100_JpGU/21_points/max_offset_10m/Vrms_estimation/corr_map.txt",
+        "corr_map_txt": "kanda/domain_100x100/CMP_loss/max_80m/Vrms_estimation/corr_map.txt",
         "comment": "[ns]",
         "time_window":3000,
         "time_step": 1,
