@@ -1,0 +1,58 @@
+#domain: 100 100 0.05
+#dx_dy_dz: 0.05 0.05 0.05
+
+#time_window: 3e-6
+
+#material: 4 0.001 1 0 regolith
+#material: 6 0.001 1 0 basalt_6
+#material: 9 0.001 1 0 basalt_9
+
+
+=====地形=====
+base basalt layer
+#box: 0 0 0 100 65 0.05 basalt_9
+
+surface regolith
+#box: 0 78 0 100 90 0.05 regolith
+
+
+ejecta
+#box: 0 55 0 100 78 0.05 basalt_6
+
+
+ejecta
+#box: 0 5 0 100 25 0.05 basalt_6
+
+
+=====地形読み込み=====
+<>
+geometry_objects_read: 0 0 0 kanda/domain_50x100/geometry/geometry.h5 kanda/domain_50x100/geometry/geometry_materials.txt
+==========
+
+
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 100 100 0.05 0.05 0.05 0.05 geometry n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 100 100 0.05 geometry
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 100e6 my_src
+
+#hertzian_dipole: z  25 90.5 0 my_src
+#rx: 25 90.5 0
+
+<snapshot作成>
+#python:
+for i in range(1, 150):
+    print('#snapshot: 0 0 0 100 100 0.05 0.05 0.05 0.05 {} snapshot{}'.format(i*0.02e-6, i))
+#end_python:
+
+#output_dir: /Volumes/SSD_kanda/gprMax/domain_100x100/CMP_loss/A-scan
+==========

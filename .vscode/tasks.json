@@ -6,22 +6,22 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_100x100_JpGU/21_points/max_offset_80m/max_offset_80m.json select"
+            "command": "python -m gprMax kanda/domain_100x100/CMP_loss/max_80m/calc.in -n 21"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_100x100_JpGU/21_points/max_offset_40m/max_offset_40m.json select"
+            "command": "python -m gprMax kanda/domain_100x100/CMP_loss/max_40m/calc.in -n 21"
         },
         {
             "label": "gprMax 3rd run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_100x100_JpGU/21_points/max_offset_20m/max_offset_20m.json select"
+            "command": "python -m gprMax kanda/domain_100x100/CMP_loss/max_20m/calc.in -n 21"
         },
         {
             "label": "gprMax 4th run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_100x100_JpGU/21_points/max_offset_10m/max_offset_10m.json select"
+            "command": "python -m gprMax kanda/domain_100x100/CMP_loss/max_10m/calc.in -n 21"
         },
         {
             "label": "task sequence",
