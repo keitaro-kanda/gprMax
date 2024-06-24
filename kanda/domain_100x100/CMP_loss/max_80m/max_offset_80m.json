@@ -34,14 +34,14 @@
             [140, 190], [520, 570], [1130, 1180], [1460, 1530]
         ],
         "_comment": "[/c]",
-        "Vrms_results": [0.51, 0.48, 0.37, 0.37, 0.37],
+        "Vrms_results": [0.53, 0.44, 0.38],
         "__comment": "[ns]",
-        "t0_results": [147, 229, 931, 1012, 1713]
+        "t0_results": [176, 544, 1159]
     },
 
     "permittivity_structure_estimation":
     {
-        "V_int_results": [0.482, 0.404, 0.321, 0.658],
-        "epsilon_r_results": [4.81, 6.14, 9.68, 2.31]
+        "V_int_results": [0.517, 0.390, 0.318],
+        "epsilon_r_results": [3.75, 6.58, 9.91]
     }
 }

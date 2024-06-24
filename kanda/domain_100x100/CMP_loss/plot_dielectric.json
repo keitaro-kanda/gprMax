@@ -1,0 +1,17 @@
+{
+    "model": "kanda/domain_100x100/CMP_loss/geometry/geometry.json",
+    "results":
+        [
+        "kanda/domain_100x100/CMP_loss/max_10m/max_offset_10m.json",
+        "kanda/domain_100x100/CMP_loss/max_20m/max_offset_20m.json",
+        "kanda/domain_100x100/CMP_loss/max_40m/max_offset_40m.json",
+        "kanda/domain_100x100/CMP_loss/max_80m/max_offset_80m.json"
+    ],
+    "labels":
+        [
+        "10m",
+        "20m",
+        "40m",
+        "80m"
+    ]
+}

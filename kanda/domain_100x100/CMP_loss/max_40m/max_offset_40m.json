@@ -26,7 +26,7 @@
 
     "Vrms_estimation":
     {
-        "corr_map_txt": "kanda/domain_100x100_JpGU/21_points/max_offset_10m/Vrms_estimation/corr_map.txt",
+        "corr_map_txt": "kanda/domain_100x100/CMP_loss/max_40m/Vrms_estimation/corr_map.txt",
         "comment": "[ns]",
         "time_window":3000,
         "time_step": 1,
@@ -34,14 +34,14 @@
             [140, 190], [520, 570], [1130, 1180], [1460, 1530]
         ],
         "_comment": "[/c]",
-        "Vrms_results": [0.51, 0.48, 0.37, 0.37, 0.37],
+        "Vrms_results": [0.52, 0.44, 0.45],
         "__comment": "[ns]",
-        "t0_results": [147, 229, 931, 1012, 1713]
+        "t0_results": [176, 552, 1161]
     },
 
     "permittivity_structure_estimation":
     {
-        "V_int_results": [0.482, 0.404, 0.321, 0.658],
-        "epsilon_r_results": [4.81, 6.14, 9.68, 2.31]
+        "V_int_results": [0.506, 0.397, 0.459],
+        "epsilon_r_results": [3.90, 6.34, 4.75]
     }
 }
