@@ -44,6 +44,6 @@
     "permittivity_structure_estimation":
     {
         "V_int_results": [0.496, 0.596],
-        "epsilon_r_results": [4.07, 3.81]
+        "epsilon_r_results": [4.07, 2.81]
     }
 }

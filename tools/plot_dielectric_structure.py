@@ -97,12 +97,14 @@ def run_estimation(json_path):
 
 #* run the tool
 #* open json file to load path
-json_for_path = 'kanda/domain_100x100_JpGU/21_points/plot_dielectric.json'
+json_for_path = 'kanda/domain_100x100/CMP_loss/plot_dielectric.json'
 output_dir = os.path.dirname(json_for_path)
 with open (json_for_path) as f:
             path = json.load(f)
 
-depth, permittivity, depth_model = run_geometry(path['model'])
+geometry_json = path['model']
+
+depth, permittivity, depth_model = run_geometry(geometry_json)
 results_num = len(path['results'])
 arrays = [depth_model]
 

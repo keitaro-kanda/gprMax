@@ -89,7 +89,7 @@ for i in range(results_num):
     arrays.append(run(path['results'][i]))
 
 clors = ['k', 'r', 'g', 'b', 'c', 'm', 'y']
-line_styles = ['-', '--', '-.', ':']
+line_styles = ['-', '--', '-.', ':', '-', '--', '-.']
 labels = ['Model']
 for i in range(results_num):
     labels.append(path['labels'][i])
