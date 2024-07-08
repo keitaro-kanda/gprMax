@@ -1,5 +1,0 @@
-#material: 1 inf 1 0 pec
-#material: 1 0 1 0 free_space
-#material: 6 0 1 0 basalt_6
-#material: 7 0 1 0 basalt_7
-#material: 6.5 0 1 0 basalt_6+basalt_6+basalt_7+basalt_7
