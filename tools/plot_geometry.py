@@ -90,7 +90,7 @@ if not os.path.exists(output_path):
 spatial_grid =  params['geometry_settings']['grid_size'] # spatial grid size [m]
 
 
-fig = plt.figure(figsize=(5, 5*map.epsilon_map.shape[0]/map.epsilon_map.shape[1]), tight_layout=True)
+fig = plt.figure(figsize=(8, 6), tight_layout=True)
 ax = fig.add_subplot(111)
 
 vacuum_thickness = params['geometry_settings']['domain_z'] - params['geometry_settings']['ground_depth'] # [m]
@@ -108,7 +108,7 @@ if args.closeup:
     ax.set_ylim(y_end, y_start)
 
 #ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 5))
-ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 10))
+ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 2))
 
 plt.xlabel('x (m)', size=18)
 plt.ylabel('z (m)', size=18)
@@ -120,6 +120,8 @@ cax = delvider.append_axes('right', size='5%', pad=0.1)
 plt.colorbar(cax=cax).set_label('epsilon_r', size=18)
 
 plt.savefig(output_path+'/' + 'epsilon_map.png')
+plt.savefig(output_path+'/' + 'epsilon_map.pdf', format='pdf', dpi=120)
 if args.closeup:
     plt.savefig(output_path +'/closeup' + str(y_start) + '-' + str(y_end) + '.png')
+    plt.savefig(output_path +'/closeup' + str(y_start) + '-' + str(y_end) + '.pdf', format='pdf', dpi=300)
 plt.show()

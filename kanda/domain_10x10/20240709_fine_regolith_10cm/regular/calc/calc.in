@@ -1,0 +1,27 @@
+#domain: 10 10 0.005
+#dx_dy_dz: 0.005 0.005 0.005
+
+#time_window: 300e-9
+
+
+=====地形読み込み=====
+<>
+#geometry_objects_read: 0 0 0 kanda/domain_10x10/20240709_fine_regolith_10cm/regular/geometry/geometry.h5 kanda/domain_10x10/20240709_fine_regolith_10cm/regular/geometry/geometry_materials.txt
+
+=====B-scan用=====
+＜波源設定＞
+#waveform: ricker 1 500e6 my_src
+
+#hertzian_dipole: z  3 8.3 0 my_src
+#rx: 3.16 8.3 0
+
+＜moving pass＞
+#src_steps: 0.04 0 0
+#rx_steps: 0.04 0 0
+トレース間隔4cmと仮定
+
+観測幅：2m
+n回数：50
+
+#output_dir: outfiles
+==========
