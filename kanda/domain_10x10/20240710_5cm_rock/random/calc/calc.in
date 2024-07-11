@@ -6,7 +6,7 @@
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 kanda/domain_10x10/20240708_fine_regolith_5cm/regular/geometry/geometry.h5 kanda/domain_10x10/20240708_fine_regolith_5cm/regular/geometry/geometry_materials.txt
+#geometry_objects_read: 0 0 0 kanda/domain_10x10/20240710_5cm_rock/random/geometry/geometry.h5 kanda/domain_10x10/20240710_5cm_rock/random/geometry/geometry_materials.txt
 
 
 =====B-scan用=====

@@ -4,7 +4,7 @@
         "comment": "file path of geometry setting json file",
         "geometry_json": "kanda/domain_10x10/20240708_fine_regolith/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_10x10/20240708_fine_regolith_5cm/random/calc/calc_merged.out",
+    "out_file": "kanda/domain_10x10/20240708_fine_regolith/calc/calc_merged.out",
     "gain_function": "kanda/domain_100x100/CMP_loss/max_20m/gain/gained_data.txt",
     "antenna_settings":
     {

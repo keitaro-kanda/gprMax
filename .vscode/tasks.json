@@ -6,12 +6,12 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_100x100/CMP_loss/max_80m/max_offset_80m.json select"
+            "command": "python -m gprMax kanda/domain_10x10/20240709_fine_regolith_10cm/regular/calc/calc.in -n 50"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_100x100/CMP_loss/max_40m/max_offset_40m.json select"
+            "command": "python -m gprMax kanda/domain_10x10/20240708_fine_regolith_5cm/random/calc/calc.in -n 50"
         },
         {
             "label": "gprMax 3rd run",
@@ -30,8 +30,6 @@
             "dependsOn": [
                 "gprMax 1st run",
                 "gprMax 2nd run",
-                "gprMax 3rd run",
-                "gprMax 4th run"
             ],
             "problemMatcher": []
         }

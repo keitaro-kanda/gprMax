@@ -1,0 +1,18 @@
+{
+    "geometry_settings":
+    {
+        "h5_file": "kanda/domain_10x10/20240710_5cm_rock/random/geometry/geometry.h5",
+        "material_file": "kanda/domain_10x10/20240710_5cm_rock/random/geometry/geometry_materials.txt",
+        "comment": "unit: [m]",
+        "domain_x": 10,
+        "domain_z": 10,
+        "ground_depth": 8,
+        "grid_size": 0.005
+    },
+    "layering_structure_info":
+    {
+        "comment": "unit: [m], including vacuum layer",
+        "internal_permittivity": [1, 4, 6, 9, 6],
+        "layer_thickness": [0.5, 12, 23, 30, 20]
+    }
+}
