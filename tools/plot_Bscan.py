@@ -50,8 +50,8 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     if not os.path.exists(outputdir):
         os.mkdir(outputdir)
 
-    fig = plt.figure(num=filename + ' - rx' + str(rxnumber), 
-                     figsize=(15, 15), facecolor='w', edgecolor='w')
+    fig = plt.figure(num=filename + ' - rx' + str(rxnumber),
+                    figsize=(15, 15), facecolor='w', edgecolor='w')
     
 
     #* normalize
@@ -59,6 +59,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
     src_step = params['antenna_settings']['src_step']
     rx_step = params['antenna_settings']['rx_step']
+    src_start = params['antenna_settings']['src_start']
 
     if src_step == rx_step:
         antenna_step = src_step
@@ -69,10 +70,10 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
 
     plt.imshow(outputdata_norm,
-             extent=[0, outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
+             extent=[src_start, src_start + outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
             interpolation='nearest', aspect='auto', cmap='seismic',
             vmin=-1, vmax=1)
-    plt.xlabel('Offset distance [m]', fontsize=20)
+    plt.xlabel('x [m]', fontsize=20)
     plt.ylabel('Time [ns]', fontsize=20)
     plt.tick_params(labelsize=18)
 
@@ -80,21 +81,22 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     if closeup:
 
         closeup_start = 0 # [ns]
-        closeup_end = 250 # [ns]
+        closeup_end = 300 # [ns]
         #closeup_start = int(closeup_start / dt)
         #closeup_end = int(closeup_end / dt)
         plt.imshow(outputdata_norm,
              extent=[0, outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
             interpolation='nearest', aspect='auto', cmap='seismic',
             vmin=-1, vmax=1)
+        plt.xlim(2, 4)
         plt.ylim(closeup_end, closeup_start)
-        plt.minorticks_on( )
+        #plt.minorticks_on( )
 
 
-    if closeup:
-        plt.title('rx' + str(rxnumber) + ' closeup: '+str(closeup_start)+'-'+str(closeup_end) + '[ns]', fontsize=20)
-    else:
-        plt.title('rx' + str(rxnumber), fontsize=20)
+    #if closeup:
+    #    plt.title('rx' + str(rxnumber) + ' closeup: '+str(closeup_start)+'-'+str(closeup_end) + '[ns]', fontsize=20)
+    #else:
+    plt.title('rx' + str(rxnumber), fontsize=20)
 
     # Grid properties
     ax = fig.gca()

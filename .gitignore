@@ -35,3 +35,5 @@ dist/
 
 # .venvファイルの除外
 .venv/
+
+tools/test_output/
