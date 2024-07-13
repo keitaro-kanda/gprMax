@@ -1,0 +1,12 @@
+{
+    "geometry_settings":
+    {
+        "h5_file": "kanda/domain_4x6/single_rock/5cm/geometry/geometry.h5",
+        "material_file": "kanda/domain_4x6/single_rock/5cm/geometry/geometry_materials.txt",
+        "comment": "unit: [m]",
+        "domain_x": 4,
+        "domain_z": 6,
+        "ground_depth": 4,
+        "grid_size": 0.005
+    }
+}

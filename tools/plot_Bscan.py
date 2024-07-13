@@ -60,9 +60,11 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     src_step = params['antenna_settings']['src_step']
     rx_step = params['antenna_settings']['rx_step']
     src_start = params['antenna_settings']['src_start']
+    rx_start = params['antenna_settings']['rx_start']
 
     if src_step == rx_step:
         antenna_step = src_step
+        antenna_start = (src_start + rx_start) / 2
     elif np.abs(src_step) == np.abs(rx_step):
         antenna_step = np.abs(src_step) * 2
     else:
@@ -70,7 +72,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
 
     plt.imshow(outputdata_norm,
-             extent=[src_start, src_start + outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
+             extent=[antenna_start, antenna_start + outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
             interpolation='nearest', aspect='auto', cmap='seismic',
             vmin=-1, vmax=1)
     plt.xlabel('x [m]', fontsize=20)

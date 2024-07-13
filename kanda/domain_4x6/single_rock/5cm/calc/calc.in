@@ -1,12 +1,12 @@
-#domain: 4 10 0.005
+#domain: 4 6 0.005
 #dx_dy_dz: 0.005 0.005 0.005
 
-#time_window: 300e-9
+#time_window: 200e-9
 
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 kanda/domain_6x10/Subsurface_rock/1cm/geometry/100_rocks/geometry.h5 kanda/domain_6x10/Subsurface_rock/1cm/geometry/100_rocks/geometry_materials.txt
+#geometry_objects_read: 0 0 0 kanda/domain_4x6/single_rock/5cm/geometry/geometry.h5 kanda/domain_4x6/single_rock/5cm/geometry/geometry_materials.txt
 
 =====B-scan用=====
 ＜波源設定＞

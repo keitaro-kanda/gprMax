@@ -6,17 +6,17 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_6x10/Subsurface_rock/5cm/100_rocks/calc/calc.in -n 75"
+            "command": "python -m gprMax kanda/domain_4x6/single_rock/1cm/calc/calc.in -n 50"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_6x10/Subsurface_rock/1cm/100_rocks/calc/calc.in -n 75"
+            "command": "python -m gprMax kanda/domain_4x6/single_rock/5cm/calc/calc.in -n 50"
         },
         {
             "label": "gprMax 3rd run",
             "type": "shell",
-            "command": "python -m tools.estimate_Vrms_CMP kanda/domain_100x100/CMP_loss/max_20m/max_offset_20m.json select"
+            "command": "python -m kanda/domain_4x6/single_rock/15cm/calc/calc.in -n 50"
         },
         {
             "label": "gprMax 4th run",
@@ -30,6 +30,7 @@
             "dependsOn": [
                 "gprMax 1st run",
                 "gprMax 2nd run",
+                "gprMax 3rd run"
             ],
             "problemMatcher": []
         }
