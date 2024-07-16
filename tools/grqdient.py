@@ -8,7 +8,7 @@ import mpl_toolkits.axes_grid1 as axgrid1
 import os
 
 
-json_path = 'kanda/domain_6x10/subsurface_rock/15cm/calc/calc.json'
+json_path = 'kanda/domain_4x6/single_rock/1cm/calc/calc.json'
 output_dir = os.path.dirname(json_path)
 
 
