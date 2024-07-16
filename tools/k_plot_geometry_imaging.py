@@ -5,7 +5,7 @@ import os
 import json
 import argparse
 import mpl_toolkits.axes_grid1 as axgrid1
-from tools.plot_geometry import epsilon_map
+from tools.k_plot_geometry import epsilon_map
 
 
 #* Parse command line arguments

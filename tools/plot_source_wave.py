@@ -59,7 +59,7 @@ def check_timewindow(timewindow, dt):
     return timewindow, iterations
 
 
-def mpl_plot(w, timewindow, dt, iterations, fft=False):
+def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
     """Plots waveform and prints useful information about its properties.
 
     Args:
@@ -119,7 +119,7 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False):
         ax1.set_ylabel('Amplitude', size=16)
 
         # Plot frequency spectra
-        markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.', use_line_collection=True)
+        markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.')
         plt.setp(baseline, 'linewidth', 0)
         plt.setp(stemlines, 'color', 'r')
         plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
@@ -131,7 +131,29 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False):
         ax1.tick_params(labelsize=15)
         ax2.tick_params(labelsize=15)
 
-        
+
+    #* Calculate and plot the power of the waveform
+    if power:
+        #* Calculate the power of the waveform
+        power = waveform**2
+        #power = 10 * np.log10(power / np.max(power))
+
+        #* Plot waveform
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num=w.type, figsize=(16, 8), facecolor='w', edgecolor='w')
+
+        # Plot waveform
+        ax1.plot(time, waveform, 'r', lw=2)
+        ax1.set_xlabel('Time [s]', size=16)
+        ax1.set_ylabel('Amplitude', size=16)
+
+        #* Plot power
+        ax2.plot(time, power, 'r', lw=2)
+        ax2.set_xlabel('Time [s]', size=16)
+        ax2.set_ylabel('Power', size=16)
+
+        # メモリサイズの変更
+        ax1.tick_params(labelsize=15)
+        ax2.tick_params(labelsize=15)
 
     else:
         fig, ax1 = plt.subplots(num=w.type, figsize=(16, 8), facecolor='w', edgecolor='w')
@@ -160,6 +182,7 @@ if __name__ == "__main__":
     parser.add_argument('timewindow', help='time window to view waveform')
     parser.add_argument('dt', type=float, help='time step to view waveform')
     parser.add_argument('-fft', action='store_true', help='plot FFT of waveform', default=False)
+    parser.add_argument('-power', action='store_true', help='plot power of waveform', default=False)
     args = parser.parse_args()
 
     # Check waveform parameters
@@ -175,5 +198,5 @@ if __name__ == "__main__":
     w.freq = args.freq
 
     timewindow, iterations = check_timewindow(args.timewindow, args.dt)
-    plthandle = mpl_plot(w, timewindow, args.dt, iterations, args.fft)
+    plthandle = mpl_plot(w, timewindow, args.dt, iterations, args.fft, args.power)
     plthandle.show()

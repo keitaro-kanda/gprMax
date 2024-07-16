@@ -12,7 +12,7 @@ import os
 import json
 
 
-from .outputfiles_merge import get_output_data
+from ..outputfiles_merge import get_output_data
 import mpl_toolkits.axes_grid1 as axgrid1
 
 
