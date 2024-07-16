@@ -4,17 +4,19 @@
         "comment": "file path of geometry setting json file",
         "geometry_json": "kanda/domain_10x10/20240708_fine_regolith/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_6x10/Subsurface_rock/1cm/calc/calc_merged.out",
+    "out_file": "kanda/domain_6x10/subsurface_rock/15cm/calc/calc_merged.out",
     "gain_function": "kanda/domain_100x100/CMP_loss/max_20m/gain/gained_data.txt",
     "antenna_settings":
     {
     "--comment": "unit: [m]",
     "antenna_height": 0.3,
-    "src_start": 1.42,
+    "src_start": 1.5,
+    "src_end": 5,
     "src_step": 0.04,
-    "rx_start": 1.58,
+    "rx_start": 1.66,
+    "rx_end": 7.16,
     "rx_step": 0.04,
-    "src_move_times": 50
+    "src_move_times": 100
     },
     "pulse_info":
     {

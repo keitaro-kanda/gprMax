@@ -6,14 +6,16 @@
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 kanda/domain_6x10/subsurface_rock/1cm/geometry/geometry.h5 kanda/domain_6x10/subsurface_rock/1cm/geometry/geometry_materials.txt
+#geometry_objects_read: 0 0 0 kanda/domain_6x10/subsurface_rock/15cm/geometry/geometry.h5 kanda/domain_6x10/subsurface_rock/15cm/geometry/geometry_materials.txt
+
 
 =====B-scan用=====
 ＜波源設定＞
 #waveform: ricker 1 500e6 my_src
 
-#hertzian_dipole: z  1.42 8.3 0 my_src
-#rx: 1.58 8.3 0
+#hertzian_dipole: z  1.92 8.3 0 my_src
+#rx: 2.0
+8 8.3 0
 tx-rx offset: 16 cm
 
 ＜moving pass＞

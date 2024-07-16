@@ -8,12 +8,20 @@ import mpl_toolkits.axes_grid1 as axgrid1
 import os
 
 
-json_path = 'kanda/domain_6x10/subsurface_rock/5cm/calc/calc.json'
+json_path = 'kanda/domain_6x10/subsurface_rock/15cm/calc/calc.json'
 output_dir = os.path.dirname(json_path)
 
 
 with open(json_path) as f:
     params = json.load(f)
+src_step = params['antenna_settings']['src_step']
+rx_step = params['antenna_settings']['rx_step']
+src_start = params['antenna_settings']['src_start']
+rx_start = params['antenna_settings']['rx_start']
+
+if src_step == rx_step:
+    antenna_step = src_step
+    antenna_start = (src_start + rx_start) / 2
 
 data_path = params['out_file']
 f = h5py.File(data_path, 'r')
@@ -22,11 +30,24 @@ nrx = f.attrs['nrx']
 for rx in range(nrx):
     data, dt = get_output_data(data_path, (rx+1), 'Ez')
 
+
+skip_time = 0
+data = data[int(skip_time/dt):]
+print('Data shape after skipping time:', data.shape)
+
+
+#* Resampling in LPR sample interval
+LPR_sample_interval = 0.3125e-9
+resample_factor = int(LPR_sample_interval / dt)
+data = data[::resample_factor]
+dt = LPR_sample_interval
+print('Data shape after resampling:', data.shape)
+
 #* Apply sobel filter
 def sobel():
-    sobelx = cv2.Sobel(np.abs(data[int(10e-9/dt):]), cv2.CV_64F, 1, 0, ksize=5)
+    sobelx = cv2.Sobel(np.abs(data), cv2.CV_64F, 1, 0, ksize=5)
     sobelx = cv2.convertScaleAbs(sobelx)
-    sobely = cv2.Sobel(np.abs(data[int(10e-9/dt):]), cv2.CV_64F, 0, 1, ksize=5)
+    sobely = cv2.Sobel(np.abs(data), cv2.CV_64F, 0, 1, ksize=5)
     sobely = cv2.convertScaleAbs(sobely)
 
     sobel_combined = cv2.addWeighted(sobelx, 0.5, sobely, 0.5, 0)
@@ -37,34 +58,47 @@ def sobel():
 
 #* Calculate gradient of the data
 def gradient():
-    gradx = np.gradient(data[int(10e-9/dt):], axis=1)
-    grady = np.gradient(data[int(10e-9/dt):], axis=0)
-    grad = np.sqrt(gradx**2 + grady**2)
+    gradx = np.abs(np.gradient(data, axis=1))
+    grady = np.abs(np.gradient(data, axis=0))
 
-    plot_list = [data, gradx, grady, grad]
+    gradx[gradx == 0] = 1e-15
+    grady[grady == 0] = 1e-15
+    
+    grad_combined = np.sqrt(gradx**2 + grady**2)
+
+    plot_list = [data, gradx, grady, grad_combined]
     return plot_list
 list = gradient()
 
 
 #* Plot the data
-fig, ax = plt.subplots(2, 2, figsize=(15, 15))
+font_large = 20
+font_medium = 18
+font_small = 16
+fig, ax = plt.subplots(2, 2, figsize=(18, 18), tight_layout=True)
 
 for i, data in enumerate(list):
     if i == 0:
         im = ax[i//2, i%2].imshow(data/np.amax(data)*100, cmap='seismic', aspect='auto',
-                                extent = [0, data.shape[1] * 0.04, data.shape[0] * dt * 1e9, 0],
+                                extent = [antenna_start, antenna_start + data.shape[1] * antenna_step, data.shape[0] * dt * 1e9, skip_time * 1e9],
                                 vmin=-1, vmax=1)
         #ax[i//2, i%2].set_ylim(35, 25)
     else:
+        data = 10 * np.log10(data/np.amax(data))
         im = ax[i//2, i%2].imshow(data, cmap='jet', aspect='auto',
-                                extent = [0, data.shape[1] * 0.04, data.shape[0] * dt * 1e9, 10],
-                                vmin=0, vmax=np.amax(data)/2)
+                                extent = [antenna_start, antenna_start + data.shape[1] * antenna_step,  data.shape[0] * dt * 1e9, skip_time * 1e9],
+                                vmin=-50, vmax=0)
         #ax[i//2, i%2].set_ylim(35, 25)
-    ax[i//2, i%2].set_title(['Ez', 'Sobel x', 'Sobel y', 'Sobel combined'][i])
+    ax[i//2, i%2].set_title(['Ez', 'Gradient x', 'Gradient y', 'Gradient combined'][i], fontsize=font_large)
+    ax[i//2, i%2].set_xlabel('x [m]', fontsize=font_medium)
+    ax[i//2, i%2].set_ylabel('Time [ns]', fontsize=font_medium)
+    ax[i//2, i%2].set_ylim(100, 0)
+    ax[i//2, i%2].tick_params(labelsize=font_small)
 
     delvider = axgrid1.make_axes_locatable(ax[i//2, i%2])
     cax = delvider.append_axes('right', size='5%', pad=0.05)
-    plt.colorbar(im, cax=cax, orientation='vertical')
+    plt.colorbar(im, cax=cax, orientation='vertical').set_label('Amplitude, dB', fontsize=font_medium)
+    cax.tick_params(labelsize=font_small)
 
 plt.savefig(output_dir + '/gradient.png', bbox_inches='tight', dpi=300)
 plt.show()
