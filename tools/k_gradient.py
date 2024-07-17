@@ -7,6 +7,7 @@ import cv2
 import mpl_toolkits.axes_grid1 as axgrid1
 import os
 import argparse
+from tqdm import tqdm
 
 
 
@@ -61,16 +62,32 @@ print('Data shape after skipping time:', data.shape)
 
 
 
-#* Calculate power
-#data = data**2
+#* Define the function to calculate the autocorrelation
+def calc_autocorrelation(Ascan): # data: 1D array
+    N = len(Ascan)
+    data_ave = np.mean(Ascan)
+    Ascan_centered = Ascan - data_ave
+    sigma = np.var(Ascan)
+
+    # Calculate the autocorrelation using numpy.correlate
+    auto_corr = np.correlate(Ascan_centered, Ascan_centered, mode='full') / (N * sigma)
+    return auto_corr[N-1:]
+
+# Calculate the autocorrelation of the data
+auto_corr = np.zeros(data.shape)
+for i in tqdm(range(data.shape[1]), desc='Calculating autocorrelation'):
+    data[:, i] = calc_autocorrelation(data[:, i])
+
+
+#* Replace 0 with a small number to avoid division by zero
 data[data == 0] = 1e-15
 
 
 #* Resampling in LPR sample interval
 LPR_sample_interval = 0.3125e-9
 resample_factor = int(LPR_sample_interval / dt)
-data = data[::resample_factor]
-dt = LPR_sample_interval
+#data = data[::resample_factor]
+#dt = LPR_sample_interval
 print('Data shape after resampling:', data.shape)
 
 #* Apply sobel filter
@@ -117,21 +134,29 @@ fig, ax = plt.subplots(2, 2, figsize=(18, 18), tight_layout=True)
 
 for i, data in enumerate(list):
     if i == 0:
+        min_max = np.amax(np.abs(data[int(20e-9/dt):]))
         im = ax[i//2, i%2].imshow(data, cmap='seismic', aspect='auto',
                                 extent = [antenna_start, antenna_start + data.shape[1] * antenna_step, data.shape[0] * dt * 1e9, skip_time * 1e9],
-                                vmin=-1, vmax=1)
+                                vmin=-min_max, vmax=min_max)
         #ax[i//2, i%2].set_ylim(35, 25)
     else:
-        data = 10 * np.log10(data/np.amax(data))
-        im = ax[i//2, i%2].imshow(data, cmap='jet', aspect='auto',
+        if args.func_type == 'sobel':
+            im = ax[i//2, i%2].imshow(data, cmap='jet', aspect='auto',
                                 extent = [antenna_start, antenna_start + data.shape[1] * antenna_step,  data.shape[0] * dt * 1e9, skip_time * 1e9],
-                                vmin=-50, vmax=0)
-        #ax[i//2, i%2].set_ylim(35, 25)
-    ax[i//2, i%2].set_title(['Ez', 'Gradient x', 'Gradient y', 'Gradient combined'][i], fontsize=font_large)
+                                vmin=0, vmax=np.amax(data))
+            ax[i//2, i%2].set_title(['Ez', 'Sobel x', 'Sobel y', 'Sobel combined'][i], fontsize=font_large)
+        elif args.func_type == 'gradient':
+            data = 10 * np.log10(data/np.amax(data))
+            im = ax[i//2, i%2].imshow(data, cmap='jet', aspect='auto',
+                                    extent = [antenna_start, antenna_start + data.shape[1] * antenna_step,  data.shape[0] * dt * 1e9, skip_time * 1e9],
+                                    vmin=-50, vmax=0)
+            ax[i//2, i%2].set_title(['Ez', 'Gradient x', 'Gradient y', 'Gradient combined'][i], fontsize=font_large)
     ax[i//2, i%2].set_xlabel('x [m]', fontsize=font_medium)
     ax[i//2, i%2].set_ylabel('Time [ns]', fontsize=font_medium)
     ax[i//2, i%2].set_ylim(150, 0)
     ax[i//2, i%2].tick_params(labelsize=font_small)
+    if data.shape[1] > 50:
+        ax[i//2, i%2].set_xlim(2, 4)
 
     delvider = axgrid1.make_axes_locatable(ax[i//2, i%2])
     cax = delvider.append_axes('right', size='5%', pad=0.05)

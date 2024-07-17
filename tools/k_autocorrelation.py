@@ -40,12 +40,20 @@ if src_step == rx_step:
 
 #* Load output file
 data_path = params['out_file']
+output_dir = os.path.dirname(data_path)
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 
 for rx in range(nrx):
     data, dt = get_output_data(data_path, (rx+1), 'Ez')
 
+
+#* Resampling in LPR sample interval
+LPR_sample_interval = 0.3125e-9
+resample_factor = int(LPR_sample_interval / dt)
+data = data[::resample_factor]
+dt = LPR_sample_interval
+print('Data shape after resampling:', data.shape)
 
 #data = data**2
 
@@ -88,9 +96,11 @@ font_medium = 18
 font_small = 16
 
 fig, ax = plt.subplots(1, 1, figsize=(10, 10), tight_layout=True)
+min_max = np.amax(np.abs(auto_corr[int(20e-9/dt):]))
 im = ax.imshow(auto_corr, cmap='seismic', aspect='auto',
             extent = [antenna_start, antenna_start + auto_corr.shape[1] * antenna_step, auto_corr.shape[0] * dt * 1e9, 0],
-            vmin=-np.amax(np.abs(auto_corr))/10, vmax=np.amax(np.abs(auto_corr))/10)
+            vmin=-min_max, vmax=min_max
+            )
 
 ax.set_xlabel('x [m]', fontsize=font_medium)
 ax.set_ylabel('Time [ns]', fontsize=font_medium)
@@ -98,7 +108,8 @@ ax.tick_params(labelsize=font_small)
 
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', '5%', pad='3%')
-plt.colorbar(im, cax=cax).set_label('Autocorrelation', fontsize=font_medium)
+plt.colorbar(im, cax=cax).set_label('Autocorrelation [%]', fontsize=font_medium)
 
 
+plt.savefig(output_dir + '/autocorrelation.png')
 plt.show()

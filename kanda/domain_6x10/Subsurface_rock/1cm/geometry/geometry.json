@@ -1,8 +1,8 @@
 {
     "geometry_settings":
     {
-        "h5_file": "kanda/domain_6x10/Subsurface_rock/1cm/geometry/100_rocks/geometry.h5",
-        "material_file": "kanda/domain_6x10/Subsurface_rock/1cm/geometry/100_rocks/geometry_materials.txt",
+        "h5_file": "kanda/domain_6x10/Subsurface_rock/1cm/geometry/geometry.h5",
+        "material_file": "kanda/domain_6x10/subsurface_rock/1cm/geometry/geometry_materials.txt",
         "comment": "unit: [m]",
         "domain_x": 10,
         "domain_z": 10,
