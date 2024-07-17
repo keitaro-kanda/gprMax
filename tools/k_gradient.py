@@ -6,14 +6,35 @@ import h5py
 import cv2
 import mpl_toolkits.axes_grid1 as axgrid1
 import os
+import argparse
 
 
-json_path = 'kanda/domain_4x6/single_rock/1cm/calc/calc.json'
-output_dir = os.path.dirname(json_path)
+
+#* Parse command line arguments
+parser = argparse.ArgumentParser(
+    prog='k_autocorrelation.py',
+    description='Calculate the autocorrelation of the data',
+    epilog='End of help message',
+    usage='python tools/k_gradient.py [json_path] [func_type]',
+)
+parser.add_argument('json_path', help='Path to the json file')
+parser.add_argument('func_type', choices=['sobel', 'gradient'], help='Type of function to be applied')
+args = parser.parse_args()
 
 
-with open(json_path) as f:
+#* Load json file
+json_path = args.json_path
+with open (json_path) as f:
     params = json.load(f)
+
+
+#* Define output directory
+output_dir = os.path.join(os.path.dirname(json_path), 'gradient')
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+
+#* Load antenna settings
 src_step = params['antenna_settings']['src_step']
 rx_step = params['antenna_settings']['rx_step']
 src_start = params['antenna_settings']['src_start']
@@ -23,17 +44,26 @@ if src_step == rx_step:
     antenna_step = src_step
     antenna_start = (src_start + rx_start) / 2
 
+
+#* Load output file
 data_path = params['out_file']
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
-
 for rx in range(nrx):
     data, dt = get_output_data(data_path, (rx+1), 'Ez')
 
 
+
+#* Define skip time if needed
 skip_time = 0
 data = data[int(skip_time/dt):]
 print('Data shape after skipping time:', data.shape)
+
+
+
+#* Calculate power
+#data = data**2
+data[data == 0] = 1e-15
 
 
 #* Resampling in LPR sample interval
@@ -63,13 +93,21 @@ def gradient():
 
     gradx[gradx == 0] = 1e-15
     grady[grady == 0] = 1e-15
-    
+
     grad_combined = np.sqrt(gradx**2 + grady**2)
 
     plot_list = [data, gradx, grady, grad_combined]
     return plot_list
-list = gradient()
 
+
+
+#* Run the function
+if args.func_type == 'sobel':
+    list = sobel()
+elif args.func_type == 'gradient':
+    list = gradient()
+else:
+    raise ValueError('Invalid function type. Choose from sobel, gradient, division.')
 
 #* Plot the data
 font_large = 20
@@ -79,7 +117,7 @@ fig, ax = plt.subplots(2, 2, figsize=(18, 18), tight_layout=True)
 
 for i, data in enumerate(list):
     if i == 0:
-        im = ax[i//2, i%2].imshow(data/np.amax(data)*100, cmap='seismic', aspect='auto',
+        im = ax[i//2, i%2].imshow(data, cmap='seismic', aspect='auto',
                                 extent = [antenna_start, antenna_start + data.shape[1] * antenna_step, data.shape[0] * dt * 1e9, skip_time * 1e9],
                                 vmin=-1, vmax=1)
         #ax[i//2, i%2].set_ylim(35, 25)
@@ -92,13 +130,19 @@ for i, data in enumerate(list):
     ax[i//2, i%2].set_title(['Ez', 'Gradient x', 'Gradient y', 'Gradient combined'][i], fontsize=font_large)
     ax[i//2, i%2].set_xlabel('x [m]', fontsize=font_medium)
     ax[i//2, i%2].set_ylabel('Time [ns]', fontsize=font_medium)
-    ax[i//2, i%2].set_ylim(100, 0)
+    ax[i//2, i%2].set_ylim(150, 0)
     ax[i//2, i%2].tick_params(labelsize=font_small)
 
     delvider = axgrid1.make_axes_locatable(ax[i//2, i%2])
     cax = delvider.append_axes('right', size='5%', pad=0.05)
-    plt.colorbar(im, cax=cax, orientation='vertical').set_label('Amplitude, dB', fontsize=font_medium)
+    plt.colorbar(im, cax=cax, orientation='vertical').set_label('Amplitude, [dB]', fontsize=font_medium)
     cax.tick_params(labelsize=font_small)
 
-plt.savefig(output_dir + '/gradient.png', bbox_inches='tight', dpi=300)
+
+if args.func_type == 'sobel':
+    plt.savefig(output_dir + '/sobel.png', bbox_inches='tight', dpi=300)
+elif args.func_type == 'gradient':
+    plt.savefig(output_dir + '/gradient.png', bbox_inches='tight', dpi=300)
+elif args.func_type == 'division':
+    plt.savefig(output_dir + '/division.png', bbox_inches='tight', dpi=300)
 plt.show()

@@ -47,7 +47,9 @@ for rx in range(nrx):
     data, dt = get_output_data(data_path, (rx+1), 'Ez')
 
 
+#data = data**2
 
+"""
 #* Define the function to calculate the autocorrelation
 def calc_autocorrelation(Ascan): # data: 1D array
     N = len(Ascan)
@@ -55,15 +57,25 @@ def calc_autocorrelation(Ascan): # data: 1D array
     sigma = 1 /N * np.sum((Ascan - data_ave)**2)
 
     #* Calculate the autocorrelation
-    auto_corr = np.zeros(N-1)
+    auto_corr = np.zeros(N)
     for i in range(1, N+1):
         auto_corr[i-1] = np.sum((Ascan[:N-i] - data_ave) * (Ascan[i:] - data_ave)) / sigma
 
     return auto_corr
+"""
 
+#* Define the function to calculate the autocorrelation
+def calc_autocorrelation(Ascan): # data: 1D array
+    N = len(Ascan)
+    data_ave = np.mean(Ascan)
+    Ascan_centered = Ascan - data_ave
+    sigma = np.var(Ascan)
 
+    # Calculate the autocorrelation using numpy.correlate
+    auto_corr = np.correlate(Ascan_centered, Ascan_centered, mode='full') / (N * sigma)
+    return auto_corr[N-1:]
 
-#* Calculate the autocorrelation of the data
+# Calculate the autocorrelation of the data
 auto_corr = np.zeros(data.shape)
 for i in tqdm(range(data.shape[1]), desc='Calculating autocorrelation'):
     auto_corr[:, i] = calc_autocorrelation(data[:, i])
@@ -71,7 +83,22 @@ for i in tqdm(range(data.shape[1]), desc='Calculating autocorrelation'):
 
 
 #* Plot
-fig, ax = plt.subplots(1, 1, figsize=(12, 6))
-ax.imshow(auto_corr, cmap='jet', aspect='auto')
+font_large = 20
+font_medium = 18
+font_small = 16
+
+fig, ax = plt.subplots(1, 1, figsize=(10, 10), tight_layout=True)
+im = ax.imshow(auto_corr, cmap='seismic', aspect='auto',
+            extent = [antenna_start, antenna_start + auto_corr.shape[1] * antenna_step, auto_corr.shape[0] * dt * 1e9, 0],
+            vmin=-np.amax(np.abs(auto_corr))/10, vmax=np.amax(np.abs(auto_corr))/10)
+
+ax.set_xlabel('x [m]', fontsize=font_medium)
+ax.set_ylabel('Time [ns]', fontsize=font_medium)
+ax.tick_params(labelsize=font_small)
+
+delvider = axgrid1.make_axes_locatable(ax)
+cax = delvider.append_axes('right', '5%', pad='3%')
+plt.colorbar(im, cax=cax).set_label('Autocorrelation', fontsize=font_medium)
+
 
 plt.show()

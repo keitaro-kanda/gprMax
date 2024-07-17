@@ -27,7 +27,7 @@ from traitlets import default
 
 from gprMax.exceptions import CmdInputError
 
-from .outputfiles_merge import get_output_data
+from outputfiles_merge import get_output_data
 
 
 # プロットを作る関数の作成部分？
@@ -129,13 +129,16 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
 
 if __name__ == "__main__":
-
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Plots a B-scan image.', 
-                                     usage='cd gprMax; python -m tools.plot_Bscan jsonfile output -closeup --select-rx')
+    #* Parse command line arguments
+    parser = argparse.ArgumentParser(
+        prog = 'plot_Bscan.py',
+        description = 'Plots a B-scan image.',
+        epilog = 'End of help message',
+        usage = 'python tools/plot_Bscan.py [jsonfile] [rx_component] [-closeup] [--select-rx]'
+        )
     #parser.add_argument('outputfile', help='name of output file including path')
     parser.add_argument('jsonfile', help='name of json file including path')
-    parser.add_argument('rx_component', help='name of output component to be plotted', 
+    parser.add_argument('rx_component', help='name of output component to be plotted',
                         choices=['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz'])
     # closeupのオプションを作る
     parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
