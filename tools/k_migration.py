@@ -14,8 +14,11 @@ from tools.outputfiles_merge import get_output_data
 
 # ======load files=====
 # Parse command line arguments
-parser = argparse.ArgumentParser(description='Processing migration', 
-                                 usage='cd gprMax; python -m tools.migration jsonfile file_type epsilon_map')
+parser = argparse.ArgumentParser(
+    prog = 'k_migration.py',
+    description='Processing migration',
+    epilog='End of help message',
+    usage='python tools/k_migration.py [jsonfile] [file_type] [epsilon_map]')
 parser.add_argument('jsonfile', help='json file name')
 parser.add_argument('file_type', choices=['raw', 'pulse_comp'], help='file type')
 parser.add_argument('epsilon_map', choices=['y', 'n'], help='whether consider about epsilon distribution or not')
@@ -30,8 +33,8 @@ with open (args.jsonfile) as f:
 
 
 # Open output file and read number of outputs (receivers)
-file_name_out = params['input_data_out']
-file_name_txt = params['input_data_txt']
+file_name_out = params['out_file']
+#file_name_txt = params['input_data_txt']
 output_data_out = h5py.File(file_name_out, 'r')
 nrx = output_data_out.attrs['nrx']
 output_data_out.close()
@@ -40,44 +43,54 @@ input_dir_path = os.path.dirname(file_name_out)
 
 
 # =====load epsilon map======
-epsilon_map_path = params['epsilon_map']
-epsilon_map = np.loadtxt(epsilon_map_path)
+#epsilon_map_path = params['epsilon_map']
+#epsilon_map = np.loadtxt(epsilon_map_path)
 # =====load epsilon map======
 
 
 # 定数の設定
 c = 299792458 # [m/s], 光速
 epsilon_0 = 1 # 真空の誘電率
-epsilon_ground_1 = params['epsilon_ground_1'] 
-
+epsilon_ground_1 = 3 # 地面の誘電率
 
 # =====load jason settings=====
-radar_type = params['radar_type'] # radar type
+radar_type = 'monostatic' # radar type
 
-tx_step = params['tx_step'] # [m]
-rx_step = params['rx_step'] # [m]
-x_resolution = params['x_resolution'] # [m]
-z_resolution = params['z_resolution'] # [m]
-tx_start = int(params["tx_start"]) # txの初期位置 
-rx_start = int(params["rx_start"]) # rxの初期位置
-antenna_zpoint = params['antenna_zpoint'] # [m]
-h = params['antenna_hight'] # [m], アンテナの高さ
-antenna_distance = int(params["monostatic_antenna_distance"]) # [m], アンテナ間隔
-array_interval = params['array_interval'] # [m] array antenna distance
-total_trace_num =  params["total_trace_num"] # rxの数
+#* Load antenna settings
+tx_step = params['antenna_settings']['src_step']
+rx_step = params['antenna_settings']['rx_step']
+tx_start = params['antenna_settings']['src_start']
+rx_start = params['antenna_settings']['rx_start']
+antenna_height = params['antenna_settings']['antenna_height']
+antenna_distance = np.abs(tx_start - rx_start)
 
-wave_duration_half = params["wave_duration"] / 2 # [s]
+x_resolution = 0.005 # [m]
+z_resolution = 0.005 # [m]
+#antenna_distance = int(params["monostatic_antenna_distance"]) # [m], アンテナ間隔
+#array_interval = params['array_interval'] # [m] array antenna distance
+#total_trace_num =  params["total_trace_num"] # rxの数
+
+wave_duration_half = params['pulse_info']['pulse_length'] / 2 # [s]
 # =====load jason settings=====
 
 
-xgrid_num = int(params['geometry_matrix_axis1'] / x_resolution) # x
-zgrid_num = int(params['geometry_matrix_axis0'] / z_resolution) # z
+
+#* Geometry settings
+geometry_json = params['geometry_settings']['geometry_json']
+with open(geometry_json) as f:
+    geometry_params = json.load(f)
+h5_file_path = geometry_params['geometry_settings']['h5_file']
+
+xgrid_num = int(geometry_params['geometry_settings']['domain_x'] / x_resolution) # x
+zgrid_num = int(geometry_params['geometry_settings']['ground_depth'] / z_resolution) # z
+
+antenna_zpoint = antenna_height + geometry_params['geometry_settings']['ground_depth'] # [m]
 
 outputdata_mig = np.zeros([zgrid_num, xgrid_num]) # grid数で定義、[m]じゃないよ！！
 delay_time = np.zeros([zgrid_num, xgrid_num]) # grid数で定義、[m]じゃないよ！！
 
 
-txt_dir_path = os.path.dirname(file_name_txt)
+#txt_dir_path = os.path.dirname(file_name_txt)
 
 
 # migration処理関数の作成
@@ -124,7 +137,7 @@ def migration(rx, x_index, z_index, x, z):
         t_ref2rx = np.sum(pass_len_ref2rx) / c
 
 
-        # for tx 
+        # for tx
         diff_z_tx2ref = np.int(z - antenna_zpoint)
         pass_tx2ref_z = antenna_zpoint * np.ones(np.abs(diff_z_tx2ref)) \
                 - np.sign(diff_z_tx2ref) * np.arange(np.abs(diff_z_tx2ref))
@@ -216,7 +229,7 @@ def migration(rx, x_index, z_index, x, z):
             elif z <= antenna_zpoint: # assume that epsiron_r = 1
                 pass_len_tx2ref = np.sqrt(np.abs(x_tx - x)**2 + np.abs(antenna_zpoint - z)**2 ) # [m]
                 delay_time = (pass_len_ref2rx + pass_len_tx2ref) / c # [s]
-                recieved_time_k = delay_time + params["wave_start_time"] # [s]
+                recieved_time_k = delay_time + params['pulse_info']['transmitting_delay'] # [s]
             
 
             else: # assume that epsiron_r is that of ground
@@ -229,7 +242,7 @@ def migration(rx, x_index, z_index, x, z):
                 """
 
                 delta_t = np.sqrt(epsilon_ground_1) * (pass_len_tx2ref + pass_len_ref2rx) / c
-                recieved_time_k = delta_t + params["wave_start_time"] # [s]
+                recieved_time_k = delta_t + params['pulse_info']['transmitting_delay'] # [s]
                 
             
             t_index_start = int((recieved_time_k - wave_duration_half) / dt)
@@ -272,11 +285,11 @@ def calc_subsurface_structure(rx):
 
 
 # =====rxの指定=====
-if params['radar_type'] == 'monostatic':
+if radar_type == 'monostatic':
     rx_num_start = 1
-elif params['radar_type'] == 'bistatic':
+elif radar_type == 'bistatic':
     rx_num_start = 1
-elif params['radar_type'] == 'array':
+elif radar_type == 'array':
     rx_num_start = 25
 else:
     print('input correct radar type')
@@ -293,27 +306,26 @@ if args.all_rx == True:
 # ==================
 
 
+# make output directory path
+if args.file_type == 'raw':
+    if args.epsilon_map == 'y':
+        output_dir_path = os.path.join(input_dir_path, 'migration_raw_mapY')
+    elif args.epsilon_map == 'n':
+        output_dir_path = os.path.join(input_dir_path, 'migration_raw_mapN')
+elif args.file_type == 'pulse_comp':
+    if args.epsilon_map == 'y':
+        output_dir_path = os.path.join(input_dir_path, 'migration_plscomp_mapY')
+    elif args.epsilon_map == 'n':
+        output_dir_path = os.path.join(input_dir_path, 'migration_plscomp_mapN')
+
+if not os.path.exists(output_dir_path):
+    os.mkdir(output_dir_path)
+
 for rx in range(rx_num_start, rx_num_end):
-
-    # make output directory path
-    if args.file_type == 'raw':
-        if args.epsilon_map == 'y':
-            output_dir_path = os.path.join(input_dir_path, 'migration_raw_mapY')
-        elif args.epsilon_map == 'n':
-            output_dir_path = os.path.join(input_dir_path, 'migration_raw_mapN')
-    elif args.file_type == 'pulse_comp':
-        if args.epsilon_map == 'y':
-            output_dir_path = os.path.join(input_dir_path, 'migration_plscomp_mapY')
-        elif args.epsilon_map == 'n':
-            output_dir_path = os.path.join(input_dir_path, 'migration_plscomp_mapN')
-
-    if not os.path.exists(output_dir_path):
-        os.mkdir(output_dir_path)
-
-    
     # from raw file
     if args.file_type == 'raw':
         outputdata, dt = get_output_data(file_name_out, rx, 'Ez') 
+        total_trace_num = outputdata.shape[1]
 
         migration_calc, time_calc = calc_subsurface_structure(rx)
         migration_result_standardize = migration_calc / np.amax(migration_calc) * 100
@@ -382,45 +394,8 @@ for rx in range(rx_num_start, rx_num_end):
         edge_color = 'gray'
     elif args.file_type == 'pulse_comp':
         edge_color = 'white'
-    # 地形のプロット
-    # shallow rille wall & floor
-    rille_apex_list = [(0, 10), (25, 10), 
-                (139, 200), (411, 200),
-                (525, 10), (550, 10)]
-    rille = patches.Polygon(rille_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
-    ax.add_patch(rille)
 
 
-    # hole
-    if params['hole'] == 'y':
-        hole_list = [(40, 35), (250, 35),
-                            (250, 60), (200, 60),
-                            (200, 77), (350, 77),
-                            (350, 60), (300, 60),
-                            (300, 35), (515, 35)]
-        tube = patches.Polygon(hole_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
-        ax.add_patch(tube)
-    elif params['hole'] == 'n':
-        surface_list = [(40, 35), (515, 35)]
-        surface = patches.Polygon(surface_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
-        ax.add_patch(surface)
-
-        cave_list = [(200, 60),(200, 77), 
-                        (350, 77), (350, 60)]
-        cave = patches.Polygon(cave_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=True)
-        ax.add_patch(cave)
-
-
-    # 2nd layer
-    if params['2nd_layer'] == 'y':
-        layer2_apex_list = [(139, 200),(175, 260), (375, 260), (411, 200)]
-        layer2 = patches.Polygon(layer2_apex_list, ec=edge_color, linestyle='--', fill=False, linewidth=1, closed=False)
-        ax.add_patch(layer2)
-    elif params['2nd_layer'] == 'n':
-        pass
-
-
-    
     """"
     ax = fig.add_subplot(212)
     plt.imshow(time_calc,

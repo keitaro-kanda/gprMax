@@ -30,6 +30,7 @@ from numpy import size
 from gprMax.exceptions import CmdInputError
 from gprMax.receivers import Rx
 from gprMax.utilities import fft_power
+from scipy import signal
 
 
 def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
@@ -82,6 +83,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 raise CmdInputError('{} output requested to plot, but the available output for receiver 1 is {}'.format(output, ', '.join(availableoutputs)))
 
             outputdata = f[path + output][:] * polarity
+            env = np.abs(signal.hilbert(outputdata))
 
             # Plotting if FFT required
             if fft:
@@ -101,16 +103,18 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 # Plot time history of output component
                 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
                 line1 = ax1.plot(time, outputdata, 'r', lw=2, label=outputtext)
+                ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
                 ax1.set_xlabel('Time [s]')
                 ax1.set_ylabel(outputtext + ' field strength [V/m]')
                 ax1.set_xlim([0, np.amax(time)])
                 ax1.grid(which='both', axis='both', linestyle='-.')
+                ax1.legend(fontsize = 15)
 
                 # Plot frequency spectra
-                markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.', use_line_collection=True)
-                plt.setp(baseline, 'linewidth', 0)
-                plt.setp(stemlines, 'color', 'r')
-                plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
+                #markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.')
+                #plt.setp(baseline, 'linewidth', 0)
+                #plt.setp(stemlines, 'color', 'r')
+                #plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
                 line2 = ax2.plot(freqs[pltrange], power[pltrange], 'r', lw=2)
                 ax2.set_xlabel('Frequency [Hz]')
                 ax2.set_ylabel('Power [dB]')

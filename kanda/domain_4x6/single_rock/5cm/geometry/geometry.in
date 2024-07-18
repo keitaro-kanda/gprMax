@@ -44,8 +44,8 @@ box(left, 2, 0, left+size, 2+size, 0.005, 'ep9', 'n')
 ＜波源設定＞
 #waveform: ricker 1 500e6 my_src
 
-#hertzian_dipole: z  2 4.3 0 my_src
-#rx: 2.16 4.3 0
+#hertzian_dipole: z  1.92 4.3 0 my_src
+#rx: 2.08 4.3 0
 
 <snapshot作成>
 #python:

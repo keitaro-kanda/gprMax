@@ -1,0 +1,28 @@
+#domain: 4 6 0.005
+#dx_dy_dz: 0.005 0.005 0.005
+
+#time_window: 200e-9
+
+
+=====地形読み込み=====
+<>
+#geometry_objects_read: 0 0 0 kanda/domain_4x6/single_rock/15cm/geometry/geometry.h5 kanda/domain_4x6/single_rock/15cm/geometry/geometry_materials.txt
+
+=====B-scan用=====
+＜波源設定＞
+#waveform: ricker 1 500e6 my_src
+
+#hertzian_dipole: z  0.92 4.3 0 my_src
+#rx: 1.08 4.3 0
+tx-rx offset: 16 cm
+
+＜moving pass＞
+#src_steps: 0.04 0 0
+#rx_steps: 0.04 0 0
+トレース間隔4cmと仮定
+
+観測幅：2m
+n回数：50
+
+#output_dir: outfiles
+==========

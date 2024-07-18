@@ -75,8 +75,8 @@ def calc_autocorrelation(Ascan): # data: 1D array
 
 # Calculate the autocorrelation of the data
 auto_corr = np.zeros(data.shape)
-for i in tqdm(range(data.shape[1]), desc='Calculating autocorrelation'):
-    data[:, i] = calc_autocorrelation(data[:, i])
+#for i in tqdm(range(data.shape[1]), desc='Calculating autocorrelation'):
+#    data[:, i] = calc_autocorrelation(data[:, i])
 
 
 #* Replace 0 with a small number to avoid division by zero
@@ -134,10 +134,9 @@ fig, ax = plt.subplots(2, 2, figsize=(18, 18), tight_layout=True)
 
 for i, data in enumerate(list):
     if i == 0:
-        min_max = np.amax(np.abs(data[int(20e-9/dt):]))
         im = ax[i//2, i%2].imshow(data, cmap='seismic', aspect='auto',
                                 extent = [antenna_start, antenna_start + data.shape[1] * antenna_step, data.shape[0] * dt * 1e9, skip_time * 1e9],
-                                vmin=-min_max, vmax=min_max)
+                                vmin=-1, vmax=1)
         #ax[i//2, i%2].set_ylim(35, 25)
     else:
         if args.func_type == 'sobel':
