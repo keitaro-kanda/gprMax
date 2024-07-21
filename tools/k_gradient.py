@@ -8,6 +8,7 @@ import mpl_toolkits.axes_grid1 as axgrid1
 import os
 import argparse
 from tqdm import tqdm
+from scipy import signal
 
 
 
@@ -16,10 +17,11 @@ parser = argparse.ArgumentParser(
     prog='k_autocorrelation.py',
     description='Calculate the autocorrelation of the data',
     epilog='End of help message',
-    usage='python tools/k_gradient.py [json_path] [func_type]',
+    usage='python tools/k_gradient.py [json_path] [func_type] [-envelope]',
 )
 parser.add_argument('json_path', help='Path to the json file')
 parser.add_argument('func_type', choices=['sobel', 'gradient'], help='Type of function to be applied')
+parser.add_argument('-envelope', action='store_true', help='Apply envelope to the data', default=False)
 args = parser.parse_args()
 
 
@@ -59,6 +61,11 @@ for rx in range(nrx):
 skip_time = 0
 data = data[int(skip_time/dt):]
 print('Data shape after skipping time:', data.shape)
+
+
+#* Calculate envelope
+if args.envelope:
+    data = np.abs(signal.hilbert(data, axis=0))
 
 
 
@@ -134,9 +141,15 @@ fig, ax = plt.subplots(2, 2, figsize=(18, 18), tight_layout=True)
 
 for i, data in enumerate(list):
     if i == 0:
-        im = ax[i//2, i%2].imshow(data, cmap='seismic', aspect='auto',
+        if args.envelope:
+            color = 'jet'
+            vmin = 0
+        else:
+            color = 'seismic'
+            vmin = -1
+        im = ax[i//2, i%2].imshow(data, cmap=color, aspect='auto',
                                 extent = [antenna_start, antenna_start + data.shape[1] * antenna_step, data.shape[0] * dt * 1e9, skip_time * 1e9],
-                                vmin=-1, vmax=1)
+                                vmin=vmin, vmax=20)
         #ax[i//2, i%2].set_ylim(35, 25)
     else:
         if args.func_type == 'sobel':
@@ -163,6 +176,10 @@ for i, data in enumerate(list):
     cax.tick_params(labelsize=font_small)
 
 
+if args.envelope:
+    output_dir = output_dir + '/envelope'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 if args.func_type == 'sobel':
     plt.savefig(output_dir + '/sobel.png', bbox_inches='tight', dpi=300)
 elif args.func_type == 'gradient':

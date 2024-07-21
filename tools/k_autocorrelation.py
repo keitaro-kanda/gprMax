@@ -7,7 +7,7 @@ import os
 import argparse
 from tqdm import tqdm
 from outputfiles_merge import get_output_data
-import scipy.signal as signal
+from scipy import signal
 from matplotlib.gridspec import GridSpec
 
 
@@ -47,10 +47,13 @@ nrx = f.attrs['nrx']
 
 for rx in range(nrx):
     data, dt = get_output_data(data_path, (rx+1), 'Ez')
-skip_time = 15e-9
+
+#* Convert into envelope
+data = np.abs(signal.hilbert(data, axis=0))
+
+skip_time = 24e-9
 data_skipped = data[int(skip_time/dt):]
 print(data_skipped.shape)
-
 
 peak_time_list = []
 for traces in range(data_skipped.shape[1]):

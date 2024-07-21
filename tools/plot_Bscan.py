@@ -28,6 +28,7 @@ from traitlets import default
 from gprMax.exceptions import CmdInputError
 
 from outputfiles_merge import get_output_data
+from scipy import signal
 
 
 # プロットを作る関数の作成部分？
@@ -55,7 +56,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     
 
     #* normalize
-    outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
+    #outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
 
     src_step = params['antenna_settings']['src_step']
     rx_step = params['antenna_settings']['rx_step']
@@ -70,11 +71,18 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     else:
         antenna_step = 1
 
-
-    plt.imshow(outputdata_norm,
-             extent=[antenna_start, antenna_start + outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
-            interpolation='nearest', aspect='auto', cmap='seismic',
-            vmin=-1, vmax=1)
+    if args.envelope:
+        data = np.abs(signal.hilbert(outputdata, axis=0))
+        plt.imshow(data,
+             extent=[antenna_start, antenna_start + outputdata.shape[1] * antenna_step, outputdata.shape[0] * dt, 0],
+            interpolation='nearest', aspect='auto', cmap='jet',
+            vmin=0, vmax=10)
+    else:
+        outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
+        plt.imshow(outputdata_norm,
+                extent=[antenna_start, antenna_start + outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
+                interpolation='nearest', aspect='auto', cmap='seismic',
+                vmin=-1, vmax=1)
     plt.xlabel('x [m]', fontsize=20)
     plt.ylabel('Time [ns]', fontsize=20)
     plt.tick_params(labelsize=18)
@@ -82,15 +90,8 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     # =====closeupオプション=====
     if closeup:
 
-        closeup_start = 0 # [ns]
-        closeup_end = 300 # [ns]
-        #closeup_start = int(closeup_start / dt)
-        #closeup_end = int(closeup_end / dt)
-        plt.imshow(outputdata_norm,
-             extent=[0, outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
-            interpolation='nearest', aspect='auto', cmap='seismic',
-            vmin=-1, vmax=1)
-        plt.xlim(2, 4)
+        closeup_start = 20 # [ns]
+        closeup_end = 40 # [ns]
         plt.ylim(closeup_end, closeup_start)
         #plt.minorticks_on( )
 
@@ -121,6 +122,9 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
                     'closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
+    elif args.envelope:
+        fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + 'envelope.png', dpi=150, format='png', 
+                 bbox_inches='tight', pad_inches=0.1)
     else:
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
@@ -134,7 +138,7 @@ if __name__ == "__main__":
         prog = 'plot_Bscan.py',
         description = 'Plots a B-scan image.',
         epilog = 'End of help message',
-        usage = 'python tools/plot_Bscan.py [jsonfile] [rx_component] [-closeup] [--select-rx]'
+        usage = 'python tools/plot_Bscan.py [jsonfile] [rx_component] [-closeup] [--select-rx] [-envelope]'
         )
     #parser.add_argument('outputfile', help='name of output file including path')
     parser.add_argument('jsonfile', help='name of json file including path')
@@ -143,6 +147,7 @@ if __name__ == "__main__":
     # closeupのオプションを作る
     parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
     parser.add_argument('--select-rx', action='store_true', help='select rx number', default=False)
+    parser.add_argument('-envelope', action='store_true', help='Apply envelope to the data', default=False)
     args = parser.parse_args()
 
     #* Load json file
