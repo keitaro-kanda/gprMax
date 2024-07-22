@@ -6,7 +6,7 @@
 
 =====地形読み込み=====
 <>
-#geometry_objects_read: 0 0 0 kanda/domain_4x6/single_rock/15cm/geometry/geometry.h5 kanda/domain_4x6/single_rock/15cm/geometry/geometry_materials.txt
+#geometry_objects_read: 0 0 0 kanda/domain_4x6/single_rock/30cm/geometry/geometry.h5 kanda/domain_4x6/single_rock/30cm/geometry/geometry_materials.txt
 
 =====B-scan用=====
 ＜波源設定＞

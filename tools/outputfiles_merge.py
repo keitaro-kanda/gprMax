@@ -120,7 +120,11 @@ def merge_files(basefilename, removefiles=False):
 if __name__ == "__main__":
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Merges traces (A-scans) from multiple output files into one new file, then optionally removes the series of output files.', usage='cd gprMax; python -m tools.outputfiles_merge basefilename')
+    parser = argparse.ArgumentParser(
+        prog='outputfiles_merge.py',
+        description='Merges traces (A-scans) from multiple output files into one new file, then optionally removes the series of output files.',
+        epilog='End of help message',
+        usage='python tools/outputfiles_merge.py [basefilename]')
     parser.add_argument('basefilename', help='base name of output file series including path')
     parser.add_argument('--remove-files', action='store_true', default=False, help='flag to remove individual output files after merge')
     args = parser.parse_args()
