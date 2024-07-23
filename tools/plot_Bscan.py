@@ -118,7 +118,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     savefile = os.path.splitext(filename)[0]
     # fig.savefig(path + os.sep + savefile + '.pdf', dpi=None, format='pdf', 
     #             bbox_inches='tight', pad_inches=0.1)
-    if closeup:
+    if closeup and args.envelope==False:
         outputdir = os.path.join(outputdir, 'closeup')
         if not os.path.exists(outputdir):
             os.mkdir(outputdir)
@@ -128,13 +128,23 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
                     '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.pdf', dpi=300, format='pdf',
                     bbox_inches='tight', pad_inches=0.1)
-    elif args.envelope:
+    elif args.envelope and closeup==False:
         outputdir = os.path.join(outputdir, 'envelope')
         if not os.path.exists(outputdir):
             os.mkdir(outputdir)
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '_envelope.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '_envelope.pdf', dpi=300, format='pdf',
+                    bbox_inches='tight', pad_inches=0.1)
+    elif args.envelope and closeup:
+        outputdir = os.path.join(outputdir, 'envelope')
+        if not os.path.exists(outputdir):
+            os.mkdir(outputdir)
+        fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
+                    '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '_envelope.png', dpi=150, format='png', 
+                bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
+                    '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '_envelope.pdf', dpi=300, format='pdf',
                     bbox_inches='tight', pad_inches=0.1)
     else:
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '.png', dpi=150, format='png', 
