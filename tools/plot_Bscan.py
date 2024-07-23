@@ -51,18 +51,18 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     if not os.path.exists(outputdir):
         os.mkdir(outputdir)
 
+
+    #* Create figure
     fig = plt.figure(num=filename + ' - rx' + str(rxnumber),
                     figsize=(15, 15), facecolor='w', edgecolor='w')
-    
 
-    #* normalize
-    #outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
 
+
+    #* Load antenna settings
     src_step = params['antenna_settings']['src_step']
     rx_step = params['antenna_settings']['rx_step']
     src_start = params['antenna_settings']['src_start']
     rx_start = params['antenna_settings']['rx_start']
-
     if src_step == rx_step:
         antenna_step = src_step
         antenna_start = (src_start + rx_start) / 2
@@ -71,12 +71,16 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     else:
         antenna_step = 1
 
+
+    #* Plot part
+    #* Calculate and plot envelope
     if args.envelope:
         data = np.abs(signal.hilbert(outputdata, axis=0))
         plt.imshow(data,
              extent=[antenna_start, antenna_start + outputdata.shape[1] * antenna_step, outputdata.shape[0] * dt, 0],
             interpolation='nearest', aspect='auto', cmap='jet',
             vmin=0, vmax=10)
+    #* Plot raw B-scan
     else:
         outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
         plt.imshow(outputdata_norm,
@@ -87,18 +91,16 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     plt.ylabel('Time [ns]', fontsize=20)
     plt.tick_params(labelsize=18)
 
-    # =====closeupオプション=====
-    if closeup:
 
+
+    #* Closeup settings
+    if closeup:
         closeup_start = 20 # [ns]
         closeup_end = 70 # [ns]
         plt.ylim(closeup_end, closeup_start)
         #plt.minorticks_on( )
 
 
-    #if closeup:
-    #    plt.title('rx' + str(rxnumber) + ' closeup: '+str(closeup_start)+'-'+str(closeup_end) + '[ns]', fontsize=20)
-    #else:
     plt.title('rx' + str(rxnumber), fontsize=20)
 
     # Grid properties
@@ -106,36 +108,38 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     ax.grid(which='both', axis='both', linestyle='-.')
 
     cb = plt.colorbar()
-    if 'E' in rxcomponent:
-        cb.set_label('Field strength percentage [%]', fontsize=20)
-    elif 'H' in rxcomponent:
-        cb.set_label('Field strength [A/m]')
-    elif 'I' in rxcomponent:
-        cb.set_label('Current [A]')
+    if args.envelope:
+        cb.set_label('Envelope amplitude', fontsize=20)
+    else:
+        cb.set_label('Normalized field strength [%]', fontsize=20)
     cb.ax.tick_params(labelsize=18)
 
-    # Save a PDF/PNG of the figure
+    #* Save plot
     savefile = os.path.splitext(filename)[0]
     # fig.savefig(path + os.sep + savefile + '.pdf', dpi=None, format='pdf', 
     #             bbox_inches='tight', pad_inches=0.1)
+
+    #* Closeup of raw B-scan
     if closeup and args.envelope==False:
         outputdir = os.path.join(outputdir, 'closeup')
         if not os.path.exists(outputdir):
             os.mkdir(outputdir)
         fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
                     '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
-                 bbox_inches='tight', pad_inches=0.1)
+                bbox_inches='tight', pad_inches=0.1)
         fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
                     '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.pdf', dpi=300, format='pdf',
                     bbox_inches='tight', pad_inches=0.1)
+    #* Envelope
     elif args.envelope and closeup==False:
         outputdir = os.path.join(outputdir, 'envelope')
         if not os.path.exists(outputdir):
             os.mkdir(outputdir)
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '_envelope.png', dpi=150, format='png', 
-                 bbox_inches='tight', pad_inches=0.1)
+                bbox_inches='tight', pad_inches=0.1)
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '_envelope.pdf', dpi=300, format='pdf',
                     bbox_inches='tight', pad_inches=0.1)
+    #* Closeup of envelope
     elif args.envelope and closeup:
         outputdir = os.path.join(outputdir, 'envelope')
         if not os.path.exists(outputdir):
@@ -146,15 +150,18 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
                     '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '_envelope.pdf', dpi=300, format='pdf',
                     bbox_inches='tight', pad_inches=0.1)
+    #* Raw B-scan
     else:
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '.png', dpi=150, format='png', 
-                 bbox_inches='tight', pad_inches=0.1)
+                bbox_inches='tight', pad_inches=0.1)
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '.pdf', dpi=300, format='pdf',
                     bbox_inches='tight', pad_inches=0.1)
 
     return plt
 
 
+
+#* Main part of the script
 if __name__ == "__main__":
     #* Parse command line arguments
     parser = argparse.ArgumentParser(
