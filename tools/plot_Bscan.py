@@ -91,7 +91,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     if closeup:
 
         closeup_start = 20 # [ns]
-        closeup_end = 40 # [ns]
+        closeup_end = 70 # [ns]
         plt.ylim(closeup_end, closeup_start)
         #plt.minorticks_on( )
 
@@ -119,15 +119,28 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     # fig.savefig(path + os.sep + savefile + '.pdf', dpi=None, format='pdf', 
     #             bbox_inches='tight', pad_inches=0.1)
     if closeup:
+        outputdir = os.path.join(outputdir, 'closeup')
+        if not os.path.exists(outputdir):
+            os.mkdir(outputdir)
         fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
-                    'closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
+                    '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(outputdir +os.sep + savefile + 'rx' + str(rxnumber) +
+                    '_closeup'+str(closeup_start)+'_'+str(closeup_end)+ '.pdf', dpi=300, format='pdf',
+                    bbox_inches='tight', pad_inches=0.1)
     elif args.envelope:
-        fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + 'envelope.png', dpi=150, format='png', 
+        outputdir = os.path.join(outputdir, 'envelope')
+        if not os.path.exists(outputdir):
+            os.mkdir(outputdir)
+        fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '_envelope.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '_envelope.pdf', dpi=300, format='pdf',
+                    bbox_inches='tight', pad_inches=0.1)
     else:
         fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '.png', dpi=150, format='png', 
                  bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(outputdir + os.sep + savefile + 'rx' + str(rxnumber) + '.pdf', dpi=300, format='pdf',
+                    bbox_inches='tight', pad_inches=0.1)
 
     return plt
 
