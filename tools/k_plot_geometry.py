@@ -91,7 +91,10 @@ output_dir = os.path.dirname(map.h5_file_name)
 spatial_grid =  params['geometry_settings']['grid_size'] # spatial grid size [m]
 
 
-fig = plt.figure(figsize=(8, 6), tight_layout=True)
+figsize_ratio = map.epsilon_map.shape[0] / map.epsilon_map.shape[1]
+print('shape: ', map.epsilon_map.shape)
+print('figsize ratio: ', figsize_ratio)
+fig = plt.figure(figsize=(6, 6*figsize_ratio), tight_layout=True)
 ax = fig.add_subplot(111)
 
 vacuum_thickness = params['geometry_settings']['domain_z'] - params['geometry_settings']['ground_depth'] # [m]
@@ -116,16 +119,18 @@ if args.closeup:
     ax.set_ylim(y_end, y_start)
 
 #ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 5))
-ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 2))
+ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 1))
 
-plt.xlabel('x (m)', size=18)
-plt.ylabel('z (m)', size=18)
-ax.set_title('epsilon_r distribution', size=20)
+plt.xlabel('x [m]', size=20)
+plt.ylabel('z [m]', size=20)
+#ax.set_title('epsilon_r distribution', size=20)
 ax.tick_params(labelsize=16)
 
 delvider = axgrid1.make_axes_locatable(ax)
 cax = delvider.append_axes('right', size='5%', pad=0.1)
-plt.colorbar(cax=cax).set_label('epsilon_r', size=18)
+cbar = plt.colorbar(cax=cax)
+cbar.set_label(r"$\varepsilon_r$", size=20)
+cbar.ax.tick_params(labelsize=16)
 
 plt.savefig(output_dir+'/' + 'epsilon_map.png')
 plt.savefig(output_dir+'/' + 'epsilon_map.pdf', format='pdf', dpi=120)

@@ -115,8 +115,8 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
 
         # Plot waveform
         ax1.plot(time * 1e9, waveform, 'r', lw=2)
-        ax1.set_xlabel('Time [s]', size=16)
-        ax1.set_ylabel('Amplitude', size=16)
+        ax1.set_xlabel('Time [ns]', size=18)
+        ax1.set_ylabel('Amplitude', size=18)
 
         # Plot frequency spectra
         #markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.')
@@ -124,23 +124,49 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
         #plt.setp(stemlines, 'color', 'r')
         #plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
         ax2.plot(freqs[pltrange], power[pltrange], 'r', lw=2)
-        ax2.set_xlabel('Frequency [Hz]', size=16)
-        ax2.set_ylabel('Power [dB]', size=16)
+        ax2.set_xlabel('Frequency [Hz]', size=18)
+        ax2.set_ylabel('Power [dB]', size=18)
 
         # メモリサイズの変更
-        ax1.tick_params(labelsize=15)
-        ax2.tick_params(labelsize=15)
+        ax1.tick_params(labelsize=16)
+        ax2.tick_params(labelsize=16)
+        plt.suptitle(str(args.type) + ', ' + str(args.freq / 1e6) + ' MHz', size=20)
 
 
     else:
         fig, ax1 = plt.subplots(num=w.type, figsize=(16, 8), facecolor='w', edgecolor='w')
 
         # Plot waveform
-        ax1.plot(time, waveform, 'r', lw=2)
-        ax1.set_xlabel('Time [s]')
-        ax1.set_ylabel('Amplitude')
+        ax1.plot(time * 1e9, waveform, 'r', lw=2)
+        plt.supxtitle(args.type + ', ' + args.freq / 1e6 + ' MHz', size=20)
+        ax1.set_xlabel('Time [ns]', size=18)
+        ax1.set_ylabel('Amplitude', size=18)
 
     [ax.grid(which='both', axis='both', linestyle='-.') for ax in fig.axes]  # Turn on grid
+
+    output_dir = 'kanda/waveform'
+    folder_name = str(args.type) + '_' + str(args.freq / 1e6) + 'MHz'
+    output_dir = os.path.join(output_dir, folder_name)
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    
+    #* Save settings in txt file
+    with open(output_dir + '/' + 'settings.txt', 'w') as f:
+        f.write('Waveform characteristics...\n')
+        f.write('Type: {}\n'.format(w.type))
+        f.write('Maximum (absolute) amplitude: {:g}\n'.format(np.max(np.abs(waveform))))
+        if w.freq and not w.type == 'gaussian':
+            f.write('Centre frequency: {:g} Hz\n'.format(w.freq))
+        if w.type == 'gaussian' or w.type == 'gaussiandot' or w.type == 'gaussiandotnorm' or w.type == 'gaussianprime' or w.type == 'gaussiandoubleprime':
+            f.write('Time to centre of pulse: {:g} s\n'.format(delay))
+        elif w.type == 'gaussiandotdot' or w.type == 'gaussiandotdotnorm' or w.type == 'ricker':
+            f.write('Time to centre of pulse: {:g} s\n'.format(delay))
+        f.write('Time window: {:g} s ({} iterations)\n'.format(timewindow, iterations))
+        f.write('Time step: {:g} s\n'.format(dt))
+    
+    # Save a PNG/PDF of the figure
+    plt.savefig(output_dir + '/' + 'waveform.png')
+    plt.savefig(output_dir + '/' + 'waveform.pdf', format='pdf', dpi=300)
 
     # Save a PDF/PNG of the figure
     # fig.savefig(os.path.dirname(os.path.abspath(__file__)) + os.sep + w.type + '.pdf', dpi=None, format='pdf', bbox_inches='tight', pad_inches=0.1)
