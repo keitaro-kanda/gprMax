@@ -1,0 +1,67 @@
+#domain: 20 10 0.005
+#dx_dy_dz: 0.005 0.005 0.005
+
+#time_window: 200e-9
+
+#material: 3 0.001 1 0 ep3
+#material: 9 0.001 1 0 ep9
+
+
+=====地形=====
+#python:
+import numpy as np
+from gprMax.input_cmd_funcs import *
+
+
+# Background regolith
+box(0, 0, 0, 20, 8, 0.005, 'ep3', 'n')
+
+
+# -----Subsurface rock fragments-----
+def make_rock(diameter, number, y_start, y_end): # diameter: [m], y_start: x10 [m], y_end: x10 [m]
+    radius = diameter / 2
+
+    center_x = np.random.randint(10, 190, size=number) / 10 # x = 1~19 [m]
+    center_y = np.random.randint(y_start, y_end, size=number) / 10 #y = 0.5~7.5 [m]
+
+    for i in range(number):
+        cylinder(center_x[i], center_y[i], 0, center_x[i], center_y[i], 0.005, radius, 'ep9', 'n')
+
+
+make_rock(0.05, 15, 30, 75)
+make_rock(0.15, 7, 5, 50)
+make_rock(0.3, 3, 5, 30)
+
+# -----Box-----
+
+
+
+#end_python:
+
+
+
+=====geometry making=====
+＜地形vtiファイル作成＞
+#geometry_view: 0 0 0 20 10 0.005 0.005 0.005 0.005 geometry n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 20 10 0.005 geometry
+==========
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 500e6 my_src
+
+#hertzian_dipole: z  9.92 8.3 0 my_src
+#rx: 10.08 8.3 0
+
+<snapshot作成>
+#python:
+for i in range(1, 100):
+    print('#snapshot: 0 0 0 20 10 0.005 0.005 0.005 0.005 {} snapshot{}'.format(i*2.0e-9, i))
+#end_python:
+
+#output_dir: A-scan
+==========

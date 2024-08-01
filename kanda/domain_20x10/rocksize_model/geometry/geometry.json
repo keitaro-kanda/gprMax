@@ -1,0 +1,12 @@
+{
+    "geometry_settings":
+    {
+        "h5_file": "kanda/domain_20x10/rocksize_model/geometry/geometry.h5",
+        "material_file": "kanda/domain_20x10/rocksize_model/geometry/geometry_materials.txt",
+        "comment": "unit: [m]",
+        "domain_x": 20,
+        "domain_z": 10,
+        "ground_depth": 8,
+        "grid_size": 0.005
+    }
+}

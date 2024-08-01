@@ -94,7 +94,7 @@ spatial_grid =  params['geometry_settings']['grid_size'] # spatial grid size [m]
 figsize_ratio = map.epsilon_map.shape[0] / map.epsilon_map.shape[1]
 print('shape: ', map.epsilon_map.shape)
 print('figsize ratio: ', figsize_ratio)
-fig = plt.figure(figsize=(6, 6*figsize_ratio), tight_layout=True)
+fig = plt.figure(figsize=(10, 10*figsize_ratio), tight_layout=True)
 ax = fig.add_subplot(111)
 
 vacuum_thickness = params['geometry_settings']['domain_z'] - params['geometry_settings']['ground_depth'] # [m]
