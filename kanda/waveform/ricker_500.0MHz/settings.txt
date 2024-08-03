@@ -1,7 +1,0 @@
-Waveform characteristics...
-Type: ricker
-Maximum (absolute) amplitude: 1
-Centre frequency: 5e+08 Hz
-Time to centre of pulse: 2.82843e-09 s
-Time window: 1e-08 s (1000001 iterations)
-Time step: 1e-14 s
