@@ -153,7 +153,7 @@ plt.tick_params(labelsize=18)
 
 
 delvider = axgrid1.make_axes_locatable(plt.gca())
-cax = delvider.append_axes('right', size='5%', pad=0.05)
+cax = delvider.append_axes('right', size='5%', pad=0.5)
 cbar = plt.colorbar(im, cax=cax)
 cbar.ax.tick_params(labelsize=18)
 
