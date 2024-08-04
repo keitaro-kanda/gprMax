@@ -19,9 +19,10 @@ parser = argparse.ArgumentParser(
     prog='k_fk_migration.py',
     description='Process f-k migration',
     epilog='End of help message',
-    usage='python -m tools.k_fk_migration [json_path]',
+    usage='python -m tools.k_fk_migration [json_path] [-mask]',
 )
 parser.add_argument('json_path', help='Path to the json file')
+parser.add_argument('-mask', action='store_true', help='Mask the direct wave area', default=False)
 args = parser.parse_args()
 
 
@@ -57,40 +58,51 @@ print('data shape: ', data.shape)
 #* Define the function to calculate the f-k migration
 def fk_migration(data, epsilon_r):
 
-    #* Calculate the temporal frequency
-    ws = 2 * np.pi * np.fft.fftfreq(data.shape[0], dt)
-    ws = ws[ws >= 0]
+    #* Calculate the temporal angular frequency
+    omega = 2 * np.pi * np.fft.fftfreq(data.shape[0], dt)
+    omega = omega[1: len(omega)//2]
+    print('shape of omega: ', omega.shape)
 
-    #* 2D Fourier transform
+    #* 2D Fourier transform, frequency-wavenaumber domain
     FK = np.fft.fft2(data)
-    FK = FK[:len(ws), :]
+    FK = FK[:len(omega), :]
 
     #* Calculate the wavenumber in x direction
     kx = 2 * np.pi * np.fft.fftfreq(data.shape[1], antenna_step)
+    #kx = kx[1: len(kx)//2]
+    #print(kx)
+    print('shape of kx: ', kx.shape)
 
     #* Interpolate from frequency (ws) into wavenumber (kz)
-    v = 3e8 / np.sqrt(epsilon_r)
-    interp_real = RectBivariateSpline(np.fft.fftshift(kx), ws, np.fft.fftshift(FK.real).T, kx=1, ky=1)
-    interp_imag = RectBivariateSpline(np.fft.fftshift(kx), ws, np.fft.fftshift(FK.imag).T, kx=1, ky=1)
+    v = 299792458 / np.sqrt(epsilon_r)
+    interp_real = RectBivariateSpline(np.fft.fftshift(kx), omega, np.fft.fftshift(FK.real, axes=1).T, kx=1, ky=1)
+    interp_imag = RectBivariateSpline(np.fft.fftshift(kx), omega, np.fft.fftshift(FK.imag, axes=1).T, kx=1, ky=1)
 
     #* interpolation will move from frequency-wavenumber to wavenumber-wavenumber, KK = D(kx,kz,t=0)
     KK = np.zeros_like(FK)
 
     #* Calculate the wavenumber in z direction
-    for zj in tqdm(range(data.shape[0]//2), desc='Calculating wavenumber in z direction'):
-        kzj = ws[zj] * 2 / v
+    for zj in tqdm(range(len(omega)), desc='Calculating wavenumber in z direction'):
+        kz_j = omega[zj] * 2 / v
 
         for xi in range(len(kx)):
-            kxi = kx[xi]
-            wsj = v / 2 * np.sqrt(kzj**2 + kxi**2)
+            kx_i = kx[xi]
+            omega_j = v / 2 * np.sqrt(kz_j**2 + kx_i**2)
+            #kz_j = np.sqrt(omega[zj]**2 / v**2 - kx_i**2)
+            #omega_j = np.sqrt(kx_i**2 + kz_j**2) * v
 
             #* Get the interpolated FFT values, real and imaginary, S(kx, kz, t=0)
-            KK[zj, xi] = interp_real(kxi, wsj)[0, 0] + 1j * interp_imag(kxi, wsj)[0, 0]
+            KK[zj, xi] = interp_real(kx_i, omega_j)[0, 0] + 1j * interp_imag(kx_i, omega_j)[0, 0]
 
     #* All vertical waevnumbers
-    kz = ws * 2 / v
+    kz = omega * 2 / v
 
     #* Calculate the scaling factor
+    """
+    『地中レーダ』 p. 151
+    omega^2 = (kx^2 + kz^2) * v^2
+    dw = kz / sqrt(kx^2 + kz^2) * dky
+    """
     kX, kZ = np.meshgrid(kx, kz)
     with np.errstate(divide='ignore', invalid='ignore'):
         scaling = kZ / np.sqrt(kX**2 + kZ**2)
@@ -109,27 +121,46 @@ def fk_migration(data, epsilon_r):
 
 
 #* Run the f-k migration function
-fk_data, v = fk_migration(data, 3)
+er = 3
+fk_data, v = fk_migration(data, er)
 
 
 
 #* Plot
 plt.figure(figsize=(12, 12), facecolor='w', edgecolor='w')
-im = plt.imshow(np.abs(fk_data), cmap='jet', aspect='auto',
+if args.mask:
+    mask_first_ns = 5 # [ns]
+    mask_last_ns = 200 # [ns]
+    mask_data = fk_data[int(mask_first_ns*1e-9/dt):int(mask_last_ns*1e-9/dt), :]
+
+    mask_first_m = mask_first_ns * 1e-9 * v / 2
+    mask_last_m = mask_last_ns * 1e-9 * v / 2
+    im = plt.imshow(np.abs(mask_data), cmap='jet', aspect='auto',
                 extent=[antenna_start,  antenna_start + fk_data.shape[1] * antenna_step,
-                fk_data.shape[0] * dt * v / 2, 0],
-                vmin=0, vmax=30
+                mask_first_m + mask_data.shape[0] * dt * v / 2, mask_first_m],
+                vmin=0, vmax=np.max(np.abs(mask_data))
                 )
+else:
+    im = plt.imshow(np.abs(fk_data), cmap='jet', aspect='auto',
+                    extent=[antenna_start,  antenna_start + fk_data.shape[1] * antenna_step,
+                    fk_data.shape[0] * dt * v / 2, 0],
+                    vmin=0, vmax=30
+                    )
 
 plt.xlabel('x [m]', fontsize=20)
-plt.ylabel('z [m]', fontsize=20)
+plt.ylabel('z [m] (assume ' r'$\varepsilon_r = $'+ str(er) + ')', fontsize=20)
 plt.tick_params(labelsize=18)
+
 
 delvider = axgrid1.make_axes_locatable(plt.gca())
 cax = delvider.append_axes('right', size='5%', pad=0.05)
 cbar = plt.colorbar(im, cax=cax)
-cbar.set_label('Amplitude', fontsize=20)
 cbar.ax.tick_params(labelsize=18)
 
-plt.savefig(os.path.join(output_dir, 'fk_migration.png'))
+if args.mask:
+    plt.savefig(os.path.join(output_dir, 'fk_migration_mask.png'))
+    plt.savefig(os.path.join(output_dir, 'fk_migration_mask.pdf'), format='pdf', dpi=300)
+else:
+    plt.savefig(os.path.join(output_dir, 'fk_migration.png'))
+    plt.savefig(os.path.join(output_dir, 'fk_migration.pdf'), format='pdf', dpi=300)
 plt.show()

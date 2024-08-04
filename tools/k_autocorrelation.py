@@ -87,9 +87,9 @@ def calc_acorr_column(Ascan):
 
 
 #* Run the autocorrelation function
-auto_corr = np.zeros(data_trim.shape)
-for i in tqdm(range(data_trim.shape[1]), desc='Calculating autocorrelation'):
-    auto_corr[:, i] = calc_acorr_column(data_trim[:, i])
+auto_corr = np.zeros(data.shape)
+for i in tqdm(range(data.shape[1]), desc='Calculating autocorrelation'):
+    auto_corr[:, i] = calc_acorr_column(data[:, i])
 
 
 
