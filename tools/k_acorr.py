@@ -16,9 +16,10 @@ parser = argparse.ArgumentParser(
     prog='k_acorr.py',
     description='Calculate the autocorrelation',
     epilog='End of help message',
-    usage='python tools/calc_acorr.py [json_path] [x_first] [x_last] [y_first] [y_last]',
+    usage='python tools/calc_acorr.py [json_path] [input_type] [x_first] [x_last] [y_first] [y_last]',
 )
 parser.add_argument('json_path', help='Path to the json file')
+parser.add_argument('input_type', choices = ['raw', 'migration'], help='Type of input data')
 parser.add_argument('x_first', type=int, help='Start position of x-axis [m]')
 parser.add_argument('x_last', type=int, help='End position of x-axis [m]')
 parser.add_argument('y_first', type=int, help='Start time of y-axis [ns]')
@@ -42,7 +43,7 @@ if src_step == rx_step:
 
 
 
-#* Load output file
+#* Load input data
 data_path = params['out_file']
 output_dir = os.path.join(os.path.dirname(data_path), 'migration')
 if not os.path.exists(output_dir):
@@ -51,6 +52,9 @@ f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):
     data, dt = get_output_data(data_path, (rx+1), 'Ez')
+if args.input_type == 'migration':
+    data = np.loadtxt(params['processed_data']['migration'], delimiter=',')
+    dt = 2 * dt
 print('data shape: ', data.shape)
 normalized_data = data / np.amax(data)
 
@@ -97,7 +101,7 @@ def calc_autocorrelation(Ascan): # data: 1D array
 #* Define the autocorrelation function
 def calc_acorr_column(Ascan):
     # Check if there are any values greater than 0.1
-    peaks = np.where(np.abs(Ascan) > 0.3)[0]
+    peaks = np.where(np.abs(Ascan) > 0.1)[0]
     if peaks.size == 0:
         # If no peak found, return an array of zeros with the same length as Ascan
         return np.zeros(len(Ascan))
@@ -136,7 +140,7 @@ def plot(plot_list):
 
     fig, ax = plt.subplots(1, len(plot_list), figsize=(26, 8), tight_layout=True, sharex=True, sharey=True)
 
-    cmap_list = ['gray', 'jet', 'seismic']
+    cmap_list = ['viridis', 'jet', 'seismic']
     title_list = ['Normalized B-scan', 'Envelope', 'Autocorrelation']
     vmin_list = [-1, 0, -np.amax(plot_list[2])]
     vmax_list = [1, np.amax(plot_list[1]), np.amax(plot_list[2])]

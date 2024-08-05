@@ -123,6 +123,7 @@ def fk_migration(data, epsilon_r):
 #* Run the f-k migration function
 er = 3
 fk_data, v = fk_migration(data, er)
+np.savetxt(os.path.join(output_dir, 'fk_migration.txt'), np.abs(fk_data), delimiter=',')
 
 
 
