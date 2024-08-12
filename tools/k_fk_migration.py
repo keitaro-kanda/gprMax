@@ -128,7 +128,7 @@ np.savetxt(os.path.join(output_dir, 'fk_migration.txt'), np.abs(fk_data), delimi
 
 
 #* Plot
-plt.figure(figsize=(12, 12), facecolor='w', edgecolor='w')
+plt.figure(figsize=(20, 15), facecolor='w', edgecolor='w')
 if args.mask:
     mask_first_ns = 5 # [ns]
     mask_last_ns = 200 # [ns]

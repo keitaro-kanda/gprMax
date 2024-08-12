@@ -29,6 +29,7 @@ from gprMax.exceptions import CmdInputError
 
 from outputfiles_merge import get_output_data
 from scipy import signal
+import mpl_toolkits.axes_grid1 as axgrid1
 
 
 # プロットを作る関数の作成部分？
@@ -54,7 +55,7 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
     #* Create figure
     fig = plt.figure(num=filename + ' - rx' + str(rxnumber),
-                    figsize=(15, 15), facecolor='w', edgecolor='w')
+                    figsize=(20, 15), facecolor='w', edgecolor='w')
 
 
 
@@ -107,12 +108,18 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     ax = fig.gca()
     ax.grid(which='both', axis='both', linestyle='-.')
 
-    cb = plt.colorbar()
+
+    #* Colorbar
+    delvider = axgrid1.make_axes_locatable(ax)
+    cax = delvider.append_axes('right', size='5%', pad=0.1)
+    cbar = plt.colorbar(cax=cax)
+    cbar.set_label('Normalized field amplitude [%]', size=20)
+    cbar.ax.tick_params(labelsize=16)
     if args.envelope:
-        cb.set_label('Envelope amplitude', fontsize=20)
+        cbar.set_label('Envelope amplitude', fontsize=20)
     else:
-        cb.set_label('Normalized field strength [%]', fontsize=20)
-    cb.ax.tick_params(labelsize=18)
+        cbar.set_label('Normalized field strength [%]', fontsize=20)
+    cbar.ax.tick_params(labelsize=18)
 
     #* Save plot
     savefile = os.path.splitext(filename)[0]
