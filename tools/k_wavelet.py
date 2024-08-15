@@ -1,6 +1,5 @@
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-#import matplotlib.patheffects as path_effects
 import numpy as np
 import h5py
 import json
@@ -65,7 +64,7 @@ def calc_wavelet(sig, tm):
     print('n_cwt: ', n_cwt)
 
     # --- 後で使うパラメータを定義
-    dj = 0.1 # parameter to determine the resolution of frequency
+    dj = 0.125 # parameter to determine the resolution of frequency
     omega0 = 6.0
     s0 = 2.0*dt # The smallest scale
     J = int(np.log2(n_cwt*dt/s0)/dj) # The largest scale
@@ -86,7 +85,7 @@ def calc_wavelet(sig, tm):
 
     Hev = np.array(omega > 0.0)
     for j in tqdm(range(J+1)):
-        Psi = np.sqrt(2.0*np.pi*s[j]/dt)*np.pi**(-0.25)*np.exp(-(s[j]*omega-omega0)**2/2.0)*Hev
+        Psi = np.sqrt(2.0*np.pi*s[j]/dt)*np.pi**(-0.25)*np.exp(-(s[j]*omega-omega0)**2/2.0)*Hev # Morlet wavelet
         cwt[j, :] = np.fft.ifft(X*np.conjugate(Psi))
 
     #* Convert scale s into frequency
@@ -109,13 +108,13 @@ time_array = np.arange(0, data.shape[0]*dt, dt) # [s]
 freq_cwt, cwt, COI = calc_wavelet(data[:, 400], time_array)
 cwt = 10 * np.log10(np.abs(cwt) / np.amax(np.abs(cwt)))
 print('shape of freq_cwt: ', cwt.shape)
-#print(freq_cwt)
+print(freq_cwt)
 
 
 
 
 #* Plot the wavelet transform
-fig =  plt.figure(figsize=(12, 12))
+fig =  plt.figure(figsize=(20, 15))
 ax1 = fig.add_axes([0.1, 0.55, 0.78, 0.35])
 ax_sc = fig.add_axes([0.1, 0.1, 0.78, 0.35])
 ax_cbar = fig.add_axes([0.9, 0.1, 0.02, 0.35])
@@ -130,16 +129,18 @@ ax1.tick_params(labelsize=16)
 
 
 im = ax_sc.imshow(cwt, aspect='auto',
-            extent=[0, data.shape[0]*dt/1e-9, 0, np.amax(freq_cwt)/1e6], cmap='jet',
+            extent=[0, data.shape[0]*dt/1e-9, np.amin(freq_cwt)/1e6, np.amax(freq_cwt)/1e6],
+            cmap='jet',
 )
 ax_sc.fill_between(time_array/1e-9, 0, COI/1e6, color='k', alpha=0.5)
 ax_sc.plot(time_array/1e-9, COI, 'k--')
-ax_sc.set_ylim(0, np.amax(freq_cwt)/1e6)
+ax_sc.set_ylim(np.amin(freq_cwt)/1e6, np.amax(freq_cwt)/1e6)
 ax_sc.set_xlabel('Time [ns]', fontsize=18)
 ax_sc.set_ylabel('Frequency [MHz]', fontsize=18)
 ax_sc.set_title('Wavelet transform', fontsize=20)
 ax_sc.grid(True, linestyle='-.', linewidth=0.5)
 ax_sc.tick_params(labelsize=16)
+ax_sc.set_yscale('log')
 
 delvider = axgrid1.make_axes_locatable(plt.gca())
 cbar = plt.colorbar(im, cax=ax_cbar)
