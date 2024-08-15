@@ -23,7 +23,6 @@ import json
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from traitlets import default
 
 from gprMax.exceptions import CmdInputError
 
