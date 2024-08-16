@@ -58,6 +58,7 @@ epsilon_0 = 8.854187817e-12 # [F/m]
 
 
 #* Gain function
+#* Reference: Feng et al. (2023), p.3
 def gain(data, er, tan_delta, freq, pulse_delay):
     t_2D = np.expand_dims(np.arange(0, data.shape[0]*dt, dt), axis=1)
 
