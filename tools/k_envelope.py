@@ -47,7 +47,7 @@ if not os.path.exists(output_dir):
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):
-    data, dt = get_output_data(data_path, (rx+1), 'Ez')
+    data, dt = get_output_data(data_path, (rx+1), params['data_name'])
 print('original data shape: ', data.shape)
 print('original dt: ', dt)
 

@@ -50,7 +50,7 @@ if not os.path.exists(output_dir):
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):
-    data, dt = get_output_data(data_path, (rx+1), 'Ez')
+    data, dt = get_output_data(data_path, (rx+1), params['data_name'])
 print('data shape: ', data.shape)
 
 
@@ -145,7 +145,7 @@ else:
     im = plt.imshow(np.abs(fk_data), cmap='jet', aspect='auto',
                     extent=[antenna_start,  antenna_start + fk_data.shape[1] * antenna_step,
                     fk_data.shape[0] * dt * v / 2, 0],
-                    vmin=0, vmax=30
+                    vmin=0, vmax=np.max(np.abs(fk_data))
                     )
 
 plt.xlabel('x [m]', fontsize=20)

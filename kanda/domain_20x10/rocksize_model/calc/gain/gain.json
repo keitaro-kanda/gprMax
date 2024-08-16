@@ -3,7 +3,12 @@
         "comment": "file path of geometry setting json file",
         "geometry_json": "kanda/domain_10x10/20240708_fine_regolith/geometry/geometry.json"
     },
-    "data": "kanda/domain_20x10/rocksize_model/calc/gain/gain_data.txt",
+    "data": "kanda/domain_20x10/rocksize_model/calc/gain/gain.out",
+    "data_name": "gain",
+    "processed_data": {
+        "migration": "kanda/domain_20x10/rocksize_model/calc/migration/fk_migration.txt",
+        "gain_function": "kanda/domain_100x100/CMP_loss/max_20m/gain/gained_data.txt"
+    },
     "antenna_settings": {
         "--comment": "unit: [m]",
         "antenna_height": 0.3,
