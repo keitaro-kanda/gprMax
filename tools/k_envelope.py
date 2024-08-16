@@ -79,11 +79,13 @@ for i in range(inst_freq.shape[1]):
 
 
 #* Plot
+envelope = 10 * np.log10(envelope/np.amax(envelope))
+
 plot_list = [envelope, inst_freq, inst_freq_mask]
 plot_name = ['envelope', 'inst_freq', 'inst_freq_mask']
 cmaps = ['jet', 'seismic', 'seismic']
-vmin = [0, -np.pi, -1]
-vmax = [0.5, np.pi, 1]
+vmin = [np.amin(envelope)/2, -np.pi, -1]
+vmax = [0, np.pi, 1]
 cbar_label = ['Envelope', 'Instantaneous phase', 'Instantaneous phase']
 for i, plot in enumerate(plot_list):
     fig, ax = plt.subplots(figsize=(12, 10))
@@ -105,46 +107,3 @@ for i, plot in enumerate(plot_list):
     plt.savefig(os.path.join(output_dir, plot_name[i] + '.png'), format='png', dpi=120)
     plt.savefig(os.path.join(output_dir, plot_name[i] + '.pdf'), format='pdf', dpi=600)
     plt.show()
-"""
-fig, ax = plt.subplots(figsize=(10, 8))
-plt.imshow(envelope,
-            extent=[antenna_start, antenna_start + envelope.shape[1] * antenna_step, envelope.shape[0] * dt / 1e-9, 0],
-            interpolation='nearest', aspect='auto', cmap='jet',
-            vmin=0, vmax=10)
-ax.set_xlabel('Position [m]', fontsize=20)
-ax.set_ylabel('Time [ns]', fontsize=20)
-ax.tick_params(labelsize=18)
-
-delvider = axgrid1.make_axes_locatable(ax)
-cax = delvider.append_axes('right', size='5%', pad=0.05)
-cbar = plt.colorbar(cax=cax)
-cbar.set_label('Normalized field amplitude [%]', size=20)
-cbar.ax.tick_params(labelsize=16)
-
-plt.savefig(os.path.join(output_dir, 'envelope.png'), format='png', dpi=120)
-plt.savefig(os.path.join(output_dir, 'envelope.pdf'), format='pdf', dpi=300)
-plt.show()
-
-
-#* Plot the instantaneous frequency
-fig, ax = plt.subplots(figsize=(10, 8))
-plt.imshow(inst_freq,
-            extent=[antenna_start, antenna_start + envelope.shape[1] * antenna_step, envelope.shape[0] * dt / 1e-9, 0],
-            interpolation='nearest', aspect='auto', cmap='seismic',
-            #vmin=0, vmax=10
-            #norm=LogNorm(vmin=1e6, vmax=10e9)
-            )
-ax.set_xlabel('Position [m]', fontsize=20)
-ax.set_ylabel('Time [ns]', fontsize=20)
-ax.tick_params(labelsize=18)
-
-delvider = axgrid1.make_axes_locatable(ax)
-cax = delvider.append_axes('right', size='5%', pad=0.05)
-cbar = plt.colorbar(cax=cax)
-cbar.set_label('Instantaneous frequency [Hz]', size=20)
-cbar.ax.tick_params(labelsize=16)
-
-plt.savefig(os.path.join(output_dir, 'inst_freq.png'), format='png', dpi=120)
-plt.savefig(os.path.join(output_dir, 'inst_freq.pdf'), format='pdf', dpi=300)
-plt.show()
-"""

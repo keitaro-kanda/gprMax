@@ -62,7 +62,6 @@ epsilon_0 = 8.854187817e-12 # [F/m]
 def gain(data, er, tan_delta, freq, pulse_delay):
     t_2D = np.expand_dims(np.arange(0, data.shape[0]*dt, dt), axis=1)
 
-    gain_func = np.zeros(data.shape)
     gain_func = t_2D**2 * c**2 / (4 * er) * np.exp(np.pi * t_2D * freq * np.sqrt(er * epsilon_0)* tan_delta)
 
     #* Plot gain function
