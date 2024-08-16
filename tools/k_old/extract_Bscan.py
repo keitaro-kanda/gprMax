@@ -23,7 +23,7 @@ with open (args.jsonfile) as f:
 
 
 #* load original B-scan data
-original_data_path = params['original_info']['original_out_file']
+original_data_path = params['original_info']['original_data']
 data, dt = get_output_data(original_data_path, 1, 'Ez')
 print(dt)
 print(data.shape)

@@ -35,12 +35,12 @@ with open(params['geometry_settings']['geometry_json']) as f:
 
 
 #* load B-scan data
-#* Chech wheter if json file has 'out_file' key or 'txt_Bscan_file' key
-data_path = params['out_file']
+#* Chech wheter if json file has 'data' key or 'txt_Bscan_file' key
+data_path = params['data']
 data, dt = get_output_data(data_path, 1, 'Ez')
 print('Load .out file: ', data_path)
 if 'txt_Bscan_file' in params:
-    data_path = params['original_info']['original_out_file']
+    data_path = params['original_info']['original_data']
     data, dt = get_output_data(data_path, 1, 'Ez')
     data = np.loadtxt(params['txt_Bscan_file'])
     print('input is extracted B-scan data txt file')

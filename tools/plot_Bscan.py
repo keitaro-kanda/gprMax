@@ -189,7 +189,7 @@ if __name__ == "__main__":
     #* Load json file
     with open (args.jsonfile) as f:
         params = json.load(f)
-    outfile_path = params['out_file']
+    outfile_path = params['data']
 
     #* Open output file and read number of outputs (receivers)
     #f = h5py.File(args.outputfile, 'r') # outファイルの読み込み？

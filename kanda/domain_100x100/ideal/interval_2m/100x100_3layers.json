@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "out_file": "kanda/domain_100x100/ideal/interval_2m/calcB_merged.out",
+    "data": "kanda/domain_100x100/ideal/interval_2m/calcB_merged.out",
 
     "_comment": "for making epsilon map",
     "h5_file": "kanda/domain_100x100/ideal/geometry/geometry.h5",

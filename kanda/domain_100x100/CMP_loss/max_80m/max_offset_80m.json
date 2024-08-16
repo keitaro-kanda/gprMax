@@ -4,7 +4,7 @@
         "comment": "file path of geometry setting json file",
         "geometry_json": "kanda/domain_100x100_JpGU/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_100x100/CMP_loss/max_80m/calc_merged.out",
+    "data": "kanda/domain_100x100/CMP_loss/max_80m/calc_merged.out",
     "gain_function": "kanda/domain_100x100/CMP_loss/max_80m/gain/gained_data.txt",
     "antenna_settings":
     {

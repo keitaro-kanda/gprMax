@@ -4,7 +4,7 @@
         "comment": "file path of geometry setting json file",
         "geometry_json": "kanda/domain_50x100/no_loss/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_50x100/no_loss/multi_CMP_int05_20m/calc_merged.out",
+    "data": "kanda/domain_50x100/no_loss/multi_CMP_int05_20m/calc_merged.out",
     "antenna_settings":
     {
     "--comment": "unit: [m]",

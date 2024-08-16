@@ -27,18 +27,18 @@ with open (args.jsonfile) as f:
 
 
 #* load B-scan data
-#* Chech wheter if json file has 'out_file' key or 'txt_Bscan_file' key
-if 'out_file' in params:
-    data_path = params['out_file']
+#* Chech wheter if json file has 'data' key or 'txt_Bscan_file' key
+if 'data' in params:
+    data_path = params['data']
     data, dt = get_output_data(data_path, 1, 'Ez')
-    print('input is out_file')
+    print('input is data')
 elif 'txt_Bscan_file' in params:
-    data_path = params['original_info']['original_out_file']
+    data_path = params['original_info']['original_data']
     data, dt = get_output_data(data_path, 1, 'Ez')
     data = np.loadtxt(params['txt_Bscan_file'])
     print('input is extracted B-scan data txt file')
 else:
-    raise ValueError('Invalid key: out_file or txt_Bscan_file')
+    raise ValueError('Invalid key: data or txt_Bscan_file')
 print('data shape: ', data.shape)
 print('dt: ', dt)
 t = np.arange(0, data.shape[0] * dt, dt) # [s]

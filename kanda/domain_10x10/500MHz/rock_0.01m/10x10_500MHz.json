@@ -4,7 +4,7 @@
     "h5_file": "kanda/domain_10x10/500MHz/rock_0.01m/geometry/geometry.h5",
     "material_file": "kanda/domain_10x10/500MHz/rock_0.01m/geometry/geometry_materials.txt",
     "_comment": "input data file",
-    "out_file": "kanda/domain_50x50/multiple_layers/int1/calc_merged.out",
+    "data": "kanda/domain_50x50/multiple_layers/int1/calc_merged.out",
     "_comment": "t0-Vrms plot file",
     "corr_map_txt": "kanda/domain_50x50/multiple_layers/int1/Vrms/corr_map.txt",
     "_comment": "t0_vrms plot file in CMP observation",

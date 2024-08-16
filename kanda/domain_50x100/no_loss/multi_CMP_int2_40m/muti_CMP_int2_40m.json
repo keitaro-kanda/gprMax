@@ -7,7 +7,7 @@
     },
     "original_info":
     {
-        "original_out_file": "kanda/domain_50x100/no_loss/multi_CMP_int1_40m/calc_merged.out",
+        "original_data": "kanda/domain_50x100/no_loss/multi_CMP_int1_40m/calc_merged.out",
         "original_json_file": "kanda/domain_50x100/no_loss/multi_CMP_int1_40m/multi_int1.json"
     },
     "txt_Bscan_file": "kanda/domain_50x100/no_loss/multi_CMP_int2_40m/extracted_Bscan.txt",

@@ -1,6 +1,6 @@
 {
     "_comment": "input data file",
-    "out_file": "kanda/domain_30x100/three_layers/calcB_merged.out",
+    "data": "kanda/domain_30x100/three_layers/calcB_merged.out",
 
     "_comment": "geometric size of the domain [m]",
     "domain_x": 30,

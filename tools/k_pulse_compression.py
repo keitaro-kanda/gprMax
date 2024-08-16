@@ -11,15 +11,15 @@ from tools.outputfiles_merge import get_output_data
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Processing migration', 
-                                 usage='cd gprMax; python -m tools.pulse_compression out_file source_file')
-parser.add_argument('out_file', help='.out file name')
+                                 usage='cd gprMax; python -m tools.pulse_compression data source_file')
+parser.add_argument('data', help='.out file name')
 parser.add_argument('source_file', help='source file name')
 parser.add_argument('-select_rx', help='option: select rx number', default=False, action='store_true')
 args = parser.parse_args()
 
 
 # Open output file and read number of outputs (receivers)
-outfile_name = args.out_file
+outfile_name = args.data
 output_data = h5py.File(outfile_name, 'r')
 nrx = output_data.attrs['nrx']
 output_data.close()

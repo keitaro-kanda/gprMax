@@ -28,7 +28,7 @@ with open (args.jsonfile) as f:
 
 
 #* check dt
-data_path = params['out_file']
+data_path = params['data']
 data = h5py.File(data_path, 'r')
 dt = data.attrs['dt']
 data.close()

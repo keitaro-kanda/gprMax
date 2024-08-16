@@ -1,0 +1,66 @@
+{
+    "geometry_settings": {
+        "comment": "file path of geometry setting json file",
+        "geometry_json": "kanda/domain_10x10/20240708_fine_regolith/geometry/geometry.json"
+    },
+    "data": "kanda/domain_20x10/rocksize_model/calc/gain/gain_data.txt",
+    "antenna_settings": {
+        "--comment": "unit: [m]",
+        "antenna_height": 0.3,
+        "src_start": 0.92,
+        "src_step": 0.04,
+        "rx_start": 1.08,
+        "rx_step": 0.04,
+        "src_move_times": 450
+    },
+    "pulse_info": {
+        "comment": "unit: pulse_length & transmitting_delay->[s], center_frequency->[Hz]",
+        "pulse_length": 1.3e-08,
+        "transmitting_delay": 1e-09,
+        "center_frequency": 500000000.0
+    },
+    "Vrms_estimation": {
+        "corr_map_txt": "kanda/domain_100x100/CMP_loss/max_10m/Vrms_estimation/corr_map.txt",
+        "comment": "[ns]",
+        "time_window": 3000,
+        "time_step": 1,
+        "select_time": [
+            [
+                140,
+                190
+            ],
+            [
+                520,
+                570
+            ],
+            [
+                1130,
+                1180
+            ],
+            [
+                1460,
+                1530
+            ]
+        ],
+        "_comment": "[/c]",
+        "Vrms_results": [
+            0.25,
+            0.33
+        ],
+        "__comment": "[ns]",
+        "t0_results": [
+            174,
+            542
+        ]
+    },
+    "permittivity_structure_estimation": {
+        "V_int_results": [
+            0.311,
+            0.362
+        ],
+        "epsilon_r_results": [
+            22.6,
+            7.64
+        ]
+    }
+}

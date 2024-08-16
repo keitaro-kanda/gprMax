@@ -21,7 +21,7 @@ with open (args.jsonfile) as f:
 
 #* Open output file and read number of outputs (receivers)
 #? h5pyを使ってデータを開ける意味はあまりないかも？nrx取得できるだけなのかな．
-data_path = params['out_file']
+data_path = params['data']
 data = h5py.File(data_path, 'r')
 nrx = data.attrs['nrx']
 data.close()

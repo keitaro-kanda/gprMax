@@ -62,7 +62,7 @@ theoretical_estimation = np.column_stack((t0_theory, Vrms_theory, mu4, internal_
 print(theoretical_estimation)
 
 #* make output dir
-data_dir_path = os.path.dirname(params['out_file'])
+data_dir_path = os.path.dirname(params['data'])
 output_dir_path = data_dir_path + '/Vrms'
 if not os.path.exists(output_dir_path):
     os.makedirs(output_dir_path)

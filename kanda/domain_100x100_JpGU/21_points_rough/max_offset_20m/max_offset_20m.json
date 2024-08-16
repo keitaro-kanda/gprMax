@@ -4,7 +4,7 @@
         "comment": "file path of geometry setting json file",
         "geometry_json": "kanda/domain_100x100_JpGU/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_100x100_JpGU/21_points/max_offset_20m/calc_merged.out",
+    "data": "kanda/domain_100x100_JpGU/21_points/max_offset_20m/calc_merged.out",
     "antenna_settings":
     {
     "--comment": "unit: [m]",

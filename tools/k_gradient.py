@@ -49,7 +49,7 @@ if src_step == rx_step:
 
 
 #* Load output file
-data_path = params['out_file']
+data_path = params['data']
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):

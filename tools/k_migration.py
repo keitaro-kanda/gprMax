@@ -33,7 +33,7 @@ with open (args.jsonfile) as f:
 
 
 # Open output file and read number of outputs (receivers)
-file_name_out = params['out_file']
+file_name_out = params['data']
 #file_name_txt = params['input_data_txt']
 output_data_out = h5py.File(file_name_out, 'r')
 nrx = output_data_out.attrs['nrx']

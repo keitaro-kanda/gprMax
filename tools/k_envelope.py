@@ -40,7 +40,7 @@ if src_step == rx_step:
 
 
 #* Load output file
-data_path = params['out_file']
+data_path = params['data']
 output_dir = os.path.join(os.path.dirname(data_path), 'Hilbert')
 if not os.path.exists(output_dir):
     os.mkdir(output_dir)

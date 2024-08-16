@@ -4,7 +4,7 @@
         "comment": "file path of geometry setting json file",
         "geometry_json": "kanda/domain_50x100/conductivity_0001/geometry/geometry.json"
     },
-    "out_file": "kanda/domain_50x100/conductivity_0001/multi_CMP_int1/calc_merged.out",
+    "data": "kanda/domain_50x100/conductivity_0001/multi_CMP_int1/calc_merged.out",
     "antenna_settings":
     {
     "--comment": "unit: [m]",
