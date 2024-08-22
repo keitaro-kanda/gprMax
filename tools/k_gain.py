@@ -45,7 +45,7 @@ if not os.path.exists(output_dir):
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):
-    data, dt = get_output_data(data_path, (rx+1), 'Ez')
+    data, dt = get_output_data(data_path, (rx+1), params['data_name'])
 print('original data shape: ', data.shape)
 print('original dt: ', dt)
 
@@ -119,6 +119,7 @@ shutil.copy(args.json_path, json_copy_name)
 with open(json_copy_name, 'r') as f:
     json_data = json.load(f)
 json_data['data'] = os.path.join(output_dir, 'gain.out')
+json_data['data_name'] = 'gain'
 with open(json_copy_name, 'w') as f:
     json.dump(json_data, f, indent=4)
 print('json file is copied and edited')
