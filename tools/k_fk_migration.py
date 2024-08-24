@@ -125,7 +125,7 @@ np.savetxt(os.path.join(output_dir, 'fk_migration.txt'), np.abs(fk_data), delimi
 
 
 #* Plot
-plt.figure(figsize=(20, 15), facecolor='w', edgecolor='w')
+plt.figure(figsize=(20, 15), facecolor='w', edgecolor='w', tight_layout=True)
 if args.mask:
     mask_first_ns = 5 # [ns]
     mask_last_ns = 200 # [ns]
@@ -141,7 +141,7 @@ if args.mask:
 else:
     im = plt.imshow(np.abs(fk_data), cmap='jet', aspect='auto',
                     extent=[antenna_start,  antenna_start + fk_data.shape[1] * antenna_step,
-                    fk_data.shape[0] * dt * v / 2, 0],
+                    fk_data.shape[0] * dt * v, 0],
                     vmin=0, vmax=np.max(np.abs(fk_data))
                     )
 
