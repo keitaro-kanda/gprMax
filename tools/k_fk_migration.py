@@ -7,10 +7,7 @@ import os
 import argparse
 from tqdm import tqdm
 from outputfiles_merge import get_output_data
-from scipy import signal
-from matplotlib.gridspec import GridSpec
-import scipy.signal as signal
-from scipy.interpolate import interp1d, RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline
 
 
 
