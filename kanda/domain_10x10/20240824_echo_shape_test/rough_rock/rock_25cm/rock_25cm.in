@@ -13,7 +13,7 @@
 import numpy as np
 from gprMax.input_cmd_funcs import *
 
-size = 0.05 # [m]
+size = 0.25 # [m]
 
 #* Main body of rock
 box(5-size/2, 3-size/2, 0, 5+size/2, 3+size/2, 0.005, 'ep9', 'n')
