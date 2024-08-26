@@ -1,0 +1,15 @@
+#domain: 10 10 0.005
+#dx_dy_dz: 0.005 0.005 0.005
+
+#time_window: 500e-9
+
+
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 500e6 my_src
+
+#hertzian_dipole: z  4.5 5 0 my_src
+#rx: 5.5 5 0
+==========

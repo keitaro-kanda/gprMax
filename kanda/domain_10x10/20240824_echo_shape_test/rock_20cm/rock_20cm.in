@@ -1,0 +1,25 @@
+#domain: 10 10 0.005
+#dx_dy_dz: 0.005 0.005 0.005
+#time_window: 100e-9
+
+#material: 3 0.001 1 0 ep3
+#material: 9 0.001 1 0 ep9
+
+
+
+#box: 0 0 0 10 5 0.005 ep3 n
+#cylinder: 5 3 0 5 3 0.005 0.10 ep9 n
+
+＜地形書き出し＞
+#geometry_objects_write: 0 0 0 10 10 0.005 geometry
+
+
+=====A-scan用=====
+＜波源設定＞
+#waveform: ricker 1 500e6 my_src
+
+#hertzian_dipole: z  4.5 6 0 my_src
+#rx: 5.5 6 0
+
+#output_dir: A-scan
+==========
