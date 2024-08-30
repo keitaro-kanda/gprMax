@@ -85,6 +85,26 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
             outputdata = f[path + output][:] * polarity
             env = np.abs(signal.hilbert(outputdata))
 
+
+            #* Calculate the background
+            background = np.mean(np.abs(outputdata[int(20e-9/dt):]))
+
+            #* Detect the peak in the envelope
+            threshold = background * 3
+            peak_idx = []
+            peak_value = []
+
+            i = 0
+            while i < len(env):
+                if env[i] > threshold:
+                    start = i
+                    while i < len(env) and env[i] > threshold:
+                        i += 1
+                    end = i
+                    peak_idx.append(np.argmax(np.abs(outputdata[start:end])) + start)
+                    peak_value.append(outputdata[peak_idx[-1]])
+                i += 1
+
             # Plotting if FFT required
             if fft:
                 # FFT
@@ -104,6 +124,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
                 line1 = ax1.plot(time, outputdata, 'r', lw=2, label=outputtext)
                 ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
+                ax1.scatter(time[peak_idx], outputdata[peak_idx], 'kx')
                 ax1.set_xlabel('Time [s]', fontsize=18)
                 ax1.set_ylabel(outputtext + ' field strength [V/m]', fontsize=18)
                 ax1.set_xlim([0, np.amax(time)])
@@ -142,8 +163,9 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
             else:
                 fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [s]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
                 ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
-                #outputdata = outputdata / np.amax(np.abs(outputdata)) # normalize
                 line = ax.plot(time, outputdata, 'r', lw=2, label=outputtext)
+                #* Plot the peak
+                ax.scatter(time[peak_idx], outputdata[peak_idx], color='k', marker='x', s=50, label='Peak')
 
                 if args.closeup:
                     ax.set_xlim([closeup_x_start*10**(-9), closeup_x_end*10**(-9)])
