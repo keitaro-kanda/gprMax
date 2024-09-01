@@ -87,10 +87,10 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
 
             #* Calculate the background
-            background = np.mean(np.abs(outputdata[int(20e-9/dt):]))
+            background = np.mean(np.abs(outputdata[int(20e-9/dt):int(50e-9/dt)]))
 
             #* Detect the peak in the envelope
-            threshold = background * 3
+            threshold = background * 1
             peak_idx = []
             peak_value = []
 
@@ -163,9 +163,12 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
             else:
                 fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [s]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
                 ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
-                line = ax.plot(time, outputdata, 'r', lw=2, label=outputtext)
+                line = ax.plot(time, outputdata, 'k', lw=2, label=outputtext)
                 #* Plot the peak
-                ax.scatter(time[peak_idx], outputdata[peak_idx], color='k', marker='x', s=50, label='Peak')
+                ax.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
+                #* Plot the background
+                ax.hlines(background, 0, np.amax(time), colors='gray', linestyles='--', label='Background')
+                ax.hlines(-background, 0, np.amax(time), colors='gray', linestyles='--')
 
                 if args.closeup:
                     ax.set_xlim([closeup_x_start*10**(-9), closeup_x_end*10**(-9)])
@@ -294,10 +297,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # for closeup option
-    closeup_x_start = 0 #[ns]
-    closeup_x_end = 500 #[ns]
-    closeup_y_start = -0.01 # normalized, -1~1
-    closeup_y_end = 0.0 # normalized, -1~1
+    closeup_x_start = 26 #[ns]
+    closeup_x_end = 42 #[ns]
+    closeup_y_start = -20 # normalized, -1~1
+    closeup_y_end = 20 # normalized, -1~1
 
     plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
     plthandle.show()

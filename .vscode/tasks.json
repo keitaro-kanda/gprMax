@@ -6,27 +6,22 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_5cm/rock_5cm.in"
+            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_5cm/factor_3/Ascan.in"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_10cm/rock_10cm.in"
+            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_5cm/factor_2/Ascan.in"
         },
         {
             "label": "gprMax 3rd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_15cm/rock_15cm.in"
+            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_5cm/factor_0.5/Ascan.in"
         },
         {
             "label": "gprMax 4th run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_20cm/rock_20cm.in"
-        },
-        {
-            "label": "gprMax 5th run",
-            "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_25cm/rock_25cm.in"
+            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_5cm/factor_0.33/Ascan.in"
         },
         {
             "label": "task sequence",
@@ -36,8 +31,7 @@
                 "gprMax 1st run",
                 "gprMax 2nd run",
                 "gprMax 3rd run",
-                "gprMax 4th run",
-                "gprMax 5th run"
+                "gprMax 4th run"
             ],
             "problemMatcher": []
         }
