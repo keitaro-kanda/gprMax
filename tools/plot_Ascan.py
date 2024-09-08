@@ -122,9 +122,11 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
                 # Plot time history of output component
                 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
-                line1 = ax1.plot(time, outputdata, 'r', lw=2, label=outputtext)
+                line1 = ax1.plot(time, outputdata, 'k', lw=2, label=outputtext)
                 ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
-                ax1.scatter(time[peak_idx], outputdata[peak_idx], 'kx')
+                #ax1.scatter(time[peak_idx], outputdata[peak_idx], 'kx')
+                #* Plot the peak
+                ax1.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
                 ax1.set_xlabel('Time [s]', fontsize=18)
                 ax1.set_ylabel(outputtext + ' field strength [V/m]', fontsize=18)
                 ax1.set_xlim([0, np.amax(time)])
