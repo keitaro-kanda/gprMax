@@ -22,7 +22,7 @@ print('data shape: ', sig.shape)
 
 t = np.arange(len(sig)) * dt / 1e-9 # Time in ns
 
-sig = - sig / np.max(np.abs(sig))
+sig = sig / np.max(np.abs(sig))
 
 
 def shift(original_sig, shit_time):
@@ -34,22 +34,27 @@ def env(data):
     return env
 
 
+multi_overlap = sig + np.roll(sig, int(-0.2e-9/dt)) + np.roll(sig, int(0.1e-9/dt))
+
+
 #* 重ね合わせる
-plt.figure(figsize=(12, 8))
-plt.plot(t, sig, label='original')
-plt.plot(t, env(sig), linestyle = '--', color = 'gray')
-for i in range (1, 11, 1):
-    plt.plot(t, shift(sig, i * 0.25) - i * 2.5, label = f'shit: {i * 0.25} ns')
-    plt.plot(t, env(shift(sig, i * 0.25))- i * 2.5, linestyle = '--', color = 'gray')
+fig, ax = plt.subplots(10, 1, figsize=(6, 18), sharex=True, sharey=True, tight_layout=True)
+ax[0].plot(t, sig, label='original')
+ax[0].plot(t, env(sig), linestyle = '--', color = 'gray')
+ax[0].legend()
+ax[0].grid()
+for i in range (1, 10, 1):
+    ax[i].plot(t, shift(sig, i * 0.25), label = f'shit: {i * 0.25} ns')
+    ax[i].plot(t, env(shift(sig, i * 0.25)), linestyle = '--', color = 'gray')
+    ax[i].legend()
+    ax[i].grid()
 
 plt.xlim(0.25, 25) # [ns]
 
-plt.xlabel('Time [ns]', fontsize=20)
-plt.ylabel('Normalized amplitude', fontsize=20)
-plt.legend(fontsize=16, loc='upper right')
-plt.tick_params(size=16)
-plt.grid()
-plt.tight_layout()
+fig.supxlabel('Time [ns]', fontsize=20)
+fig.supylabel('Normalized amplitude', fontsize=20)
+
+
 
 plt.savefig(os.path.join(output_dir, 'phase.png'), format='png', dpi=120)
 plt.savefig(os.path.join(output_dir, 'phase.pdf'), format='pdf', dpi=300)
