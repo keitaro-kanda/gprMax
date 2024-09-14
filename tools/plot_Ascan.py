@@ -50,7 +50,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
     nrx = f.attrs['nrx']
     dt = f.attrs['dt']
     iterations = f.attrs['Iterations']
-    time = np.linspace(0, (iterations - 1) * dt, num=iterations)
+    time = np.linspace(0, (iterations - 1) * dt, num=iterations) / 1e-9 # [ns]
 
     # Check there are any receivers
     if nrx == 0:
@@ -121,13 +121,13 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 pltrange = np.s_[0:pltrange]
 
                 # Plot time history of output component
-                fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
+                fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
                 line1 = ax1.plot(time, outputdata, 'k', lw=2, label=outputtext)
                 ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
                 #ax1.scatter(time[peak_idx], outputdata[peak_idx], 'kx')
                 #* Plot the peak
                 ax1.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
-                ax1.set_xlabel('Time [s]', fontsize=18)
+                ax1.set_xlabel('Time [ns]', fontsize=18)
                 ax1.set_ylabel(outputtext + ' field strength [V/m]', fontsize=18)
                 ax1.set_xlim([0, np.amax(time)])
                 ax1.grid(which='both', axis='both', linestyle='-.')
@@ -141,9 +141,10 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 #plt.setp(stemlines, 'color', 'r')
                 #plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
                 line2 = ax2.plot(freqs[pltrange], power[pltrange], 'r', lw=2)
-                ax2.set_xlabel('Frequency [Hz]')
-                ax2.set_ylabel('Power [dB]')
+                ax2.set_xlabel('Frequency [Hz]', fontsize=18)
+                ax2.set_ylabel('Power [dB]', fontsize=18)
                 ax2.grid(which='both', axis='both', linestyle='-.')
+                ax2.tick_params(labelsize=18)
 
                 # Change colours and labels for magnetic field components or currents
                 if 'H' in outputs[0]:
@@ -163,7 +164,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
             #* Plotting if no FFT required
             else:
-                fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [s]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
+                fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
                 ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
                 line = ax.plot(time, outputdata, 'k', lw=2, label=outputtext)
                 #* Plot the peak
@@ -173,13 +174,13 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 ax.hlines(-background, 0, np.amax(time), colors='gray', linestyles='--')
 
                 if args.closeup:
-                    ax.set_xlim([closeup_x_start*10**(-9), closeup_x_end*10**(-9)])
+                    ax.set_xlim([closeup_x_start, closeup_x_end])
                     ax.set_ylim([closeup_y_start, closeup_y_end])
                 else:
                     ax.set_xlim([0, np.amax(time)])
                 ax.grid(which='both', axis='both', linestyle='-.')
                 ax.minorticks_on()
-                ax.set_xlabel('Time [s]', fontsize=18)
+                ax.set_xlabel('Time [ns]', fontsize=18)
                 ax.set_ylabel(outputtext + ' field strength [V/m]', fontsize=18)
                 ax.tick_params(labelsize=18)
                 ax.legend(fontsize = 16)
@@ -193,7 +194,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
         # If multiple outputs required, create all nine subplots and populate only the specified ones
         else:
-            fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [s]'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
+            fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
             if len(outputs) == 9:
                 gs = gridspec.GridSpec(3, 3, hspace=0.3, wspace=0.3)
             else:
@@ -299,10 +300,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # for closeup option
-    closeup_x_start = 15 #[ns]
-    closeup_x_end = 30 #[ns]
-    closeup_y_start = -100 # normalized, -1~1
-    closeup_y_end = 100 # normalized, -1~1
+    closeup_x_start = 26 #[ns]
+    closeup_x_end = 42 #[ns]
+    closeup_y_start = -30 # normalized, -1~1
+    closeup_y_end = 30 # normalized, -1~1
 
     plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
     plthandle.show()
