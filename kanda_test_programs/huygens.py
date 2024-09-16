@@ -10,8 +10,8 @@ import mpl_toolkits.axes_grid1 as axgrid1
 x_size, y_size = 10, 10 # [m]
 dx, dy = 0.005, 0.005 # [m]
 Nx, Ny = int(x_size / dx), int(y_size / dy)
-dt = 1e-11 # [s]
-time_window = 1e-9 # [s]
+dt = 0.1e-9 # [s]
+time_window = 3e-9 # [s]
 Nt = int(time_window / dt)
 c0 = 299792458 # [m/s]
 
@@ -26,30 +26,33 @@ def create_default_dielectric_constant(Nx, Ny):
     epsilon_r = np.ones((Nx, Ny))
     # Introduce a dielectric interface
     epsilon_r[:, Ny//2: Ny//4*3] = 4.0  # Right half has higher dielectric constant
-    return epsilon_r
+    return np.flipud(epsilon_r.T)
 
 # Initialize wavefront
 def initialize_wavefront(Nx, Ny):
     wavefront = np.zeros((Nx, Ny), dtype=bool)
     # Set initial wavefront (e.g., a circle at the center)
-    x0, y0 = Nx // 2 , Ny // 2 - Ny // 5
-    radius = 0.5  # [m]
+    source_position = 5, 2  # [m]
+    x0, y0 = int(source_position[0] / dx), int(source_position[1] / dy)
+    radius = 0.2  # [m]
     x, y = np.ogrid[-x0:Nx - x0, -y0:Ny - y0]
     mask = x**2 + y**2 <= (radius / dx)**2
     wavefront[mask] = True
-    return wavefront
+    return source_position, wavefront.T
 
 # Main simulation loop
 def huygens_simulation(epsilon_r, wavefront, c0, dx, dy, dt, T):
-    c = c0 / np.sqrt(epsilon_r)
+    v = c0 / np.sqrt(epsilon_r)
     frames = []
     for n in tqdm(range(int(T/dt)), desc='Simulating'):
         # Calculate the propagation distance for this time step
-        s = c * dt * n
+        s = v * dt * n
         # Use distance transform to find the front of the wavefront
         distance = distance_transform_edt(~wavefront) * dx
         # Generate new wavefront by expanding the current wavefront
-        new_wavefront = distance <= s
+        #new_wavefront = distance <= s
+        new_wavefront = np.logical_and(distance <= s, distance >= s - c0 * dt)
+        #new_wavefront = distance > s - c * dt
         # Handle reflection and refraction at interfaces
         # For simplicity, we'll approximate reflection by keeping the wavefront within bounds
         # This can be improved by more advanced methods
@@ -60,9 +63,9 @@ def huygens_simulation(epsilon_r, wavefront, c0, dx, dy, dt, T):
     return frames
 
 # Visualization
-def animate_wavefront(frames, epsilon_r):
+def animate_wavefront(frames, epsilon_r, source_position):
     fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-    extent = [0, epsilon_r.shape[1]*dx, 0, epsilon_r.shape[0]*dy]
+    extent = [0, epsilon_r.shape[1]*dx, epsilon_r.shape[0]*dy, 0]
 
     # 左のプロット：誘電体構造と波面
     dielectric_img = axs[0].imshow(
@@ -70,8 +73,9 @@ def animate_wavefront(frames, epsilon_r):
         cmap='binary',
         extent=extent,
         interpolation='nearest',
-        alpha=0.5
+        alpha=1
     )
+    axs[0].plot(source_position[0], source_position[1], 'rx')
     axs[0].set_title(r'$\epsilon_r$' + ' structure')
     axs[0].set_xlabel('X')
     axs[0].set_ylabel('Y')
@@ -83,12 +87,13 @@ def animate_wavefront(frames, epsilon_r):
 
     # 右のプロット：波面のみ
     wavefront_img_right = axs[1].imshow(
-        np.flipud(frames[0]),
+        frames[0],
         cmap='viridis',
         extent=extent,
         interpolation='nearest',
-        alpha=0.9
+        alpha=1
     )
+    axs[1].plot(source_position[0], source_position[1], 'rx')
     axs[1].set_title('Wavefront')
     axs[1].set_xlabel('X')
     axs[1].set_ylabel('Y')
@@ -100,16 +105,20 @@ def animate_wavefront(frames, epsilon_r):
 
     # アニメーションの更新関数
     def update(i):
-        wavefront_img_right.set_data(np.flipud(frames[i]))
+        wavefront_img_right.set_data(frames[i])
+        time_in_ns = i * dt / 1e-9
+        axs[1].set_title(f'Wavefront at t = {time_in_ns:.2f} ns')
         return [wavefront_img_right]
 
     print('Animating...')
     print('Number of frames:', len(frames))
+    fps = 10
     ani = animation.FuncAnimation(
-        fig, update, frames=len(frames), interval=50, blit=True, repeat=False
+        fig, update, frames=len(frames), interval=1000/fps, blit=True, repeat=False
     )
 
     plt.tight_layout()
+    ani.save('kanda_test_programs/wavefront_animation.mp4', writer='ffmpeg', fps=fps)
     plt.show()
 
 
@@ -121,11 +130,11 @@ def main():
     # For this example, create a default dielectric grid
     epsilon_r = create_default_dielectric_constant(Nx, Ny)
 
-    wavefront = initialize_wavefront(Nx, Ny)
+    source_position, wavefront = initialize_wavefront(Nx, Ny)
     frames = huygens_simulation(
         epsilon_r, wavefront, c0, dx, dy, dt, time_window
     )
-    animate_wavefront(frames, epsilon_r)
+    animate_wavefront(frames, epsilon_r, source_position)
 
 if __name__ == '__main__':
     main()
