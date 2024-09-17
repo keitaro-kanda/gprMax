@@ -2,91 +2,128 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import h5py
-from scipy.ndimage import distance_transform_edt, binary_dilation
+from scipy.ndimage import distance_transform_edt
 from tqdm import tqdm
 import mpl_toolkits.axes_grid1 as axgrid1
-import heapq
 
 # Simulation parameters
 x_size, y_size = 10, 10  # [m]
-dx, dy = 0.005, 0.005  # [m]
+dx, dy = 0.02, 0.02  # [m]
 Nx, Ny = int(x_size / dx), int(y_size / dy)
-dt = 0.1e-9  # [s]
+dt = 0.005e-9  # [s]
 time_window = 3e-9  # [s]
 Nt = int(time_window / dt)
 c0 = 299792458  # [m/s]
 
-# Load dielectric constant grid from h5 file
-def load_dielectric_constant(filename):
-    with h5py.File(filename, 'r') as f:
-        epsilon_r = f['/epsilon_r'][:]
-    return epsilon_r
-
-# For demonstration, create a default dielectric grid if no file is provided
+# Create default dielectric grid
 def create_default_dielectric_constant(Nx, Ny):
     epsilon_r = np.ones((Nx, Ny))
     # Introduce a dielectric interface
-    epsilon_r[:, Ny // 2 : Ny // 4 * 3] = 4.0  # Right half has higher dielectric constant
-    return epsilon_r.T
+    epsilon_r[:, Ny // 2:] = 4.0  # Right half has higher dielectric constant
+    return epsilon_r
 
-# Compute arrival times using Dijkstra's algorithm with 8-connectivity
-def compute_arrival_times(v, source_position, dx, dy):
-    Nx, Ny = v.shape
-    arrival_time = np.full((Nx, Ny), np.inf)
-    x0, y0 = int(source_position[0] / dx), int(source_position[1] / dy)
-    arrival_time[x0, y0] = 0
+# Initialize level set function (phi)
+def initialize_level_set(Nx, Ny, source_position):
+    x = np.linspace(0, x_size, Nx)
+    y = np.linspace(0, y_size, Ny)
+    X, Y = np.meshgrid(x, y, indexing='ij')
+    phi = np.sqrt((X - source_position[0])**2 + (Y - source_position[1])**2) - 0.1  # Initial radius
+    return phi
 
-    # Priority queue: (arrival_time, (x, y))
-    heap = []
-    heapq.heappush(heap, (0, (x0, y0)))
+# Reflective boundary conditions
+def apply_reflective_boundary(phi):
+    phi[0, :] = phi[1, :]
+    phi[-1, :] = phi[-2, :]
+    phi[:, 0] = phi[:, 1]
+    phi[:, -1] = phi[:, -2]
+    return phi
 
-    visited = np.zeros((Nx, Ny), dtype=bool)
+# Eikonal equation solver using upwind scheme
+def eikonal_solver(phi, v, dt, dx, dy):
+    phi_new = phi.copy()
 
-    # Define neighbor offsets for 8-connectivity
-    neighbor_offsets = [(-1, -1), (-1, 0), (-1, 1),
-                        (0, -1),          (0, 1),
-                        (1, -1),  (1, 0),  (1, 1)]
+    # Compute gradients using upwind scheme
+    phi_x_forward = (np.roll(phi, -1, axis=0) - phi) / dx
+    phi_x_backward = (phi - np.roll(phi, 1, axis=0)) / dx
+    phi_y_forward = (np.roll(phi, -1, axis=1) - phi) / dy
+    phi_y_backward = (phi - np.roll(phi, 1, axis=1)) / dy
 
-    while heap:
-        current_time, (x, y) = heapq.heappop(heap)
+    phi_x_positive = np.maximum(phi_x_backward, 0)
+    phi_x_negative = np.minimum(phi_x_forward, 0)
+    phi_y_positive = np.maximum(phi_y_backward, 0)
+    phi_y_negative = np.minimum(phi_y_forward, 0)
 
-        if visited[x, y]:
-            continue
-        visited[x, y] = True
+    grad_phi = np.sqrt(
+        np.maximum(phi_x_positive, -phi_x_negative)**2 +
+        np.maximum(phi_y_positive, -phi_y_negative)**2
+    )
 
-        for dx_offset, dy_offset in neighbor_offsets:
-            nx, ny = x + dx_offset, y + dy_offset
+    phi_new -= v * dt * grad_phi
+    return phi_new
 
-            if 0 <= nx < Nx and 0 <= ny < Ny:
-                if visited[nx, ny]:
-                    continue
+# Handle wavefront splitting at interfaces
+def handle_interfaces(phi, v, epsilon_r, dt, dx, dy):
+    # Identify interface cells
+    grad_epsilon_x = np.abs(np.roll(epsilon_r, -1, axis=0) - epsilon_r) > 0
+    grad_epsilon_y = np.abs(np.roll(epsilon_r, -1, axis=1) - epsilon_r) > 0
+    interface_cells = np.logical_or(grad_epsilon_x, grad_epsilon_y)
 
-                # Compute the travel distance to neighbor
-                if dx_offset == 0 or dy_offset == 0:
-                    ds = dx  # Horizontal or vertical neighbor
-                else:
-                    ds = np.sqrt(dx**2 + dy**2)  # Diagonal neighbor
+    # Find cells where wavefront reaches the interface
+    wavefront = np.abs(phi) < (dx + dy)
+    interface_wavefront = np.logical_and(wavefront, interface_cells)
 
-                # Average speed between current and neighbor cell
-                v_avg = 0.5 * (v[x, y] + v[nx, ny])
-                travel_time = ds / v_avg
+    # Create reflected wave
+    phi_reflected = phi.copy()
+    phi_reflected[~interface_wavefront] = np.inf  # Only consider interface wavefront cells
 
-                tentative_arrival_time = current_time + travel_time
+    # Update reflected wave using reflection coefficient
+    # For simplicity, assume total reflection (reflection coefficient = 1)
+    phi_reflected = eikonal_solver(phi_reflected, v, dt, dx, dy)
+    phi_reflected = apply_reflective_boundary(phi_reflected)
 
-                if tentative_arrival_time < arrival_time[nx, ny]:
-                    arrival_time[nx, ny] = tentative_arrival_time
-                    heapq.heappush(heap, (arrival_time[nx, ny], (nx, ny)))
+    return phi_reflected
 
-    return arrival_time
+# Main function
+def main():
+    epsilon_r = create_default_dielectric_constant(Nx, Ny)
+    v = c0 / np.sqrt(epsilon_r)
+
+    source_position = (5, 2)  # [m]
+
+    phi = initialize_level_set(Nx, Ny, source_position)
+    phi_reflected = np.full_like(phi, np.inf)  # Initialize reflected wave level set
+
+    frames = []
+
+    for n in tqdm(range(Nt), desc='Simulating'):
+        phi = eikonal_solver(phi, v, dt, dx, dy)
+        phi = apply_reflective_boundary(phi)
+
+        # Handle reflection at interfaces
+        phi_reflected_new = handle_interfaces(phi, v, epsilon_r, dt, dx, dy)
+        phi_reflected = np.minimum(phi_reflected, phi_reflected_new)
+
+        # Update reflected wave
+        phi_reflected = eikonal_solver(phi_reflected, v, dt, dx, dy)
+        phi_reflected = apply_reflective_boundary(phi_reflected)
+
+        # Combine original and reflected waves
+        total_phi = np.minimum(phi, phi_reflected)
+
+        # Capture zero level set as wavefront
+        wavefront = np.abs(total_phi) < (dx + dy)
+        frames.append(wavefront)
+
+    animate_wavefront(frames, epsilon_r, source_position)
 
 # Visualization
 def animate_wavefront(frames, epsilon_r, source_position):
     fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-    extent = [0, epsilon_r.shape[1]*dx, epsilon_r.shape[0]*dy, 0]
+    extent = [0, x_size, y_size, 0]
 
-    # 左のプロット：誘電体構造と波源
+    # Left plot: Dielectric structure and source
     dielectric_img = axs[0].imshow(
-        epsilon_r,
+        epsilon_r.T,
         cmap='binary',
         extent=extent,
         interpolation='nearest',
@@ -102,9 +139,9 @@ def animate_wavefront(frames, epsilon_r, source_position):
     cbar = plt.colorbar(dielectric_img, cax=cax)
     cbar.set_label(r'$\epsilon_r$')
 
-    # 右のプロット：波面のみ
+    # Right plot: Wavefront only
     wavefront_img_right = axs[1].imshow(
-        frames[0],
+        frames[0].T,
         cmap='viridis',
         extent=extent,
         interpolation='nearest',
@@ -120,16 +157,16 @@ def animate_wavefront(frames, epsilon_r, source_position):
     cbar = plt.colorbar(wavefront_img_right, cax=cax)
     cbar.set_label('Wavefront')
 
-    # アニメーションの更新関数
+    # Animation update function
     def update(i):
-        wavefront_img_right.set_data(frames[i])
+        wavefront_img_right.set_data(frames[i].T)
         time_in_ns = i * dt / 1e-9
         axs[1].set_title(f'Wavefront at t = {time_in_ns:.2f} ns')
         return [wavefront_img_right]
 
     print('Animating...')
     print('Number of frames:', len(frames))
-    fps = 10
+    fps = 30
     ani = animation.FuncAnimation(
         fig, update, frames=len(frames), interval=1000 / fps, blit=True, repeat=False
     )
@@ -137,31 +174,6 @@ def animate_wavefront(frames, epsilon_r, source_position):
     plt.tight_layout()
     ani.save('kanda_test_programs/wavefront_animation.mp4', writer='ffmpeg', fps=fps)
     plt.show()
-
-# Main function
-def main():
-    # Uncomment the following line to load dielectric constant from a file
-    # epsilon_r = load_dielectric_constant('dielectric_constant.h5')
-
-    # For this example, create a default dielectric grid
-    epsilon_r = create_default_dielectric_constant(Nx, Ny)
-    v = c0 / np.sqrt(epsilon_r)
-
-    source_position = (5, 2)  # [m]
-
-    arrival_time = compute_arrival_times(v, source_position, dx, dy)
-
-    # Generate frames
-    frames = []
-    tol = dt  # Tolerance for wavefront thickness
-
-    Nt = int(time_window / dt)
-    for n in range(Nt):
-        t = n * dt
-        wavefront = np.abs(arrival_time - t) <= tol
-        frames.append(wavefront)
-
-    animate_wavefront(frames, epsilon_r, source_position)
 
 if __name__ == '__main__':
     main()
