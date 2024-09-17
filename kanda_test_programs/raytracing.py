@@ -35,6 +35,7 @@ def create_default_dielectric_constant(Nx, Ny):
 #* Initialize rays
 def initialize_rays(num_rays, source_position):
     rays = []
+    #* Define beam width in radians
     angles = np.linspace(np.pi/3, np.pi*2/3, num_rays, endpoint=False)
     for idx, angle in enumerate(angles):
         ray = {
@@ -120,8 +121,8 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                         epsilon = 1e-8  # 微小量
                         denominator_s = n1 * cos_theta_i + n2 * cos_theta_t + epsilon
                         denominator_p = n1 * cos_theta_t + n2 * cos_theta_i + epsilon
-                        Rs = ((n1 * cos_theta_i - n2 * cos_theta_t) / denominator_s) ** 2
-                        Rp = ((n1 * cos_theta_t - n2 * cos_theta_i) / denominator_p) ** 2
+                        Rs = ((n1 * cos_theta_i - n2 * cos_theta_t) / denominator_s) ** 2 # reflectance for s-polarized light
+                        Rp = ((n1 * cos_theta_t - n2 * cos_theta_i) / denominator_p) ** 2 # reflectance for p-polarized light
                         R = 0.5 * (Rs + Rp)
                         R = np.clip(R, 0.0, 1.0)
                         T = 1 - R
