@@ -52,7 +52,7 @@ def compute_refractive_index(epsilon_r):
 #* Ray tracing simulation
 def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
     frames_positions = []
-    frames_intensities = []  # 強度を保存するリストを追加
+    frames_intensities = []
 
     Nx, Ny = epsilon_r.shape
     n_map = compute_refractive_index(epsilon_r)
@@ -60,15 +60,14 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
 
     for step in tqdm(range(Nt), desc='Simulating'):
         positions = []
-        intensities = []  # 強度を保存するリスト
-        new_rays = []
-        rays_to_process = all_rays  # 現在のタイムステップで処理する光線
+        intensities = []
 
-        all_rays = []  # 次のタイムステップ用にリセット
+        updated_all_rays = []  # 終了していない光線を保持する新しいリスト
 
-        for ray in rays_to_process:
+        for ray in all_rays:
             if ray['terminated']:
                 continue
+
             x, y = ray['position']
             ix, iy = int(x / dx), int(y / dy)
             if ix < 0 or ix >= Nx or iy < 0 or iy >= Ny:
@@ -127,6 +126,7 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                         # 反射光線を生成し、次のタイムステップで処理
                         if R * ray['intensity'] > intensity_threshold:
                             print(f"Reflection at  {step*dt/1e-9:.2f} ns, position {ray['position']}")
+
                             reflected_direction = ray['direction'] - 2 * cos_theta_i * normal
                             reflected_direction /= np.linalg.norm(reflected_direction)
                             reflected_ray = {
@@ -136,7 +136,7 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                                 'intensity': ray['intensity'] * R,
                                 'terminated': False,
                             }
-                            new_rays.append(reflected_ray)
+                            all_rays.append(reflected_ray)
 
                         # 屈折光線を更新
                         if T * ray['intensity'] > intensity_threshold:
@@ -147,28 +147,21 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                         else:
                             ray['terminated'] = True
                             continue
-            # 光線の強度が閾値以下の場合、終了
-            if ray['intensity'] < intensity_threshold:
-                ray['terminated'] = True
-                continue
+                # 光線の強度が閾値以下の場合、終了フラグを設定
+                if ray['intensity'] < intensity_threshold:
+                    ray['terminated'] = True
+                    print(f"Terminated at {step*dt/1e-9:.2f} ns, position {ray['position']}")
+                    continue
+
             positions.append(ray['position'].copy())
-            intensities.append(ray['intensity'])  # 強度を保存
-            all_rays.append(ray)  # 次のタイムステップのために保存
-        # 新たに生成された反射光線を次のタイムステップで処理
-        all_rays.extend(new_rays)
+            intensities.append(ray['intensity'])
 
-        # positions と intensities を numpy 配列に変換
-        positions_array = np.array(positions)
-        intensities_array = np.array(intensities)
+            updated_all_rays.append(ray)  # 終了していない光線のみ追加
 
-        # positions_array の形状を確認・修正
-        if positions_array.ndim == 1 and positions_array.size == 2:
-            positions_array = positions_array.reshape(1, -1)
-        elif positions_array.ndim == 1 and positions_array.size == 0:
-            positions_array = positions_array.reshape(0, 2)
+        all_rays = updated_all_rays  # 次のタイムステップ用に更新
 
-        frames_positions.append(positions_array)
-        frames_intensities.append(intensities_array)
+        frames_positions.append(np.array(positions))
+        frames_intensities.append(np.array(intensities))
 
         # 100回に1回、光線の数を表示
         if step % 100 == 0:
@@ -275,7 +268,7 @@ def animate_rays(frames_positions, frames_intensities, epsilon_r, source_positio
 
     plt.tight_layout()
     ani.save('kanda_test_programs/ray_tracing/ray_tracing_animation.mp4', writer='ffmpeg', fps=fps)
-    plt.close()
+    plt.show()
 
 # メイン関数
 def main():
