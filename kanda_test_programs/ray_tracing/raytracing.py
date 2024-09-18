@@ -1,0 +1,297 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from tqdm import tqdm
+import mpl_toolkits.axes_grid1 as axgrid1
+import matplotlib.cm as cm
+
+#* Simulation parameters
+x_size, y_size = 3, 5  # [m]
+dx, dy = 0.005, 0.005  # [m]
+dt = 0.01e-9  # [s]
+time_window = 30e-9  # [s]
+Nt = int(time_window / dt)
+c = 299792458  # [m/s]
+intensity_threshold = 1e-12  # 閾値を小さく設定
+
+#* Define the dielectric constant distribution
+def create_default_dielectric_constant(Nx, Ny):
+    epsilon_r = np.ones((Nx, Ny))
+    #* Background regolith
+    epsilon_r[:, int(2/dy):] = 3.0
+    #* Rock
+    x = np.linspace(0, x_size, Nx)
+    y = np.linspace(0, y_size, Ny)
+    X, Y = np.meshgrid(x, y, indexing='ij')
+    r = np.sqrt((X - 1.5)**2 + (Y - 4)**2)
+    epsilon_r[r < 0.15] = 9.0
+
+    return epsilon_r
+
+#* Initialize rays
+def initialize_rays(num_rays, source_position):
+    rays = []
+    #* Define beam width in radians
+    angles = np.linspace(np.pi/3, np.pi*2/3, num_rays, endpoint=False)
+    for idx, angle in enumerate(angles):
+        ray = {
+            'id': idx,
+            'position': np.array([source_position[0], source_position[1]], dtype=float),
+            'direction': np.array([np.cos(angle), np.sin(angle)], dtype=float),
+            'intensity': 1.0,
+            'terminated': False,
+        }
+        rays.append(ray)
+    print(f"Initialized {len(rays)} rays.")
+    return rays
+
+#* Compute the refractive index from the dielectric constant
+def compute_refractive_index(epsilon_r):
+    return np.sqrt(epsilon_r)
+
+#* Ray tracing simulation
+def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
+    frames_positions = []
+    frames_intensities = []  # 強度を保存するリストを追加
+
+    Nx, Ny = epsilon_r.shape
+    n_map = compute_refractive_index(epsilon_r)
+    all_rays = rays.copy()  # すべての光線を管理するリスト
+
+    for step in tqdm(range(Nt), desc='Simulating'):
+        positions = []
+        intensities = []  # 強度を保存するリスト
+        new_rays = []
+        rays_to_process = all_rays  # 現在のタイムステップで処理する光線
+
+        all_rays = []  # 次のタイムステップ用にリセット
+
+        for ray in rays_to_process:
+            if ray['terminated']:
+                continue
+            x, y = ray['position']
+            ix, iy = int(x / dx), int(y / dy)
+            if ix < 0 or ix >= Nx or iy < 0 or iy >= Ny:
+                ray['terminated'] = True
+                continue
+            n = n_map[ix, iy]
+            v = c / n
+
+            # 位置を更新
+            ray['position'] += ray['direction'] * v * dt
+
+            # インターフェースの検出
+            ix_new, iy_new = int(ray['position'][0] / dx), int(ray['position'][1] / dy)
+            if ix_new != ix or iy_new != iy:
+                if ix_new < 0 or ix_new >= Nx or iy_new < 0 or iy_new >= Ny:
+                    ray['terminated'] = True
+                    continue
+                n_new = n_map[ix_new, iy_new]
+                if abs(n - n_new) > 1e-6:
+                    # インターフェースの法線ベクトルを計算
+                    normal = compute_interface_normal(ix, iy, n_map, dx, dy)
+
+                    # 入射角を計算
+                    cos_theta_i = -np.dot(normal, ray['direction'])
+                    cos_theta_i = np.clip(cos_theta_i, -1.0, 1.0)
+                    sin_theta_i = np.sqrt(1 - cos_theta_i**2)
+
+                    # スネルの法則を適用
+                    n1, n2 = n, n_new
+                    eta = n1 / n2
+                    sin_theta_t = eta * sin_theta_i
+
+                    if abs(sin_theta_t) > 1.0:
+                        # 全反射
+                        R = 1.0
+                        T = 0.0
+                        # 反射方向を計算
+                        reflected_direction = ray['direction'] - 2 * cos_theta_i * normal
+                        reflected_direction /= np.linalg.norm(reflected_direction)
+                        ray['direction'] = reflected_direction
+                        ray['intensity'] *= R
+                    else:
+                        # 部分的な反射と透過
+                        cos_theta_t = np.sqrt(1 - sin_theta_t**2)
+
+                        # フレネルの式を用いて反射率と透過率を計算
+                        Rs = ((n1 * cos_theta_i - n2 * cos_theta_t) / (n1 * cos_theta_i + n2 * cos_theta_t)) ** 2
+                        Rp = ((n1 * cos_theta_t - n2 * cos_theta_i) / (n1 * cos_theta_t + n2 * cos_theta_i)) ** 2
+                        R = 0.5 * (Rs + Rp)
+                        T = 1 - R
+
+                        # 数値的不安定性のチェック
+                        R = np.clip(R, 0.0, 1.0)
+                        T = np.clip(T, 0.0, 1.0)
+
+                        # 反射光線を生成し、次のタイムステップで処理
+                        if R * ray['intensity'] > intensity_threshold:
+                            print(f"Reflection at  {step*dt/1e-9:.2f} ns, position {ray['position']}")
+                            reflected_direction = ray['direction'] - 2 * cos_theta_i * normal
+                            reflected_direction /= np.linalg.norm(reflected_direction)
+                            reflected_ray = {
+                                'id': ray['id'],
+                                'position': ray['position'].copy(),
+                                'direction': reflected_direction,
+                                'intensity': ray['intensity'] * R,
+                                'terminated': False,
+                            }
+                            new_rays.append(reflected_ray)
+
+                        # 屈折光線を更新
+                        if T * ray['intensity'] > intensity_threshold:
+                            transmitted_direction = eta * ray['direction'] + (eta * cos_theta_i - cos_theta_t) * normal
+                            transmitted_direction /= np.linalg.norm(transmitted_direction)
+                            ray['direction'] = transmitted_direction
+                            ray['intensity'] *= T
+                        else:
+                            ray['terminated'] = True
+                            continue
+            # 光線の強度が閾値以下の場合、終了
+            if ray['intensity'] < intensity_threshold:
+                ray['terminated'] = True
+                continue
+            positions.append(ray['position'].copy())
+            intensities.append(ray['intensity'])  # 強度を保存
+            all_rays.append(ray)  # 次のタイムステップのために保存
+        # 新たに生成された反射光線を次のタイムステップで処理
+        all_rays.extend(new_rays)
+
+        # positions と intensities を numpy 配列に変換
+        positions_array = np.array(positions)
+        intensities_array = np.array(intensities)
+
+        # positions_array の形状を確認・修正
+        if positions_array.ndim == 1 and positions_array.size == 2:
+            positions_array = positions_array.reshape(1, -1)
+        elif positions_array.ndim == 1 and positions_array.size == 0:
+            positions_array = positions_array.reshape(0, 2)
+
+        frames_positions.append(positions_array)
+        frames_intensities.append(intensities_array)
+
+        # 100回に1回、光線の数を表示
+        if step % 100 == 0:
+            print(f"At {step*dt/1e-9:.2f} ns: Number of rays = {len(positions)}")
+    return frames_positions, frames_intensities  # 強度を返す
+
+# インターフェースの法線ベクトルを計算
+def compute_interface_normal(ix, iy, n_map, dx, dy):
+    grad_nx = (n_map[min(ix + 1, n_map.shape[0] - 1), iy] - n_map[max(ix - 1, 0), iy]) / 2
+    grad_ny = (n_map[ix, min(iy + 1, n_map.shape[1] - 1)] - n_map[ix, max(iy - 1, 0)]) / 2
+    normal = np.array([grad_nx, grad_ny])
+    if np.linalg.norm(normal) == 0:
+        normal = np.array([0.0, 1.0])  # 法線ベクトルがゼロの場合のデフォルト
+    else:
+        normal = normal / np.linalg.norm(normal)
+    return normal
+
+# 可視化
+def animate_rays(frames_positions, frames_intensities, epsilon_r, source_position):
+    fig, ax = plt.subplots(figsize=(8, 8), dpi=300)
+    extent = [0, x_size, y_size, 0]
+
+    # 誘電率構造をプロット
+    dielectric_img = ax.imshow(
+        epsilon_r.T,
+        cmap='binary',
+        extent=extent,
+        interpolation='nearest',
+        alpha=0.5,
+        origin='upper'
+    )
+    ax.plot(source_position[0], source_position[1], 'ro')
+    ax.set_title('Ray Tracing Simulation')
+    ax.set_xlabel('X [m]')
+    ax.set_ylabel('Y [m]')
+
+    divider = axgrid1.make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.1)
+    cbar = plt.colorbar(dielectric_img, cax=cax)
+    cbar.set_label(r'$\epsilon_r$')
+
+    # 全フレームの強度を取得して正規化
+    all_intensities = np.concatenate(frames_intensities)
+    vmin = np.min(all_intensities)
+    vmax = np.max(all_intensities)
+
+    # 強度に基づくカラーマップを作成
+    cmap = plt.get_cmap('jet')
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+
+    # スキャッタープロットを初期化
+    scat = ax.scatter([], [], s=1, c=[], cmap=cmap, norm=norm)
+
+    cax_scat = divider.append_axes('right', size='5%', pad=1)
+    cbar_scat = plt.colorbar(cm.ScalarMappable(cmap=cmap, norm=norm), cax=cax_scat)
+    cbar_scat.set_label('Intensity of rays')
+
+    # ブリッティングのための初期化関数
+    def init():
+        scat.set_offsets(np.empty((0, 2)))
+        scat.set_array(np.array([]))
+        return scat,
+
+    # 更新関数の修正
+    def update(i):
+        positions = frames_positions[i]
+        intensities = frames_intensities[i]
+
+        # positions の形状を確認・修正
+        if positions.ndim == 1 and positions.size == 2:
+            positions = positions.reshape(1, -1)
+        elif positions.ndim == 1 and positions.size == 0:
+            positions = positions.reshape(0, 2)
+
+        if len(intensities) > 0:
+            scat.set_offsets(positions)
+            scat.set_array(intensities)
+        else:
+            scat.set_offsets(np.empty((0, 2)))
+            scat.set_array(np.array([]))
+        time_in_ns = i * dt / 1e-9
+        ax.set_title(f'Ray Tracing at t = {time_in_ns:.2f} ns')
+        return scat,
+
+    print('Animating...')
+    print('Number of frames:', len(frames_positions))
+    fps = 30
+
+    # tqdmを用いたフレームジェネレータ
+    def frame_generator():
+        for i in tqdm(range(len(frames_positions)), desc='Creating Animation'):
+            yield i
+
+    ani = animation.FuncAnimation(
+        fig,
+        update,
+        frames=frame_generator(),  # プログレスバー付きのフレームジェネレータ
+        init_func=init,
+        interval=1000 / fps,
+        blit=True,
+        repeat=False,
+        save_count=len(frames_positions),
+    )
+
+    plt.tight_layout()
+    ani.save('kanda_test_programs/ray_tracing/ray_tracing_animation.mp4', writer='ffmpeg', fps=fps)
+    plt.close()
+
+# メイン関数
+def main():
+    #* Prepare model
+    Nx, Ny = int(x_size / dx), int(y_size / dy)
+    epsilon_r = create_default_dielectric_constant(Nx, Ny)
+
+    #* Settting about rays
+    source_position = (1.5, 1)  # [m]
+    num_rays = 100  # 光線の数
+    rays = initialize_rays(num_rays, source_position)
+
+    frames_positions, frames_intensities = ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy)
+    print('frames_positions:', len(frames_positions))
+    print('frames_intensities:', len(frames_intensities))
+    animate_rays(frames_positions, frames_intensities, epsilon_r, source_position)
+
+if __name__ == '__main__':
+    main()
