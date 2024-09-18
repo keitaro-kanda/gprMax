@@ -14,8 +14,6 @@ Nt = int(time_window / dt)
 c = 299792458  # [m/s]
 intensity_threshold = 0.0001
 
-
-
 #* Define the dielectric constant distribution
 def create_default_dielectric_constant(Nx, Ny):
     epsilon_r = np.ones((Nx, Ny))
@@ -29,8 +27,6 @@ def create_default_dielectric_constant(Nx, Ny):
     epsilon_r[r < 0.15] = 9.0
 
     return epsilon_r
-
-
 
 #* Initialize rays
 def initialize_rays(num_rays, source_position):
@@ -48,19 +44,15 @@ def initialize_rays(num_rays, source_position):
         rays.append(ray)
     return rays
 
-
-
 #* Compute the refractive index from the dielectric constant
 def compute_refractive_index(epsilon_r):
     return np.sqrt(epsilon_r)
-
-
 
 #* Ray tracing simulation
 def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
     frames_positions = []
     frames_ids = []
-
+    
     Nx, Ny = epsilon_r.shape
     n_map = compute_refractive_index(epsilon_r)
     all_rays = rays.copy()  # すべての光線を管理するリスト
@@ -69,7 +61,11 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
         positions = []
         ids = []
         new_rays = []
-        for ray in all_rays:
+        rays_to_process = all_rays  # 現在のタイムステップで処理する光線
+
+        all_rays = []  # 次のタイムステップ用にリセット
+
+        for ray in rays_to_process:
             if ray['terminated']:
                 continue
             x, y = ray['position']
@@ -93,7 +89,6 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                 if n_new != n:
                     # インターフェースの法線ベクトルを計算
                     normal = compute_interface_normal(ix, iy, n_map, dx, dy)
-                    normal = -normal  # 法線の向きを修正
 
                     # 入射角を計算
                     cos_theta_i = -np.dot(normal, ray['direction'])
@@ -108,8 +103,8 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                         # 全反射
                         R = 1.0
                         T = 0.0
-                        # 反射方向のみを計算
-                        reflected_direction = ray['direction'] - 2 * np.dot(ray['direction'], normal) * normal
+                        # 反射方向を計算
+                        reflected_direction = ray['direction'] - 2 * cos_theta_i * normal
                         reflected_direction /= np.linalg.norm(reflected_direction)
                         ray['direction'] = reflected_direction
                         ray['intensity'] *= R
@@ -121,8 +116,8 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                         epsilon = 1e-8  # 微小量
                         denominator_s = n1 * cos_theta_i + n2 * cos_theta_t + epsilon
                         denominator_p = n1 * cos_theta_t + n2 * cos_theta_i + epsilon
-                        Rs = ((n1 * cos_theta_i - n2 * cos_theta_t) / denominator_s) ** 2 # reflectance for s-polarized light
-                        Rp = ((n1 * cos_theta_t - n2 * cos_theta_i) / denominator_p) ** 2 # reflectance for p-polarized light
+                        Rs = ((n1 * cos_theta_i - n2 * cos_theta_t) / denominator_s) ** 2
+                        Rp = ((n1 * cos_theta_t - n2 * cos_theta_i) / denominator_p) ** 2
                         R = 0.5 * (Rs + Rp)
                         R = np.clip(R, 0.0, 1.0)
                         T = 1 - R
@@ -132,12 +127,12 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                         if np.isnan(T) or np.isinf(T):
                             T = 1.0
 
-                        # 反射光線を生成
+                        # 反射光線を生成し、即座に処理
                         if R * ray['intensity'] > intensity_threshold:
-                            reflected_direction = ray['direction'] - 2 * np.dot(ray['direction'], normal) * normal
+                            reflected_direction = ray['direction'] - 2 * cos_theta_i * normal
                             reflected_direction /= np.linalg.norm(reflected_direction)
                             reflected_ray = {
-                                'id': ray['id'],  # 親光線のIDを引き継ぐ
+                                'id': ray['id'],
                                 'position': ray['position'].copy(),
                                 'direction': reflected_direction,
                                 'intensity': ray['intensity'] * R,
@@ -147,7 +142,8 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
 
                         # 屈折光線を更新
                         if T * ray['intensity'] > intensity_threshold:
-                            transmitted_direction = (n1 / n2) * (ray['direction'] + cos_theta_i * normal) - cos_theta_t * normal
+                            eta = n1 / n2
+                            transmitted_direction = eta * ray['direction'] + (eta * cos_theta_i - cos_theta_t) * normal
                             transmitted_direction /= np.linalg.norm(transmitted_direction)
                             ray['direction'] = transmitted_direction
                             ray['intensity'] *= T
@@ -160,16 +156,19 @@ def ray_tracing_simulation(rays, epsilon_r, dt, Nt, dx, dy):
                 continue
             positions.append(ray['position'].copy())
             ids.append(ray['id'])
+            all_rays.append(ray)  # 次のタイムステップのために保存
+        # 新たに生成された反射光線を現在のタイムステップで処理
         all_rays.extend(new_rays)
         frames_positions.append(np.array(positions))
         frames_ids.append(np.array(ids))
     return frames_positions, frames_ids
 
+
 # インターフェースの法線ベクトルを計算
 def compute_interface_normal(ix, iy, n_map, dx, dy):
-    #n_center = n_map[ix, iy]
-    grad_nx = (n_map[min(ix + 1, n_map.shape[0] - 1), iy] - n_map[max(ix - 1, 0), iy]) / (2 * dx)
-    grad_ny = (n_map[ix, min(iy + 1, n_map.shape[1] - 1)] - n_map[ix, max(iy - 1, 0)]) / (2 * dy)
+    epsilon = 1e-8  # 微小量を追加
+    grad_nx = (n_map[min(ix + 1, n_map.shape[0] - 1), iy] - n_map[max(ix - 1, 0), iy]) / (2 * dx + epsilon)
+    grad_ny = (n_map[ix, min(iy + 1, n_map.shape[1] - 1)] - n_map[ix, max(iy - 1, 0)]) / (2 * dy + epsilon)
     normal = np.array([grad_nx, grad_ny])
     if np.linalg.norm(normal) == 0:
         normal = np.array([0.0, 1.0])  # 法線ベクトルがゼロの場合のデフォルト
