@@ -78,7 +78,7 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
         if len(positions) == 0:
             break  # 処理する光線がなくなったら終了
 
-        # 光線の位置を更新
+        # 光線の位置インデックスを取得
         ix = (positions[:, 0] / dx).astype(int)
         iy = (positions[:, 1] / dy).astype(int)
 
@@ -90,12 +90,12 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
         ix = ix[valid]
         iy = iy[valid]
 
-        #* 光線の位置を更新
+        #* 前の時刻に計算した速度から現在時刻の光線の位置を計算
         n = n_map[ix, iy]
         v = c / n
         positions += directions * v[:, np.newaxis] * dt
 
-        # インターフェースの検出
+        # 現在時刻の位置インデックスを取得
         ix_new = (positions[:, 0] / dx).astype(int)
         iy_new = (positions[:, 1] / dy).astype(int)
 
