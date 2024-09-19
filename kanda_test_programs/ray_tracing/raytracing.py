@@ -93,9 +93,7 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
         #* 光線の位置を更新
         n = n_map[ix, iy]
         v = c / n
-        #positions += directions * v[:, np.newaxis] * dt
-        # positionに応じたvを取り出し，directionsに掛ける
-        positions += directions * v[positions[0], positions[1]] * dt
+        positions += directions * v[:, np.newaxis] * dt
 
         # インターフェースの検出
         ix_new = (positions[:, 0] / dx).astype(int)
