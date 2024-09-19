@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from tqdm import tqdm
 import mpl_toolkits.axes_grid1 as axgrid1
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.cm as cm
 
 #* Simulation parameters
@@ -134,10 +135,11 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
                 # 全反射
                 R = 1.0
                 T = 0.0
+                print(f'Full reflection is occured at {step * dt / 1e-9:.2f}) ns, ray {i}')
             else:
                 cos_theta_t = np.sqrt(1 - sin_theta_t**2)
                 Rs = ((n1 * cos_theta_i - n2 * cos_theta_t) / (n1 * cos_theta_i + n2 * cos_theta_t)) ** 2
-                Rp = ((n1 * cos_theta_t - n2 * cos_theta_i) / (n1 * cos_theta_t + n2 * cos_theta_i)) ** 2
+                Rp = ((n2 * cos_theta_t - n1 * cos_theta_i) / (n2 * cos_theta_t + n1 * cos_theta_i)) ** 2
                 R = 0.5 * (Rs + Rp)
                 T = 1 - R
 
@@ -171,18 +173,36 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
 
         # 新たな光線を追加
         if new_positions:
-            positions = np.vstack((positions, new_positions))
-            directions = np.vstack((directions, new_directions))
+            new_positions = np.array(new_positions)
+            new_directions = np.array(new_directions)
+            new_intensities = np.array(new_intensities)
+
+            print('Before adding new rays:')
+            print(f'positions shape: {positions.shape}')
+            print(f'new_positions shape: {new_positions.shape}')
+            print(' ')
+            positions = np.concatenate((positions, new_positions), axis=0)
+            directions = np.concatenate((directions, new_directions), axis=0)
             intensities = np.concatenate((intensities, new_intensities))
+
+            print('After adding new rays:')
+            print(f'positions shape: {positions.shape}')
+            print(f'directions shape: {directions.shape}')
+            print(f'intensities shape: {intensities.shape}')
+            print(' ')
 
         # フレームデータを記録
         frames_positions.append(positions.copy())
         frames_intensities.append(intensities.copy())
 
         if step % 100 == 0:
-            print(f"At {step * dt / 1e-9:.2f} ns: Number of rays = {len(positions)}")
+            print(f"At {step * dt / 1e-9:.2f} ns: Shape of positions = {positions.shape}")
+            print('-----------------------------------')
         if len(positions) == 0:
+            print(' ')
+            print('===================================')
             print(f"Simulation terminated at {step * dt / 1e-9:.2f} ns.")
+            print('===================================')
 
     return frames_positions, frames_intensities
 
@@ -198,12 +218,6 @@ def compute_interface_normal(ix, iy, n_map, dx, dy):
         normal = normal / np.linalg.norm(normal)
     return normal
 
-# 可視化
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import matplotlib.cm as cm
 
 # 可視化
 def animate_rays(frames_positions, frames_intensities, epsilon_r, source_position):
@@ -225,7 +239,7 @@ def animate_rays(frames_positions, frames_intensities, epsilon_r, source_positio
     ax.tick_params(labelsize=18)
 
     # 時刻表示用のテキストを追加
-    time_text = ax.text(0.05, 0.95, '', transform=ax.transAxes, fontsize=12, verticalalignment='top')
+    time_text = ax.text(0.05, 0.95, '', transform=ax.transAxes, fontsize=20, verticalalignment='top')
 
     # カラーバー1（誘電率のカラーバー）
     divider = make_axes_locatable(ax)
@@ -245,7 +259,7 @@ def animate_rays(frames_positions, frames_intensities, epsilon_r, source_positio
     scat = ax.scatter([], [], s=1, c=[], cmap=cmap, norm=norm)
 
     # カラーバー2（光線強度のカラーバー）
-    cax2 = divider.append_axes('right', size='5%', pad=1.0)  # padを調整して2本目が重ならないようにする
+    cax2 = divider.append_axes('right', size='5%', pad=0.8)  # padを調整して2本目が重ならないようにする
     cbar2 = plt.colorbar(cm.ScalarMappable(cmap=cmap, norm=norm), cax=cax2)
     cbar2.set_label('Intensity of rays', fontsize=18)
     cbar2.ax.tick_params(labelsize=16)
@@ -269,7 +283,7 @@ def animate_rays(frames_positions, frames_intensities, epsilon_r, source_positio
             scat.set_offsets(np.empty((0, 2)))
             scat.set_array(np.array([]))
         time_in_ns = i * dt / 1e-9
-        time_text.set_text(f't = {time_in_ns:.2f} ns', fontsize=20)
+        time_text.set_text(f't = {time_in_ns:.2f} ns')
         return scat, time_text
 
     print('Animating...')
