@@ -236,6 +236,7 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
 
 
 # インターフェースの法線ベクトルを計算
+"""
 def compute_interface_normal(ix, iy, n_map):
     if n_map[ix, iy] == n_map[ix-1, iy] and  n_map[ix, iy] == n_map[ix, iy-1] and n_map[ix, iy] == n_map[ix-1, iy] and n_map[ix, iy] == n_map[ix, iy-1]:
         normal  = np.array([0.0, 0.0])
@@ -248,6 +249,23 @@ def compute_interface_normal(ix, iy, n_map):
         else:
             normal = normal / np.linalg.norm(normal)
     return normal
+"""
+
+def compute_interface_normal(ix, iy, n_map):
+    if ix <= 0 or iy <= 0 or ix >= n_map.shape[0] - 1 or iy >= n_map.shape[1] - 1:
+        return np.array([0.0, 0.0])
+    
+    # 屈折率の勾配（法線）を計算
+    grad_nx = (n_map[min(ix + 1, n_map.shape[0] - 1), iy] - n_map[max(ix - 1, 0), iy]) / 2
+    grad_ny = (n_map[ix, min(iy + 1, n_map.shape[1] - 1)] - n_map[ix, max(iy - 1, 0)]) / 2
+
+    normal = np.array([grad_nx, grad_ny])
+    norm = np.linalg.norm(normal)
+    
+    if norm > 0:
+        return normal / norm
+    else:
+        return np.array([0.0, 0.0])
 
 
 # 可視化
