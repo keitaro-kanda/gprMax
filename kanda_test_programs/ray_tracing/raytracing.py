@@ -150,16 +150,6 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
                 T = np.clip(T, 0.0, 1.0)
 
             # 反射光線の生成
-            """
-            # 元々ずっと使ってたやつ
-            if intensities[i] * R > intensity_threshold:
-                reflected_direction = directions[i] - 2 * cos_theta_i * normal
-                reflected_direction /= np.linalg.norm(reflected_direction)
-                new_positions.append(positions[i].copy())
-                new_directions.append(reflected_direction)
-                new_intensities.append(intensities[i] * R)
-                print(f"Ray {i} is reflected at ({positions[i][0]:.2f}, {positions[i][1]:.2f})")
-            """
             if intensities[i] * R > intensity_threshold:
                 reflected_direction = directions[i] - 2 * np.dot(directions[i], normal) * normal
                 reflected_direction /= np.linalg.norm(reflected_direction)
@@ -177,15 +167,6 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
 
 
             # 屈折光線の更新
-            """
-            # 元々ずっと使ってたやつ
-            if intensities[i] * T > intensity_threshold:
-                transmitted_direction = eta * directions[i] + (eta * cos_theta_i - np.sqrt(1 - (eta * sin_theta_i) ** 2)) * normal
-                transmitted_direction /= np.linalg.norm(transmitted_direction)
-                directions[i] = transmitted_direction
-                intensities[i] *= T
-            """
-
             if intensities[i] * T > intensity_threshold:
                 transmitted_direction = 1/eta * directions[i] \
                     - 1/eta * (np.dot(directions[i], normal) + np.sqrt(eta**2 - 1 + np.dot(directions[i], normal)**2)) * normal
@@ -255,45 +236,7 @@ def compute_interface_normal(ix, iy, n_map):
         return normal / norm
     else:
         return np.array([0.0, 0.0])
-"""
 
-def compute_interface_normal(ix, iy, n_map, delta_n_threshold=1e-6):
-    # 現在の屈折率
-    current_n = n_map[ix, iy]
-    
-    # 隣接セルの屈折率を取得
-    neighbors = []
-    if ix > 0:
-        neighbors.append(n_map[ix - 1, iy])
-    if ix < n_map.shape[0] - 1:
-        neighbors.append(n_map[ix + 1, iy])
-    if iy > 0:
-        neighbors.append(n_map[ix, iy - 1])
-    if iy < n_map.shape[1] - 1:
-        neighbors.append(n_map[ix, iy + 1])
-    
-    # 境界面上に存在するかを判定
-    is_interface = any(abs(n - current_n) > delta_n_threshold for n in neighbors)
-    
-    if not is_interface:
-        return np.array([0.0, 0.0])
-    
-    # 境界面上に存在する場合、中心差分法で法線ベクトルを計算
-    if ix <= 0 or iy <= 0 or ix >= n_map.shape[0] - 1 or iy >= n_map.shape[1] - 1:
-        return np.array([0.0, 0.0])
-
-    # 中心差分法による勾配計算
-    grad_nx = (n_map[ix + 1, iy] - n_map[ix - 1, iy]) / 2
-    grad_ny = (n_map[ix, iy + 1] - n_map[ix, iy - 1]) / 2
-
-    normal = np.array([grad_nx, grad_ny])
-    norm = np.linalg.norm(normal)
-
-    if norm > 0:
-        return normal / norm
-    else:
-        return np.array([0.0, 0.0])
-"""
 
 
 # 可視化
@@ -451,7 +394,7 @@ def main():
 
     #* Settting about rays
     source_position = (1.5, 1)  # [m]
-    num_rays = 100  # 光線の数
+    num_rays = 200  # 光線の数
     #rays = initialize_rays(num_rays, source_position)
 
     frames_positions, frames_intensities = ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
