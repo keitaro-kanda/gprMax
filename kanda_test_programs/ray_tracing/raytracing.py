@@ -33,7 +33,7 @@ def create_default_dielectric_constant(Nx, Ny):
 def initialize_rays(num_rays, source_position):
     rays = []
     #* Define beam width in radians
-    angles = np.linspace(np.pi/3, np.pi*2/3, num_rays, endpoint=False)
+    angles = np.linspace(np.pi*89/180, np.pi*91/180, num_rays, endpoint=False)
     for idx, angle in enumerate(angles):
         ray = {
             'id': idx,
@@ -121,7 +121,8 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
         # インターフェースを通過する光線の処理
         for i in np.where(interface_indices)[0]:
             # インターフェースの法線ベクトルを計算
-            normal = compute_interface_normal(ix[i], iy[i], n_map)
+            #normal = compute_interface_normal(ix[i], iy[i], n_map)
+            normal = compute_interface_normal(ix_new[i], iy_new[i], n_map)
 
             # 入射角の計算
             cos_theta_i = -np.dot(normal, directions[i])
@@ -162,7 +163,12 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
             if intensities[i] * R > intensity_threshold:
                 reflected_direction = directions[i] - 2 * np.dot(directions[i], normal) * normal
                 reflected_direction /= np.linalg.norm(reflected_direction)
-                new_positions.append(positions[i].copy())
+
+                # インターフェースからわずかに離すオフセットを追加
+                offset_distance = 1e-6  # 適切な小さな値に調整
+                new_position = positions[i] + reflected_direction * offset_distance
+                new_positions.append(new_position)
+                #new_positions.append(positions[i].copy())
                 #new_positions.append(positions[i] + reflected_direction * v[i] * dt)
                 new_directions.append(reflected_direction)
                 new_intensities.append(intensities[i] * R)
@@ -236,36 +242,58 @@ def ray_tracing_simulation(epsilon_r, dt, Nt, dx, dy, source_position, num_rays)
 
 
 # インターフェースの法線ベクトルを計算
-"""
+
 def compute_interface_normal(ix, iy, n_map):
     if n_map[ix, iy] == n_map[ix-1, iy] and  n_map[ix, iy] == n_map[ix, iy-1] and n_map[ix, iy] == n_map[ix-1, iy] and n_map[ix, iy] == n_map[ix, iy-1]:
-        normal  = np.array([0.0, 0.0])
-    else:
-        grad_nx = -(n_map[min(ix+1, n_map.shape[0] - 1), iy] - n_map[max(ix-1, 0), iy]) / 2
-        grad_ny = (n_map[ix, min(iy+1, n_map.shape[1] - 1)] - n_map[ix, max(iy-1, 0)]) / 2
-        normal = np.array([grad_nx, grad_ny])
-        if np.linalg.norm(normal) == 0:
-            normal = np.array([0.0, 0.0])  # 法線ベクトルがゼロの場合のデフォルト
-        else:
-            normal = normal / np.linalg.norm(normal)
-    return normal
-"""
-
-def compute_interface_normal(ix, iy, n_map):
-    if ix <= 0 or iy <= 0 or ix >= n_map.shape[0] - 1 or iy >= n_map.shape[1] - 1:
         return np.array([0.0, 0.0])
-    
-    # 屈折率の勾配（法線）を計算
-    grad_nx = (n_map[min(ix + 1, n_map.shape[0] - 1), iy] - n_map[max(ix - 1, 0), iy]) / 2
-    grad_ny = (n_map[ix, min(iy + 1, n_map.shape[1] - 1)] - n_map[ix, max(iy - 1, 0)]) / 2
 
+    grad_nx = (n_map[min(ix+1, n_map.shape[0] - 1), iy] - n_map[max(ix-1, 0), iy]) / 2
+    grad_ny = (n_map[ix, min(iy+1, n_map.shape[1] - 1)] - n_map[ix, max(iy-1, 0)]) / 2
     normal = np.array([grad_nx, grad_ny])
     norm = np.linalg.norm(normal)
-    
     if norm > 0:
         return normal / norm
     else:
         return np.array([0.0, 0.0])
+"""
+
+def compute_interface_normal(ix, iy, n_map, delta_n_threshold=1e-6):
+    # 現在の屈折率
+    current_n = n_map[ix, iy]
+    
+    # 隣接セルの屈折率を取得
+    neighbors = []
+    if ix > 0:
+        neighbors.append(n_map[ix - 1, iy])
+    if ix < n_map.shape[0] - 1:
+        neighbors.append(n_map[ix + 1, iy])
+    if iy > 0:
+        neighbors.append(n_map[ix, iy - 1])
+    if iy < n_map.shape[1] - 1:
+        neighbors.append(n_map[ix, iy + 1])
+    
+    # 境界面上に存在するかを判定
+    is_interface = any(abs(n - current_n) > delta_n_threshold for n in neighbors)
+    
+    if not is_interface:
+        return np.array([0.0, 0.0])
+    
+    # 境界面上に存在する場合、中心差分法で法線ベクトルを計算
+    if ix <= 0 or iy <= 0 or ix >= n_map.shape[0] - 1 or iy >= n_map.shape[1] - 1:
+        return np.array([0.0, 0.0])
+
+    # 中心差分法による勾配計算
+    grad_nx = (n_map[ix + 1, iy] - n_map[ix - 1, iy]) / 2
+    grad_ny = (n_map[ix, iy + 1] - n_map[ix, iy - 1]) / 2
+
+    normal = np.array([grad_nx, grad_ny])
+    norm = np.linalg.norm(normal)
+
+    if norm > 0:
+        return normal / norm
+    else:
+        return np.array([0.0, 0.0])
+"""
 
 
 # 可視化
