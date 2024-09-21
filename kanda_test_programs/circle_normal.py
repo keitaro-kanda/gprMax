@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 #* Defin function to make circle
@@ -21,7 +22,7 @@ def circle(center, radius, num_points=100):
 
 
 #* Define function to make input wave
-def initial_wave(position, angle, length=1):
+def initial_wave(position, angle, num):
     """
     Parameters:
     - position: tuple (x, y), starting point of the wave
@@ -33,11 +34,11 @@ def initial_wave(position, angle, length=1):
     - y: np.array, y-coordinates of the wave
     """
 
-    theta = np.linspace(3/2*np.pi - angle, 3/2*np.pi, 10, endpoint=True)
-    x = length * np.cos(theta)
-    y = length * np.sin(theta)
+    theta = np.linspace(3/2*np.pi - angle, 3/2*np.pi, num, endpoint=True)
+    x =  np.cos(theta)
+    y =  np.sin(theta)
 
-    vector_list = np.zeros((10, 2))
+    vector_list = np.zeros((num, 2))
     vector_list[:, 0] = x
     vector_list[:, 1] = y
 
@@ -69,10 +70,13 @@ def refraction_at_surface(source_position, incident, surface_position, n1, n2):
     else:
         intersection = None
 
-    normal = np.array([0, 1])
+    if incident[1] > 0:
+        normal = np.array([0, -1])
+    else:
+        normal = np.array([0, 1])
     R, T = calc_vec(incident, normal, n1, n2)
 
-    return np.array(intersection), t, R, T
+    return intersection, t, R, T
 
 
 
@@ -168,18 +172,18 @@ def calc_vec(incident, normal, epsilon1, epsilon2):
 
 
 
-
+#* Physical constants
+c = 299792458 # speed of light in vacuum [m/s]
 
 #* Make circle
-center = (1.5, 4)
+center = (1.5, 3)
 radius = 0.15
 x_circle, y_circle = circle(center, radius)
 
 
 #* Calculate the surface refraction
 source_position = (1.5, 6)
-incident_wave_vector = initial_wave(source_position, np.pi/180*5, length=1)
-print(incident_wave_vector)
+incident_wave_vector = initial_wave(source_position, np.pi/180*3.988, 15)
 
 surface = 5.0
 
@@ -187,36 +191,40 @@ surface = 5.0
 
 
 #* Plot and calculate
-fig, ax = plt.subplots(figsize=(8,8))
+fig, ax = plt.subplots(1, 3, figsize=(18,8), tight_layout=True)
 
 #* Plot the circle
-ax.plot(x_circle, y_circle, c='k')
+ax[0].plot(x_circle, y_circle, c='k')
+ax[1].plot(x_circle, y_circle, c='k')
 #* Plot the surface
-ax.axhline(y=surface, color='k', linestyle='-')
+ax[0].axhline(y=surface, color='k', linestyle='-')
+ax[1].axhline(y=surface, color='k', linestyle='-')
 #* Plot the source position
-ax.scatter(source_position[0], source_position[1], c='r')
+ax[0].scatter(source_position[0], source_position[1], c='r')
+ax[1].scatter(source_position[0], source_position[1], c='r')
 
 
 
 #* Calculate the ray paths
+total_times = []
+
+
 for i in range(incident_wave_vector.shape[0]):
     #* Source -> Surface
     surface_intersection, distance1, R1, T1 = refraction_at_surface(
         source_position, incident_wave_vector[i], surface, 1, 3)
-    if i==0:
-        print('surface_intersection: ', surface_intersection)
-        print('T1: ', T1)
-        print(' ')
+
 
     #* Surface -> Upper boundary of the circle
-    intersection2, distance2 = compute_circle_intersection(
-        p0=surface_intersection,
-        d=T1,
-        center=center,
-        radius=radius
-    )
-    if i==0:
-        print('intersection2: ', intersection2)
+    if surface_intersection is None:
+        continue
+    else:
+        intersection2, distance2 = compute_circle_intersection(
+            p0=surface_intersection,
+            d=T1,
+            center=center,
+            radius=radius
+        )
 
     if not intersection2 is None:
         normal2 = intersection2 - center # to the outside
@@ -230,15 +238,41 @@ for i in range(incident_wave_vector.shape[0]):
         center=center,
         radius=radius
     )
-    if i==0:
-        print('intercestion3: ', intersection3)
 
     if not intersection3 is None:
         normal3 = - (intersection3 - center) # minus: to the inside
         normal3 = normal3 / np.linalg.norm(normal3)
         R3, T3 = calc_vec(T2, normal3, 9, 3)
 
-    total_distance = distance1 + distance2 + distance3
+
+
+    #* Lower boundary of the circle -> Upper boundary of the circle
+    intersection4, distance4 = compute_circle_intersection(
+        p0=intersection3,
+        d=R3,
+        center=center,
+        radius=radius
+    )
+
+    if not intersection4 is None:
+        normal4 = - (intersection4 - center)
+        normal4 = normal4 / np.linalg.norm(normal4)
+        R4, T4 = calc_vec(R3, normal4, 9, 3)
+
+
+    #* Upper boundary of the circle -> Surface
+    intersection5, distance5, R5, T5 = refraction_at_surface(
+        intersection4, T4, surface, 3, 1)
+    
+
+    #* At height of the source
+    intersection6, distance6, R6, T6 = refraction_at_surface(
+        intersection4, T5, 6, 1, 1)
+
+
+
+    total_time = (distance1 + distance6) / c + (distance2 + distance5) / (c / np.sqrt(3)) + (distance3 + distance4) / (c /np.sqrt(9))
+    total_times.append([intersection3[0], intersection3[1], total_time / 1e-9]) # ns
 
 
     #* 単位ベクトルの長さ調整
@@ -249,75 +283,141 @@ for i in range(incident_wave_vector.shape[0]):
     T2 = T2/10
     R3 = R3/10
     T3 = T3/10
+    R4 = R4/10
+    T4 = T4/10
+    R5 = R5/10
+    T5 = T5/10
+    R6 = R6/10
+    T6 = T6/10
 
-    #* Plot the vectors
-    if i == 0:
-        #* Source
-        ax.arrow(source_position[0], source_position[1], incident_wave_vector[i, 0], incident_wave_vector[i, 1],
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r', label='Incident wave')
-
-        #* Surface
-        ax.arrow(surface_intersection[0] - incident_wave_vector[i, 0], surface_intersection[1] - incident_wave_vector[i, 1],
-                    incident_wave_vector[i, 0], incident_wave_vector[i, 1],
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
-        ax.arrow(surface_intersection[0], surface_intersection[1], T1[0], T1[1],
-                    head_width=0.01, head_length=0.01,  fc='b', ec='b', label='Refracted wave')
-        ax.arrow(surface_intersection[0], surface_intersection[1], R1[0], R1[1],
-                    head_width=0.01, head_length=0.01,  fc='g', ec='g', label='Reflected wave', alpha=0.5)
-
-        #* Upper boundary of the circle
-        ax.arrow(surface_intersection[0] - T1[0], surface_intersection[1] - T1[1], T1[0], T1[1],
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
-        ax.arrow(intersection2[0], intersection2[1], T2[0], T2[1],
-                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
-        ax.arrow(intersection2[0], intersection2[1], R2[0], R2[1],
-                    head_width=0.01, head_length=0.01,  fc='g', ec='g', alpha=0.5)
-
-        #* Lower boundary of the circle
-        ax.arrow(intersection3[0] - T2[0], intersection3[1] - T2[1], T2[0], T2[1],
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
-        ax.arrow(intersection3[0], intersection3[1], T3[0], T3[1],
-                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
-        ax.arrow(intersection3[0], intersection3[1], R3[0], R3[1],
-                    head_width=0.01, head_length=0.01,  fc='g', ec='g')
-    else:
-        #* Source
-        ax.arrow(source_position[0], source_position[1], incident_wave_vector[i, 0], incident_wave_vector[i, 1],
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
-
-        #* Surface
-        ax.arrow(surface_intersection[0] - incident_wave_vector[i, 0], surface_intersection[1] - incident_wave_vector[i, 1],
-                    incident_wave_vector[i, 0], incident_wave_vector[i, 1],
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
-        ax.arrow(surface_intersection[0], surface_intersection[1], T1[0], T1[1],
-                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
-        ax.arrow(surface_intersection[0], surface_intersection[1], R1[0], R1[1],
-                    head_width=0.01, head_length=0.01,  fc='g', ec='g', alpha=0.5)
-
-        #* Upper boundary of the circle
-        ax.arrow(intersection2[0] - T1[0], intersection2[1] - T1[1], T1[0], T1[1],
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
-        ax.arrow(intersection2[0], intersection2[1], T2[0], T2[1],
-                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
-        ax.arrow(intersection2[0], intersection2[1], R2[0], R2[1],
-                    head_width=0.01, head_length=0.01,  fc='g', ec='g', alpha=0.5)
-
-        #* Lower boundary of the circle
-        ax.arrow(intersection3[0] - T2[0], intersection3[1] - T2[1], T2[0], T2[1],
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
-        ax.arrow(intersection3[0], intersection3[1], T3[0], T3[1],
-                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
-        ax.arrow(intersection3[0], intersection3[1], R3[0], R3[1],
-                    head_width=0.01, head_length=0.01,  fc='g', ec='g')
+    arrow_list = [R1, T1, R2, T2, R3, T3, R4, T4, R5, T5, R6, T6]
+    position_list = [surface_intersection, intersection2, intersection3, intersection4, intersection5, intersection6]
 
 
-ax.set_xlim(0, 3)
-ax.set_ylim(3.5, 6.5)
-ax.set_aspect('equal')
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.grid(True)
-ax.legend()
+    #* Source position
+    ax[0].scatter(source_position[0], source_position[1], c='r')
+    ax[0].arrow(source_position[0], source_position[1], incident_wave_vector[i][0], incident_wave_vector[i][1],
+                head_width=0.01, head_length=0.01,  fc='r', ec='r')
+
+    #* Plot the ray arrows
+    for j in range(len(position_list)):
+        if j >= 3:
+            I = arrow_list[(j-1)*2]
+        else:
+            I = arrow_list[j*2-1]
+        R = arrow_list[j*2]
+        T = arrow_list[j*2+1]
+        position = position_list[j]
+
+        if i == 0 and j == 0:
+            #* Incident wave
+            ax[0].arrow(position[0] - I[0], position[1] - I[1], I[0], I[1],
+                        head_width=0.01, head_length=0.01,  fc='r', ec='r', label='Incident wave', alpha=0.5)
+            #* Reflected wave
+            ax[0].arrow(position[0], position[1], R[0], R[1],
+                        head_width=0.01, head_length=0.01,  fc='g', ec='g', alpha=0.5, label='Reflected wave')
+            #* Refracted wave
+            ax[0].arrow(position[0], position[1], T[0], T[1],
+                        head_width=0.01, head_length=0.01,  fc='b', ec='b', label='Refracted wave')
+        elif j ==5:
+            #* Refracted wave
+            ax[0].arrow(position[0], position[1], T[0], T[1],
+                        head_width=0.01, head_length=0.01,  fc='b', ec='b')
+        else:
+            #* Incident wave
+            ax[0].arrow(position[0] - I[0], position[1] - I[1], I[0], I[1],
+                        head_width=0.01, head_length=0.01,  fc='r', ec='r', alpha=0.5)
+            #* Reflected wave
+            ax[0].arrow(position[0], position[1], R[0], R[1],
+                        head_width=0.01, head_length=0.01,  fc='g', ec='g')
+            #* Refracted wave
+            ax[0].arrow(position[0], position[1], T[0], T[1],
+                        head_width=0.01, head_length=0.01,  fc='b', ec='b')
+
+
+    #* Calculate the scatter points
+    scatters = []
+    scatter1 = np.linspace(source_position, surface_intersection, 100)
+    scatters.append(scatter1)
+    scatter2 = np.linspace(surface_intersection, intersection2, 100)
+    scatters.append(scatter2)
+    scatter3 = np.linspace(intersection2, intersection3, 100)
+    scatters.append(scatter3)
+    scatter4 = np.linspace(intersection3, intersection4, 100)
+    scatters.append(scatter4)
+    scatter5 = np.linspace(intersection4, intersection5, 100)
+    scatters.append(scatter5)
+    scatter6 = np.linspace(intersection5, intersection6, 100)
+    scatters.append(scatter6)
+
+    scatters = np.array(scatters)
+
+    #* Calculate the time at each scatter point
+    scatters_flattened = scatters.reshape(-1, 2)  # Reshape for scatter plotting
+
+    total_scatter_points = scatters_flattened.shape[0]  # Number of scatter points
+    time_list = np.linspace(0, total_time, total_scatter_points)  # Time for each point
+    ax[1].scatter(scatters_flattened[:, 0], scatters_flattened[:, 1], c=time_list, cmap='jet', s=1)
+
+
+
+    """
+    #* Plt scatter from source to surface and show the time in color
+    ax[1].scatter(surface_intersection[0], surface_intersection[1], c=total_time, cmap='jet')
+    #* plt scatter from surface to the circle and show the time in color
+    ax[1].scatter(intersection2[0], intersection2[1], c=total_time, cmap='jet')
+    #* plt scatter from the circle to the circle and show the time in color
+    ax[1].scatter(intersection3[0], intersection3[1], c=total_time, cmap='jet')
+    """
+
+total_times = np.array(total_times)
+
+
+ax[0].set_xlim(0, 3)
+ax[0].set_ylim(2.5, 6.5)
+ax[0].set_aspect('equal')
+ax[0].grid(True)
+ax[0].legend()
+ax[0].set_title('Ray paths', fontsize=20)
+ax[0].set_xlabel('x', fontsize=20)
+ax[0].set_ylabel('y', fontsize=20)
+ax[0].tick_params(labelsize=16)
+
+ax[1].set_xlim(0, 3)
+ax[1].set_ylim(2.5, 6.5)
+ax[1].set_aspect('equal')
+ax[1].grid(True)
+ax[1].set_title('Propagation time', fontsize=20)
+ax[1].set_xlabel('x', fontsize=20)
+ax[1].set_ylabel('y', fontsize=20)
+ax[1].tick_params(labelsize=16)
+
+
+#* Add colorbar
+norm = plt.cm.colors.Normalize(vmin=0, vmax=max(total_times[:, 2]))
+divider = make_axes_locatable(ax[1])
+cax = divider.append_axes('right', size='5%', pad=1)
+cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap='jet'), cax=cax, orientation='vertical')
+cbar.set_label('Time [ns]', fontsize=18)
+cbar.ax.tick_params(labelsize=16)
+
+
+#* Calculate and plot the phase lag
+time_list = total_times[:, 2]
+time_list = time_list[1:] # Remove the first element
+time_list = time_list - time_list.min()
+pulse_width = 4
+phase_lag = time_list / pulse_width * 2 * np.pi
+
+ax[2].plot(time_list, phase_lag)
+ax[2].set_title('Phase lag', fontsize=20)
+ax[2].set_xlabel('Lag of time [ns]', fontsize=20)
+ax[2].set_ylabel('Phase [rad]', fontsize=20)
+ax[2].tick_params(labelsize=16)
+ax[2].grid(True)
+
 
 plt.savefig('kanda_test_programs/circle_normal.png')
 plt.show()
+
+print(total_times)
