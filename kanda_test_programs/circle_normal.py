@@ -2,6 +2,80 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+#* Defin function to make circle
+def circle(center, radius, num_points=100):
+    """
+    Parameters:
+    - center: tuple (cx, cy), center of the circle
+    - radius: float, radius of the circle
+    - num_points: int, number of points to make the circle
+
+    Returns:
+    - x: np.array, x-coordinates of the circle
+    - y: np.array, y-coordinates of the circle
+    """
+    theta = np.linspace(0, 2 * np.pi, num_points)
+    x = center[0] + radius * np.cos(theta)
+    y = center[1] + radius * np.sin(theta)
+    return x, y
+
+
+#* Define function to make input wave
+def initial_wave(position, angle, length=1):
+    """
+    Parameters:
+    - position: tuple (x, y), starting point of the wave
+    - angle: float, angle of the wave
+    - length: float, length of the wave
+
+    Returns:
+    - x: np.array, x-coordinates of the wave
+    - y: np.array, y-coordinates of the wave
+    """
+
+    theta = np.linspace(3/2*np.pi - angle, 3/2*np.pi, 10, endpoint=True)
+    x = length * np.cos(theta)
+    y = length * np.sin(theta)
+
+    vector_list = np.zeros((10, 2))
+    vector_list[:, 0] = x
+    vector_list[:, 1] = y
+
+    return vector_list
+
+
+
+#* Define function to calculate the refraction at the surface
+def refraction_at_surface(source_position, incident, surface_position, n1, n2):
+    """
+    Parameters:
+    - source_position: tuple (x, y), starting point of the wave
+    - incident: np.array([dx, dy]), normalized direction vector
+    - surface_position: float, y-coordinate of the surface
+
+    Returns:
+    - intersection: np.array([x, y]), point of intersection
+    - None: if no intersection
+    """
+    # レイの方程式: p = p0 + t*d
+    p0 = np.array(source_position)
+    d = np.array(incident)
+
+    # 平面の方程式: y = surface_position
+    # 代入して解く: p0[1] + t*d[1] = surface_position
+    t = (surface_position - p0[1]) / d[1]
+    if t > 0:
+        intersection = p0 + t * d
+    else:
+        intersection = None
+
+    normal = np.array([0, 1])
+    R, T = calc_vec(incident, normal, n1, n2)
+
+    return np.array(intersection), t, R, T
+
+
+
 #* Define function to calculate the intersection of a ray and a circle
 def compute_circle_intersection(p0, d, center, radius, tol=1e-8):
     """
@@ -57,7 +131,7 @@ def compute_circle_intersection(p0, d, center, radius, tol=1e-8):
 
 
 #* Defin function to calculate the reflection and refraction of light
-def calc_vec(incident, normal, n1, n2):
+def calc_vec(incident, normal, epsilon1, epsilon2):
     """
     Parameters:
     - incident: vector of incident light
@@ -76,6 +150,8 @@ def calc_vec(incident, normal, n1, n2):
     R = R / np.linalg.norm(R)
 
     #* Calculate the refraction vector
+    n1 = np.sqrt(epsilon1)
+    n2 = np.sqrt(epsilon2)
     eta = n2 / n1
     cos_theta_i = -np.dot(normal, incident)
     sin_theta_i_sq = 1 - cos_theta_i**2
@@ -84,117 +160,164 @@ def calc_vec(incident, normal, n1, n2):
         # Total reflection
         T = None
     else:
-        cos_theta_t = np.sqrt(1 - sin_theta_t_sq)
-        T = (1 / eta) * incident + ((1 / eta) * cos_theta_i - cos_theta_t) * normal
+        T = (1 / eta) * incident - 1 / eta * (np.dot(incident, normal) + np.sqrt(eta**2 - 1 + np.dot(incident, normal)**2)) * normal
         T = T / np.linalg.norm(T)
 
     return R, T
 
 
-#* 円のパラメータ
-center = (1.5, 3)  # 円の中心座標
-radius = 0.30       # 円の半径
-surface = 5
-
-# 円を描くための角度の範囲
-theta = np.linspace(0, 2 * np.pi, 100)
-x_circle = center[0] + radius * np.cos(theta)
-y_circle = center[1] + radius * np.sin(theta)
-
-# 法線ベクトルを描画する点の数
-num_vectors = 12  # 例: 12本の法線ベクトルを描画
-delta_angle = 2 * np.pi / num_vectors
-angles = np.linspace(np.pi / 2, np.pi, num_vectors, endpoint=True)
-
-# 入射波
-I = np.array([0, -1])
-I = I / np.linalg.norm(I)
-
-# 屈折率
-regolith = 3.0
-rock = 9.0
-
-# 屈折波の交点を保存するリスト
-refraction_intersections = []
 
 
 
-#* プロットの設定
+
+#* Make circle
+center = (1.5, 4)
+radius = 0.15
+x_circle, y_circle = circle(center, radius)
+
+
+#* Calculate the surface refraction
+source_position = (1.5, 6)
+incident_wave_vector = initial_wave(source_position, np.pi/180*5, length=1)
+print(incident_wave_vector)
+
+surface = 5.0
+
+
+
+
+#* Plot and calculate
 fig, ax = plt.subplots(figsize=(8,8))
 
-# 円をプロット
+#* Plot the circle
 ax.plot(x_circle, y_circle, c='k')
-
-# 表面をプロット
+#* Plot the surface
 ax.axhline(y=surface, color='k', linestyle='-')
-
-# 法線ベクトル、入射波、反射波、屈折波をプロット
-for i, angle in enumerate(angles):
-    # 法線ベクトルの始点（円周上の点）
-    x_start = center[0] + radius * np.cos(angle)
-    y_start = center[1] + radius * np.sin(angle)
-
-    # 法線ベクトルの方向（外向き）
-    n = np.array([np.cos(angle), np.sin(angle)])
-
-    #* 外部からの入射波に対する挙動
-    # 反射波の計算
-    reflected_1, refracted_1 = calc_vec(I, n, regolith, rock)
-
-    # 屈折波が存在する場合、交点を計算
-    if refracted_1 is not None:
-        intersection, distance = compute_circle_intersection(
-            p0=[x_start, y_start],
-            d=refracted_1,
-            center=center,
-            radius=radius
-        )
-
-        # 交点の法線ベクトルを計算
-        normal_new = - (intersection - center) # minus: to the inside
-        normal_new = normal_new / np.linalg.norm(normal_new)
+#* Plot the source position
+ax.scatter(source_position[0], source_position[1], c='r')
 
 
-    #* 屈折波の挙動計算
-    reflected_2, refracted_2 = calc_vec(refracted_1, normal_new, rock, regolith)
 
-    # ベクトルを描画（矢印）
+#* Calculate the ray paths
+for i in range(incident_wave_vector.shape[0]):
+    #* Source -> Surface
+    surface_intersection, distance1, R1, T1 = refraction_at_surface(
+        source_position, incident_wave_vector[i], surface, 1, 3)
+    if i==0:
+        print('surface_intersection: ', surface_intersection)
+        print('T1: ', T1)
+        print(' ')
+
+    #* Surface -> Upper boundary of the circle
+    intersection2, distance2 = compute_circle_intersection(
+        p0=surface_intersection,
+        d=T1,
+        center=center,
+        radius=radius
+    )
+    if i==0:
+        print('intersection2: ', intersection2)
+
+    if not intersection2 is None:
+        normal2 = intersection2 - center # to the outside
+        normal2 = normal2 / np.linalg.norm(normal2)
+        R2, T2 = calc_vec(T1, normal2, 3, 9)
+
+    #* Upper boundary of the circle -> Lower boundary of the circle
+    intersection3, distance3 = compute_circle_intersection(
+        p0=intersection2,
+        d=T2,
+        center=center,
+        radius=radius
+    )
+    if i==0:
+        print('intercestion3: ', intersection3)
+
+    if not intersection3 is None:
+        normal3 = - (intersection3 - center) # minus: to the inside
+        normal3 = normal3 / np.linalg.norm(normal3)
+        R3, T3 = calc_vec(T2, normal3, 9, 3)
+
+    total_distance = distance1 + distance2 + distance3
+
+
+    #* 単位ベクトルの長さ調整
+    incident_wave_vector[i] = incident_wave_vector[i]/10
+    R1 = R1/10
+    T1 = T1/10
+    R2 = R2/10
+    T2 = T2/10
+    R3 = R3/10
+    T3 = T3/10
+
+    #* Plot the vectors
     if i == 0:
-        # 最初のベクトルにのみラベルを付ける
-        ax.arrow(x_start - I[0]/10, y_start - I[1]/10, I[0]/10, I[1]/10,
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r', alpha=0.5, label='Incident wave')
-        ax.arrow(x_start, y_start, reflected_1[0]/10, reflected_1[1]/10,
-                    head_width=0.01, head_length=0.01,  fc='g', ec='g', label='Reflected wave')
-        if refracted_1 is not None:
-            ax.arrow(x_start, y_start, refracted_1[0]/10, refracted_1[1]/10,
-                        head_width=0.01, head_length=0.01,  fc='b', ec='b', label='Refracted wave')
-    else:
-        # 他のベクトルにはラベルを付けない
-        ax.arrow(x_start - I[0]/10, y_start - I[1]/10, I[0]/10, I[1]/10,
-                    head_width=0.01, head_length=0.01, fc='r', ec='r', alpha=0.5)
-        ax.arrow(x_start, y_start, reflected_1[0]/10, reflected_1[1]/10,
-                    head_width=0.01, head_length=0.01, fc='g', ec='g')
-        if refracted_1 is not None:
-            ax.arrow(x_start, y_start, refracted_1[0]/10, refracted_1[1]/10,
-                        head_width=0.01, head_length=0.01, fc='b', ec='b')
-        ax.arrow(intersection[0] - refracted_1[0]/10, intersection[1] - refracted_1[1]/10, refracted_1[0]/10, refracted_1[1]/10,
-                    head_width=0.01, head_length=0.01,  fc='r', ec='r', alpha=0.5)
-        ax.arrow(intersection[0], intersection[1], reflected_2[0]/10, reflected_2[1]/10,
+        #* Source
+        ax.arrow(source_position[0], source_position[1], incident_wave_vector[i, 0], incident_wave_vector[i, 1],
+                    head_width=0.01, head_length=0.01,  fc='r', ec='r', label='Incident wave')
+
+        #* Surface
+        ax.arrow(surface_intersection[0] - incident_wave_vector[i, 0], surface_intersection[1] - incident_wave_vector[i, 1],
+                    incident_wave_vector[i, 0], incident_wave_vector[i, 1],
+                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
+        ax.arrow(surface_intersection[0], surface_intersection[1], T1[0], T1[1],
+                    head_width=0.01, head_length=0.01,  fc='b', ec='b', label='Refracted wave')
+        ax.arrow(surface_intersection[0], surface_intersection[1], R1[0], R1[1],
+                    head_width=0.01, head_length=0.01,  fc='g', ec='g', label='Reflected wave', alpha=0.5)
+
+        #* Upper boundary of the circle
+        ax.arrow(surface_intersection[0] - T1[0], surface_intersection[1] - T1[1], T1[0], T1[1],
+                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
+        ax.arrow(intersection2[0], intersection2[1], T2[0], T2[1],
+                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
+        ax.arrow(intersection2[0], intersection2[1], R2[0], R2[1],
+                    head_width=0.01, head_length=0.01,  fc='g', ec='g', alpha=0.5)
+
+        #* Lower boundary of the circle
+        ax.arrow(intersection3[0] - T2[0], intersection3[1] - T2[1], T2[0], T2[1],
+                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
+        ax.arrow(intersection3[0], intersection3[1], T3[0], T3[1],
+                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
+        ax.arrow(intersection3[0], intersection3[1], R3[0], R3[1],
                     head_width=0.01, head_length=0.01,  fc='g', ec='g')
-        if refracted_2 is not None:
-            ax.arrow(intersection[0], intersection[1], refracted_2[0]/10, refracted_2[1]/10,
-                        head_width=0.01, head_length=0.01,  fc='b', ec='b')
+    else:
+        #* Source
+        ax.arrow(source_position[0], source_position[1], incident_wave_vector[i, 0], incident_wave_vector[i, 1],
+                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
+
+        #* Surface
+        ax.arrow(surface_intersection[0] - incident_wave_vector[i, 0], surface_intersection[1] - incident_wave_vector[i, 1],
+                    incident_wave_vector[i, 0], incident_wave_vector[i, 1],
+                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
+        ax.arrow(surface_intersection[0], surface_intersection[1], T1[0], T1[1],
+                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
+        ax.arrow(surface_intersection[0], surface_intersection[1], R1[0], R1[1],
+                    head_width=0.01, head_length=0.01,  fc='g', ec='g', alpha=0.5)
+
+        #* Upper boundary of the circle
+        ax.arrow(intersection2[0] - T1[0], intersection2[1] - T1[1], T1[0], T1[1],
+                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
+        ax.arrow(intersection2[0], intersection2[1], T2[0], T2[1],
+                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
+        ax.arrow(intersection2[0], intersection2[1], R2[0], R2[1],
+                    head_width=0.01, head_length=0.01,  fc='g', ec='g', alpha=0.5)
+
+        #* Lower boundary of the circle
+        ax.arrow(intersection3[0] - T2[0], intersection3[1] - T2[1], T2[0], T2[1],
+                    head_width=0.01, head_length=0.01,  fc='r', ec='r')
+        ax.arrow(intersection3[0], intersection3[1], T3[0], T3[1],
+                    head_width=0.01, head_length=0.01,  fc='b', ec='b')
+        ax.arrow(intersection3[0], intersection3[1], R3[0], R3[1],
+                    head_width=0.01, head_length=0.01,  fc='g', ec='g')
 
 
-# グラフの見た目を整える
 ax.set_xlim(0, 3)
-ax.set_ylim(2.5, 6.5)
-ax.set_aspect('equal')  # アスペクト比を等しくする
+ax.set_ylim(3.5, 6.5)
+ax.set_aspect('equal')
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.grid(True)
 ax.legend()
 
-# プロットを表示
 plt.savefig('kanda_test_programs/circle_normal.png')
 plt.show()
