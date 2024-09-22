@@ -191,7 +191,7 @@ surface = 5.0
 
 
 #* Plot and calculate
-fig, ax = plt.subplots(1, 3, figsize=(18,8), tight_layout=True)
+fig, ax = plt.subplots(1, 2, figsize=(18,8), tight_layout=True)
 
 #* Plot the circle
 ax[0].plot(x_circle, y_circle, c='k')
@@ -270,9 +270,10 @@ for i in range(incident_wave_vector.shape[0]):
         intersection4, T5, 6, 1, 1)
 
 
-
+    if i == 14:
+        print('distance1:', distance1 + distance2 + distance3 + distance4 + distance5 + distance6)
     total_time = (distance1 + distance6) / c + (distance2 + distance5) / (c / np.sqrt(3)) + (distance3 + distance4) / (c /np.sqrt(9))
-    total_times.append([intersection3[0], intersection3[1], total_time / 1e-9]) # ns
+    total_times.append([intersection6[0], intersection6[1], total_time / 1e-9]) # ns
 
 
     #* 単位ベクトルの長さ調整
@@ -360,21 +361,11 @@ for i in range(incident_wave_vector.shape[0]):
     ax[1].scatter(scatters_flattened[:, 0], scatters_flattened[:, 1], c=time_list, cmap='jet', s=1)
 
 
-
-    """
-    #* Plt scatter from source to surface and show the time in color
-    ax[1].scatter(surface_intersection[0], surface_intersection[1], c=total_time, cmap='jet')
-    #* plt scatter from surface to the circle and show the time in color
-    ax[1].scatter(intersection2[0], intersection2[1], c=total_time, cmap='jet')
-    #* plt scatter from the circle to the circle and show the time in color
-    ax[1].scatter(intersection3[0], intersection3[1], c=total_time, cmap='jet')
-    """
-
 total_times = np.array(total_times)
 
 
-ax[0].set_xlim(0, 3)
-ax[0].set_ylim(2.5, 6.5)
+ax[0].set_xlim(1, 2)
+ax[0].set_ylim(2.5, 3.5)
 ax[0].set_aspect('equal')
 ax[0].grid(True)
 ax[0].legend()
@@ -402,22 +393,32 @@ cbar.set_label('Time [ns]', fontsize=18)
 cbar.ax.tick_params(labelsize=16)
 
 
-#* Calculate and plot the phase lag
-time_list = total_times[:, 2]
-time_list = time_list[1:] # Remove the first element
-time_list = time_list - time_list.min()
-pulse_width = 4
-phase_lag = time_list / pulse_width * 2 * np.pi
-
-ax[2].plot(time_list, phase_lag)
-ax[2].set_title('Phase lag', fontsize=20)
-ax[2].set_xlabel('Lag of time [ns]', fontsize=20)
-ax[2].set_ylabel('Phase [rad]', fontsize=20)
-ax[2].tick_params(labelsize=16)
-ax[2].grid(True)
-
 
 plt.savefig('kanda_test_programs/circle_normal.png')
 plt.show()
 
-print(total_times)
+
+
+
+#* Calculate and plot the phase lag
+x_list = total_times[:, 0]
+time_list = total_times[:, 2]
+lists = np.array([x_list, time_list]).T
+
+#* Sort the lists by x
+lists = lists[lists[:, 0].argsort()]
+
+#lists[:, 1] = lists[:, 1] - np.min(lists[:, 1])
+pulse_width = 4
+phase_lag = time_list / pulse_width * 2 * np.pi
+
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6), tight_layout=True)
+ax.plot(lists[1:, 0], lists[1:, 1])
+ax.set_xlabel('x', fontsize=20)
+ax.set_ylabel('Time lag [ns]', fontsize=20)
+ax.tick_params(labelsize=16)
+ax.grid(True)
+
+plt.savefig('kanda_test_programs/circle_normal_phase.png')
+plt.show()

@@ -36,20 +36,30 @@ def env(data):
 
 multi_overlap = sig + np.roll(sig, int(-0.2e-9/dt)) + np.roll(sig, int(0.1e-9/dt))
 
+time_lag = np.arange(0.01, 1.01, 0.01)
+shifted = sig
+for i in range(len(time_lag)-1):
+    shifted =+ shift(sig, time_lag[i])
 
 #* 重ね合わせる
-fig, ax = plt.subplots(10, 1, figsize=(6, 18), sharex=True, sharey=True, tight_layout=True)
+fig, ax = plt.subplots(2, 1, figsize=(6, 6), sharex=True, sharey=True, tight_layout=True)
 ax[0].plot(t, sig, label='original')
-ax[0].plot(t, env(sig), linestyle = '--', color = 'gray')
+ax[0].plot(t, env(sig), linestyle = '--', color = 'gray', label='envelope')
 ax[0].legend()
-ax[0].grid()
-for i in range (1, 10, 1):
+ax[0].grid(True)
+"""
+for i in range (len(time_lag)-1):
     ax[i].plot(t, shift(sig, i * 0.25), label = f'shit: {i * 0.25} ns')
     ax[i].plot(t, env(shift(sig, i * 0.25)), linestyle = '--', color = 'gray')
     ax[i].legend()
     ax[i].grid()
+"""
+ax[1].plot(t, shifted, label='shifted')
+ax[1].plot(t, env(shifted), linestyle = '--', color = 'gray', label='envelope')
+ax[1].legend()
+ax[1].grid(True)
 
-plt.xlim(0.25, 25) # [ns]
+plt.xlim(0, 15) # [ns]
 
 fig.supxlabel('Time [ns]', fontsize=20)
 fig.supylabel('Normalized amplitude', fontsize=20)
