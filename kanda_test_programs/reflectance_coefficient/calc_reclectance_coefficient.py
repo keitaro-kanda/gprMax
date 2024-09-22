@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 theta_i = np.linspace(0, np.pi/2, 100)
 sin_i = np.sin(theta_i)
 cos_i = np.cos(theta_i)
-epsilon_1 = 3
+epsilon_1 = 9
 n1 = np.sqrt(1 / epsilon_1)
-epsilon_2 = 9
+epsilon_2 = 3
 n2 = np.sqrt(1 / epsilon_2)
 
 
@@ -30,6 +30,6 @@ plt.title(r'$\varepsilon_1 = $' + str(epsilon_1) + r', $\varepsilon_2 = $' + str
 plt.xlabel(r'$\theta_i$')
 plt.ylabel('Intensity')
 
-plt.savefig('kanda_test_programs/reflectance_coefficient/R_T.png')
+plt.savefig('kanda_test_programs/reflectance_coefficient/coefficient' + str(epsilon_1) + '_' + str(epsilon_2) + '.png')
 plt.show()
 
