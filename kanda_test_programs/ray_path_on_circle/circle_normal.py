@@ -47,7 +47,7 @@ def initial_wave(position, angle, num):
 
 
 #* Define function to calculate the refraction at the surface
-def refraction_at_surface(source_position, incident, surface_position, n1, n2):
+def refraction_at_surface(source_position, incident, surface_position, epsilon1, epsilon2):
     """
     Parameters:
     - source_position: tuple (x, y), starting point of the wave
@@ -74,9 +74,13 @@ def refraction_at_surface(source_position, incident, surface_position, n1, n2):
         normal = np.array([0, -1])
     else:
         normal = np.array([0, 1])
-    R, T = calc_vec(incident, normal, n1, n2)
+    R_vec, T_vec = calc_vec(incident, normal, epsilon1, epsilon2)
 
-    return intersection, t, R, T
+
+    #* Calculate the reflection and refraction coefficients
+
+
+    return intersection, t, R_vec, T_vec
 
 
 
