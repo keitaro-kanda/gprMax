@@ -394,7 +394,7 @@ cbar.ax.tick_params(labelsize=16)
 
 
 
-plt.savefig('kanda_test_programs/circle_normal.png')
+plt.savefig('kanda_test_programs/ray_path_on_circle/ray_vector.png')
 plt.show()
 
 
@@ -420,5 +420,5 @@ ax.set_ylabel('Time lag [ns]', fontsize=20)
 ax.tick_params(labelsize=16)
 ax.grid(True)
 
-plt.savefig('kanda_test_programs/circle_normal_phase.png')
+plt.savefig('kanda_test_programs/ray_path_on_circle/travel_time.png')
 plt.show()
