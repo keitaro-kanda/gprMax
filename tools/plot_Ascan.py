@@ -301,7 +301,11 @@ if __name__ == "__main__":
 
     # for closeup option
     closeup_x_start = 25 #[ns]
+<<<<<<< HEAD
     closeup_x_end = 45 #[ns]
+=======
+    closeup_x_end =45 #[ns]
+>>>>>>> 9dde66e7 (三角作成)
     closeup_y_start = -20 # normalized, -1~1
     closeup_y_end = 20 # normalized, -1~1
 
