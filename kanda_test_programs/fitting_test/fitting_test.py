@@ -88,17 +88,16 @@ def fit_ellipse_and_hyperbola(x, y):
 
 
 
-# 楕円
-a = 4
+#* Hyperbola for test
+a = 1
 b = 3
 center_x = 0
 center_y = 0
 rotation = 0
 x = np.linspace(center_x-a, center_x+a, 100, endpoint=True)
-y = np.sqrt(b**2 * (1 - (x - center_x)**2 / a**2) ) + center_y
+y = - b * np.sqrt((x - center_x)**2 / a**2 + 1) + center_y
 
-# ノイズ
-#x += np.random.normal(0, 0.1)
+#* Add noise
 y += np.random.normal(0, 0.1, len(y))
 
 # フィッティング
@@ -147,11 +146,16 @@ for x_val in x:
 fig, ax = plt.subplots()
 ax.scatter(x, y, color='black', s=10, marker='x')
 t = np.linspace(0, 2*np.pi, 100)
-ax.plot(x_vals, y_pos, color='blue')
+ax.plot(x_vals, y_neg, color='blue')
 
 ax.set_aspect('equal')
 ax.set_xlim(center_x-a-1, center_x+a+1)
-ax.set_ylim(center_y-1, center_y+b+1)
+#ax.set_ylim(center_y-1, center_y+b+1)
 ax.grid(True)
 
+
+output_dir = 'kanda_test_programs/fitting_test'
+output_name = f'a_{a}_b_{b}.png'
+output_path = f'{output_dir}/{output_name}'
+plt.savefig(output_path)
 plt.show()
