@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from numpy.linalg import svd, eig, inv
 
 
-
+"""
 def fit_ellipse(x, y):
     # Build design matrix
     D = np.vstack([x**2, x*y, y**2, x, y, np.ones(len(x))]).T
@@ -27,6 +27,8 @@ def fit_ellipse(x, y):
     a = gevec[:, neg_idx]
     
     return a
+"""
+
 
 
 def fit_ellipse_and_hyperbola(x, y):
@@ -45,16 +47,15 @@ def fit_ellipse_and_hyperbola(x, y):
     
     # S3のランクをテスト
     Us3, Ss3, Vs3 = svd(S3)
-    condNrs = np.diag(Ss3) / Ss3[0]
-    print(condNrs)
+    condNrs = Ss3 / Ss3[0]
+    print("Condition numbers:", condNrs)
 
-        # 対角成分を抽出
-    diag_condNrs = np.diag(condNrs)
-
-    epsilon = np.finfo(float).eps
-    if diag_condNrs[2] < epsilon:
+    #epsilon = np.finfo(float).eps
+    epsilon = 1e-10
+    if condNrs[2] < epsilon:
         print('Warning: S3 is degenerate')
         return None, None
+
 
     # 制約行列とその逆行列を定義
     C = np.array([[0, 0, -2], [0, 1, 0], [-2, 0, 0]])
@@ -65,8 +66,6 @@ def fit_ellipse_and_hyperbola(x, y):
     S = Ci @ (S1 - S2 @ T)
     
     evals, evec = eig(S)
-    print(evec)
-    print(evals)
     
     # 制約値を評価してソート
     cond = evec[1, :] ** 2 - 4 * (evec[0, :] * evec[2, :])
@@ -88,74 +87,127 @@ def fit_ellipse_and_hyperbola(x, y):
 
 
 
-#* Hyperbola for test
-a = 1
-b = 3
-center_x = 0
-center_y = 0
-rotation = 0
-x = np.linspace(center_x-a, center_x+a, 100, endpoint=True)
-y = - b * np.sqrt((x - center_x)**2 / a**2 + 1) + center_y
+def extract_hyperbola_parameters(coeffs):
+    A, B, C, D, E, F = coeffs
 
-#* Add noise
-y += np.random.normal(0, 0.1, len(y))
+    # 回転角の計算
+    theta = 0.5 * np.arctan2(B, A - C)
+
+    # 回転行列
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+
+    # 行列形式での計算
+    M = np.array([[A, B/2], [B/2, C]])
+    offset = np.array([D/2, E/2])
+
+    # 中心座標の計算
+    center = -np.linalg.inv(M) @ offset
+
+    # 座標の移動
+    x0, y0 = center
+
+    # 係数の再計算
+    F_center = A*x0**2 + B*x0*y0 + C*y0**2 + D*x0 + E*y0 + F
+
+    # 軸長の計算
+    numerator = 2 * F_center
+    denom_x = A * cos_t**2 + B * cos_t * sin_t + C * sin_t**2
+    denom_y = A * sin_t**2 - B * cos_t * sin_t + C * cos_t**2
+
+    # 軸長の計算
+    a = np.sqrt(np.abs(numerator / denom_y))
+    b = np.sqrt(np.abs(numerator / denom_x))
+
+
+    return a, b, x0, y0, theta
+
+def extract_hyperbola_parameters_no_rotation(coeffs):
+    A, B, C, D, E, F = coeffs
+
+    # B をゼロと仮定
+    B = 0
+
+    # 中心座標の計算
+    x0 = -D / (2 * A)
+    y0 = -E / (2 * C)
+
+    # 定数項の再計算
+    F_center = A*x0**2 + C*y0**2 + D*x0 + E*y0 + F
+
+    # 軸長の計算
+    a = np.sqrt(np.abs(-F_center / A))
+    b = np.sqrt(np.abs(-F_center / C))
+
+    # 回転角はゼロ
+    theta = 0
+
+    return a, b, x0, y0, theta
+
+
+
+
+
+# データ生成（テスト用）
+t0_true = 80 # [ns]
+x0_true = 0 # [m]
+c = 0.299792458 # [m/ns]
+epsilon_r = 3.0
+v_true = c / np.sqrt(epsilon_r) # [m/ns]
+R_true = 0.15 # [m]
+
+def hyperbola_model(x, t0, x0, epsilon_r, R):
+    """
+    x: [m], array-like
+    t0: [ns], float
+    x0: [m], float
+    epsilon_r: dimensionless, float
+    R: [m], float
+    """
+
+    c = 0.299792458 # [m/ns]
+    v = c / np.sqrt(epsilon_r)
+    return   2 / v * (np.sqrt((v * t0 / 2 + R)**2 + (x - x0)**2) - R)
+
+
+#x_data = np.linspace(-2.5, 2.5, 100)
+x_data = np.arange(-2.5, 2.5, 0.036)
+#t_data = hyperbola_model(x_data, t0_true, x0_true, epsilon_r, R_true)
+t_data = hyperbola_model(x_data, 100, 0, 3.0, 0.15)
+noise = np.random.normal(0, 1, size=t_data.shape) # [ns]
+t_data += noise
+
+
 
 # フィッティング
-ellipse_fit, hyperbola_fit = fit_ellipse_and_hyperbola(x, y)
-print('ellipse: ', ellipse_fit)
-print('hyperbola: ', hyperbola_fit)
+ellipse_fit, hyperbola_fit = fit_ellipse_and_hyperbola(x_data, t_data)
+print('Fitted coefficeints:', hyperbola_fit)
+
+a_fit, b_fit, x0_fit, t0_fit, theta_fit = extract_hyperbola_parameters(hyperbola_fit)
+#a_fit, b_fit, x0_fit, t0_fit, theta_fit = extract_hyperbola_parameters_no_rotation(hyperbola_fit)
+print(f'Fitted parameters: a={a_fit}, b={b_fit}, x0={x0_fit}, t0={t0_fit}, theta={theta_fit}')
+print(' ')
 
 
-def solve_y(parameter_array, x_val):
-    a, b, c, d, e, f = parameter_array
-    # 二次方程式 a y^2 + (bx + e)y + (cx^2 + dx + f) = 0 を解く
-    A = c
-    B = b * x_val + e
-    C = a * x_val**2 + d * x_val + f
+#* Calculate v and R
+R_estimated = (a_fit - t0_fit) * b_fit / a_fit
+v_estimated = 2 * b_fit / a_fit
+print(f'Estimated parameters: R={R_estimated} [m], v={v_estimated} [m/ns]')
 
-    # 判別式を計算
-    discriminant = B**2 - 4 * A * C
-
-    if discriminant < 0:
-        return None  # 実数解が存在しない場合
-
-    # 二次方程式の解
-    y1 = (-B + np.sqrt(discriminant)) / (2 * A)
-    y2 = (-B - np.sqrt(discriminant)) / (2 * A)
-    
-    return y1, y2
-
-
-# 解を求める
-y_pos = []
-y_neg = []
-x_vals = []
-
-x_fit = np.arange(-5, 5, 0.01)
-
-for x_val in x:
-    solution = solve_y(ellipse_fit, x_val)
-    if solution:
-        y1, y2 = solution
-        y_pos.append(y1)
-        y_neg.append(y2)
-        x_vals.append(x_val)
+#* Make best fit hyperbola
+t_fit = hyperbola_model(x_data, t0_fit, x0_fit, v_estimated, R_estimated)
 
 
 # Plot
 fig, ax = plt.subplots()
-ax.scatter(x, y, color='black', s=10, marker='x')
-t = np.linspace(0, 2*np.pi, 100)
-ax.plot(x_vals, y_neg, color='blue')
+ax.scatter(x_data, t_data , color='black', s=10, marker='x', label='Data')
+ax.plot(x_data, t_fit, color='red', label='Best fit')
 
-ax.set_aspect('equal')
-ax.set_xlim(center_x-a-1, center_x+a+1)
-#ax.set_ylim(center_y-1, center_y+b+1)
 ax.grid(True)
-
+ax.set_xlabel('x [m]')
+ax.set_ylabel('t [ns]')
+#ax.set_ylim(np.max(t_data) + 10, 0)
+ax.legend()
 
 output_dir = 'kanda_test_programs/fitting_test'
-output_name = f'a_{a}_b_{b}.png'
-output_path = f'{output_dir}/{output_name}'
-plt.savefig(output_path)
 plt.show()
