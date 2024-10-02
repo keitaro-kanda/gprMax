@@ -2,6 +2,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.linalg import svd, eig, inv
 
+
+
+# データ生成（テスト用）
+t0_true = 70  # [ns]
+x0_true = 0   # [m]
+v_true = 0.299792458 / np.sqrt(4.0) # [m/ns]
+R_true = 0.30 # [m]
+
+def hyperbola_model(x, t0, x0, v, R):
+    return 2 / v * (np.sqrt((v * t0 / 2 + R)**2 + (x - x0)**2) - R)
+
+
+x_data = np.arange(x0_true-2.50, x0_true+2.50, 0.036) # CE-4, [cm]
+t_data = hyperbola_model(x_data, t0_true, x0_true, v_true, R_true)
+noise = np.random.normal(0, 0.1, size=t_data.shape)  # ノイズレベルを調整
+#t_data = t_data + noise
+
+
+
 def fit_ellipse_and_hyperbola(x, y):
     # xとyはカラムベクトルであることが仮定される
     x2 = x ** 2
@@ -44,17 +63,16 @@ def fit_ellipse_and_hyperbola(x, y):
     print('condVals:', condVals)
 
 
+    """
     # 双曲線解を取得
-    #idx = np.argmax(cond)  # 最大の cond を持つものを選ぶ
-    #alpha1 = evec[:, idx] # 双曲線の係数，固有ベクトルを取得
-    #alpha2 = T @ alpha1 # 1次項の係数を計算
-    #hyperbola = np.concatenate([alpha1, alpha2])
+    idx = np.argmax(cond)  # 最大の cond を持つものを選ぶ
+    alpha1 = evec[:, idx] # 双曲線の係数，固有ベクトルを取得
+    alpha2 = T @ alpha1 # 1次項の係数を計算
+    hyperbola = np.concatenate([alpha1, alpha2])
+    """
 
     # 双曲線解を取得
-    #ke = condVals[condVals < 0]
-    #ki = condVals[condVals > 0]
     possibleHs = condVals[1:3] + condVals[0]
-    #possibleHs = ke + ki
     possibleHs = possibleHs[possibleHs > 0]
     minDiffAt = np.argmin(np.abs(possibleHs))
     minDiffAt = np.argmin(possibleHs)
@@ -78,16 +96,6 @@ def extract_hyperbola_parameters_vertical(coeffs):
         print("This conic is not a hyperbola.")
         return None
 
-    """
-    # 回転角の計算
-    theta = 0.5 * np.arctan2(B, A - C)
-    print('theta in degrees:', np.degrees(theta))
-
-    # 回転角が小さい場合はゼロと仮定
-    if np.isclose(theta, 0):
-        theta = 0
-        print('theta is close to zero.')
-    """
 
     # 行列形式での計算
     M = np.array([[A, B/2], [B/2, C]])
@@ -129,70 +137,9 @@ def extract_hyperbola_parameters_vertical(coeffs):
     y0 = - (E_new / (2 * C_new))
 
 
-    """
-    offset = np.array([D/2, E/2])
-
-    # 中心座標の計算
-    center = -np.linalg.inv(M) @ offset
-    x0, y0 = center
-
-    # 係数の再計算
-    F_center = A*x0**2 + B*x0*y0 + C*y0**2 + D*x0 + E*y0 + F
-    print('F_center:', F_center)
-
-    # 軸長の計算（開口が y 軸方向の場合）
-    numerator = 2 * F_center
-    denom_y = A * np.sin(theta)**2 - B * np.sin(theta) * np.cos(theta) + C * np.cos(theta)**2
-    denom_x = A * np.cos(theta)**2 + B * np.sin(theta) * np.cos(theta) + C * np.sin(theta)**2
-    print('denom_y:', denom_y)
-
-    a = np.sqrt(np.abs(numerator / denom_y))
-    b = np.sqrt(np.abs(numerator / denom_x))
-    """
-    """
-
-
-    # 回転行列
-    cos_t = np.cos(theta)
-    sin_t = np.sin(theta)
-    rotation_matrix = np.array([[cos_t, sin_t], [-sin_t, cos_t]])
-
-    # 変数の置き換え
-    A_ = A * cos_t**2 + B * cos_t * sin_t + C * sin_t**2
-    B_ = 0
-    C_ = A * sin_t**2 - B * cos_t * sin_t + C * cos_t**2
-    D_ = D * cos_t + E * sin_t
-    E_ = -D * sin_t + E * cos_t
-    F_ = F
-
-    # 中心座標を計算
-    denom = 2 * (A_ * C_)
-    x0 = (C_ * D_ - B_ * E_) / denom
-    y0 = (A_ * E_ - B_ * D_) / denom
-
-    # 軸長を計算
-    numerator = 2 * (A_ * E_**2 + C_ * D_**2 - B_ * D_ * E_) - 4 * (A_ * C_ * F_)
-    denom_x = discriminant * (C_**2)
-    denom_y = discriminant * (A_**2)
-    a = np.sqrt(np.abs(numerator / denom_x))
-    b = np.sqrt(np.abs(numerator / denom_y))
-    """
-
     return a, b, x0, y0
-# データ生成（テスト用）
-t0_true = 70  # [ns]
-x0_true = 0   # [m]
-v_true = 29.9792458 / np.sqrt(4.0) # [cm/ns]
-R_true = 30 # [cm]
-
-def hyperbola_model(x, t0, x0, v, R):
-    return 2 / v * (np.sqrt((v * t0 / 2 + R)**2 + (x - x0)**2) - R)
 
 
-x_data = np.arange(x0_true-250, x0_true+250, 3.6) # CE-4, [cm]
-t_data = hyperbola_model(x_data, t0_true, x0_true, v_true, R_true)
-noise = np.random.normal(0, 0.1, size=t_data.shape)  # ノイズレベルを調整
-#t_data = t_data + noise
 
 # フィッティング
 hyperbola_fit = fit_ellipse_and_hyperbola(x_data, t_data)
@@ -267,7 +214,7 @@ else:
     ax.plot(x_data, y_pos, color='green', label='y_pos', linestyle='--')
 
     ax.grid(True)
-    ax.set_xlabel('x [cm]')
+    ax.set_xlabel('x [m]')
     ax.set_ylabel('t [ns]')
     ax.legend()
     plt.show()
