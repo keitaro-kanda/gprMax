@@ -8,7 +8,7 @@ from numpy.linalg import svd, eig, inv
 t0_true = 70  # [ns]
 x0_true = 0   # [m]
 v_true = 0.299792458 / np.sqrt(4.0) # [m/ns]
-R_true = 0.30 # [m]
+R_true = 0.15 # [m], 半径
 
 def hyperbola_model(x, t0, x0, v, R):
     return 2 / v * (np.sqrt((v * t0 / 2 + R)**2 + (x - x0)**2) - R)
@@ -56,11 +56,34 @@ def fit_ellipse_and_hyperbola(x, y):
     print('evec: \n', evec)
 
     # 制約値を評価してソート
-    cond = evec[1, :] ** 2 - 4 * (evec[0, :] * evec[2, :])
-    print('cond:', cond)
+    cond = evec[1, :] ** 2 - 4 * evec[0, :] * evec[2, :]
     condVals = np.sort(cond)
-    #condVals = cond
-    print('condVals:', condVals)
+    print('condVals: \n', condVals)
+
+    """
+    # Compute the discriminant for each eigenvector
+    cond = evec[1, :] ** 2 - 4 * evec[0, :] * evec[2, :]
+
+    # Find indices where the conic is a hyperbola (cond > 0)
+    hyperbola_indices = np.where(cond > 0)[0]
+
+    if len(hyperbola_indices) == 0:
+        print("No hyperbola solution found.")
+        return None, None
+
+    # Select the index with the largest positive discriminant
+    idx = hyperbola_indices[np.argmax(cond[hyperbola_indices])]
+
+    # Get the corresponding eigenvector
+    alpha1 = evec[:, idx]
+
+    # Compute the first-order coefficients
+    alpha2 = T @ alpha1
+
+    # Combine to get the full set of coefficients
+    hyperbola = np.concatenate([alpha1, alpha2])
+    """
+
 
 
     """
@@ -72,7 +95,7 @@ def fit_ellipse_and_hyperbola(x, y):
     """
 
     # 双曲線解を取得
-    possibleHs = condVals[1:3] + condVals[0]
+    possibleHs = condVals[1:2] + condVals[0]
     possibleHs = possibleHs[possibleHs > 0]
     minDiffAt = np.argmin(np.abs(possibleHs))
     minDiffAt = np.argmin(possibleHs)
@@ -82,8 +105,20 @@ def fit_ellipse_and_hyperbola(x, y):
     alpha2 = T @ alpha1
     hyperbola = np.concatenate([alpha1, alpha2])
 
+    alpha01 = evec[:, 0]
+    alpha02 = T @ alpha01
+    hyperbola0 = np.concatenate([alpha01, alpha02])
 
-    return hyperbola
+    alpha11 = evec[:, 1]
+    alpha12 = T @ alpha11
+    hyperbola1 = np.concatenate([alpha11, alpha12])
+
+    alpha21 = evec[:, 2]
+    alpha22 = T @ alpha21
+    hyperbola2 = np.concatenate([alpha21, alpha22])
+
+
+    return hyperbola0, hyperbola1, hyperbola2
 
 
 
@@ -94,55 +129,52 @@ def extract_hyperbola_parameters_vertical(coeffs):
     discriminant = B**2 - 4 * A * C
     if discriminant <= 0:
         print("This conic is not a hyperbola.")
-        return None
+        return None, None, None, None
+
+    else:
+        # 行列形式での計算
+        M = np.array([[A, B/2], [B/2, C]])
+
+        # Mの固有値，固有ベクトルを計算
+        eigvals, eigvecs = np.linalg.eig(M)
+        # 正規化
+        eigvecs = eigvecs / np.linalg.norm(eigvecs, axis=0)
+        print('eigvals:', eigvals)
+        print('eigvecs:', eigvecs)
 
 
-    # 行列形式での計算
-    M = np.array([[A, B/2], [B/2, C]])
+        # x, yをX, Yに変換
+        new_2nd_order_coeffs = eigvecs.T @ M @ eigvecs
+        A_new = new_2nd_order_coeffs[0, 0]
+        B_new = new_2nd_order_coeffs[0, 1]
+        C_new = new_2nd_order_coeffs[1, 1]
+        print('A_new:', A_new)
+        print('B_new:', B_new)
+        print('C_new:', C_new)
+        print(' ')
 
-    # Mの固有値，固有ベクトルを計算
-    eigvals, eigvecs = np.linalg.eig(M)
-    # 正規化
-    eigvecs = eigvecs / np.linalg.norm(eigvecs, axis=0)
-    print('eigvals:', eigvals)
-    print('eigvecs:', eigvecs)
+        # 1次項の係数を計算
+        new_1st_order_coeffs = [D, E] @ eigvecs
+        D_new = new_1st_order_coeffs[0]
+        E_new = new_1st_order_coeffs[1]
+        print('D_new:', D_new)
+        print('E_new:', E_new)
 
+        # 平方完成
+        F_new = (C_new * D_new**2 + A_new * E_new**2 - 4 * A_new * C_new * F) / (4 * A_new * C_new)
+        print('F_new:', F_new)
+        a = np.sqrt(np.abs(F_new / C_new))
+        b = np.sqrt(np.abs(F_new / A_new))
+        print('a:', a)
+        print('b:', b)
 
-    # x, yをX, Yに変換
-    new_2nd_order_coeffs = eigvecs.T @ M @ eigvecs
-    A_new = new_2nd_order_coeffs[0, 0]
-    B_new = new_2nd_order_coeffs[0, 1]
-    C_new = new_2nd_order_coeffs[1, 1]
-    print('A_new:', A_new)
-    print('B_new:', B_new)
-    print('C_new:', C_new)
-    print(' ')
-
-    # 1次項の係数を計算
-    new_1st_order_coeffs = [D, E] @ eigvecs
-    D_new = new_1st_order_coeffs[0]
-    E_new = new_1st_order_coeffs[1]
-    print('D_new:', D_new)
-    print('E_new:', E_new)
-
-    # 平方完成
-    F_new = (C_new * D_new**2 + A_new * E_new**2 - 4 * A_new * C_new * F) / (4 * A_new * C_new)
-    print('F_new:', F_new)
-    a = np.sqrt(np.abs(F_new / C_new))
-    b = np.sqrt(np.abs(F_new / A_new))
-    print('a:', a)
-    print('b:', b)
-
-    x0 = - (D_new / (2 * A_new))
-    y0 = - (E_new / (2 * C_new))
+        x0 = - (D_new / (2 * A_new))
+        y0 = - (E_new / (2 * C_new))
 
 
-    return a, b, x0, y0
+        return a, b, x0, y0
 
 
-
-# フィッティング
-hyperbola_fit = fit_ellipse_and_hyperbola(x_data, t_data)
 
 def solve_y(parameter_array, x_val):
     a, b, c, d, e, f = parameter_array
@@ -165,56 +197,87 @@ def solve_y(parameter_array, x_val):
 
 
 # 解を求める
-y_pos = []
-y_neg = []
-x_vals = []
+def calc_y(parameter_array, x_val):
+    y_pos = []
+    y_neg = []
 
-x_fit = np.arange(-5, 5, 0.01)
+    for x_val in x_data:
+        solution = solve_y(parameter_array, x_val)
+        if solution:
+            y1, y2 = solution
+            y_pos.append(y1)
+            y_neg.append(y2)
 
-for x_val in x_data:
-    solution = solve_y(hyperbola_fit, x_val)
-    if solution:
-        y1, y2 = solution
-        y_pos.append(y1)
-        y_neg.append(y2)
-        x_vals.append(x_val)
-if hyperbola_fit is None:
-    print("Hyperbola fitting failed.")
-else:
-    print('Fitted coefficients:', hyperbola_fit)
+    return  y_pos, y_neg
+
+
+
+
+# フィッティング
+hyperbola_fit0, hyperbola_fit1, hyperbola_fit2 = fit_ellipse_and_hyperbola(x_data, t_data)
+
+print('------------------------------------')
+a_fit0, b_fit0, x0_fit0, y0_fit0 = extract_hyperbola_parameters_vertical(hyperbola_fit0)
+print(f'Fitted parameters: a={a_fit0}, b={b_fit0}, x0={x0_fit0}, y0={y0_fit0}')
+if not a_fit0 is None:
+    t0_fit0 = a_fit0 - y0_fit0
+    print('t0_fit0:', t0_fit0)
+
+    v_estimated0 = 2 * b_fit0 / a_fit0
+    R_estimated0 = (a_fit0 - t0_fit0) * b_fit0 / a_fit0
     print(' ')
 
+    y_pos0, y_neg0 = calc_y(hyperbola_fit0, x_data)
 
-    a_fit, b_fit, x0_fit, y0_fit = extract_hyperbola_parameters_vertical(hyperbola_fit)
-    print(f'Fitted parameters: a={a_fit}, b={b_fit}, x0={x0_fit}, t0={y0_fit}')
+print('------------------------------------')
+a_fit1, b_fit1, x0_fit1, y0_fit1 = extract_hyperbola_parameters_vertical(hyperbola_fit1)
+print(f'Fitted parameters: a={a_fit1}, b={b_fit1}, x0={x0_fit1}, y0={y0_fit1}')
+if not a_fit1 is None:
+    t0_fit1 = a_fit1 - y0_fit1
+    print('t0_fit1:', t0_fit1)
+
+    v_estimated1 = 2 * b_fit1 / a_fit1
+    R_estimated1 = (a_fit1 - t0_fit1) * b_fit1 / a_fit1
+    print(f'Estimated parameters: R={R_estimated1} [m], v={v_estimated1} [m/ns]')
     print(' ')
 
-    t0_fit = a_fit - y0_fit
-    print('t0_fit:', t0_fit)
-    print('x0_fit:', x0_fit)
+    t_fit1 = hyperbola_model(x_data, t0_fit1, x0_fit1, v_estimated1, R_estimated1)
 
-    #* Asymptotes of hyperbola
-    y_asymptote_pos = (b_fit / a_fit) * (x_data - x0_fit) + y0_fit
-    y_asymptote_neg = -(b_fit / a_fit) * (x_data - x0_fit) + y0_fit
+    y_pos1, y_neg1 = calc_y(hyperbola_fit1, x_data)
 
-    #* Calculate v and R
-    v_estimated = 2 * b_fit / a_fit
-    R_estimated = (a_fit - t0_fit) * b_fit / a_fit
-    print(f'Estimated parameters: R={R_estimated} [m], v={v_estimated} [m/ns]')
+print('------------------------------------')
+a_fit2, b_fit2, x0_fit2, y0_fit2 = extract_hyperbola_parameters_vertical(hyperbola_fit2)
+print(f'Fitted parameters: a={a_fit2}, b={b_fit2}, x0={x0_fit2}, y0={y0_fit2}')
+if not a_fit2 is None:
+    t0_fit2 = a_fit2 - y0_fit2
+    print('t0_fit2:', t0_fit2)
 
-    #* Make best fit hyperbola
+    v_estimated2 = 2 * b_fit2 / a_fit2
+    R_estimated2 = (a_fit2 - t0_fit2) * b_fit2 / a_fit2
+    print(f'Estimated parameters: R={R_estimated2} [m], v={v_estimated2} [m/ns]')
+    print(' ')
 
-    t_fit = hyperbola_model(x_data, t0_fit, x0_fit, v_estimated, R_estimated)
+    t_fit2 = hyperbola_model(x_data, t0_fit2, x0_fit2, v_estimated2, R_estimated2)
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(10, 8))
-    ax.scatter(x_data, t_data , color='black', s=10, marker='x', label='Data')
-    ax.plot(x_data, t_fit, color='red', label='fit')
-    #ax.plot(x_data, y_neg, color='blue', label='y_neg')
-    ax.plot(x_data, y_pos, color='green', label='y_pos', linestyle='--')
+    y_pos2, y_neg2 = calc_y(hyperbola_fit2, x_data)
 
-    ax.grid(True)
-    ax.set_xlabel('x [m]')
-    ax.set_ylabel('t [ns]')
-    ax.legend()
-    plt.show()
+
+
+
+#* Plot
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.scatter(x_data, t_data , color='black', s=10, marker='x', label='Data')
+
+ax.plot(x_data, t_fit1, color='red', label='fit 1')
+ax.plot(x_data, y_pos1, color='green', label='y_pos', linestyle='--')
+
+ax.plot(x_data, t_fit2, color='blue', label='fit 2')
+ax.plot(x_data, y_pos2, color='purple', label='y_pos', linestyle='--')
+
+ax.grid(True)
+ax.set_xlabel('x [m]')
+ax.set_ylabel('t [ns]')
+ax.legend()
+
+ax.set_ylim(t0_true + 10, 0)
+plt.show()
