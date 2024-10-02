@@ -19,7 +19,6 @@ def fit_ellipse_and_hyperbola(x, y):
     # S3のランクをテスト
     Us3, Ss3, Vs3 = svd(S3)
     condNrs = Ss3 / Ss3[0]
-    print("Condition numbers:", condNrs)
 
     epsilon = 1e-10
     if condNrs[2] < epsilon:
@@ -40,7 +39,6 @@ def fit_ellipse_and_hyperbola(x, y):
     cond = evec[1, :] ** 2 - 4 * (evec[0, :] * evec[2, :])
     condVals = np.sort(cond)
 
-    print(cond)
 
     # 双曲線解を取得
     #idx = np.argmax(cond)  # 最大の cond を持つものを選ぶ
@@ -80,11 +78,13 @@ def extract_hyperbola_parameters_vertical(coeffs):
 
     # 係数の再計算
     F_center = A*x0**2 + B*x0*y0 + C*y0**2 + D*x0 + E*y0 + F
+    print('F_center:', F_center)
 
     # 軸長の計算（開口が y 軸方向の場合）
     numerator = 2 * F_center
     denom_y = A * np.sin(theta)**2 - B * np.sin(theta) * np.cos(theta) + C * np.cos(theta)**2
     denom_x = A * np.cos(theta)**2 + B * np.sin(theta) * np.cos(theta) + C * np.sin(theta)**2
+    print('denom_y:', denom_y)
 
     a = np.sqrt(np.abs(numerator / denom_y))
     b = np.sqrt(np.abs(numerator / denom_x))
@@ -126,7 +126,7 @@ def solve_y(parameter_array, x_val):
     # 二次方程式の解
     y1 = (-B + np.sqrt(discriminant)) / (2 * A)
     y2 = (-B - np.sqrt(discriminant)) / (2 * A)
-    
+
     return y1, y2
 
 
@@ -148,8 +148,17 @@ if hyperbola_fit is None:
     print("Hyperbola fitting failed.")
 else:
     print('Fitted coefficients:', hyperbola_fit)
-    a_fit, b_fit, x0_fit, t0_fit, theta_fit = extract_hyperbola_parameters_vertical(hyperbola_fit)
-    print(f'Fitted parameters: a={a_fit}, b={b_fit}, x0={x0_fit}, t0={t0_fit}, theta={theta_fit}')
+    print(' ')
+
+    a_fit, b_fit, x0_fit, y0_fit, theta_fit = extract_hyperbola_parameters_vertical(hyperbola_fit)
+    print(f'Fitted parameters: a={a_fit}, b={b_fit}, x0={x0_fit}, t0={y0_fit}, theta={theta_fit}')
+    print(' ')
+
+    t0_fit = y0_fit - a_fit
+
+    #* Asymptotes of hyperbola
+    y_asymptote_pos = (b_fit / a_fit) * (x_data - x0_fit) + y0_fit
+    y_asymptote_neg = -(b_fit / a_fit) * (x_data - x0_fit) + y0_fit
 
     #* Calculate v and R
     v_estimated = 2 * b_fit / a_fit
@@ -157,13 +166,16 @@ else:
     print(f'Estimated parameters: R={R_estimated} [m], v={v_estimated} [m/ns]')
 
     #* Make best fit hyperbola
+
     t_fit = hyperbola_model(x_data, t0_fit, x0_fit, v_estimated, R_estimated)
 
     # Plot
     fig, ax = plt.subplots()
     ax.scatter(x_data, t_data_noisy , color='black', s=10, marker='x', label='Data')
     ax.plot(x_data, t_fit, color='red', label='Best fit')
-    ax.plot(x_vals, y_pos, color='blue', label='Hyperbola')
+    ax.plot(x_data, y_pos, color='blue', label='Hyperbola')
+    ax.plot(x_data, y_asymptote_pos, color='green', label='Asymptote')
+    ax.plot(x_data, y_asymptote_neg, color='green')
 
     ax.grid(True)
     ax.set_xlabel('x [m]')
