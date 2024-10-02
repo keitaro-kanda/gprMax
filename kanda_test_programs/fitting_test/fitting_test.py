@@ -34,10 +34,14 @@ def fit_ellipse_and_hyperbola(x, y):
     S = Ci @ (S1 - S2 @ T)
 
     evals, evec = eig(S)
+    print('evec: \n', evec)
 
     # 制約値を評価してソート
     cond = evec[1, :] ** 2 - 4 * (evec[0, :] * evec[2, :])
+    print('cond:', cond)
     condVals = np.sort(cond)
+    #condVals = cond
+    print('condVals:', condVals)
 
 
     # 双曲線解を取得
@@ -47,11 +51,19 @@ def fit_ellipse_and_hyperbola(x, y):
     #hyperbola = np.concatenate([alpha1, alpha2])
 
     # 双曲線解を取得
+    #ke = condVals[condVals < 0]
+    #ki = condVals[condVals > 0]
     possibleHs = condVals[1:3] + condVals[0]
+    #possibleHs = ke + ki
+    possibleHs = possibleHs[possibleHs > 0]
     minDiffAt = np.argmin(np.abs(possibleHs))
+    minDiffAt = np.argmin(possibleHs)
+    print('minDiffAt:', minDiffAt)
     alpha1 = evec[:, minDiffAt + 1]
+    print('alpha1: \n', alpha1)
     alpha2 = T @ alpha1
     hyperbola = np.concatenate([alpha1, alpha2])
+
 
     return hyperbola
 
@@ -60,16 +72,64 @@ def fit_ellipse_and_hyperbola(x, y):
 def extract_hyperbola_parameters_vertical(coeffs):
     A, B, C, D, E, F = coeffs
 
+    # 双曲線の判別式を計算
+    discriminant = B**2 - 4 * A * C
+    if discriminant <= 0:
+        print("This conic is not a hyperbola.")
+        return None
+
+    """
     # 回転角の計算
     theta = 0.5 * np.arctan2(B, A - C)
+    print('theta in degrees:', np.degrees(theta))
 
     # 回転角が小さい場合はゼロと仮定
     if np.isclose(theta, 0):
         theta = 0
         print('theta is close to zero.')
+    """
 
     # 行列形式での計算
     M = np.array([[A, B/2], [B/2, C]])
+
+    # Mの固有値，固有ベクトルを計算
+    eigvals, eigvecs = np.linalg.eig(M)
+    # 正規化
+    eigvecs = eigvecs / np.linalg.norm(eigvecs, axis=0)
+    print('eigvals:', eigvals)
+    print('eigvecs:', eigvecs)
+
+
+    # x, yをX, Yに変換
+    new_2nd_order_coeffs = eigvecs.T @ M @ eigvecs
+    A_new = new_2nd_order_coeffs[0, 0]
+    B_new = new_2nd_order_coeffs[0, 1]
+    C_new = new_2nd_order_coeffs[1, 1]
+    print('A_new:', A_new)
+    print('B_new:', B_new)
+    print('C_new:', C_new)
+    print(' ')
+
+    # 1次項の係数を計算
+    new_1st_order_coeffs = [D, E] @ eigvecs
+    D_new = new_1st_order_coeffs[0]
+    E_new = new_1st_order_coeffs[1]
+    print('D_new:', D_new)
+    print('E_new:', E_new)
+
+    # 平方完成
+    F_new = (C_new * D_new**2 + A_new * E_new**2 - 4 * A_new * C_new * F) / (4 * A_new * C_new)
+    print('F_new:', F_new)
+    a = np.sqrt(np.abs(F_new / C_new))
+    b = np.sqrt(np.abs(F_new / A_new))
+    print('a:', a)
+    print('b:', b)
+
+    x0 = - (D_new / (2 * A_new))
+    y0 = - (E_new / (2 * C_new))
+
+
+    """
     offset = np.array([D/2, E/2])
 
     # 中心座標の計算
@@ -88,27 +148,54 @@ def extract_hyperbola_parameters_vertical(coeffs):
 
     a = np.sqrt(np.abs(numerator / denom_y))
     b = np.sqrt(np.abs(numerator / denom_x))
+    """
+    """
 
-    return a, b, x0, y0, theta
 
+    # 回転行列
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    rotation_matrix = np.array([[cos_t, sin_t], [-sin_t, cos_t]])
+
+    # 変数の置き換え
+    A_ = A * cos_t**2 + B * cos_t * sin_t + C * sin_t**2
+    B_ = 0
+    C_ = A * sin_t**2 - B * cos_t * sin_t + C * cos_t**2
+    D_ = D * cos_t + E * sin_t
+    E_ = -D * sin_t + E * cos_t
+    F_ = F
+
+    # 中心座標を計算
+    denom = 2 * (A_ * C_)
+    x0 = (C_ * D_ - B_ * E_) / denom
+    y0 = (A_ * E_ - B_ * D_) / denom
+
+    # 軸長を計算
+    numerator = 2 * (A_ * E_**2 + C_ * D_**2 - B_ * D_ * E_) - 4 * (A_ * C_ * F_)
+    denom_x = discriminant * (C_**2)
+    denom_y = discriminant * (A_**2)
+    a = np.sqrt(np.abs(numerator / denom_x))
+    b = np.sqrt(np.abs(numerator / denom_y))
+    """
+
+    return a, b, x0, y0
 # データ生成（テスト用）
-t0_true = 50  # [ns]
+t0_true = 70  # [ns]
 x0_true = 0   # [m]
-v_true = 0.15 # [m/ns]
-v_true = 0.299792458 / np.sqrt(4.0) # [m/ns]
-R_true = 0.30 # [m]
+v_true = 29.9792458 / np.sqrt(4.0) # [cm/ns]
+R_true = 30 # [cm]
 
 def hyperbola_model(x, t0, x0, v, R):
     return 2 / v * (np.sqrt((v * t0 / 2 + R)**2 + (x - x0)**2) - R)
 
-x_data = np.linspace(-2.5, 2.5, 100)
-x_data = np.arange(-2.5, 2.5, 0.036) # CE-4
+
+x_data = np.arange(x0_true-250, x0_true+250, 3.6) # CE-4, [cm]
 t_data = hyperbola_model(x_data, t0_true, x0_true, v_true, R_true)
 noise = np.random.normal(0, 0.1, size=t_data.shape)  # ノイズレベルを調整
-t_data_noisy = t_data + noise
+#t_data = t_data + noise
 
 # フィッティング
-hyperbola_fit = fit_ellipse_and_hyperbola(x_data, t_data_noisy)
+hyperbola_fit = fit_ellipse_and_hyperbola(x_data, t_data)
 
 def solve_y(parameter_array, x_val):
     a, b, c, d, e, f = parameter_array
@@ -150,11 +237,14 @@ else:
     print('Fitted coefficients:', hyperbola_fit)
     print(' ')
 
-    a_fit, b_fit, x0_fit, y0_fit, theta_fit = extract_hyperbola_parameters_vertical(hyperbola_fit)
-    print(f'Fitted parameters: a={a_fit}, b={b_fit}, x0={x0_fit}, t0={y0_fit}, theta={theta_fit}')
+
+    a_fit, b_fit, x0_fit, y0_fit = extract_hyperbola_parameters_vertical(hyperbola_fit)
+    print(f'Fitted parameters: a={a_fit}, b={b_fit}, x0={x0_fit}, t0={y0_fit}')
     print(' ')
 
-    t0_fit = y0_fit - a_fit
+    t0_fit = a_fit - y0_fit
+    print('t0_fit:', t0_fit)
+    print('x0_fit:', x0_fit)
 
     #* Asymptotes of hyperbola
     y_asymptote_pos = (b_fit / a_fit) * (x_data - x0_fit) + y0_fit
@@ -170,15 +260,14 @@ else:
     t_fit = hyperbola_model(x_data, t0_fit, x0_fit, v_estimated, R_estimated)
 
     # Plot
-    fig, ax = plt.subplots()
-    ax.scatter(x_data, t_data_noisy , color='black', s=10, marker='x', label='Data')
-    ax.plot(x_data, t_fit, color='red', label='Best fit')
-    ax.plot(x_data, y_pos, color='blue', label='Hyperbola')
-    ax.plot(x_data, y_asymptote_pos, color='green', label='Asymptote')
-    ax.plot(x_data, y_asymptote_neg, color='green')
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.scatter(x_data, t_data , color='black', s=10, marker='x', label='Data')
+    ax.plot(x_data, t_fit, color='red', label='fit')
+    #ax.plot(x_data, y_neg, color='blue', label='y_neg')
+    ax.plot(x_data, y_pos, color='green', label='y_pos', linestyle='--')
 
     ax.grid(True)
-    ax.set_xlabel('x [m]')
+    ax.set_xlabel('x [cm]')
     ax.set_ylabel('t [ns]')
     ax.legend()
     plt.show()
