@@ -1,0 +1,12 @@
+{
+    "geometry_settings":
+    {
+        "h5_file": "kanda/domain_6x7/241002_FittingTest/shape/box/geometry.h5",
+        "material_file": "kanda/domain_6x7/241002_FittingTest/shape/box/geometry_materials.txt",
+        "comment": "unit: [m]",
+        "domain_x": 6,
+        "domain_z": 7,
+        "ground_depth": 6,
+        "grid_size": 0.005
+    }
+}
