@@ -77,18 +77,151 @@ def extract_peak(data, trac_num):
             end = i
             idx_time.append(np.argmax(np.abs(data[start:end])) + start + int(skip_time*1e-9/dt)) # index, not time
             idx_trace.append(trac_num)
-            peak_value.append(data[idx_trace[-1]])
         i += 1
+
+
+
+def fit_hyperbola(x, y):
+    # xとyはカラムベクトルであることが仮定される
+    x2 = x ** 2
+    y2 = y ** 2
+    xy = x * y
+
+    #* Define design matrix and scatter matrix
+    D1 = np.column_stack([x2, xy, y2])
+    D2 = np.column_stack([x, y, np.ones_like(x)])
+
+    S1 = D1.T @ D1
+    S2 = D1.T @ D2
+    S3 = D2.T @ D2
+
+    #* Test the rank of S3
+    Us3, Ss3, Vs3 = svd(S3)
+    condNrs = Ss3 / Ss3[0]
+
+    epsilon = 1e-10
+    if condNrs[2] < epsilon:
+        print('Warning: S3 is degenerate')
+        return None, None
+
+    #* Define constraint matrix and its inverse matrix
+    C = np.array([[0, 0, -2], [0, 1, 0], [-2, 0, 0]])
+    Ci = inv(C)
+
+    #* Solve the generalized eigenvalue problem
+    T = -inv(S3) @ S2.T
+    S = Ci @ (S1 - S2 @ T)
+
+    evals, evec = eig(S)
+
+    #* Evaluate the constraint values and sort them
+    cond = evec[1, :] ** 2 - 4 * evec[0, :] * evec[2, :]
+    condVals = np.sort(cond)
+
+
+    #* Get the hyperbolic solution
+    possibleHs = condVals[1:2] + condVals[0]
+    possibleHs = possibleHs[possibleHs > 0]
+    minDiffAt = np.argmin(np.abs(possibleHs))
+    minDiffAt = np.argmin(possibleHs)
+    alpha1 = evec[:, minDiffAt + 1]
+    alpha2 = T @ alpha1
+    hyperbola = np.concatenate([alpha1, alpha2])
+
+
+    return hyperbola
+
+
+
+def extract_hyperbola_parameters_vertical(coeffs):
+    A, B, C, D, E, F = coeffs
+
+    # 双曲線の判別式を計算
+    discriminant = B**2 - 4 * A * C
+    if discriminant <= 0:
+        print("This conic is not a hyperbola.")
+        return None, None, None, None
+
+    else:
+        # 行列形式での計算
+        M = np.array([[A, B/2], [B/2, C]])
+
+        # Mの固有値，固有ベクトルを計算
+        eigvals, eigvecs = np.linalg.eig(M)
+        # 正規化
+        eigvecs = eigvecs / np.linalg.norm(eigvecs, axis=0)
+
+
+        # x, yをX, Yに変換
+        new_2nd_order_coeffs = eigvecs.T @ M @ eigvecs
+        A_new = new_2nd_order_coeffs[0, 0]
+        B_new = new_2nd_order_coeffs[0, 1]
+        C_new = new_2nd_order_coeffs[1, 1]
+
+        # 1次項の係数を計算
+        new_1st_order_coeffs = [D, E] @ eigvecs
+        D_new = new_1st_order_coeffs[0]
+        E_new = new_1st_order_coeffs[1]
+
+        # 平方完成
+        F_new = (C_new * D_new**2 + A_new * E_new**2 - 4 * A_new * C_new * F) / (4 * A_new * C_new)
+        a = np.sqrt(np.abs(F_new / C_new))
+        b = np.sqrt(np.abs(F_new / A_new))
+
+        x0 = - (D_new / (2 * A_new))
+        y0 = - (E_new / (2 * C_new))
+
+
+        return a, b, x0, y0
 
 
 
 #* Extract peak
 idx_time = []
 idx_trace = []
-peak_value = []
 
 for i in range(data.shape[1]):
     extract_peak(data[:, i], i)
+
+
+#* １つのトレースに複数のピークがある場合，最初のピークのみを抽出
+unique_trace = np.unique(np.array(idx_trace))
+overlap = int(len(idx_trace) / len(unique_trace))
+idx_trace = idx_trace[::overlap]
+idx_time = idx_time[::overlap]
+
+
+
+#* Fit the hyperbola
+x = np.array(idx_trace) * antenna_step + antenna_start # [m]
+print(x)
+t = np.array(idx_time) * dt / 1e-9 # [ns]
+fit_coefficients = fit_hyperbola(x, t)
+a_fit, b_fit, x0_fit, y0_fit = extract_hyperbola_parameters_vertical(fit_coefficients)
+x0_fit = (np.max(x) + np.min(x)) / 2 + x0_fit # [m]
+
+t0_fit = a_fit - y0_fit # [ns]
+v_estimated = 2 * b_fit / a_fit # [m/ns]
+R_estimated = (a_fit - t0_fit) * b_fit / a_fit # [m]
+
+#* Estimate the epsilon_r
+c = 299792458 # [m/s]
+epsilon_r = (c * 1e-9 / v_estimated)**2
+
+#* Save estimated parameters to txt file
+param_names = ['a', 'b', 'x0', 'y0', 't0 [ns]', 'v [m/ns]', 'R [m]', 'epsilon_r']
+params = [a_fit, b_fit, x0_fit, y0_fit, t0_fit, v_estimated, R_estimated, epsilon_r]
+save_params = np.array([param_names, params]).T
+np.savetxt(os.path.join(output_dir, 'fitted_params.txt'), save_params, fmt='%s')
+
+print(f'estimated t0 = {t0_fit} ns')
+print(f'estimated v = {v_estimated} m/ns')
+print(f'estimated R = {R_estimated} m')
+
+hyperbola_fit = 2 / v_estimated * (np.sqrt((v_estimated * t0_fit / 2 + R_estimated)**2 + (x - x0_fit)**2) - R_estimated)
+
+
+
 
 
 
@@ -99,12 +232,14 @@ im = plt.imshow(data, cmap='gray', aspect='auto',
                 data.shape[0] * dt / 1e-9, 0],
                 vmin=-np.amax(np.abs(data)/100), vmax=np.amax(np.abs(data)/100)
                 )
-plt.scatter(np.array(idx_trace) * antenna_step + antenna_start, np.array(idx_time) * dt / 1e-9, c='r', s=20, marker='x')
+plt.scatter(np.array(idx_trace) * antenna_step + antenna_start, np.array(idx_time) * dt / 1e-9, c='r', s=20, marker='x', label='Peak')
+plt.plot(x, hyperbola_fit, c='b', lw=2, linestyle='--', label='Fitting')
 
 plt.xlabel('x [m]', fontsize=20)
 plt.ylabel('Time [ns])', fontsize=20)
 plt.tick_params(labelsize=18)
 plt.grid(which='both', axis='both', linestyle='-.')
+plt.legend(fontsize=18, loc='lower right')
 
 delvider = axgrid1.make_axes_locatable(plt.gca())
 cax = delvider.append_axes('right', size='5%', pad=0.5)
