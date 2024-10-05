@@ -102,7 +102,6 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                         i += 1
                     end = i
                     peak_idx.append(np.argmax(np.abs(outputdata[start:end])) + start)
-                    peak_value.append(outputdata[peak_idx[-1]])
                 i += 1
 
             # Plotting if FFT required
