@@ -301,9 +301,9 @@ if __name__ == "__main__":
 
     # for closeup option
     closeup_x_start = 25 #[ns]
-    closeup_x_end =45 #[ns]
-    closeup_y_start = -20 # normalized, -1~1
-    closeup_y_end = 20 # normalized, -1~1
+    closeup_x_end =50 #[ns]
+    closeup_y_start = -60 # normalized, -1~1
+    closeup_y_end = 60 # normalized, -1~1
 
     plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
     plthandle.show()
