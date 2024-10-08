@@ -116,7 +116,7 @@ def fit_hyperbola_shihab(x, y):
             # Ensure the sign of the constraint is positive
             if constraint_value < 0:
                 a_i_normalized = -a_i_normalized
-        
+
         # Verify the constraint
             constraint_check = a_i_normalized.T @ C @ a_i_normalized
             print(f'Eigenvector {i}:')

@@ -1,0 +1,10 @@
+t0_true: 100
+x0_true: 0
+epsilon_r_true: 3.0
+v_true: 0.17308525632731958
+R_true: 0.3
+noise_level: noise_level
+t0_fit: 99.94767011102152
+v_estimated: 0.49318869052826386
+R_estimated: -21.893997971978965
+epsilon_r_estimated: 0.3695006338060591

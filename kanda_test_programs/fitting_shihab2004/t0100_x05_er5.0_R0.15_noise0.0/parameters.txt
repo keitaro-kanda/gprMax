@@ -1,0 +1,10 @@
+t0_true: 100
+x0_true: 5
+epsilon_r_true: 5.0
+v_true: 0.13407126304595013
+R_true: 0.15
+noise_level: noise_level
+t0_fit: nan
+v_estimated: nan
+R_estimated: nan
+epsilon_r_estimated: nan
