@@ -8,7 +8,7 @@ import os
 # データ生成（テスト用）
 t0_true = 110  # [ns]
 x0_true = 3   # [m]
-c = 0.299792458 # [m/s]
+c = 0.299792458 # [m/ns]
 epsilon_r_true = 3.0
 v_true = c / np.sqrt(epsilon_r_true) # [m/ns]
 R_true = 0.15 # [m], 半径
@@ -50,6 +50,8 @@ def fit_hyperbola_shihab(x, y):
 
     #* Solve the generalized eigenvalue problem
     eigval, eigvec = linalg.eig(S, C, right=True, left=False)
+    print('eigval:', eigval)
+    print('eigvec: \n', eigvec)
     # Normalize eigenvectors to satisfy the constraint
     eigvec_normalized = []
     for i in range(eigvec.shape[1]):
@@ -76,7 +78,7 @@ def fit_hyperbola_shihab(x, y):
         else:
             print(f'Eigenvector {i} has a constraint value too small for reliable normalization.')
 
-    """
+
     # Select the eigenvector corresponding to the smallest positive eigenvalue
     # (You may need to adjust this selection based on your specific problem)
     valid_indices = np.where((eigval.real > 0) & np.isfinite(eigval))[0]
@@ -103,6 +105,7 @@ def fit_hyperbola_shihab(x, y):
 
     # Return the coefficients of the fitted hyperbola
     return best_eigvec_normalized
+    """
 
 
 
