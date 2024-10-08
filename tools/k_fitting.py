@@ -113,6 +113,7 @@ def fit_hyperbola(x, y):
     S = Ci @ (S1 - S2 @ T)
 
     evals, evec = eig(S)
+    evec = evec/np.linalg.norm(evec, axis=0)
 
     #* Evaluate the constraint values and sort them
     cond = evec[1, :] ** 2 - 4 * evec[0, :] * evec[2, :]
@@ -194,9 +195,9 @@ idx_time = idx_time[::overlap]
 
 #* Fit the hyperbola
 x = np.array(idx_trace) * antenna_step + antenna_start # [m]
-print(x)
 t = np.array(idx_time) * dt / 1e-9 # [ns]
 fit_coefficients = fit_hyperbola(x, t)
+print('fit_coefficients:', fit_coefficients)
 a_fit, b_fit, x0_fit, y0_fit = extract_hyperbola_parameters_vertical(fit_coefficients)
 x0_fit = (np.max(x) + np.min(x)) / 2 + x0_fit # [m]
 
