@@ -9,6 +9,7 @@ from tqdm import tqdm
 from outputfiles_merge import get_output_data
 from scipy import signal
 from numpy.linalg import svd, eig, inv
+import scipy.linalg as linalg
 
 
 
@@ -79,6 +80,46 @@ def extract_peak(data, trac_num):
             idx_trace.append(trac_num)
         i += 1
 
+
+
+def fit_hyperbola_shihab(x, y):
+    x2 = x ** 2
+    y2 = y ** 2
+    xy = x * y
+
+
+    #* Define design matrix and scatter matrix
+    D = np.matrix(np.column_stack([x2, xy, y2, x, y, np.ones_like(x)])) # Design matrix
+    S = np.matrix(D.T @ D) # Scatter matrix
+
+
+    #* Define constraint matrix
+    C = np.zeros((6, 6))
+    C[0, 2] = -2
+    C[1, 1] = 1
+    C[2, 0] = -2
+    #print('C: \n', C)
+
+
+    #* Solve the generalized eigenvalue problem
+    eigval, eigvec = linalg.eig(S, C, right=True, left=False)
+    print('eigval: ', eigval)
+    #* Normalize the eigenvectors
+    #eigvec = eigvec / np.linalg.norm(eigvec, axis=0)
+    print('eigvec: \n', eigvec)
+
+    for i in range(eigvec.shape[1]):
+        eigvec = np.matrix(eigvec)
+        constraint = eigvec[:, i].T @ C @ eigvec[:, i]
+        print('constraint: ', constraint)
+        
+        #mu_2 = 1 / (eigvec[i].T @ C @ eigvec[i])
+        #constraint = mu_2 * eigvec[i].T @ C @ eigvec[i]
+        #print('constraint: ', constraint)
+
+        #left = S @ eigvec[:, i]
+        #right = eigval[i] * C @ eigvec[:, i]
+        #print(right - left)
 
 
 def fit_hyperbola(x, y):
@@ -196,7 +237,7 @@ idx_time = idx_time[::overlap]
 #* Fit the hyperbola
 x = np.array(idx_trace) * antenna_step + antenna_start # [m]
 t = np.array(idx_time) * dt / 1e-9 # [ns]
-fit_coefficients = fit_hyperbola(x, t)
+fit_coefficients = fit_hyperbola_shihab(x, t)
 print('fit_coefficients:', fit_coefficients)
 a_fit, b_fit, x0_fit, y0_fit = extract_hyperbola_parameters_vertical(fit_coefficients)
 x0_fit = (np.max(x) + np.min(x)) / 2 + x0_fit # [m]
