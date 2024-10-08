@@ -103,23 +103,48 @@ def fit_hyperbola_shihab(x, y):
 
     #* Solve the generalized eigenvalue problem
     eigval, eigvec = linalg.eig(S, C, right=True, left=False)
-    print('eigval: ', eigval)
-    #* Normalize the eigenvectors
-    #eigvec = eigvec / np.linalg.norm(eigvec, axis=0)
-    print('eigvec: \n', eigvec)
-
+    # Normalize eigenvectors to satisfy the constraint
     for i in range(eigvec.shape[1]):
-        eigvec = np.matrix(eigvec)
-        constraint = eigvec[:, i].T @ C @ eigvec[:, i]
-        print('constraint: ', constraint)
-        
-        #mu_2 = 1 / (eigvec[i].T @ C @ eigvec[i])
-        #constraint = mu_2 * eigvec[i].T @ C @ eigvec[i]
-        #print('constraint: ', constraint)
+        a_i = eigvec[:, i]
+        constraint_value = a_i.T @ C @ a_i
 
-        #left = S @ eigvec[:, i]
-        #right = eigval[i] * C @ eigvec[:, i]
-        #print(right - left)
+        # Check if constraint_value is not zero to avoid division by zero
+        if np.abs(constraint_value) > 1e-12:
+            # Normalize the eigenvector
+            a_i_normalized = a_i / np.sqrt(np.abs(constraint_value))
+
+            # Ensure the sign of the constraint is positive
+            if constraint_value < 0:
+                a_i_normalized = -a_i_normalized
+        
+        # Verify the constraint
+            constraint_check = a_i_normalized.T @ C @ a_i_normalized
+            print(f'Eigenvector {i}:')
+            print('Normalized eigenvector:', a_i_normalized)
+            print('Constraint value:', constraint_check)
+        else:
+            print(f'Eigenvector {i} has a constraint value too small for reliable normalization.')
+
+    # Select the eigenvector corresponding to the smallest positive eigenvalue
+    # (You may need to adjust this selection based on your specific problem)
+    valid_indices = np.where((eigval.real > 0) & np.isfinite(eigval))[0]
+    if valid_indices.size > 0:
+        min_index = valid_indices[np.argmin(eigval[valid_indices].real)]
+        best_eigvec = eigvec[:, min_index]
+        # Normalize the selected eigenvector
+        constraint_value = best_eigvec.T @ C @ best_eigvec
+        best_eigvec_normalized = best_eigvec / np.sqrt(np.abs(constraint_value))
+        # Ensure the sign of the constraint is positive
+        if constraint_value < 0:
+            best_eigvec_normalized = -best_eigvec_normalized
+        print('Best eigenvector after normalization:', best_eigvec_normalized)
+        print(' ')
+    else:
+        print('No valid eigenvector found.')
+        print(' ')
+
+    # Return the coefficients of the fitted hyperbola
+    return best_eigvec_normalized.real
 
 
 def fit_hyperbola(x, y):
@@ -192,7 +217,7 @@ def extract_hyperbola_parameters_vertical(coeffs):
         eigvals, eigvecs = np.linalg.eig(M)
         # 正規化
         eigvecs = eigvecs / np.linalg.norm(eigvecs, axis=0)
-
+        #print('eigvecs:', eigvecs)
 
         # x, yをX, Yに変換
         new_2nd_order_coeffs = eigvecs.T @ M @ eigvecs
@@ -205,16 +230,24 @@ def extract_hyperbola_parameters_vertical(coeffs):
         D_new = new_1st_order_coeffs[0]
         E_new = new_1st_order_coeffs[1]
 
+
         # 平方完成
         F_new = (C_new * D_new**2 + A_new * E_new**2 - 4 * A_new * C_new * F) / (4 * A_new * C_new)
-        a = np.sqrt(np.abs(F_new / C_new))
+        print('A_new:', A_new)
+        print('B_new:', B_new)
+        print('C_new:', C_new)
+        print('D_new:', D_new)
+        print('E_new:', E_new)
+        print('F_new:', F_new)
+        print(' ')
+        a = np.sqrt(F_new / C_new)
         b = np.sqrt(np.abs(F_new / A_new))
 
-        x0 = - (D_new / (2 * A_new))
-        y0 = - (E_new / (2 * C_new))
+        x0 = (D_new / (2 * A_new))
+        y0 = (E_new / (2 * C_new))
 
 
-        return a, b, x0, y0
+        return a, b, -x0, y0
 
 
 
@@ -240,9 +273,12 @@ t = np.array(idx_time) * dt / 1e-9 # [ns]
 fit_coefficients = fit_hyperbola_shihab(x, t)
 print('fit_coefficients:', fit_coefficients)
 a_fit, b_fit, x0_fit, y0_fit = extract_hyperbola_parameters_vertical(fit_coefficients)
-x0_fit = (np.max(x) + np.min(x)) / 2 + x0_fit # [m]
+print("a_fit:", a_fit)
+print("b_fit:", b_fit)
+print("x0_fit:", x0_fit)
+print("y0_fit:", y0_fit)
 
-t0_fit = a_fit - y0_fit # [ns]
+t0_fit = a_fit + y0_fit # [ns]
 v_estimated = 2 * b_fit / a_fit # [m/ns]
 R_estimated = (a_fit - t0_fit) * b_fit / a_fit # [m]
 
@@ -259,6 +295,7 @@ np.savetxt(os.path.join(output_dir, 'fitted_params.txt'), save_params, fmt='%s')
 print(f'estimated t0 = {t0_fit} ns')
 print(f'estimated v = {v_estimated} m/ns')
 print(f'estimated R = {R_estimated} m')
+print(f'estimated epsilon_r = {epsilon_r}')
 
 hyperbola_fit = 2 / v_estimated * (np.sqrt((v_estimated * t0_fit / 2 + R_estimated)**2 + (x - x0_fit)**2) - R_estimated)
 
