@@ -6,22 +6,17 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_5cm/factor_3/Ascan.in"
+            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R150/cylinder.in -n 100"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_5cm/factor_2/Ascan.in"
+            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R15/cylinder.in -n 100"
         },
         {
             "label": "gprMax 3rd run",
             "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_5cm/factor_0.5/Ascan.in"
-        },
-        {
-            "label": "gprMax 4th run",
-            "type": "shell",
-            "command": "python -m gprMax kanda/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_5cm/factor_0.33/Ascan.in"
+            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R1.5/cylinder.in -n 100"
         },
         {
             "label": "task sequence",
@@ -30,8 +25,7 @@
             "dependsOn": [
                 "gprMax 1st run",
                 "gprMax 2nd run",
-                "gprMax 3rd run",
-                "gprMax 4th run"
+                "gprMax 3rd run"
             ],
             "problemMatcher": []
         }
