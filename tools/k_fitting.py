@@ -18,9 +18,10 @@ parser = argparse.ArgumentParser(
     prog='k_fitting.py',
     description='Process hyperbola fitting',
     epilog='End of help message',
-    usage='python -m tools.k_fk_migration [json_path]',
+    usage='python -m tools.k_fk_migration [json_path] [-fix]',
 )
 parser.add_argument('json_path', help='Path to the json file')
+parser.add_argument('-fix', choices=['er', 'R'], help='Fix the epsilon_r or R', default=None)
 args = parser.parse_args()
 
 
@@ -42,9 +43,18 @@ if src_step == rx_step:
 
 #* Load output file
 data_path = params['data']
-output_dir = os.path.join(os.path.dirname(data_path), 'fitting')
-if not os.path.exists(output_dir):
-    os.mkdir(output_dir)
+if args.fix == 'er':
+    output_dir = os.path.join(os.path.dirname(data_path), 'fitting_er_fixed')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+elif args.fix == 'R':
+    output_dir = os.path.join(os.path.dirname(data_path), 'fitting_R_fixed')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+else:
+    output_dir = os.path.join(os.path.dirname(data_path), 'fitting_no_fixed')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):
@@ -262,12 +272,54 @@ for i in range(data.shape[1]):
 #* １つのトレースに複数のピークがある場合，最初のピークのみを抽出
 unique_trace = np.unique(np.array(idx_trace))
 overlap = int(len(idx_trace) / len(unique_trace))
-idx_trace = idx_trace[::overlap]
-idx_time = idx_time[::overlap]
+idx_trace = idx_trace[::overlap] # index, not in m
+idx_time = idx_time[::overlap] # index, not in sec
 
+hyperbola_x = np.array(idx_trace) * antenna_step + antenna_start # [m]
+hyperbola_t = np.array(idx_time) * dt / 1e-9 # [ns]
 
 
 #* Fit the hyperbola
+c = 0.299792458 # [m/ns]
+if args.fix == 'er':
+    epsilon_r = [3]
+    #R = np.arange(0, 0.5, 0.01)
+    R = [0, 0.010, 0.015, 0.020, 0.10, 0.15, 0.20, 1.0, 1.5, 2.0] # [m]
+elif args.fix == 'R':
+    epsilon_r = np.arange(1, 10, 0.5)
+    R = [0.015] # [m]
+else:
+    epsilon_r = np.arange(1, 10, 1)
+    R = np.arange(0, 0.5, 0.01) # [m]
+
+t0 = np.min(hyperbola_t)
+x0 = hyperbola_x[np.argmin(hyperbola_t)+1] # [cm]
+print(f't0: {t0} ns, x0: {x0} m')
+
+#* Calculate the hyperbola
+hyperbola_list = []
+er_R_list = []
+for i in tqdm(range(len(epsilon_r)), desc='Calculating hyperbola'):
+    for j in range(len(R)):
+        v = c / np.sqrt(epsilon_r[i]) # [m/ns]
+        hyperbola = 2 / v * (np.sqrt((v * t0 / 2 + R[j])**2 + (hyperbola_x - x0)**2) - R[j])
+        hyperbola_list.append(hyperbola)
+        er_R_list.append([epsilon_r[i], R[j]])
+er_R_list = np.array(er_R_list)
+
+
+#* Calculate the most similar hyperbola
+min_diff = np.inf
+min_idx = 0
+for i in range(len(hyperbola_list)):
+    diff = np.sum(np.abs(hyperbola_list[i] - hyperbola_t))
+    if diff < min_diff:
+        min_diff = diff
+        min_idx = i
+print('min_idx:', min_idx)
+
+
+"""
 x = np.array(idx_trace) * antenna_step + antenna_start # [m]
 t = np.array(idx_time) * dt / 1e-9 # [ns]
 fit_coefficients = fit_hyperbola_shihab(x, t)
@@ -298,34 +350,67 @@ print(f'estimated R = {R_estimated} m')
 print(f'estimated epsilon_r = {epsilon_r}')
 
 hyperbola_fit = 2 / v_estimated * (np.sqrt((v_estimated * t0_fit / 2 + R_estimated)**2 + (x - x0_fit)**2) - R_estimated)
-
+"""
 
 
 
 
 
 #* Plot the peak on the B-scan
-plt.figure(figsize=(20, 15))
+plt.figure(figsize=(20, 15), tight_layout=True)
 im = plt.imshow(data, cmap='gray', aspect='auto',
                 extent=[antenna_start,  antenna_start + data.shape[1] * antenna_step,
                 data.shape[0] * dt / 1e-9, 0],
                 vmin=-np.amax(np.abs(data)/100), vmax=np.amax(np.abs(data)/100)
                 )
 plt.scatter(np.array(idx_trace) * antenna_step + antenna_start, np.array(idx_time) * dt / 1e-9, c='r', s=20, marker='x', label='Peak')
-plt.plot(x, hyperbola_fit, c='b', lw=2, linestyle='--', label='Fitting')
+#plt.plot(x, hyperbola_fit, c='b', lw=2, linestyle='--', label='Fitting')
+
+#* Plot fitting hyperbola
+# cmapに従って色を変える
+colors = plt.cm.jet(np.linspace(0, 1, len(hyperbola_list)))
+for i in range(len(hyperbola_list)):
+    plt.plot(hyperbola_x, hyperbola_list[i], lw=1, linestyle='--',
+                    label=f'er={er_R_list[i, 0]:.2}, R={er_R_list[i, 1]:.2}', c=colors[i])
 
 plt.xlabel('x [m]', fontsize=20)
 plt.ylabel('Time [ns])', fontsize=20)
+plt.ylim(40, 20)
+if args.fix == 'er':
+    plt.title(f'er={epsilon_r[0]}, best fit R={er_R_list[min_idx, 1]}', fontsize=20)
+elif args.fix == 'R':
+    plt.title(f'best fit er={er_R_list[min_idx, 0]}, R={R[0]}', fontsize=20)
 plt.tick_params(labelsize=18)
 plt.grid(which='both', axis='both', linestyle='-.')
-plt.legend(fontsize=18, loc='lower right')
+plt.legend(fontsize=16)
 
 delvider = axgrid1.make_axes_locatable(plt.gca())
-cax = delvider.append_axes('right', size='5%', pad=0.5)
-cbar = plt.colorbar(im, cax=cax)
+cax1 = delvider.append_axes('right', size='5%', pad=0.2)
+cbar = plt.colorbar(im, cax=cax1)
 cbar.ax.tick_params(labelsize=18)
 cbar.set_label('Amplitude', fontsize=20)
 
-plt.savefig(os.path.join(output_dir, 'fitting.png'), format='png', dpi=120)
-plt.savefig(os.path.join(output_dir, 'fitting.pdf'), format='pdf', dpi=600)
+#* Colorbar for colors
+"""
+cax2 = delvider.append_axes('bottom', size='5%', pad=1)
+cbar2 = plt.colorbar(plt.cm.ScalarMappable(cmap='jet'), cax=cax2, orientation='horizontal')
+if args.fix == 'er':
+    cbar2.set_label('R [m]', fontsize=18)
+elif args.fix == 'R':
+    cbar2.set_label('er', fontsize=18)
+cbar2.ax.tick_params(labelsize=16)
+cbar2.set_ticks(np.linspace(0, np.max(epsilon_r), len(hyperbola_list)))
+cbar2.set_ticklabels(np.round(er_R_list[:, 1], 2))
+"""
+
+
+if args.fix == 'er':
+    plt.savefig(os.path.join(output_dir, f'er{epsilon_r[0]}.png'), format='png', dpi=120)
+    plt.savefig(os.path.join(output_dir, f'er{epsilon_r[0]}.pdf'), format='pdf', dpi=600)
+elif args.fix == 'R':
+    plt.savefig(os.path.join(output_dir, f'R{R[0]}.png'), format='png', dpi=120)
+    plt.savefig(os.path.join(output_dir, f'R{R[0]}.pdf'), format='pdf', dpi=600)
+else:
+    plt.savefig(os.path.join(output_dir, 'fitting.png'), format='png', dpi=120)
+    plt.savefig(os.path.join(output_dir, 'fitting.pdf'), format='pdf', dpi=600)
 plt.show()
