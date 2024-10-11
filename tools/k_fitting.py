@@ -288,7 +288,7 @@ c = 0.299792458 # [m/ns]
 if args.fix == 'er':
     epsilon_r = [3]
     #R = np.arange(0, 0.5, 0.01)
-    R = np.arange(0, 1.81, 0.15) # [m]
+    R = np.arange(0, 1.81, 0.05) # [m]
 elif args.fix == 'R':
     epsilon_r = np.arange(1, 10, 0.5)
     R = [1.5] # [m]
