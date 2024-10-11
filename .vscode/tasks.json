@@ -6,17 +6,22 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R150/cylinder.in -n 100"
+            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R30/cylinder.in -n 100"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R15/cylinder.in -n 100"
+            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R60/cylinder.in -n 100"
         },
         {
             "label": "gprMax 3rd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R1.5/cylinder.in -n 100"
+            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R90/cylinder.in -n 100"
+        },
+        {
+            "label": "gprMax 3rd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax kanda/domain_6x7/241002_FittingTest/size/R120/cylinder.in -n 100"
         },
         {
             "label": "task sequence",
@@ -25,7 +30,8 @@
             "dependsOn": [
                 "gprMax 1st run",
                 "gprMax 2nd run",
-                "gprMax 3rd run"
+                "gprMax 3rd run",
+                "gprMax 4th run"
             ],
             "problemMatcher": []
         }
