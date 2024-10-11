@@ -86,8 +86,8 @@ def extract_peak(data, trac_num):
             while i < len(envelope) and envelope[i] > threshold:
                 i += 1
             end = i
-            idx_time.append(np.argmax(np.abs(data[start:end])) + start + int(skip_time*1e-9/dt)) # index, not time
-            idx_trace.append(trac_num)
+            extracted_time = np.argmax(np.abs(data[start:end])) + start + int(skip_time*1e-9/dt)
+            peak_indeces.append([trac_num, extracted_time])
         i += 1
 
 
@@ -261,22 +261,26 @@ def extract_hyperbola_parameters_vertical(coeffs):
 
 
 
-#* Extract peak
-idx_time = []
-idx_trace = []
+#* Extract peaks
+peak_indeces = []
 
 for i in range(data.shape[1]):
     extract_peak(data[:, i], i)
 
 
 #* １つのトレースに複数のピークがある場合，最初のピークのみを抽出
-unique_trace = np.unique(np.array(idx_trace))
-overlap = int(len(idx_trace) / len(unique_trace))
-idx_trace = idx_trace[::overlap] # index, not in m
-idx_time = idx_time[::overlap] # index, not in sec
+#unique_trace = np.unique(np.array(idx_trace))
+#overlap = int(len(idx_trace) / len(unique_trace))
+#idx_trace = idx_trace[::overlap] # index, not in m
+#idx_time = idx_time[::overlap] # index, not in sec
 
-hyperbola_x = np.array(idx_trace) * antenna_step + antenna_start # [m]
-hyperbola_t = np.array(idx_time) * dt / 1e-9 # [ns]
+# 37.5 ns以内のピークのみを抽出
+max_time_idx = 37.5 * 1e-9 / dt
+peak_indeces = np.array(peak_indeces)
+peak_indeces = peak_indeces[peak_indeces[:, 1] < max_time_idx]
+
+hyperbola_x = np.array(peak_indeces[:, 0]) * antenna_step + antenna_start # [m]
+hyperbola_t = np.array(peak_indeces[:, 1]) * dt / 1e-9 # [ns]
 
 
 #* Fit the hyperbola
@@ -284,13 +288,13 @@ c = 0.299792458 # [m/ns]
 if args.fix == 'er':
     epsilon_r = [3]
     #R = np.arange(0, 0.5, 0.01)
-    R = [0, 0.010, 0.015, 0.020, 0.10, 0.15, 0.20, 1.0, 1.5, 2.0] # [m]
+    R = np.arange(0, 1.81, 0.15) # [m]
 elif args.fix == 'R':
     epsilon_r = np.arange(1, 10, 0.5)
-    R = [0.015] # [m]
+    R = [1.5] # [m]
 else:
     epsilon_r = np.arange(1, 10, 1)
-    R = np.arange(0, 0.5, 0.01) # [m]
+    R = np.arange(0, 1.5, 0.15) # [m]
 
 t0 = np.min(hyperbola_t)
 x0 = hyperbola_x[np.argmin(hyperbola_t)+1] # [cm]
@@ -363,21 +367,21 @@ im = plt.imshow(data, cmap='gray', aspect='auto',
                 data.shape[0] * dt / 1e-9, 0],
                 vmin=-np.amax(np.abs(data)/100), vmax=np.amax(np.abs(data)/100)
                 )
-plt.scatter(np.array(idx_trace) * antenna_step + antenna_start, np.array(idx_time) * dt / 1e-9, c='r', s=20, marker='x', label='Peak')
+plt.scatter(np.array(peak_indeces[:, 0]) * antenna_step + antenna_start, np.array(peak_indeces[:, 1]) * dt / 1e-9, c='r', s=20, marker='x', label='Peak')
 #plt.plot(x, hyperbola_fit, c='b', lw=2, linestyle='--', label='Fitting')
 
 #* Plot fitting hyperbola
 # cmapに従って色を変える
 colors = plt.cm.jet(np.linspace(0, 1, len(hyperbola_list)))
 for i in range(len(hyperbola_list)):
-    plt.plot(hyperbola_x, hyperbola_list[i], lw=1, linestyle='--',
-                    label=f'er={er_R_list[i, 0]:.2}, R={er_R_list[i, 1]:.2}', c=colors[i])
+    plt.plot(hyperbola_x, hyperbola_list[i], lw=2, linestyle='--',
+                    label=f'er={er_R_list[i, 0]:.3}, R={er_R_list[i, 1]:.3}', c=colors[i])
 
 plt.xlabel('x [m]', fontsize=20)
-plt.ylabel('Time [ns])', fontsize=20)
+plt.ylabel('Time [ns]', fontsize=20)
 plt.ylim(40, 20)
 if args.fix == 'er':
-    plt.title(f'er={epsilon_r[0]}, best fit R={er_R_list[min_idx, 1]}', fontsize=20)
+    plt.title(f'er={epsilon_r[0]}, best fit R={er_R_list[min_idx, 1]:.3}', fontsize=20)
 elif args.fix == 'R':
     plt.title(f'best fit er={er_R_list[min_idx, 0]}, R={R[0]}', fontsize=20)
 plt.tick_params(labelsize=18)
