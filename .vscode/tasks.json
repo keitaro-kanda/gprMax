@@ -1,0 +1,45 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "gprMax 1st run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_30cm/factor_4/Ascan.in"
+        },
+        {
+            "label": "gprMax 2nd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_30cm/factor_6/Ascan.in"
+        },
+        {
+            "label": "gprMax 3rd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_30cm/factor_7/Ascan.in"
+        },
+        {
+            "label": "gprMax 4th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_30cm/factor_8/Ascan.in"
+        },
+        {
+            "label": "gprMax 5 run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_30cm/factor_9/Ascan.in"
+        },
+        {
+            "label": "task sequence",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "gprMax 1st run",
+                "gprMax 2nd run",
+                "gprMax 3rd run",
+                "gprMax 4th run",
+                "gprMax 5th run"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}
