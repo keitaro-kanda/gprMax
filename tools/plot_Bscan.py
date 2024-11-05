@@ -82,11 +82,12 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
             vmin=0, vmax=10)
     #* Plot raw B-scan
     else:
-        outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
-        plt.imshow(outputdata_norm,
-                extent=[antenna_start, antenna_start + outputdata_norm.shape[1] * antenna_step, outputdata_norm.shape[0] * dt, 0],
+        #outputdata_norm = outputdata / np.amax(np.abs(outputdata)) * 100
+        plt.imshow(outputdata,
+                extent=[antenna_start, antenna_start + outputdata.shape[1] * antenna_step, outputdata.shape[0] * dt, 0],
                 interpolation='nearest', aspect='auto', cmap='seismic',
-                vmin=-1, vmax=1)
+                vmin=-np.max(np.abs(outputdata))/100, vmax=np.max(np.abs(outputdata))/100
+                )
     plt.xlabel('x [m]', fontsize=20)
     plt.ylabel('Time [ns]', fontsize=20)
     plt.tick_params(labelsize=18)
@@ -112,12 +113,12 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
     delvider = axgrid1.make_axes_locatable(ax)
     cax = delvider.append_axes('right', size='5%', pad=0.1)
     cbar = plt.colorbar(cax=cax)
-    cbar.set_label('Normalized field amplitude [%]', size=20)
+    #cbar.set_label(f'{rxcomponent} field amplitude', size=20)
     cbar.ax.tick_params(labelsize=16)
     if args.envelope:
         cbar.set_label('Envelope amplitude', fontsize=20)
     else:
-        cbar.set_label('Normalized field strength [%]', fontsize=20)
+        cbar.set_label(f'{rxcomponent} field amplitude', size=20)
     cbar.ax.tick_params(labelsize=18)
 
     #* Save plot

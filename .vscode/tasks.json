@@ -6,7 +6,7 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x10/20240824_echo_shape_test/rock_ellipse/rock_30cm/factor_4/Ascan.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241104_polarity/rock_cylinder/rock_20cm/Bscan/Bscan.in -n 150"
         },
         {
             "label": "gprMax 2nd run",
