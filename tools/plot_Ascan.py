@@ -278,7 +278,9 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
         if args.fft:
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fft.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
         elif args.closeup:
-            fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_closeup' + str(closeup_x_start) + '_' + str(closeup_x_end) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+            fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_closeup_x' + str(closeup_x_start) \
+                            + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
+                            ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
         else:
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
 
@@ -301,8 +303,8 @@ if __name__ == "__main__":
     # for closeup option
     closeup_x_start = 25 #[ns]
     closeup_x_end =50 #[ns]
-    closeup_y_start = -60 # normalized, -1~1
-    closeup_y_end = 60 # normalized, -1~1
+    closeup_y_start = -30 # normalized, -1~1
+    closeup_y_end = 30 # normalized, -1~1
 
     plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
     plthandle.show()

@@ -25,8 +25,8 @@ t = np.arange(len(sig)) * dt / 1e-9 # Time in ns
 sig = sig / np.max(np.abs(sig))
 
 
-def shift(original_sig, shit_time):
-    shifted_sig = original_sig + np.roll(sig, int(shit_time * 1e-9 / dt))
+def shift(shit_time):
+    shifted_sig = - np.roll(sig, int(shit_time * 1e-9 / dt)) * 0.7
     return shifted_sig
 
 def env(data):
@@ -34,38 +34,28 @@ def env(data):
     return env
 
 
-multi_overlap = sig + np.roll(sig, int(-0.2e-9/dt)) + np.roll(sig, int(0.1e-9/dt))
+time_lag = 3.2 # [ns]
+shifted = shift(time_lag)
+overlaped = sig + shifted
 
-time_lag = np.arange(0.01, 1.01, 0.01)
-shifted = sig
-for i in range(len(time_lag)-1):
-    shifted =+ shift(sig, time_lag[i])
+plot_list = [sig, shifted, overlaped]
+label_list = ['original', f'{time_lag} ns shifted', 'overlaped']
 
 #* 重ね合わせる
-fig, ax = plt.subplots(2, 1, figsize=(6, 6), sharex=True, sharey=True, tight_layout=True)
-ax[0].plot(t, sig, label='original')
-ax[0].plot(t, env(sig), linestyle = '--', color = 'gray', label='envelope')
-ax[0].legend()
-ax[0].grid(True)
-"""
-for i in range (len(time_lag)-1):
-    ax[i].plot(t, shift(sig, i * 0.25), label = f'shit: {i * 0.25} ns')
-    ax[i].plot(t, env(shift(sig, i * 0.25)), linestyle = '--', color = 'gray')
-    ax[i].legend()
-    ax[i].grid()
-"""
-ax[1].plot(t, shifted, label='shifted')
-ax[1].plot(t, env(shifted), linestyle = '--', color = 'gray', label='envelope')
-ax[1].legend()
-ax[1].grid(True)
+fig, ax = plt.subplots(1, 1, figsize=(6, 6), sharex=True, sharey=True, tight_layout=True)
+for i in range(len(plot_list)):
+    ax.plot(t, plot_list[i] - 2.5 * i, label=label_list[i])
 
-plt.xlim(0, 15) # [ns]
 
+plt.xlim(0, 25) # [ns]
+plt.grid()
+plt.legend(fontsize=16, loc='upper right')
+ax.tick_params(labelsize=16)
 fig.supxlabel('Time [ns]', fontsize=20)
 fig.supylabel('Normalized amplitude', fontsize=20)
 
 
 
-plt.savefig(os.path.join(output_dir, 'phase.png'), format='png', dpi=120)
-plt.savefig(os.path.join(output_dir, 'phase.pdf'), format='pdf', dpi=300)
+plt.savefig(os.path.join(output_dir, str(time_lag) + 'ns_shift.png'), format='png', dpi=120)
+plt.savefig(os.path.join(output_dir, str(time_lag) + 'ns_shift.pdf'), format='pdf', dpi=300)
 plt.show()
