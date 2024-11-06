@@ -122,7 +122,7 @@ if args.closeup:
 ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 1))
 
 plt.xlabel('x [m]', size=20)
-plt.ylabel('z [m]', size=20)
+plt.ylabel('y [m]', size=20)
 #ax.set_title('epsilon_r distribution', size=20)
 ax.tick_params(labelsize=16)
 
