@@ -87,9 +87,10 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
 
             #* Calculate the background
-            background = np.mean(np.abs(outputdata[int(20e-9/dt):int(50e-9/dt)]))
+            #background = np.mean(np.abs(outputdata[int(20e-9/dt):int(50e-9/dt)]))
 
             #* Detect the peak in the envelope
+            """
             threshold = background * 1
             peak_idx = []
             peak_value = []
@@ -103,6 +104,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     end = i
                     peak_idx.append(np.argmax(np.abs(outputdata[start:end])) + start)
                 i += 1
+            """
 
             # Plotting if FFT required
             if fft:
@@ -122,15 +124,20 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 # Plot time history of output component
                 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
                 line1 = ax1.plot(time, outputdata, 'k', lw=2, label=outputtext)
-                ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
+                #ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
                 #ax1.scatter(time[peak_idx], outputdata[peak_idx], 'kx')
                 #* Plot the peak
-                ax1.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
+                #ax1.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
                 ax1.set_xlabel('Time [ns]', fontsize=18)
                 ax1.set_ylabel(outputtext + ' field strength [V/m]', fontsize=18)
-                ax1.set_xlim([0, np.amax(time)])
+                #* Closeup otpion
+                if args.closeup:
+                    ax1.set_xlim([closeup_x_start, closeup_x_end])
+                    ax1.set_ylim([closeup_y_start, closeup_y_end])
+                else:
+                    ax1.set_xlim([0, np.amax(time)])
                 ax1.grid(which='both', axis='both', linestyle='-.')
-                ax1.legend(fontsize = 15)
+                #ax1.legend(fontsize = 15)
                 ax1.minorticks_on()
                 ax1.tick_params(labelsize=18)
 
@@ -139,7 +146,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 #plt.setp(baseline, 'linewidth', 0)
                 #plt.setp(stemlines, 'color', 'r')
                 #plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
-                line2 = ax2.plot(freqs[pltrange], power[pltrange], 'r', lw=2)
+                line2 = ax2.plot(freqs[pltrange], power[pltrange], 'k', lw=2)
                 ax2.set_xlabel('Frequency [Hz]', fontsize=18)
                 ax2.set_ylabel('Power [dB]', fontsize=18)
                 ax2.grid(which='both', axis='both', linestyle='-.')
@@ -164,13 +171,13 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
             #* Plotting if no FFT required
             else:
                 fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
-                ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
+                #ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
                 line = ax.plot(time, outputdata, 'k', lw=2, label=outputtext)
                 #* Plot the peak
-                ax.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
+                #ax.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
                 #* Plot the background
-                ax.hlines(background, 0, np.amax(time), colors='gray', linestyles='--', label='Background')
-                ax.hlines(-background, 0, np.amax(time), colors='gray', linestyles='--')
+                #ax.hlines(background, 0, np.amax(time), colors='gray', linestyles='--', label='Background')
+                #ax.hlines(-background, 0, np.amax(time), colors='gray', linestyles='--')
 
                 if args.closeup:
                     ax.set_xlim([closeup_x_start, closeup_x_end])
@@ -182,7 +189,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 ax.set_xlabel('Time [ns]', fontsize=18)
                 ax.set_ylabel(outputtext + ' field strength [V/m]', fontsize=18)
                 ax.tick_params(labelsize=18)
-                ax.legend(fontsize = 16)
+                #ax.legend(fontsize = 16)
 
                 if 'H' in output:
                     plt.setp(line, color='g')

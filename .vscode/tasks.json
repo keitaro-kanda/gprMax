@@ -6,32 +6,32 @@
         {
             "label": "gprMax 1st run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/35cm/geometry/geometry.in"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/60cm/geometry/A-scan/geometry.out --outputs Ez"
         },
         {
             "label": "gprMax 2nd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/40cm/geometry/geometry.in"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/60cm/geometry/A-scan/geometry.out --outputs Ez -closeup"
         },
-            {
+        {
             "label": "gprMax 3rd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/45cm/geometry/geometry.in"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/75cm/geometry/A-scan/geometry.out --outputs Ez"
         },
         {
             "label": "gprMax 4th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/60cm/geometry/geometry.in"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/75cm/geometry/A-scan/geometry.out --outputs Ez -closeup"
         },
         {
             "label": "gprMax 5th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/75cm/geometry/geometry.in"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/90cm/geometry/A-scan/geometry.out --outputs Ez"
         },
         {
             "label": "gprMax 6th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/90cm/geometry/geometry.in"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/90cm/geometry/A-scan/geometry.out --outputs Ez -closeup"
         },
         {
             "label": "task sequence",
