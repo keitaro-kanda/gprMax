@@ -4,46 +4,91 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "gprMax 1st run",
+            "label": "gprMax run template",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/60cm/geometry/A-scan/geometry.out --outputs Ez"
+            "command": "${command:python.interpreterPath} -m gprMax [.in file path]"
         },
         {
-            "label": "gprMax 2nd run",
+            "label": "Ascan plot template",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/60cm/geometry/A-scan/geometry.out --outputs Ez -closeup"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py [.out file path] --outputs Ez -closeup"
         },
         {
-            "label": "gprMax 3rd run",
+            "label": "1st run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/75cm/geometry/A-scan/geometry.out --outputs Ez"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor2/A-scan/geometry.out --outputs Ez -closeup"
         },
         {
-            "label": "gprMax 4th run",
+            "label": "2nd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/75cm/geometry/A-scan/geometry.out --outputs Ez -closeup"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor3/A-scan/geometry.out --outputs Ez -closeup"
         },
         {
-            "label": "gprMax 5th run",
+            "label": "3rd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/90cm/geometry/A-scan/geometry.out --outputs Ez"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor3/A-scan/geometry.out --outputs Ez -closeup"
         },
         {
-            "label": "gprMax 6th run",
+            "label": "4th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/plot_Ascan.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/90cm/geometry/A-scan/geometry.out --outputs Ez -closeup"
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor4/A-scan/geometry.out --outputs Ez -closeup"
+        },
+        {
+            "label": "5th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor5/A-scan/geometry.out --outputs Ez -closeup"
+        },
+        {
+            "label": "6th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor6/A-scan/geometry.out --outputs Ez -closeup"
+        },
+        {
+            "label": "7th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor7/A-scan/geometry.out --outputs Ez -closeup"
+        },
+        {
+            "label": "8th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor8/A-scan/geometry.out --outputs Ez -closeup"
+        },
+        {
+            "label": "9th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor9/A-scan/geometry.out --outputs Ez -closeup"
+        },
+        {
+            "label": "10th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor10/A-scan/geometry.out --outputs Ez -closeup"
+        },
+        {
+            "label": "11th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/75cm/geometry/A-scan/geometry.out --outputs Ez -closeup"
+        },
+        {
+            "label": "12th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} tools/plot_Ascan.py  /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/90cm/geometry/A-scan/geometry.out --outputs Ez -closeup"
         },
         {
             "label": "task sequence",
             "type": "shell",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "gprMax 1st run",
-                "gprMax 2nd run",
-                "gprMax 3rd run",
-                "gprMax 4th run",
-                "gprMax 5th run",
-                "gprMax 6th run"
+                "1st run",
+                "2nd run",
+                "3rd run",
+                "4th run",
+                "5th run",
+                "6th run",
+                "7th run",
+                "8th run",
+                "9th run",
+                "10th run"
+
             ],
             "problemMatcher": []
         }
