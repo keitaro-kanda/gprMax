@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(
     prog='k_trimming.py',
     description='Trim the specified area of the image',
     epilog='End of help message',
-    usage='python -m ttools/k_trimming.py [img_folder_path] [area_L] [area_R] [area_T] [area_B]',
+    usage='python -m tools/k_trimming.py [img_folder_path] [area_L] [area_R] [area_T] [area_B]',
 )
 parser.add_argument('img_folder_path', help='Path to the folder containing the images to be trimmed')
 parser.add_argument('area_L', type=int, help='Left side of the area to be trimmed')
@@ -25,7 +25,10 @@ input_folder = args.img_folder_path
 output_folder = os.path.join(os.path.dirname(input_folder), 'screenshot_trimmed')
 os.makedirs(output_folder, exist_ok=True)
 
-
+#* Save settings in txt file
+with open(output_folder + '/' + 'settings.txt', 'w') as f:
+    f.write('Image trimming settings...\n')
+    f.write('Area to be trimmed: ({}, {}, {}, {})\n'.format(args.area_L, args.area_T, args.area_R, args.area_B))
 
 #* Define the area to be trimmed
 #* (left, upper, right, lower) in percent
