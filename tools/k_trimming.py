@@ -28,7 +28,7 @@ os.makedirs(output_folder, exist_ok=True)
 #* Save settings in txt file
 with open(output_folder + '/' + 'settings.txt', 'w') as f:
     f.write('Image trimming settings...\n')
-    f.write('Area to be trimmed: ({}, {}, {}, {})\n'.format(args.area_L, args.area_T, args.area_R, args.area_B))
+    f.write('Area to be trimmed: (Left: {}, Top: {}, Right: {}, Bottom: {})\n'.format(args.area_L, args.area_T, args.area_R, args.area_B))
 
 #* Define the area to be trimmed
 #* (left, upper, right, lower) in percent
