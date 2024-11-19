@@ -1,13 +1,11 @@
-import json
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
-import mpl_toolkits.axes_grid1 as axgrid1
 import os
 import argparse
 from tqdm import tqdm
 from outputfiles_merge import get_output_data
-from scipy import signal
+from scipy.signal import hilbert
 
 
 
@@ -16,135 +14,161 @@ parser = argparse.ArgumentParser(
     prog='k_detect_peak.py',
     description='Detect the peak from the B-scan data',
     epilog='End of help message',
-    usage='python -m tools.k_detect_peak [json_path]',
+    usage='python -m tools.k_detect_peak [out_file] [-closeup]',
 )
-parser.add_argument('json_path', help='Path to the json file')
+parser.add_argument('out_file', help='Path to the .out file')
+parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
 args = parser.parse_args()
 
 
-
-#* Load json file
-with open(args.json_path) as f:
-    params = json.load(f)
-#* Load antenna settings
-src_step = params['antenna_settings']['src_step']
-rx_step = params['antenna_settings']['rx_step']
-src_start = params['antenna_settings']['src_start']
-rx_start = params['antenna_settings']['rx_start']
-#* Check antenna step
-if src_step == rx_step:
-    antenna_step = src_step
-    antenna_start = (src_start + rx_start) / 2
-
-
-
-#* Load output file
-data_path = params['data']
-
-#* Define output directory
-output_dir = os.path.join(os.path.dirname(data_path), 'detect_peak')
-os.makedirs(output_dir, exist_ok=True)
-
-
-#* Load the data
+#* Load the A-scan data
+data_path = args.out_file
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):
-    data, dt = get_output_data(data_path, (rx+1), params['data_name'])
-print('data shape: ', data.shape)
+    data, dt = get_output_data(data_path, (rx+1), 'Ez')
+
+#time = np.arange(len(data)) * dt
 
 
-#* Calculate the envelope
-envelope = np.abs(signal.hilbert(data, axis=0))
+#* Define the function to analyze the pulses
+def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end):
+    time = np.arange(len(data)) * dt
+
+    #* Calculate the envelope of the signal
+    analytic_signal = hilbert(data)
+    envelope = np.abs(analytic_signal)
+
+    #* Find the peaks
+    peaks = []
+    for i in tqdm(range(1, len(data) - 1)):
+        if envelope[i - 1] < envelope[i] > envelope[i + 1] and np.abs(data[i]) > 1:
+            peaks.append(i)
+
+    # Calculate the half-width of the pulses
+    pulse_info = []
+    for i, peak_idx in enumerate(peaks):
+        peak_amplitude = data[peak_idx]
+        half_amplitude = peak_amplitude / 2
+
+        # 左側の半値位置を探索
+        left_idx = peak_idx
+        while left_idx > 0 and envelope[left_idx] > half_amplitude:
+            left_idx -= 1
+
+        if left_idx == 0:
+            left_half_time = time[0]
+        else:
+            # 線形補間で正確な半値位置を求める
+            left_slope = (envelope[left_idx + 1] - envelope[left_idx]) / (time[left_idx + 1] - time[left_idx])
+            left_half_time = time[left_idx] + (half_amplitude - envelope[left_idx]) / left_slope
+
+        # 右側の半値位置を探索
+        right_idx = peak_idx
+        while right_idx < len(envelope) - 1 and envelope[right_idx] > half_amplitude:
+            right_idx += 1
+
+        if right_idx == len(envelope) - 1:
+            right_half_time = time[-1]
+        else:
+            # 線形補間で正確な半値位置を求める
+            right_slope = (envelope[right_idx] - envelope[right_idx - 1]) / (time[right_idx] - time[right_idx - 1])
+            right_half_time = time[right_idx - 1] + (half_amplitude - envelope[right_idx - 1]) / right_slope
+
+        # 半値全幅を計算
+        width = right_half_time - left_half_time
+        width_half = width / 2
+
+        # 次のピークとの時間差と判定
+        if i < len(peaks) - 1:
+            next_peak_idx = peaks[i + 1]
+            separation = time[next_peak_idx] - time[peak_idx]
+            distinguishable = separation >= width_half
+        else:
+            separation = None
+            distinguishable = None
+
+        # 半値全幅内でのA-scanデータの最大値を探す
+        # 時間範囲をインデックス範囲に変換
+        left_time_idx = np.searchsorted(time, left_half_time)
+        right_time_idx = np.searchsorted(time, right_half_time)
+
+        # 範囲内での最大振幅とそのインデックスを取得
+        data_segment = data[left_time_idx:right_time_idx+1]
+        if len(data_segment) > 0:
+            local_max_idx = np.argmax(np.abs(data_segment))
+            max_idx = left_time_idx + local_max_idx
+            max_time = time[max_idx]
+            max_amplitude = data[max_idx]
+        else:
+            max_idx = peak_idx
+            max_time = time[peak_idx]
+            max_amplitude = data[peak_idx]
+
+        pulse_info.append({
+            'peak_idx': peak_idx,
+            'peak_time': time[peak_idx],
+            'peak_amplitude': peak_amplitude,
+            'width': width,
+            'width_half': width_half,
+            'left_half_time': left_half_time,
+            'right_half_time': right_half_time,
+            'separation': separation,
+            'distinguishable': distinguishable,
+            'max_idx': max_idx,
+            'max_time': max_time,
+            'max_amplitude': max_amplitude
+        })
 
 
+    #* Plot A-scan
+    fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'), num='rx' + str(rx),
+                            figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
+    ax.plot(time, data, label='A-scan', color='black')
+    ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.')
 
-#* Detect peak from the B-scan data
-scatter_x_idx = []
-scatter_time_idx = []
-scatter_value = []
+    for i, info in enumerate(pulse_info):
+        peak_time = info['peak_time']
+        plt.plot(info['max_time'], info['max_amplitude'], 'ro')
 
-data_trim = data[int(15e-9/dt):, :]
-envelope_trim = envelope[int(15e-9/dt):, :]
-backgrounds = np.mean(np.abs(data_trim), axis=0)
-thresholds = backgrounds * 3
-
-
-#* Detect the peak
-for i in tqdm(range(data.shape[1]), desc='Detecting peaks'):
-    above_threshold_indices = np.where(envelope_trim[:, i] > thresholds[i])[0]
-
-    if len(above_threshold_indices) > 0:
-        # Find the start and end of each group of indices above the threshold
-        split_points = np.split(above_threshold_indices, np.where(np.diff(above_threshold_indices) != 1)[0] + 1)
-
-        for group in split_points:
-            start, end = group[0], group[-1] + 1
-            peak_idx_in_group = np.argmax(np.abs(envelope_trim[start:end, i])) + start
-
-            scatter_x_idx.append(i)
-            scatter_time_idx.append(peak_idx_in_group)
-            scatter_value.append(data_trim[peak_idx_in_group, i])
-            #if data[peak_idx_in_group, i] > 0:
-            #    scatter_value.append(1)
-            #else:
-            #    scatter_value.append(-1)
-
-print('Length of values array: ', len(scatter_value))
-print('Length of x index array: ', len(scatter_x_idx))
-print('Length of time index array: ', len(scatter_time_idx))
-
-scatter_x_idx = np.array(scatter_x_idx)
-scatter_time_idx = np.array(scatter_time_idx)
-scatter_value = np.array(scatter_value)
-
-scatter_max = np.amax(np.abs(scatter_value))
+        # 半値全幅を描画
+        if np.abs(info['peak_amplitude']) > 1:
+            plt.hlines(envelope[info['peak_idx']] / 2,
+                    info['left_half_time'],
+                    info['right_half_time'],
+                    color='green', linestyle='--', label='FWHM' if i == 0 else "")
 
 
-#* Calculate dB
-envelope[envelope == 0] = 1e-10
-envelope_db = 10 * np.log10(envelope/np.amax(np.abs(envelope)))
+    plt.xlabel('Time [ns]', fontsize=20)
+    plt.ylabel('Amplitude', fontsize=20)
+    #plt.title('Pulse Analysis')
+    plt.legend(fontsize=16)
+    plt.tick_params(labelsize=16)
+    plt.grid(True)
+
+    if args.closeup:
+        ax.set_xlim([closeup_x_start * 1e-9, closeup_x_end * 1e-9])
+        ax.set_ylim([closeup_y_start, closeup_y_end])
+    else:
+        ax.set_xlim([0, np.amax(time)])
+    plt.show()
+
+    return pulse_info
+
+# 使用例
+if __name__ == "__main__":
+    # for closeup option
+    closeup_x_start = 0 #[ns]
+    closeup_x_end =100 #[ns]
+    closeup_y_start = -60
+    closeup_y_end = 60
 
 
-
-#* Plot
-print(' ')
-print('Plotting...')
+    #* Run the pulse analysis
+    pulse_info = analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end)
 
 
+    # 結果の表示
+    for info in pulse_info:
+        print(f"Peak at {info['peak_time']/1e-9:.4f} ns: Width={info['width']/1e-9:.4f} ns, Distinguishable={info['distinguishable']}")
 
-fig = plt.figure(figsize=(18, 12))
-ax = fig.add_subplot(111)
-
-im = ax.imshow(envelope_db, aspect='auto', cmap='viridis',
-                extent=[antenna_start, antenna_start + data.shape[1]*antenna_step,
-                15 + data.shape[0]*dt*1e9, 0],
-                vmin=-35, vmax=0
-                )
-scatter = ax.scatter(antenna_start + scatter_x_idx*antenna_step, scatter_time_idx*dt*1e9 + 15, # +50 to compensate the trim
-                    c=scatter_value, cmap='bwr', s=5,
-                    vmin = -30, vmax = 30)
-
-
-#* Set labels
-ax.set_xlabel('Distance [m]', fontsize=20)
-ax.set_ylabel('Time [ns]', fontsize=20)
-ax.tick_params(labelsize=16)
-
-
-delvider = axgrid1.make_axes_locatable(ax)
-cax_im = delvider.append_axes('right', size='3%', pad=0.1)
-cbar_im = plt.colorbar(im, cax=cax_im, orientation = 'vertical')
-cbar_im.set_label('Envelope', fontsize=18)
-cbar_im.ax.tick_params(labelsize=16)
-
-cax_scatter = delvider.append_axes('right', size='3%', pad=1)
-cbar_scatter = plt.colorbar(scatter, cax=cax_scatter, orientation = 'vertical')
-cbar_scatter.set_label('Peak amplitude', fontsize=18)
-cbar_scatter.ax.tick_params(labelsize=16)
-
-
-fig.savefig(output_dir + '/detect_peak.png', format='png', dpi=120)
-fig.savefig(output_dir + '/detect_peak.pdf', format='pdf', dpi=300)
-
-plt.show()
