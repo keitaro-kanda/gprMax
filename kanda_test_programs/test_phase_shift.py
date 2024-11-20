@@ -10,7 +10,7 @@ sys.path.append('tools')
 from outputfiles_merge import get_output_data
 
 # データの読み込み
-data_path = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x10/20240824_echo_shape_test/direct_wave/direct.out'
+data_path = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/direct/A-scan/direct.out'
 output_dir = os.path.join(os.path.dirname(data_path), 'phase_shift')
 if not os.path.exists(output_dir):
     os.mkdir(output_dir)
@@ -24,9 +24,9 @@ print('data shape: ', sig.shape)
 t = np.arange(len(sig)) * dt / 1e-9  # 時間をナノ秒に変換
 sig = sig / np.max(np.abs(sig))  # 正規化
 
-def shift(shift_time):
+def shift(shift_time, original_sig):
     shift_samples = int(shift_time * 1e-9 / dt)
-    shifted_sig = -np.roll(sig, shift_samples) * 0.7
+    shifted_sig = -np.roll(original_sig, shift_samples) * 0.7
     return shifted_sig
 
 def env(data):
@@ -52,10 +52,12 @@ fig.supylabel('Normalized amplitude', fontsize=20)
 # アニメーション関数
 def animate(i):
     time_lag = time_lag_list[i]
-    shifted = shift(time_lag)
-    overlapped = sig + shifted
+    shifted = shift(time_lag, sig)
+    #overlapped = sig + shifted
+    bottom_wave = sig + shifted
+    overlapped = sig + bottom_wave
 
-    plot_list = [sig, shifted, overlapped]
+    plot_list = [sig, bottom_wave, overlapped]
     for idx, line in enumerate([line1, line2, line3]):
         line.set_data(t, plot_list[idx] - 2.5 * idx)
     ax.set_title(f'Time lag: {time_lag:.2f} ns', fontsize=16)
@@ -67,6 +69,6 @@ ani = FuncAnimation(fig, animate, frames=len(time_lag_list), blit=True, repeat=F
 
 # 動画の保存（FFmpegが必要）
 writer = FFMpegWriter(fps=10, metadata=dict(artist='Me'), bitrate=1800)
-ani.save(os.path.join(output_dir, 'wave_overlap_animation.mp4'), writer=writer)
+ani.save(os.path.join(output_dir, 'wave_overlap_animation_small.mp4'), writer=writer)
 
 plt.show()
