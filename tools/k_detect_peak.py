@@ -21,8 +21,11 @@ parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
 args = parser.parse_args()
 
 
-#* Load the A-scan data
+#* Define path
 data_path = args.out_file
+output_dir = os.path.dirname(data_path)
+
+#* Load the A-scan data
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):
@@ -33,7 +36,7 @@ for rx in range(nrx):
 
 #* Define the function to analyze the pulses
 def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end):
-    time = np.arange(len(data)) * dt
+    time = np.arange(len(data)) * dt  / 1e-9 # ns
 
     #* Calculate the envelope of the signal
     analytic_signal = hilbert(data)
@@ -48,7 +51,7 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
     # Calculate the half-width of the pulses
     pulse_info = []
     for i, peak_idx in enumerate(peaks):
-        peak_amplitude = data[peak_idx]
+        peak_amplitude = np.abs(data[peak_idx])
         half_amplitude = peak_amplitude / 2
 
         # 左側の半値位置を探索
@@ -129,14 +132,16 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
 
     for i, info in enumerate(pulse_info):
         peak_time = info['peak_time']
-        plt.plot(info['max_time'], info['max_amplitude'], 'ro')
+        plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
 
         # 半値全幅を描画
+        """
         if np.abs(info['peak_amplitude']) > 1:
             plt.hlines(envelope[info['peak_idx']] / 2,
                     info['left_half_time'],
                     info['right_half_time'],
                     color='green', linestyle='--', label='FWHM' if i == 0 else "")
+        """
 
 
     plt.xlabel('Time [ns]', fontsize=20)
@@ -147,10 +152,18 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
     plt.grid(True)
 
     if args.closeup:
-        ax.set_xlim([closeup_x_start * 1e-9, closeup_x_end * 1e-9])
+        ax.set_xlim([closeup_x_start, closeup_x_end])
         ax.set_ylim([closeup_y_start, closeup_y_end])
     else:
         ax.set_xlim([0, np.amax(time)])
+
+    #* Save the plot
+    if args.closeup:
+            fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '_closeup_x' + str(closeup_x_start) \
+                    + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
+                    ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+    else:
+        fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
     plt.show()
 
     return pulse_info
@@ -170,5 +183,18 @@ if __name__ == "__main__":
 
     # 結果の表示
     for info in pulse_info:
-        print(f"Peak at {info['peak_time']/1e-9:.4f} ns: Width={info['width']/1e-9:.4f} ns, Distinguishable={info['distinguishable']}")
+        print(f"Peak at {info['peak_time']:.4f} ns: Width={info['width']:.4f} ns, Distinguishable={info['distinguishable']}")
+
+    #* Save the pulse information
+    filename = os.path.join(output_dir, 'peak_info.txt')
+    peak_info = []
+    for info in pulse_info:
+        peak_info.append({
+            'Peak time (envelope) [ns]': info['peak_time'],
+            'Peak amplitude (envelope)': info['peak_amplitude'],
+            'Distinguishable': info['distinguishable'],
+            'Max amplitude': info['max_amplitude'],
+            'Max time [ns]': info['max_time']
+        })
+    np.savetxt(filename, peak_info, delimiter=' ', fmt='%s')
 
