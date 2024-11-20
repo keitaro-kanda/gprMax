@@ -86,7 +86,8 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
         if i < len(peaks) - 1:
             next_peak_idx = peaks[i + 1]
             separation = time[next_peak_idx] - time[peak_idx]
-            distinguishable = separation >= width_half
+            #distinguishable = separation >= width_half
+            distinguishable = separation >= right_half_time - time[peak_idx]
         else:
             separation = None
             distinguishable = None
@@ -135,20 +136,20 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
         plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
 
         # 半値全幅を描画
-        """
+        
         if np.abs(info['peak_amplitude']) > 1:
             plt.hlines(envelope[info['peak_idx']] / 2,
                     info['left_half_time'],
                     info['right_half_time'],
                     color='green', linestyle='--', label='FWHM' if i == 0 else "")
-        """
+        
 
 
-    plt.xlabel('Time [ns]', fontsize=20)
-    plt.ylabel('Amplitude', fontsize=20)
+    plt.xlabel('Time [ns]', fontsize=24)
+    plt.ylabel('Amplitude', fontsize=24)
     #plt.title('Pulse Analysis')
-    plt.legend(fontsize=16)
-    plt.tick_params(labelsize=16)
+    plt.legend(fontsize=20, loc='lower right')
+    plt.tick_params(labelsize=20)
     plt.grid(True)
 
     if args.closeup:
