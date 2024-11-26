@@ -14,10 +14,11 @@ parser = argparse.ArgumentParser(
     prog='k_detect_peak.py',
     description='Detect the peak from the B-scan data',
     epilog='End of help message',
-    usage='python -m tools.k_detect_peak [out_file] [-closeup]',
+    usage='python -m tools.k_detect_peak [out_file] [-closeup] [-FWHM]',
 )
 parser.add_argument('out_file', help='Path to the .out file')
 parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
+parser.add_argument('-FWHM', action='store_true', help='Plot the FWHM')
 args = parser.parse_args()
 
 
@@ -45,13 +46,16 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
     #* Find the peaks
     peaks = []
     for i in tqdm(range(1, len(data) - 1)):
-        if envelope[i - 1] < envelope[i] > envelope[i + 1] and np.abs(data[i]) > 1:
+        if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
             peaks.append(i)
+    print(f'Found {len(peaks)} peaks')
+
 
     # Calculate the half-width of the pulses
     pulse_info = []
     for i, peak_idx in enumerate(peaks):
-        peak_amplitude = np.abs(data[peak_idx])
+        #peak_amplitude = np.abs(data[peak_idx])
+        peak_amplitude = envelope[peak_idx]
         half_amplitude = peak_amplitude / 2
 
         # 左側の半値位置を探索
@@ -86,8 +90,8 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
         if i < len(peaks) - 1:
             next_peak_idx = peaks[i + 1]
             separation = time[next_peak_idx] - time[peak_idx]
-            #distinguishable = separation >= width_half
-            distinguishable = separation >= right_half_time - time[peak_idx]
+            distinguishable = separation >= width_half
+            #distinguishable = separation >= right_half_time - time[peak_idx]
         else:
             separation = None
             distinguishable = None
@@ -136,13 +140,14 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
         plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
 
         # 半値全幅を描画
-        
-        if np.abs(info['peak_amplitude']) > 1:
-            plt.hlines(envelope[info['peak_idx']] / 2,
-                    info['left_half_time'],
-                    info['right_half_time'],
-                    color='green', linestyle='--', label='FWHM' if i == 0 else "")
-        
+        if args.FWHM:
+            if info['distinguishable']:
+                plt.hlines(envelope[info['peak_idx']] / 2,
+                        info['left_half_time'],
+                        info['right_half_time'],
+                        color='green', linestyle='--', label='FWHM' if i == 0 else "")
+        else:
+            continue
 
 
     plt.xlabel('Time [ns]', fontsize=24)
