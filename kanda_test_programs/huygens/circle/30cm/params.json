@@ -1,0 +1,27 @@
+{
+    "simulation_space": {
+        "size": [10.0, 6.0],
+        "grid_spacing": 0.01
+    },
+    "time": {
+        "time_step": 1e-9,
+        "time_window": 100e-9
+    },
+    "source":{
+        "position": [5.0, 5.3]
+    },
+    "media": [
+        {
+            "type": "square",
+            "bottom_left": [0, 0],
+            "size": [10, 5],
+            "epsilon": 3.0
+        },
+        {
+            "type": "circle",
+            "center": [5.0, 2.85],
+            "radius": 0.15,
+            "epsilon": 9.0
+        }
+    ]
+}
