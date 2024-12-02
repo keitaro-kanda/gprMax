@@ -11,7 +11,7 @@ c0 = 3e8  # 真空中の光速 [m/s]
 # コマンドライン引数の解析
 parser = argparse.ArgumentParser(
     prog='huygens_wave_simulation.py',
-    description='Simulate wave propagation using Huygens principle with recursive secondary sources at media boundaries.',
+    description='Simulate wave propagation using Huygens principle with secondary sources at media boundaries.',
     epilog='End of help message',
     usage='python huygens_wave_simulation.py [json]',
 )
@@ -32,55 +32,14 @@ def add_square(epsilon_grid, bottom_left, size, epsilon, x, y):
     epsilon_grid[mask] = epsilon
     return epsilon_grid
 
-# 波面クラスの定義
-class Wavefront:
-    def __init__(self, positions, time_created, source_positions):
-        self.positions = positions
-        self.time_created = time_created
-        self.source_positions = source_positions
-        self.active = True
-
-    def update(self, dt, c_grid, epsilon_grid, size_x, size_y, nx, ny, dx, dy):
-        new_positions = []
-        new_wavefronts = []
-        for idx, point in enumerate(self.positions):
-            x, y = point
-            source_position = self.source_positions[idx]
-            if 0 <= x < size_x and 0 <= y < size_y:
-                i = int(y / dy)
-                j = int(x / dx)
-                epsilon = epsilon_grid[i, j]
-                c = c0 / np.sqrt(epsilon)
-                direction = point - source_position
-                if np.linalg.norm(direction) != 0:
-                    direction = direction / np.linalg.norm(direction)
-                    new_point = point + c * dt * direction
-                    # 媒質の境界チェック
-                    i_new = int(new_point[1] / dy)
-                    j_new = int(new_point[0] / dx)
-                    if 0 <= i_new < ny and 0 <= j_new < nx:
-                        epsilon_new = epsilon_grid[i_new, j_new]
-                        if epsilon != epsilon_new:
-                            # 境界に到達した場合、新たな波面を生成
-                            new_wavefront = Wavefront(
-                                positions=[point.copy()],
-                                time_created=self.time_created + dt,
-                                source_positions=[point.copy()]
-                            )
-                            new_wavefronts.append(new_wavefront)
-                        else:
-                            new_positions.append(new_point)
-                    else:
-                        self.active = False  # シミュレーション領域外
-                else:
-                    self.active = False  # 方向が定義できない
-            else:
-                self.active = False  # シミュレーション領域外
-        self.positions = new_positions
-        self.source_positions = [self.source_positions[idx] for idx in range(len(self.positions))]
-        if not self.positions:
-            self.active = False  # 波面が消滅
-        return new_wavefronts  # 新たに生成された波面を返す
+# 初期波面の設定関数（円周上の点として設定）
+def init_wavefront(position_x, position_y, source_radius, num_points):
+    angles = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
+    wave_points = np.array([
+        position_x + source_radius * np.cos(angles),
+        position_y + source_radius * np.sin(angles)
+    ]).T
+    return wave_points
 
 # メイン
 if __name__ == '__main__':
@@ -89,12 +48,10 @@ if __name__ == '__main__':
         params = json.load(f)
     output_dir = os.path.dirname(args.json)
 
-    # シミュレーション空間の設定（左半分）
+    # シミュレーション空間の設定
     size_x, size_y = params['simulation_space']['size']
-    size_x = size_x / 2  # 左半分のみ
     dx = params['simulation_space']['grid_spacing']
-    dy = dx  # 正方格子を想定
-    nx, ny = int(size_x / dx), int(size_y / dy)
+    nx, ny = int(size_x / dx), int(size_y / dx)
     x = np.linspace(0, size_x, nx)
     y = np.linspace(0, size_y, ny)
     X, Y = np.meshgrid(x, y)
@@ -109,99 +66,133 @@ if __name__ == '__main__':
     media = params['media']
     for medium in media:
         if medium['type'] == 'circle':
-            center = medium['center']
-            if center[0] <= size_x:  # 左半分にある媒質のみ追加
-                epsilon_grid = add_circle(
-                    epsilon_grid,
-                    medium['center'],
-                    medium['radius'],
-                    medium['epsilon'],
-                    X, Y
-                )
+            epsilon_grid = add_circle(
+                epsilon_grid,
+                medium['center'],
+                medium['radius'],
+                medium['epsilon'],
+                X, Y
+            )
         elif medium['type'] == 'square':
-            bottom_left = medium['bottom_left']
-            if bottom_left[0] + medium['size'][0] <= size_x:
-                epsilon_grid = add_square(
-                    epsilon_grid,
-                    medium['bottom_left'],
-                    medium['size'],
-                    medium['epsilon'],
-                    X, Y
-                )
+            epsilon_grid = add_square(
+                epsilon_grid,
+                medium['bottom_left'],
+                medium['size'],
+                medium['epsilon'],
+                X, Y
+            )
 
     # 波速マップの計算
     c_grid = c0 / np.sqrt(epsilon_grid)
 
-    # 波面の初期化
+    # 初期波面の設定
+    source_position = params['source']['position']
+    source_radius = 0.15  # 波源の半径 [m]（必要に応じて調整）
+    num_points = 360  # 波面上の点の数（必要に応じて調整）
+    wave_points = init_wavefront(
+        source_position[0],
+        source_position[1],
+        source_radius,
+        num_points
+    )
+
+    # 二次波源のリスト
+    secondary_sources = []
+
+    # 波面の位置を保存するリスト
     wavefronts = []
 
-    # 初期波面（左半分のみ）
-    source_position = params['source']['position']
-    if source_position[0] > size_x:
-        print("Source position is outside the simulation domain.")
-        exit()
-    source_radius = 0.5  # 波源の半径 [m]
-    num_points = 180  # 波面上の点の数
-    angles = np.linspace(np.pi / 2, np.pi * 3 / 2, num_points)  # 左半分
-    initial_positions = np.array([
-        source_position[0] + source_radius * np.cos(angles),
-        source_position[1] + source_radius * np.sin(angles)
-    ]).T
-    initial_source_positions = np.array([source_position] * num_points)
-
-    initial_wavefront = Wavefront(
-        positions=initial_positions.tolist(),
-        time_created=0.0,
-        source_positions=initial_source_positions.tolist()
-    )
-    wavefronts.append(initial_wavefront)
-
-    # 波面の履歴を保存するリスト
-    wavefronts_history = []
-
-    # フレームを保存するディレクトリを作成
+    # 結果を保存するディレクトリを作成
     output_dir_frames = os.path.join(output_dir, 'wave_simulation_frames')
     if not os.path.exists(output_dir_frames):
         os.makedirs(output_dir_frames)
 
     # シミュレーションの実行
     for step in tqdm(range(num_steps), desc='Calculating...'):
-        current_time = step * dt
-        new_wavefronts = []
-        for wavefront in wavefronts:
-            if wavefront.active:
-                generated_wavefronts = wavefront.update(
-                    dt, c_grid, epsilon_grid,
-                    size_x, size_y, nx, ny, dx, dy
-                )
-                new_wavefronts.extend(generated_wavefronts)
-        # 新たに生成された波面を追加
-        wavefronts.extend(new_wavefronts)
-        # アクティブでない波面を削除
-        wavefronts = [w for w in wavefronts if w.active]
-        # 可視化のために波面の位置を保存
-        wavefronts_history.append([w.positions for w in wavefronts])
+        new_wave_points = []
+        # 一次波面の更新
+        for point in wave_points:
+            x, y = point
+            # 位置がシミュレーション領域内か確認
+            if 0 <= x < size_x and 0 <= y < size_y:
+                i = int((y / size_y) * ny)
+                j = int((x / size_x) * nx)
+                # 局所的な波速を計算
+                epsilon = epsilon_grid[i, j]
+                c = c0 / np.sqrt(epsilon)
+                # 波の進行方向は放射状
+                direction = point - np.array(source_position)
+                if np.linalg.norm(direction) != 0:
+                    direction = direction / np.linalg.norm(direction)
+                    # 位置の更新
+                    new_point = point + c * dt * direction
+                    # 境界のチェック
+                    i_new = int((new_point[1] / size_y) * ny)
+                    j_new = int((new_point[0] / size_x) * nx)
+                    if 0 <= i_new < ny and 0 <= j_new < nx:
+                        epsilon_new = epsilon_grid[i_new, j_new]
+                        if epsilon != epsilon_new:
+                            # 境界に到達した場合、二次波源を追加
+                            secondary_sources.append({
+                                'position': point.copy(),
+                                'time': step * dt
+                            })
+                        else:
+                            # 境界に到達していない場合、位置を更新
+                            new_wave_points.append(new_point)
+        wave_points = np.array(new_wave_points)
+        wavefronts.append({
+            'primary': wave_points.copy(),
+            'secondary': []
+        })
+
+        # 二次波源からの波面を計算
+        secondary_wave_points = []
+        for source in secondary_sources:
+            time_elapsed = (step * dt) - source['time']
+            if time_elapsed >= 0:
+                # 二次波源からの波面を計算
+                i_src = int((source['position'][1] / size_y) * ny)
+                j_src = int((source['position'][0] / size_x) * nx)
+                epsilon = epsilon_grid[i_src, j_src]
+                c = c0 / np.sqrt(epsilon)
+                radius = c * time_elapsed
+                # 二次波面上の点を計算
+                angles = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
+                points = np.array([
+                    source['position'][0] + radius * np.cos(angles),
+                    source['position'][1] + radius * np.sin(angles)
+                ]).T
+                # シミュレーション領域内の点のみを追加
+                for point in points:
+                    x, y = point
+                    if 0 <= x < size_x and 0 <= y < size_y:
+                        secondary_wave_points.append(point)
+        wavefronts[-1]['secondary'] = np.array(secondary_wave_points)
 
     print('Calculation done.')
     print(' ')
 
     # 可視化とフレームの保存
-    for i, wavefronts in tqdm(enumerate(wavefronts_history), desc='Saving frames...', total=len(wavefronts_history)):
-        plt.figure(figsize=(10, 10 * size_y / size_x))
-        plt.imshow(epsilon_grid, extent=(0, size_x, 0, size_y), cmap='Greys', origin='lower', alpha=0.3)
-        # 全ての波面をプロット
-        for positions in wavefronts:
-            if positions:
-                positions = np.array(positions)
-                plt.scatter(positions[:, 0], positions[:, 1], s=1, c='blue')
-        plt.title(f'Time: {i * dt * 1e9:.2f} ns', fontsize=24)
-        plt.xlabel('x (m)', fontsize=24)
-        plt.ylabel('y (m)', fontsize=24)
-        plt.xlim(0, size_x)
-        plt.ylim(0, size_y)
-        plt.tick_params(labelsize=20)
-        plt.savefig(f'{output_dir_frames}/frame_{i:04d}.png')
-        plt.close()
+    for i, wavefront in tqdm(enumerate(wavefronts), desc='Saving frames...', total=len(wavefronts)):
+        if i % 10 == 0:
+            plt.figure(figsize=(10, 10 * size_y / size_x))
+            plt.imshow(epsilon_grid, extent=(0, size_x, 0, size_y), cmap='Greys', origin='lower', alpha=0.3)
+            # 一次波面のプロット
+            if wavefront['primary'].size > 0:
+                plt.scatter(wavefront['primary'][:, 0], wavefront['primary'][:, 1], s=1, c='blue', label='Primary Wavefront')
+            # 二次波面のプロット
+            if wavefront['secondary'].size > 0:
+                plt.scatter(wavefront['secondary'][:, 0], wavefront['secondary'][:, 1], s=1, c='red', label='Secondary Wavefront')
+            plt.title(f'Time: {i * dt * 1e9 * 10:.2f} ns', fontsize=24)
+            plt.xlabel('x (m)', fontsize=24)
+            plt.ylabel('y (m)', fontsize=24)
+            plt.xlim(0, size_x)
+            plt.ylim(0, size_y)
+            plt.legend(fontsize=16)
+            plt.tick_params(labelsize=20)
+            plt.savefig(f'{output_dir_frames}/frame_{i:04d}.png')
+            plt.close()
     print('Frames saved.')
     print(' ')
 
@@ -214,19 +205,22 @@ if __name__ == '__main__':
     def animate_func(i):
         ax.clear()
         ax.imshow(epsilon_grid, extent=(0, size_x, 0, size_y), cmap='Greys', origin='lower', alpha=0.3)
-        wavefronts = wavefronts_history[i]
-        for positions in wavefronts:
-            if positions:
-                positions = np.array(positions)
-                ax.scatter(positions[:, 0], positions[:, 1], s=1, c='blue')
+        wavefront = wavefronts[i]
+        # 一次波面のプロット
+        if wavefront['primary'].size > 0:
+            ax.scatter(wavefront['primary'][:, 0], wavefront['primary'][:, 1], s=1, c='blue', label='Primary Wavefront')
+        # 二次波面のプロット
+        if wavefront['secondary'].size > 0:
+            ax.scatter(wavefront['secondary'][:, 0], wavefront['secondary'][:, 1], s=1, c='red', label='Secondary Wavefront')
         ax.set_title(f'Time: {i * dt * 1e9:.2f} ns', fontsize=24)
         ax.set_xlabel('x (m)', fontsize=24)
         ax.set_ylabel('y (m)', fontsize=24)
         ax.set_xlim(0, size_x)
         ax.set_ylim(0, size_y)
+        ax.legend(fontsize=16)
         ax.tick_params(labelsize=20)
         return ax
 
-    ani = animation.FuncAnimation(fig, animate_func, frames=len(wavefronts_history), interval=50)
+    ani = animation.FuncAnimation(fig, animate_func, frames=len(wavefronts), interval=50)
     ani.save(os.path.join(output_dir, 'wave_simulation.gif'), writer='pillow')
     print('Animation saved.')
