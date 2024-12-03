@@ -56,17 +56,17 @@ delta_T = Ts - Tb  # [s]
 
 
 #* Plot
-fig, ax = plt.subplots(1, 3, figsize=(20, 8), tight_layout=True)
+fig, ax = plt.subplots(1, 3, figsize=(20, 7), tight_layout=True)
 
 #* Plot colormap
 color = 'jet'
-colorbar_size = '5%'
-colorbar_pad = '20%'
+colorbar_size = '10%'
+colorbar_pad = 1
 
 #* Bottom component
 im0 = ax[0].imshow(Tb / 1e-9,
             extent=(rock_size_array[0], rock_size_array[-1], theta_array[0], theta_array[-1]),
-            aspect='equal', cmap = color)
+            cmap = color)
 ax[0].set_title('Bottom component', fontsize=24)
 ax[0].set_ylabel('Initial transmission angle', fontsize=20)
 
@@ -79,7 +79,7 @@ cbar0.ax.tick_params(labelsize=18)
 #* Side component
 im1 = ax[1].imshow(Ts / 1e-9,
             extent=(rock_size_array[0], rock_size_array[-1], theta_array[0], theta_array[-1]),
-            aspect='equal', cmap = color)
+            cmap = color)
 ax[1].set_title('Side component', fontsize=24)
 
 delvider1 = axgrid1.make_axes_locatable(ax[1])
@@ -91,7 +91,7 @@ cbar1.ax.tick_params(labelsize=18)
 #* Time difference
 im2 = ax[2].imshow(delta_T / 1e-9,
             extent=(rock_size_array[0], rock_size_array[-1], theta_array[0], theta_array[-1]),
-            aspect='equal', cmap = color)
+            cmap = color)
 ax[2].set_title('Time difference', fontsize=24)
 
 delvider2 = axgrid1.make_axes_locatable(ax[2])
@@ -110,6 +110,7 @@ for i in range(3):
     ax[i].set_yticks(y_ticks)
     ax[i].set_yticklabels(y_labels)
     ax[i].tick_params(axis='both', labelsize=18)
+
 
 plt.savefig('kanda_test_programs/propagation_model_square/propagation_time.png')
 plt.show()
