@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 from tqdm import tqdm
 import os
 import json
@@ -34,7 +35,7 @@ def add_square(epsilon_grid, bottom_left, size, epsilon, x, y):
 
 # 初期波面の設定関数（円周上の点として設定）
 def init_wavefront(position_x, position_y, source_radius, num_points):
-    angles = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
+    angles = np.linspace(np.pi, 2 * np.pi, num_points, endpoint=False)
     wave_points = np.array([
         position_x + source_radius * np.cos(angles),
         position_y + source_radius * np.sin(angles)
@@ -83,12 +84,12 @@ if __name__ == '__main__':
             )
 
     # 波速マップの計算
-    c_grid = c0 / np.sqrt(epsilon_grid)
+    v_grid = c0 / np.sqrt(epsilon_grid)
 
     # 初期波面の設定
     source_position = params['source']['position']
-    source_radius = 0.15  # 波源の半径 [m]（必要に応じて調整）
-    num_points = 360  # 波面上の点の数（必要に応じて調整）
+    source_radius = params['source']['radius']  # 波源の半径 [m]（必要に応じて調整）
+    num_points = 180  # 波面上の点の数（必要に応じて調整）
     wave_points = init_wavefront(
         source_position[0],
         source_position[1],
@@ -119,13 +120,13 @@ if __name__ == '__main__':
                 j = int((x / size_x) * nx)
                 # 局所的な波速を計算
                 epsilon = epsilon_grid[i, j]
-                c = c0 / np.sqrt(epsilon)
+                c_medium = c0 / np.sqrt(epsilon)
                 # 波の進行方向は放射状
                 direction = point - np.array(source_position)
                 if np.linalg.norm(direction) != 0:
                     direction = direction / np.linalg.norm(direction)
                     # 位置の更新
-                    new_point = point + c * dt * direction
+                    new_point = point + c_medium * dt * direction
                     # 境界のチェック
                     i_new = int((new_point[1] / size_y) * ny)
                     j_new = int((new_point[0] / size_x) * nx)
@@ -155,8 +156,8 @@ if __name__ == '__main__':
                 i_src = int((source['position'][1] / size_y) * ny)
                 j_src = int((source['position'][0] / size_x) * nx)
                 epsilon = epsilon_grid[i_src, j_src]
-                c = c0 / np.sqrt(epsilon)
-                radius = c * time_elapsed
+                c_medium = c0 / np.sqrt(epsilon)
+                radius = c_medium * time_elapsed
                 # 二次波面上の点を計算
                 angles = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
                 points = np.array([
@@ -172,55 +173,79 @@ if __name__ == '__main__':
 
     print('Calculation done.')
     print(' ')
+    frame_indices = [i for i in range(len(wavefronts)) if i % 50 == 0]
 
     # 可視化とフレームの保存
-    for i, wavefront in tqdm(enumerate(wavefronts), desc='Saving frames...', total=len(wavefronts)):
-        if i % 10 == 0:
-            plt.figure(figsize=(10, 10 * size_y / size_x))
-            plt.imshow(epsilon_grid, extent=(0, size_x, 0, size_y), cmap='Greys', origin='lower', alpha=0.3)
-            # 一次波面のプロット
-            if wavefront['primary'].size > 0:
-                plt.scatter(wavefront['primary'][:, 0], wavefront['primary'][:, 1], s=1, c='blue', label='Primary Wavefront')
-            # 二次波面のプロット
-            if wavefront['secondary'].size > 0:
-                plt.scatter(wavefront['secondary'][:, 0], wavefront['secondary'][:, 1], s=1, c='red', label='Secondary Wavefront')
-            plt.title(f'Time: {i * dt * 1e9 * 10:.2f} ns', fontsize=24)
-            plt.xlabel('x (m)', fontsize=24)
-            plt.ylabel('y (m)', fontsize=24)
-            plt.xlim(0, size_x)
-            plt.ylim(0, size_y)
-            plt.legend(fontsize=16)
-            plt.tick_params(labelsize=20)
-            plt.savefig(f'{output_dir_frames}/frame_{i:04d}.png')
-            plt.close()
+    for idx, i in tqdm(enumerate(frame_indices), desc='Saving frames...', total=len(frame_indices)):
+        wavefront = wavefronts[i]
+        plt.figure(figsize=(10, 10 * size_y / size_x))
+        plt.imshow(epsilon_grid, extent=(0, size_x, 0, size_y), cmap='Greys', origin='lower', alpha=0.7)
+        # 一次波面のプロット
+        if wavefront['primary'].size > 0:
+            plt.scatter(wavefront['primary'][:, 0], wavefront['primary'][:, 1], s=1, c='blue', label='Primary Wavefront')
+        # 二次波面のプロット
+        if wavefront['secondary'].size > 0:
+            plt.scatter(wavefront['secondary'][:, 0], wavefront['secondary'][:, 1], s=1, c='red', label='Secondary Wavefront')
+        current_time = i * dt * 1e9  # 時間を正しく計算
+        plt.title(f'Time: {current_time:.2f} ns', fontsize=24)
+        plt.xlabel('x (m)', fontsize=24)
+        plt.ylabel('y (m)', fontsize=24)
+        plt.xlim(0, size_x)
+        plt.ylim(0, size_y)
+        plt.legend(fontsize=16)
+        plt.tick_params(labelsize=20)
+        plt.savefig(f'{output_dir_frames}/frame_{idx:04d}.png')
+        plt.close()
     print('Frames saved.')
     print(' ')
 
     # アニメーションの作成
-    import matplotlib.animation as animation
+    print('Creating animation...')
+    animation_wavefronts = [wavefronts[i] for i in frame_indices]
+
 
     figsize_ratio = size_y / size_x
     fig, ax = plt.subplots(figsize=(10, 10 * figsize_ratio))
 
-    def animate_func(i):
-        ax.clear()
-        ax.imshow(epsilon_grid, extent=(0, size_x, 0, size_y), cmap='Greys', origin='lower', alpha=0.3)
-        wavefront = wavefronts[i]
-        # 一次波面のプロット
-        if wavefront['primary'].size > 0:
-            ax.scatter(wavefront['primary'][:, 0], wavefront['primary'][:, 1], s=1, c='blue', label='Primary Wavefront')
-        # 二次波面のプロット
-        if wavefront['secondary'].size > 0:
-            ax.scatter(wavefront['secondary'][:, 0], wavefront['secondary'][:, 1], s=1, c='red', label='Secondary Wavefront')
-        ax.set_title(f'Time: {i * dt * 1e9:.2f} ns', fontsize=24)
-        ax.set_xlabel('x (m)', fontsize=24)
-        ax.set_ylabel('y (m)', fontsize=24)
-        ax.set_xlim(0, size_x)
-        ax.set_ylim(0, size_y)
-        ax.legend(fontsize=16)
-        ax.tick_params(labelsize=20)
-        return ax
+    class Animator:
+        def __init__(self, ax, wavefronts, epsilon_grid, frame_indices, dt, size_x, size_y):
+            self.ax = ax
+            self.wavefronts = wavefronts
+            self.epsilon_grid = epsilon_grid
+            self.frame_indices = frame_indices
+            self.dt = dt
+            self.size_x = size_x
+            self.size_y = size_y
+            self.pbar = tqdm(total=len(wavefronts), desc='Animating...')
+            self.counter = 0  # プログレスバーのカウンター
 
-    ani = animation.FuncAnimation(fig, animate_func, frames=len(wavefronts), interval=50)
+        def __call__(self, i):
+            self.ax.clear()
+            self.ax.imshow(self.epsilon_grid, extent=(0, self.size_x, 0, self.size_y), cmap='Greys', origin='lower', alpha=0.7)
+            wavefront = self.wavefronts[i]
+            # 一次波面のプロット
+            if wavefront['primary'].size > 0:
+                self.ax.scatter(wavefront['primary'][:, 0], wavefront['primary'][:, 1], s=1, c='blue', label='Primary Wavefront')
+            # 二次波面のプロット
+            if wavefront['secondary'].size > 0:
+                self.ax.scatter(wavefront['secondary'][:, 0], wavefront['secondary'][:, 1], s=1, c='red', label='Secondary Wavefront')
+            current_time = self.frame_indices[i] * dt * 1e9  # 正しい時間を計算
+            self.ax.set_title(f'Time: {current_time:.2f} ns', fontsize=24)
+            self.ax.set_xlabel('x (m)', fontsize=24)
+            self.ax.set_ylabel('y (m)', fontsize=24)
+            self.ax.set_xlim(0, self.size_x)
+            self.ax.set_ylim(0, self.size_y)
+            self.ax.legend(fontsize=16)
+            self.ax.tick_params(labelsize=20)
+            self.pbar.update(1)
+            self.counter += 1
+            return self.ax
+
+        def close(self):
+            self.pbar.close()
+
+    animator = Animator(ax, animation_wavefronts, epsilon_grid, frame_indices, dt, size_x, size_y)
+    ani = animation.FuncAnimation(fig, animator, frames=len(animation_wavefronts), interval=50)
     ani.save(os.path.join(output_dir, 'wave_simulation.gif'), writer='pillow')
+    animator.close()
     print('Animation saved.')
