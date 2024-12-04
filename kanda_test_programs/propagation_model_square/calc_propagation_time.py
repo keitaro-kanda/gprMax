@@ -21,7 +21,8 @@ h_dash = antenna_height
 
 #* Parameters
 rock_size_array = np.arange(0, 2.101, 0.001)  # [m]
-theta_array = np.arange(0, np.pi * 1/2, np.pi / 720)  # [rad], 0 ~ pi/2
+theta_array = np.arange(0, np.pi * 1/2, np.pi / 1440
+)  # [rad], 0 ~ pi/2
 print('theta:', len(theta_array))
 
 
@@ -136,7 +137,7 @@ plt.show()
 
 
 #* Plot the minimum time difference
-plt.figure(figsize=(10, 8))
+plt.figure(figsize=(8, 6), tight_layout=True)
 plt.plot(rock_size_array, min_delta_T / 1e-9, linewidth=2)
 
 plt.xlabel('Rock size [m]', fontsize=20)
