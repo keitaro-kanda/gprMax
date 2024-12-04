@@ -39,7 +39,7 @@ for i, theta in enumerate(theta_array):
     for j, rock_size in enumerate(rock_size_array):
         side_criteria_1 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(3 - np.sin(theta)**2))  # [m]
         side_criteria_2 = antenna_height * np.tan(theta) + rock_depth * (3 * np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))\
-                + rock_size * (3 * np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
+                + rock_size * (np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
         if side_criteria_1 < rock_size/2 and rock_size/2 < side_criteria_2:
             Ls[i, j] = (antenna_height + h_dash) / np.cos(theta) \
                 + (6 * rock_depth) / (np.sqrt(3 - np.sin(theta)**2)) \
@@ -64,6 +64,13 @@ colorbar_size = '10%'
 colorbar_pad = 1
 
 #* Bottom component
+ax[0].plot(rock_size_array, Tb[0] / 1e-9, label='Bottom', linewidth=2)
+ax[0].set_title('Bottom component', fontsize=24)
+
+ax[0].set_ylabel('Time [ns]', fontsize=20)
+ax[0].grid(axis='both')
+
+"""
 im0 = ax[0].imshow(Tb / 1e-9,
             extent=(rock_size_array[0], rock_size_array[-1], theta_array[0], theta_array[-1]),
             cmap = color)
@@ -75,8 +82,10 @@ cax0 = delvider0.append_axes('bottom', size=colorbar_size, pad=colorbar_pad)
 cbar0 = plt.colorbar(im0, cax=cax0, orientation='horizontal')
 cbar0.set_label('Time [ns]', fontsize=20)
 cbar0.ax.tick_params(labelsize=18)
+"""
 
 #* Side component
+
 im1 = ax[1].imshow(Ts / 1e-9,
             extent=(rock_size_array[0], rock_size_array[-1], theta_array[0], theta_array[-1]),
             cmap = color)
@@ -107,9 +116,12 @@ y_labels = ['0', r'$\frac{\pi}{8}$', r'$\frac{\pi}{4}$', r'$\frac{3\pi}{8}$', r'
 for i in range(3):
     ax[i].set_xlabel('Rock size [m]', fontsize=20)
 
-    ax[i].set_yticks(y_ticks)
-    ax[i].set_yticklabels(y_labels)
     ax[i].tick_params(axis='both', labelsize=18)
+
+    if i != 0:
+        ax[i].set_yticks(y_ticks)
+        ax[i].set_yticklabels(y_labels)
+        ax[i].set_ylabel('Initial transmission angle', fontsize=20)
 
 
 plt.savefig('kanda_test_programs/propagation_model_square/propagation_time.png')
