@@ -16,62 +16,62 @@
         {
             "label": "1st run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor2/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor3/A-scan/geometry.out"
         },
         {
             "label": "2nd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor3/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor3/A-scan/geometry.out -closeup"
         },
         {
             "label": "3rd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor4/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor4/A-scan/geometry.out"
         },
         {
             "label": "4th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor5/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor4/A-scan/geometry.out -closeup"
         },
         {
             "label": "5th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor6/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor6/A-scan/geometry.out"
         },
         {
             "label": "6th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor7/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor6/A-scan/geometry.out -closeup"
         },
         {
             "label": "7th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor8/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor7/A-scan/geometry.out"
         },
         {
             "label": "8th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor9/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor7/A-scan/geometry.out -closeup"
         },
         {
             "label": "9th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/30cm/factor10/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor8/A-scan/geometry.out"
         },
         {
             "label": "10th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/60cm/geometry/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor8/A-scan/geometry.out -closeup"
         },
         {
             "label": "11th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/75cm/geometry/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor9/A-scan/geometry.out"
         },
         {
             "label": "12th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/90cm/geometry/A-scan/geometry.out -closeup"
+            "command": "${command:python.interpreterPath} tools/k_detect_peak.py /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_rectangle/60cm/factor9/A-scan/geometry.out -closeup"
         },
         {
             "label": "task sequence",
@@ -86,7 +86,10 @@
                 "6th run",
                 "7th run",
                 "8th run",
-                "9th run"
+                "9th run",
+                "10th run",
+                "11th run",
+                "12th run"
 
             ],
             "problemMatcher": []

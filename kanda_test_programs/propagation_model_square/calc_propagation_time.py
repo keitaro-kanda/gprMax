@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
+from matplotlib.gridspec import GridSpec
 
 # Physical constants
 c0 = 299792458  # Speed of light in vacuum [m/s]
@@ -18,8 +19,8 @@ h_dash = antenna_height
 
 
 #* Parameters
-rock_size_array = np.arange(0, 2.11, 0.01)  # [m]
-theta_array = np.arange(0, np.pi * 181 / 360, np.pi / 360)  # [rad]
+rock_size_array = np.arange(0, 2.101, 0.001)  # [m]
+theta_array = np.arange(0, np.pi * 1/2, np.pi / 720)  # [rad], 0 ~ pi/2
 print('theta:', len(theta_array))
 
 
@@ -38,9 +39,10 @@ print('Ls:', Ls.shape)
 for i, theta in enumerate(theta_array):
     for j, rock_size in enumerate(rock_size_array):
         side_criteria_1 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(3 - np.sin(theta)**2))  # [m]
-        side_criteria_2 = antenna_height * np.tan(theta) + rock_depth * (3 * np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))\
+        side_criteria_2 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))\
                 + rock_size * (np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
         if side_criteria_1 < rock_size/2 and rock_size/2 < side_criteria_2:
+        #if side_criteria_1 < rock_size / 2:
             Ls[i, j] = (antenna_height + h_dash) / np.cos(theta) \
                 + (6 * rock_depth) / (np.sqrt(3 - np.sin(theta)**2)) \
                 + (18 * rock_size) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
@@ -58,6 +60,7 @@ delta_T = Ts - Tb  # [s]
 #* Plot
 fig, ax = plt.subplots(1, 3, figsize=(20, 7), tight_layout=True)
 
+
 #* Plot colormap
 color = 'jet'
 colorbar_size = '10%'
@@ -68,27 +71,16 @@ ax[0].plot(rock_size_array, Tb[0] / 1e-9, label='Bottom', linewidth=2)
 ax[0].set_title('Bottom component', fontsize=24)
 
 ax[0].set_ylabel('Time [ns]', fontsize=20)
-ax[0].grid(axis='both')
 
-"""
-im0 = ax[0].imshow(Tb / 1e-9,
-            extent=(rock_size_array[0], rock_size_array[-1], theta_array[0], theta_array[-1]),
-            cmap = color)
-ax[0].set_title('Bottom component', fontsize=24)
-ax[0].set_ylabel('Initial transmission angle', fontsize=20)
-
-delvider0 = axgrid1.make_axes_locatable(ax[0])
-cax0 = delvider0.append_axes('bottom', size=colorbar_size, pad=colorbar_pad)
-cbar0 = plt.colorbar(im0, cax=cax0, orientation='horizontal')
-cbar0.set_label('Time [ns]', fontsize=20)
-cbar0.ax.tick_params(labelsize=18)
-"""
 
 #* Side component
 
 im1 = ax[1].imshow(Ts / 1e-9,
             extent=(rock_size_array[0], rock_size_array[-1], theta_array[0], theta_array[-1]),
-            cmap = color)
+            origin='lower', # theta=0が下に来るように
+            cmap = color,
+            #min=25, vmax=75
+            )
 ax[1].set_title('Side component', fontsize=24)
 
 delvider1 = axgrid1.make_axes_locatable(ax[1])
@@ -100,7 +92,10 @@ cbar1.ax.tick_params(labelsize=18)
 #* Time difference
 im2 = ax[2].imshow(delta_T / 1e-9,
             extent=(rock_size_array[0], rock_size_array[-1], theta_array[0], theta_array[-1]),
-            cmap = color)
+            origin='lower', # theta=0が下に来るように
+            cmap = color,
+            #vmin=0, vmax=25
+            )
 ax[2].set_title('Time difference', fontsize=24)
 
 delvider2 = axgrid1.make_axes_locatable(ax[2])
@@ -118,10 +113,13 @@ for i in range(3):
 
     ax[i].tick_params(axis='both', labelsize=18)
 
+    ax[i].grid(axis='both')
+
     if i != 0:
         ax[i].set_yticks(y_ticks)
         ax[i].set_yticklabels(y_labels)
         ax[i].set_ylabel('Initial transmission angle', fontsize=20)
+        ax[i].set_ylim(0, np.pi /4)
 
 
 plt.savefig('kanda_test_programs/propagation_model_square/propagation_time.png')
