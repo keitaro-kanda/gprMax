@@ -68,6 +68,13 @@ two_way_travel_time = [length / c0 /1e-9 for length in optical_path_length] # [n
 delay = model['initial_pulse_delay']# [ns]
 two_way_travel_time = [t + delay for t in two_way_travel_time]
 
+print('Two-way travel time [ns]:')
+print(two_way_travel_time)
+print(' ')
+
+#* Save the two-way travel time as txt
+np.savetxt(output_dir + '/delay_time.txt', two_way_travel_time, fmt='%.6f', delimiter=' ', header='Two-way travel time [ns]')
+
 
 
 
