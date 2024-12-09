@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(
     prog='huygens_wave_simulation.py',
     description='Simulate wave propagation using Huygens principle with secondary sources at media boundaries.',
     epilog='End of help message',
-    usage='python huygens_wave_simulation.py [json]',
+    usage='python kanda_test_programs/huygens.py [json]',
 )
 parser.add_argument('json', help='Path to the parameter json file')
 args = parser.parse_args()
