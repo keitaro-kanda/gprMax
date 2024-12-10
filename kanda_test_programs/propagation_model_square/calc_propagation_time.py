@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.gridspec import GridSpec
 from tqdm import tqdm
+from tqdm.contrib import tenumerate
 
 # Physical constants
 c0 = 299792458  # Speed of light in vacuum [m/s]
@@ -39,13 +40,17 @@ print('Tb:', Tb.shape)
 def calc_side_component(rock_width):
     Ls = np.zeros((len(thetas), len(rock_heights)))  # [m]
     #print('Ls:', Ls.shape)
-    for i, theta in enumerate(thetas):
+    for i, theta in tenumerate(thetas, desc=f'Rock width: {rock_width:.1f} m'):
         for j, h in enumerate(rock_heights):
+            # Criteriaの計算
             side_criteria_1 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(3 - np.sin(theta)**2))  # [m]
-            side_criteria_2 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(3 - np.sin(theta)**2))\
-                    +  h * (np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
-            if side_criteria_1 < rock_width/2 and rock_width/2 < side_criteria_2:
-            #if side_criteria_1 < rock_size / 2:
+            side_criteria_2 = side_criteria_1 + h * (np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
+
+            # 条件を判定
+            if side_criteria_1 < rock_width / 2 < side_criteria_2:
+                h_dash = (2 * np.cos(theta)**2 - 1) * antenna_height + \
+                            (rock_width - 2 * np.sin(theta) * (rock_depth / np.sqrt(3 - np.sin(theta)**2) + h / np.sqrt(9 - np.sin(theta)**2))) * \
+                            np.sin(theta) * np.cos(theta) # [m]
                 Ls[i, j] = (antenna_height + h_dash) / np.cos(theta) \
                     + (6 * rock_depth) / (np.sqrt(3 - np.sin(theta)**2)) \
                     + (18 * h) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
