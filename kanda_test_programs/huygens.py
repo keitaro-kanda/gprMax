@@ -34,15 +34,17 @@ def add_square(epsilon_grid, bottom_left, size, epsilon, x, y):
     return epsilon_grid
 
 # 初期波面の設定関数（円周上の点として設定）
-def init_wavefront(position_x, position_y, source_radius, num_points):
-    angles = np.linspace(np.pi, 3/2 * np.pi, num_points, endpoint=False)
+def init_wavefront(position_x, position_y, source_radius):
+    num_points = 9
+    angles = np.linspace(np.pi, 5/4 * np.pi, num_points, endpoint=True)
     wave_points = np.array([
         position_x + source_radius * np.cos(angles),
         position_y + source_radius * np.sin(angles)
     ]).T
     return wave_points
 
-def create_new_wavefronts(position_x, position_y, source_radius, num_points):
+def create_new_wavefronts(position_x, position_y, source_radius):
+    num_points = 72
     angles = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
     wave_points = np.array([
         position_x + source_radius * np.cos(angles),
@@ -91,12 +93,19 @@ class Wavefront:
                     if 0 <= i_new < self.ny and 0 <= j_new < self.nx:
                         epsilon_new = self.epsilon_grid[i_new, j_new]
                         if epsilon_at_point != epsilon_new:
-                            # 境界に達した点のみ削除し、新たな波面を生成
+                            # 境界に達した点から新たな球面波を生成
+                            # 小さな半径の円周上に点群を作る
+                            secondary_radius = dx  # 極小半径
+                            new_wave_points = create_new_wavefronts(
+                                new_point[0],  # new_pointのx座標
+                                new_point[1],  # new_pointのy座標
+                                secondary_radius
+                            )
+
                             new_wavefront = Wavefront(
-                                #positions=[point.copy()],
-                                positions=[new_point.copy()],
+                                positions=new_wave_points.tolist(),
                                 time_created=self.time_created + self.dt,
-                                source_position=point.copy(),
+                                source_position=new_point.copy(),
                                 dt=self.dt,
                                 c0=self.c0,
                                 epsilon_grid=self.epsilon_grid,
@@ -176,8 +185,7 @@ if __name__ == '__main__':
     # 初期波面の設定
     source_position = params['source']['position']
     source_radius = params['source']['radius']  # 波源の半径 [m]（必要に応じて調整）
-    num_points = 180  # 波面上の点の数（必要に応じて調整）
-    initial_positions = init_wavefront(source_position[0], source_position[1], source_radius, num_points)
+    initial_positions = init_wavefront(source_position[0], source_position[1], source_radius)
 
     # 初期波面をWavefrontとして生成
     wavefronts = [
@@ -199,7 +207,7 @@ if __name__ == '__main__':
 
     for step in tqdm(range(num_steps), desc='Calculating...'):
         new_wavefronts = []
-        for w in wavefronts:
+        for w in tqdm(wavefronts, desc=f'Calculate wavefron: step {step}', leave=False):
             if w.active:
                 gen_wfs = w.update()
                 new_wavefronts.extend(gen_wfs)
@@ -214,7 +222,7 @@ if __name__ == '__main__':
     print(' ')
 
     # 50タイムステップごとにフレームを保存
-    frame_indices = [i for i in range(len(wavefronts_history)) if i % 50 == 0]
+    frame_indices = [i for i in range(len(wavefronts_history )+1) if i % 50 == 0]
     print(f"Total frames to save: {len(frame_indices)}")
 
     output_dir_frames = os.path.join(output_dir, 'wave_simulation_frames')
