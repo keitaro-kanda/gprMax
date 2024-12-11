@@ -77,8 +77,23 @@ def calc_min_time_difference(delta_T):
     return min_delta_T
 
 
+#* Define function to calculate mean and standard deviation of time difference
+def calc_time_difference(delta_T):
+    delta_T_mean = np.zeros(len(rock_widths))  # 結果を格納する配列
+    delta_T_std = np.zeros(len(rock_widths))  # 結果を格納する配列
+    for i in range(len(rock_widths)):
+        # delta_T[:, i] に NaN 以外の値があるかチェック
+        if np.all(np.isnan(delta_T[:, i])):
+            delta_T_mean[i] = np.nan
+            delta_T_std[i] = np.nan
+        else:
+            delta_T_mean[i] = np.nanmean(delta_T[:, i])
+            delta_T_std[i] = np.nanstd(delta_T[:, i])
+    return delta_T_mean, delta_T_std
 
-def plot(height, Ts, delta_T, min_delta_T):
+
+
+def plot(height, Ts, delta_T, min_delta_T, delta_T_mean, delta_T_std):
     #* Create a GridSpec layout
     fig = plt.figure(figsize=(20, 8))
     gs = GridSpec(1, 3, figure=fig, width_ratios=[1, 1, 1])  # Equal-sized panels
@@ -161,6 +176,23 @@ def plot(height, Ts, delta_T, min_delta_T):
     plt.close()
 
 
+    #* Plot the mean and standard deviation of time difference
+    plt.figure(figsize=(8, 6), tight_layout=True)
+    plt.errorbar(rock_widths, delta_T_mean / 1e-9, yerr=delta_T_std / 1e-9, fmt='o', markersize=5, color='gray', alpha=0.5)
+    plt.plot(rock_widths, delta_T_mean / 1e-9, linewidth=2, color='orange')
+
+    plt.title(f'Rock height: {height:.1f} m', fontsize=24)
+    plt.xlabel('Rock width [m]', fontsize=20)
+    plt.ylabel('Minimum time difference [ns]', fontsize=20)
+    plt.tick_params(labelsize=18)
+    plt.grid()
+
+    plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/mean_std_time_difference_h{height:.1f}.png')
+    #plt.show()
+    plt.close()
+
+
+
 
 #* main
 if __name__ == '__main__':
@@ -168,4 +200,5 @@ if __name__ == '__main__':
         Tb_i = np.tile(Tb[i], (len(thetas), len(rock_widths)))  # [s]
         Ts, delta_T = calc_side_component(i, Tb_i)
         min_delta_T = calc_min_time_difference(delta_T)
-        plot(h, Ts, delta_T, min_delta_T)
+        delta_T_mean, delta_T_std = calc_time_difference(delta_T)
+        plot(h, Ts, delta_T, min_delta_T, delta_T_mean, delta_T_std)
