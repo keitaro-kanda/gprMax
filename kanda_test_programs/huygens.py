@@ -56,9 +56,11 @@ def create_new_wavefronts(position_x, position_y, source_radius):
 # 波面のクラス
 class Wavefront:
     def __init__(self, positions, time_created, source_position, dt, c0, epsilon_grid, size_x, size_y, nx, ny):
-        self.positions = positions
+        #self.positions = positions
+        self.positions = np.array(positions, dtype=float)
         self.time_created = time_created
-        self.source_position = source_position
+        #self.source_position = source_position
+        self.source_position = np.array(source_position, dtype=float)
         self.active = True
         self.dt = dt
         self.c0 = c0
@@ -68,6 +70,131 @@ class Wavefront:
         self.nx = nx
         self.ny = ny
 
+    def update(self):
+        new_wavefronts = []
+        dx = self.size_x / self.nx
+        dy = self.size_y / self.ny
+
+        # 1. シミュレーション領域内にある点をフィルタ
+        pos = self.positions
+        in_domain_mask = (
+            (pos[:,0] >= 0) & (pos[:,0] < self.size_x) &
+            (pos[:,1] >= 0) & (pos[:,1] < self.size_y)
+        )
+        pos = pos[in_domain_mask]
+        if pos.size == 0:
+            # 全て領域外ならアクティブフラグOFF
+            self.active = False
+            return new_wavefronts
+
+        # 2. 格子インデックス取得
+        i = (pos[:,1] // dy).astype(int)
+        j = (pos[:,0] // dx).astype(int)
+
+        # インデックスが範囲外でないか一応チェック
+        valid_idx_mask = (i >= 0) & (i < self.ny) & (j >= 0) & (j < self.nx)
+        pos = pos[valid_idx_mask]
+        i = i[valid_idx_mask]
+        j = j[valid_idx_mask]
+        if pos.size == 0:
+            self.active = False
+            return new_wavefronts
+
+        epsilon_at_point = self.epsilon_grid[i, j]
+
+        # 3. 方向ベクトル計算
+        direction = pos - self.source_position
+        norm = np.linalg.norm(direction, axis=1)
+        non_zero_mask = (norm != 0)
+        # 方向が0の点はスキップ（境界生成もしない）
+        direction[non_zero_mask] /= norm[non_zero_mask][:, None]
+
+        # 有効な点のみ残す
+        pos = pos[non_zero_mask]
+        direction = direction[non_zero_mask]
+        epsilon_at_point = epsilon_at_point[non_zero_mask]
+
+        if pos.size == 0:
+            # すべて無効ならアクティブOFF
+            self.active = False
+            return new_wavefronts
+
+        # 4. 速度計算
+        v_at_point = self.c0 / np.sqrt(epsilon_at_point)
+
+        # 5. 新しい座標計算
+        new_point = pos + (v_at_point * self.dt)[:, None] * direction
+
+        # 6. 新しい座標が領域外でないかチェック
+        new_in_domain_mask = (
+            (new_point[:,0] >= 0) & (new_point[:,0] < self.size_x) &
+            (new_point[:,1] >= 0) & (new_point[:,1] < self.size_y)
+        )
+
+        # 7. 新しい点の媒質チェック
+        i_new = (new_point[:,1] // dy).astype(int)
+        j_new = (new_point[:,0] // dx).astype(int)
+
+        # インデックス範囲再チェック
+        valid_new_idx_mask = (i_new >= 0) & (i_new < self.ny) & (j_new >= 0) & (j_new < self.nx)
+        final_mask = new_in_domain_mask & valid_new_idx_mask
+
+        i_new = i_new[final_mask]
+        j_new = j_new[final_mask]
+
+        # final_maskをpos,new_point,epsilon_at_point,v_at_point,directionにも適用
+        pos = pos[final_mask]
+        new_point = new_point[final_mask]
+        epsilon_at_point = epsilon_at_point[final_mask]
+        epsilon_new = self.epsilon_grid[i_new, j_new]
+
+        # 8. 境界チェック
+        boundary_mask = (epsilon_at_point != epsilon_new)
+
+        # 境界に当たった点
+        boundary_points = new_point[boundary_mask]
+
+        # 境界に当たらず継続する点
+        continuing_points = new_point[~boundary_mask]
+
+        # 9. 境界点から新たな波面生成
+        if boundary_points.size > 0:
+            # secondary_radiusはdxとする (元コードと同じ)
+            secondary_radius = dx
+            # 全てのboundary_pointsに対して波面生成
+            # 今回は全て個別に新しいWavefrontを作る場合
+            # 必要に応じて一括で作成してもいいが、ここでは元コードのロジック維持
+            for bp in boundary_points:
+                new_wave_points = create_new_wavefronts(
+                    bp[0],
+                    bp[1],
+                    secondary_radius
+                )
+                new_wf = Wavefront(
+                    #positions=new_wave_points.tolist(),
+                    positions=new_wave_points,
+                    time_created=self.time_created + self.dt,
+                    source_position=bp.copy(),
+                    dt=self.dt,
+                    c0=self.c0,
+                    epsilon_grid=self.epsilon_grid,
+                    size_x=self.size_x,
+                    size_y=self.size_y,
+                    nx=self.nx,
+                    ny=self.ny
+                )
+                new_wavefronts.append(new_wf)
+
+        # 10. 続行する点をpositionsに戻す
+        #self.positions = continuing_points.tolist()
+        self.positions = continuing_points
+
+        # 全て消えたらactiveをFalse
+        if len(self.positions) == 0 and len(new_wavefronts) == 0:
+            self.active = False
+
+        return new_wavefronts
+    """
     def update(self):
         new_positions = []
         new_wavefronts = []
@@ -137,6 +264,7 @@ class Wavefront:
             self.active = False
 
         return new_wavefronts
+    """
 
 # メイン
 if __name__ == '__main__':
@@ -190,7 +318,8 @@ if __name__ == '__main__':
     # 初期波面をWavefrontとして生成
     wavefronts = [
         Wavefront(
-            positions=initial_positions.tolist(),
+            #positions=initial_positions.tolist(),
+            positions=initial_positions,
             time_created=0.0,
             source_position=source_position,
             dt=dt,
@@ -207,7 +336,7 @@ if __name__ == '__main__':
 
     for step in tqdm(range(num_steps), desc='Calculating...'):
         new_wavefronts = []
-        for w in tqdm(wavefronts, desc=f'Calculate wavefron: step {step}', leave=False):
+        for w in tqdm(wavefronts, desc=f'Calculate wavefront: step {step}', leave=False):
             if w.active:
                 gen_wfs = w.update()
                 new_wavefronts.extend(gen_wfs)
@@ -222,7 +351,7 @@ if __name__ == '__main__':
     print(' ')
 
     # 50タイムステップごとにフレームを保存
-    frame_indices = [i for i in range(len(wavefronts_history )+1) if i % 50 == 0]
+    frame_indices = [i for i in range(len(wavefronts_history )) if i % 50 == 0]
     print(f"Total frames to save: {len(frame_indices)}")
 
     output_dir_frames = os.path.join(output_dir, 'wave_simulation_frames')
