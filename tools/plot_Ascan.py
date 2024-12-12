@@ -128,8 +128,8 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 #ax1.scatter(time[peak_idx], outputdata[peak_idx], 'kx')
                 #* Plot the peak
                 #ax1.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
-                ax1.set_xlabel('Time [ns]', fontsize=24)
-                ax1.set_ylabel(outputtext + ' field strength [V/m]', fontsize=24)
+                ax1.set_xlabel('Time [ns]', fontsize=28)
+                ax1.set_ylabel(outputtext + ' field strength [V/m]', fontsize=28)
                 #* Closeup otpion
                 if args.closeup:
                     ax1.set_xlim([closeup_x_start, closeup_x_end])
@@ -139,7 +139,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 ax1.grid(which='both', axis='both', linestyle='-.')
                 #ax1.legend(fontsize = 15)
                 ax1.minorticks_on()
-                ax1.tick_params(labelsize=20)
+                ax1.tick_params(labelsize=24)
 
                 # Plot frequency spectra
                 #markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.')
@@ -147,10 +147,10 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 #plt.setp(stemlines, 'color', 'r')
                 #plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
                 line2 = ax2.plot(freqs[pltrange], power[pltrange], 'k', lw=2)
-                ax2.set_xlabel('Frequency [Hz]', fontsize=24)
-                ax2.set_ylabel('Power [dB]', fontsize=24)
+                ax2.set_xlabel('Frequency [Hz]', fontsize=28)
+                ax2.set_ylabel('Power [dB]', fontsize=28)
                 ax2.grid(which='both', axis='both', linestyle='-.')
-                ax2.tick_params(labelsize=20)
+                ax2.tick_params(labelsize=24)
 
                 # Change colours and labels for magnetic field components or currents
                 if 'H' in outputs[0]:
@@ -186,9 +186,9 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.set_xlim([0, np.amax(time)])
                 ax.grid(which='both', axis='both', linestyle='-.')
                 ax.minorticks_on()
-                ax.set_xlabel('Time [ns]', fontsize=24)
-                ax.set_ylabel(outputtext + ' field strength [V/m]', fontsize=24)
-                ax.tick_params(labelsize=20)
+                ax.set_xlabel('Time [ns]', fontsize=28)
+                ax.set_ylabel(outputtext + ' field strength [V/m]', fontsize=28)
+                ax.tick_params(labelsize=24)
                 plt.tight_layout()
                 #ax.legend(fontsize = 16)
 
@@ -310,7 +310,7 @@ if __name__ == "__main__":
 
     # for closeup option
     closeup_x_start = 0 #[ns]
-    closeup_x_end =100 #[ns]
+    closeup_x_end = 100 #[ns]
     closeup_y_start = -60
     closeup_y_end = 60
 
