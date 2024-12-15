@@ -105,9 +105,9 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T):
     ax0.plot(rock_heights, Tb / 1e-9, linewidth=2)
     ax0.axvline(height, color='red', linestyle='--', linewidth=3)
 
-    ax0.set_xlabel('Rock height [m]', fontsize=20)
-    ax0.set_title('Bottom component', fontsize=24)
-    ax0.set_ylabel('Two-way travel time [ns]', fontsize=20)
+    ax0.set_xlabel('Rock height [m]', fontsize=24)
+    ax0.set_title('Bottom component', fontsize=28)
+    ax0.set_ylabel('Two-way travel time [ns]', fontsize=24)
 
     #* Side component
     ax1 = fig.add_subplot(gs[0, 1])
@@ -117,12 +117,12 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T):
         origin='lower',
         cmap='jet',
     )
-    ax1.set_title('Side component', fontsize=24)
+    ax1.set_title('Side component', fontsize=28)
     divider1 = make_axes_locatable(ax1)
     cax1 = divider1.append_axes('bottom', size='10%', pad=1)
     cbar1 = plt.colorbar(im1, cax=cax1, orientation='horizontal')
-    cbar1.set_label('Two-way travel time [ns]', fontsize=20)
-    cbar1.ax.tick_params(labelsize=18)
+    cbar1.set_label('Two-way travel time [ns]', fontsize=24)
+    cbar1.ax.tick_params(labelsize=20)
 
     #* Time difference
     ax2 = fig.add_subplot(gs[0, 2])
@@ -132,31 +132,31 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T):
         origin='lower',
         cmap='jet',
     )
-    ax2.set_title('Time difference of two components', fontsize=24)
+    ax2.set_title('Time difference', fontsize=28)
     divider2 = make_axes_locatable(ax2)
     cax2 = divider2.append_axes('bottom', size='10%', pad=1)
     cbar2 = plt.colorbar(im2, cax=cax2, orientation='horizontal')
-    cbar2.set_label('Time difference [ns]', fontsize=20)
-    cbar2.ax.tick_params(labelsize=18)
+    cbar2.set_label('Time difference [ns]', fontsize=24)
+    cbar2.ax.tick_params(labelsize=20)
 
     #* y軸のメモリをpiに変換
     y_ticks = np.arange(0, np.pi * 5 / 8, np.pi / 8)
     y_labels = ['0', r'$\frac{\pi}{8}$', r'$\frac{\pi}{4}$', r'$\frac{3\pi}{8}$', r'$\frac{\pi}{2}$']
     for ax in [ax1, ax2]:
-        ax.set_xlabel('Rock width [m]', fontsize=20)
+        ax.set_xlabel('Rock width [m]', fontsize=24)
         ax.set_yticks(y_ticks)
         ax.set_yticklabels(y_labels)
-        ax.set_ylabel('Initial transmission angle', fontsize=20)
+        ax.set_ylabel('Initial transmission angle', fontsize=24)
         #ax.set_ylim(0, np.pi / 4)
         #ax.set_xlim(1.0, np.max(rock_heights))
 
     #* Add common elements to all axes
     for ax in [ax0, ax1, ax2]:
-        ax.tick_params(axis='both', labelsize=18)
+        ax.tick_params(axis='both', labelsize=20)
         ax.grid(axis='both')
         ax.set_aspect('auto')
 
-    fig.suptitle(f'Rock height: {height:.1f} m', fontsize=24)
+    #fig.suptitle(f'Rock height: {height:.1f} m', fontsize=28)
     plt.tight_layout()
     plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/propagation_time_h{height:.1f}.png')
     #plt.show()
@@ -169,12 +169,12 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T):
     plt.plot(rock_widths, min_delta_T / 1e-9, linewidth=2, label='Min')
     #plt.plot(rock_widths, mean_delta_T / 1e-9, linewidth=2, label='Mean', linestyle='-.')
 
-    plt.title(f'Rock height: {height:.1f} m', fontsize=24)
-    plt.xlabel('Rock width [m]', fontsize=20)
-    plt.ylabel('Minimum time difference [ns]', fontsize=20)
-    plt.tick_params(labelsize=18)
+    #plt.title(f'Rock height: {height:.1f} m', fontsize=28)
+    plt.xlabel('Rock width [m]', fontsize=24)
+    plt.ylabel('Minimum time difference [ns]', fontsize=24)
+    plt.tick_params(labelsize=20)
     plt.grid()
-    plt.legend(fontsize=18)
+    plt.legend(fontsize=20)
 
     plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/min_time_difference_h{height:.1f}.png')
     plt.close()
@@ -206,18 +206,18 @@ def compare_with_FDTD(height, min_delta_T):
                                 [5.4, 11.59], [6.0, 13.55]]
     #* Plot the minimum time difference
     plt.figure(figsize=(8, 6), tight_layout=True)
-    plt.plot(rock_widths, min_delta_T / 1e-9, linewidth=2, label='Model')
+    plt.plot(rock_widths, min_delta_T / 1e-9, linewidth=2, label='Model', color = 'b')
 
     #* Plt the FDTD results
     for i in range(len(time_difference_FDTD)):
         plt.plot(time_difference_FDTD[i][0], time_difference_FDTD[i][1], 'o', markersize=5, color='r', label='FDTD' if i == 0 else None)
 
-    plt.title(f'Rock height: {height:.1f} m', fontsize=24)
-    plt.xlabel('Rock width [m]', fontsize=20)
-    plt.ylabel('Minimum time difference [ns]', fontsize=20)
-    plt.tick_params(labelsize=18)
+    #plt.title(f'Rock height: {height:.1f} m', fontsize=28)
+    plt.xlabel('Rock width [m]', fontsize=24)
+    plt.ylabel('Minimum time difference [ns]', fontsize=24)
+    plt.tick_params(labelsize=20)
     plt.grid()
-    plt.legend(fontsize=18)
+    plt.legend(fontsize=20)
 
     plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/min_time_difference_h{height:.1f}_compare.png')
     plt.close()
