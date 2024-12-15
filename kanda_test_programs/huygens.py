@@ -5,6 +5,7 @@ from tqdm import tqdm
 import os
 import json
 import argparse
+import shutil
 
 # 定数
 c0 = 3e8  # 真空中の光速 [m/s]
@@ -35,7 +36,7 @@ def add_square(epsilon_grid, bottom_left, size, epsilon, x, y):
 
 # 初期波面の設定関数（円周上の点として設定）
 def init_wavefront(position_x, position_y, source_radius):
-    num_points = 9
+    num_points = 9 # 1 point per 5 degree
     angles = np.linspace(5/4 * np.pi, 3/2 * np.pi, num_points, endpoint=True) # 45 degree
     wave_points = np.array([
         position_x + source_radius * np.cos(angles),
@@ -44,7 +45,7 @@ def init_wavefront(position_x, position_y, source_radius):
     return wave_points
 
 def create_new_wavefronts(position_x, position_y, source_radius):
-    num_points = 36
+    num_points = 24 # 1 point per 15 degree
     angles = np.linspace(0, 2 * np.pi, num_points, endpoint=False) # 360 degree
     wave_points = np.array([
         position_x + source_radius * np.cos(angles),
@@ -160,7 +161,7 @@ class Wavefront:
         # 9. 境界点から新たな波面生成
         if boundary_points.size > 0:
             # secondary_radiusはdxとする (元コードと同じ)
-            secondary_radius = dx
+            secondary_radius = dx * 3
             # 全てのboundary_pointsに対して波面生成
             # 今回は全て個別に新しいWavefrontを作る場合
             # 必要に応じて一括で作成してもいいが、ここでは元コードのロジック維持
@@ -350,13 +351,18 @@ if __name__ == '__main__':
     print('Calculation done.')
     print(' ')
 
-    # 50タイムステップごとにフレームを保存
-    frame_indices = [i for i in range(len(wavefronts_history )) if i % 50 == 0]
+    # 20タイムステップごとにフレームを保存
+    frame_indices = [i for i in range(len(wavefronts_history )) if i % 20 == 0]
     print(f"Total frames to save: {len(frame_indices)}")
 
     output_dir_frames = os.path.join(output_dir, 'wave_simulation_frames')
     if not os.path.exists(output_dir_frames):
         os.makedirs(output_dir_frames)
+    # すでに存在する場合は削除して再作成
+    if os.path.exists(output_dir_frames):
+        shutil.rmtree(output_dir_frames)
+        os.makedirs(output_dir_frames)
+
 
     for idx, i in tqdm(enumerate(frame_indices), desc='Saving frames...', total=len(frame_indices)):
         wfs = wavefronts_history[i]
