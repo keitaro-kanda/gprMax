@@ -141,7 +141,7 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
 
         # 半値全幅を描画
         if args.FWHM:
-            if info['distinguishable']:
+            if info['distinguishable'] or len(peaks) == 1:
                 plt.hlines(envelope[info['peak_idx']] / 2,
                         info['left_half_time'],
                         info['right_half_time'],
@@ -165,9 +165,9 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
 
     #* Save the plot
     if args.closeup:
-            fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '_closeup_x' + str(closeup_x_start) \
-                    + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
-                    ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '_closeup_x' + str(closeup_x_start) \
+                + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
+                ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
     else:
         fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
     plt.show()
@@ -178,7 +178,7 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
 if __name__ == "__main__":
     # for closeup option
     closeup_x_start = 0 #[ns]
-    closeup_x_end =100 #[ns]
+    closeup_x_end = 100 #[ns]
     closeup_y_start = -60
     closeup_y_end = 60
 
