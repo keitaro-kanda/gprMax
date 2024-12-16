@@ -200,13 +200,14 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T):
 def compare_with_FDTD(height, min_delta_T):
     #* 現状計算している高さ30 cm, 60 cmの場合のFDTD結果のみ実装
     if height == 0.3:
-        time_difference_FDTD = [[1.8, 1.82], [2.4, 3.04], [2.7, 3.74], [3.0, 4.53]]
+        time_difference_FDTD = [[1.8, 1.82], [2.1, 2.38], [2.4, 3.04], [2.7, 3.74], [3.0, 4.53]]
     elif height == 0.6:
         time_difference_FDTD = [[1.8, 1.66], [2.4, 2.83], [3.0, 4.26], [3.6, 5.91], [4.2, 7.71], [4.8, 9.62],
                                 [5.4, 11.59], [6.0, 13.55]]
     #* Plot the minimum time difference
     plt.figure(figsize=(8, 6), tight_layout=True)
     plt.plot(rock_widths, min_delta_T / 1e-9, linewidth=2, label='Model', color = 'b')
+    plt.axhline(1.56, color='k', linestyle='--', label='FWHM')
 
     #* Plt the FDTD results
     for i in range(len(time_difference_FDTD)):
