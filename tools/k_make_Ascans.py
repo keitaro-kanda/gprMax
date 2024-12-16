@@ -154,8 +154,8 @@ def analyze_pulses(data, time, rx, closeup_x_start, closeup_x_end, closeup_y_sta
     #* Plot A-scan
     fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'), num='rx' + str(rx),
                             figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-    ax.plot(time, data, label='A-scan', color='black')
-    ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.')
+    ax.plot(time, data, label='A-scan', color='black', lw=2)
+    ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.', lw=2)
 
     for i, info in enumerate(pulse_info):
         peak_time = info['peak_time']
@@ -172,11 +172,11 @@ def analyze_pulses(data, time, rx, closeup_x_start, closeup_x_end, closeup_y_sta
             continue
 
 
-    plt.xlabel('Time [ns]', fontsize=24)
-    plt.ylabel('Amplitude', fontsize=24)
+    plt.xlabel('Time [ns]', fontsize=28)
+    plt.ylabel('Amplitude', fontsize=28)
     #plt.title('Pulse Analysis')
-    plt.legend(fontsize=20, loc='lower right')
-    plt.tick_params(labelsize=20)
+    plt.legend(fontsize=24, loc='lower right')
+    plt.tick_params(labelsize=24)
     plt.grid(True)
 
     if args.closeup:
@@ -230,28 +230,20 @@ def plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x
                                 figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
 
     #* Plot A-scan
-    ax.plot(time, data, label='A-scan', color='black')
+    ax.plot(time, data, label='A-scan', color='black', lw=2)
 
     #* Plot the estimated two-way travel time
     colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
     for i, t in enumerate(two_way_travel_time):
         label = ['vacuum-regolith', 'regolith-rock top', 'rock bottom-regolith']
-        ax.axvline(t, linestyle='--', label=label[i], color=colors[i])
+        ax.axvline(t, linestyle='--', label=label[i], color=colors[i], lw=3)
 
-
-    plt.xlabel('Time [ns]', fontsize=24)
-    plt.ylabel('Amplitude', fontsize=24)
+    plt.xlabel('Time [ns]', fontsize=28)
+    plt.ylabel('Amplitude', fontsize=28)
     #plt.title('Pulse Analysis')
-    plt.legend(fontsize=20, loc='lower right')
-    plt.tick_params(labelsize=20)
+    plt.legend(fontsize=24, loc='lower right')
+    plt.tick_params(labelsize=24)
     plt.grid(True)
-
-
-    #* for closeup option
-    closeup_x_start = 0 #[ns]
-    closeup_x_end =100 #[ns]
-    closeup_y_start = -60
-    closeup_y_end = 60
 
     if args.closeup:
             ax.set_xlim([closeup_x_start, closeup_x_end])
