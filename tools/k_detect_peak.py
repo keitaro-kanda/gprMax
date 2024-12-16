@@ -83,29 +83,29 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
             right_half_time = time[right_idx - 1] + (half_amplitude - envelope[right_idx - 1]) / right_slope
 
         # 半値全幅を計算
-        width = right_half_time - left_half_time
-        width_half = width / 2
+        hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)]) # [ns], Half width at half maximum
+        fwhm = hwhm * 2 # [ns], Full width at half maximum
+        #width = right_half_time - left_half_time
+        #width_half = hwhm
 
         # 次のピークとの時間差と判定
         if i < len(peaks) - 1:
             next_peak_idx = peaks[i + 1]
             separation = time[next_peak_idx] - time[peak_idx]
-            distinguishable = separation >= width_half
-            #distinguishable = separation >= right_half_time - time[peak_idx]
+            distinguishable = separation >= hwhm
         else:
             separation = None
             distinguishable = None
 
-        # 半値全幅内でのA-scanデータの最大値を探す
-        # 時間範囲をインデックス範囲に変換
-        left_time_idx = np.searchsorted(time, left_half_time)
-        right_time_idx = np.searchsorted(time, right_half_time)
 
         # 範囲内での最大振幅とそのインデックスを取得
-        data_segment = data[left_time_idx:right_time_idx+1]
+        hwhm_idx = int(hwhm / (dt / 1e-9)) # [ns]
+        data_segment = data[peak_idx-hwhm_idx:peak_idx+hwhm_idx+1] # 半値全幅のデータ
         if len(data_segment) > 0:
             local_max_idx = np.argmax(np.abs(data_segment))
-            max_idx = left_time_idx + local_max_idx
+            #max_idx = left_time_idx + local_max_idx
+            max_idx = peak_idx - hwhm_idx + local_max_idx
+            #print(max_idx)
             max_time = time[max_idx]
             max_amplitude = data[max_idx]
         else:
@@ -117,8 +117,8 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
             'peak_idx': peak_idx,
             'peak_time': time[peak_idx],
             'peak_amplitude': peak_amplitude,
-            'width': width,
-            'width_half': width_half,
+            'width': fwhm,
+            'width_half': hwhm,
             'left_half_time': left_half_time,
             'right_half_time': right_half_time,
             'separation': separation,
