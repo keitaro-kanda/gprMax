@@ -136,8 +136,8 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
     ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.')
 
     for i, info in enumerate(pulse_info):
-        peak_time = info['peak_time']
-        plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
+        if info['distinguishable']:
+            plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
 
         # 半値全幅を描画
         if args.FWHM:
