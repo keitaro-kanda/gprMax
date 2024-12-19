@@ -4,6 +4,7 @@ import h5py
 import os
 from scipy import signal
 from matplotlib.animation import FuncAnimation, FFMpegWriter
+from scipy.signal import hilbert
 import sys
 sys.path.append('tools')
 from outputfiles_merge import get_output_data
@@ -39,11 +40,17 @@ def env(data):
 
 
 #* Define the function to plot the wave overlap
-def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time, output_dir):
+def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time, envelope, peak_info, output_dir):
     fig, ax = plt.subplots(figsize=(10, 8), tight_layout=True)
     ax.plot(time, original_sig, label='Original', linewidth=2)
     ax.plot(time, shifted_sig - 3.0, label=f'Shifted {shift_time:.1f} ns', linewidth=2)
     ax.plot(time, overlapped_sig - 6.0, label='Overlapped', linewidth=2)
+
+    #* Plot the envelope and peaks
+    ax.plot(time, envelope - 6.0, label='Envelope', color='k', linestyle='-.')
+    for i, info in enumerate(peak_info):
+        if info['distinguishable']:
+            plt.plot(info['max_time'], info['max_amplitude'] - 6.0, 'ro', label='Peak' if i == 0 else "")
 
     ax.set_xlim(0, 20)
     ax.set_ylim(-8, 1)
@@ -59,12 +66,17 @@ def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time,
 
 
 #* Define the function to plot the wave overlap for animation
-def plot_for_animation(ax, original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time):
+def plot_for_animation(ax, original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time, envelope, peak_info):
     # アニメーション用のplot関数。既存のaxにプロットするのみ。保存やcloseはしない。
     ax.clear()
     ax.plot(time, original_sig, label='Original', linewidth=2)
     ax.plot(time, shifted_sig - 3.0, label=f'Shifted {shift_time:.1f} ns', linewidth=2)
     ax.plot(time, overlapped_sig - 6.0, label='Overlapped', linewidth=2)
+
+    #* Plot the envelope and peaks
+    ax.plot(time, envelope, label='Envelope', color='k', linestyle='-.')
+    for i, info in enumerate(peak_info):
+        plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
 
     ax.set_xlim(0, 20)
     ax.set_ylim(-8, 1)
@@ -100,6 +112,107 @@ class Animation:
 
 
 
+#* Define the function to analyze the pulses
+def analyze_pulses(data, dt):
+    time = np.arange(len(data)) * dt  / 1e-9 # ns
+
+    #* Calculate the envelope of the signal
+    analytic_signal = hilbert(data)
+    envelope = np.abs(analytic_signal)
+
+    #* Find the peaks
+    peaks = []
+    for i in range(1, len(data) - 1):
+        if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
+            peaks.append(i)
+
+
+    # Calculate the half-width of the pulses
+    pulse_info = []
+    for i, peak_idx in enumerate(peaks):
+        #peak_amplitude = np.abs(data[peak_idx])
+        peak_amplitude = envelope[peak_idx]
+        half_amplitude = peak_amplitude / 2
+
+        # 左側の半値位置を探索
+        left_idx = peak_idx
+        while left_idx > 0 and envelope[left_idx] > half_amplitude:
+            left_idx -= 1
+
+        if left_idx == 0:
+            left_half_time = time[0]
+        else:
+            # 線形補間で正確な半値位置を求める
+            left_slope = (envelope[left_idx + 1] - envelope[left_idx]) / (time[left_idx + 1] - time[left_idx])
+            left_half_time = time[left_idx] + (half_amplitude - envelope[left_idx]) / left_slope
+
+        # 右側の半値位置を探索
+        right_idx = peak_idx
+        while right_idx < len(envelope) - 1 and envelope[right_idx] > half_amplitude:
+            right_idx += 1
+
+        if right_idx == len(envelope) - 1:
+            right_half_time = time[-1]
+        else:
+            # 線形補間で正確な半値位置を求める
+            right_slope = (envelope[right_idx] - envelope[right_idx - 1]) / (time[right_idx] - time[right_idx - 1])
+            right_half_time = time[right_idx - 1] + (half_amplitude - envelope[right_idx - 1]) / right_slope
+
+        # 半値全幅を計算
+        hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)]) # [ns], Half width at half maximum
+        fwhm = hwhm * 2 # [ns], Full width at half maximum
+        #width = right_half_time - left_half_time
+        #width_half = hwhm
+
+        # 次のピークとの時間差と判定
+        if len(peaks) == 1:
+            separation = None
+            distinguishable = 'True'
+        elif i < len(peaks) - 1:
+            next_peak_idx = peaks[i + 1]
+            separation = time[next_peak_idx] - time[peak_idx]
+            distinguishable = separation >= hwhm
+        #elif i == len(peaks) - 1:
+        #    separation = None
+        #    distinguishable = 'True'
+        else:
+            separation = None
+            distinguishable = None
+
+
+        # 範囲内での最大振幅とそのインデックスを取得
+        hwhm_idx = int(hwhm / (dt / 1e-9)) # [ns]
+        data_segment = data[peak_idx-hwhm_idx:peak_idx+hwhm_idx+1] # 半値全幅のデータ
+        if len(data_segment) > 0:
+            local_max_idx = np.argmax(np.abs(data_segment))
+            #max_idx = left_time_idx + local_max_idx
+            max_idx = peak_idx - hwhm_idx + local_max_idx
+            #print(max_idx)
+            max_time = time[max_idx]
+            max_amplitude = data[max_idx]
+        else:
+            max_idx = peak_idx
+            max_time = time[peak_idx]
+            max_amplitude = data[peak_idx]
+
+        pulse_info.append({
+            'peak_idx': peak_idx,
+            'peak_time': time[peak_idx],
+            'peak_amplitude': peak_amplitude,
+            'width': fwhm,
+            'width_half': hwhm,
+            'left_half_time': left_half_time,
+            'right_half_time': right_half_time,
+            'separation': separation,
+            'distinguishable': distinguishable,
+            'max_idx': max_idx,
+            'max_time': max_time,
+            'max_amplitude': max_amplitude
+        })
+
+    return envelope, pulse_info
+
+
 
 #* Main part
 t = np.arange(len(original_sig)) * dt / 1e-9  # 時間をナノ秒に変換
@@ -124,15 +237,18 @@ for amplitude in amplitudes:
         shifted_sigs[i, :] = shifted_sig
         overlapped_sigs[i, :] = overlapped_sig
 
-        plot(sig, shifted_sig, overlapped_sig, shift_time, amplitude, t, output_dir)
+        #* detect peaks of the overlapped signal
+        envelope_overlapped, peak_info_overlapped = analyze_pulses(overlapped_sig, dt)
+
+        plot(sig, shifted_sig, overlapped_sig, shift_time, amplitude, t, envelope_overlapped, peak_info_overlapped, output_dir)
 
     #* Make animation
-    fig, ax = plt.subplots(figsize=(10, 8), tight_layout=True)
-    anim_func = Animation(ax, sig, shifted_sigs, overlapped_sigs, shift_times, amplitude, t, output_dir)
-    ani = FuncAnimation(fig, anim_func, frames=len(shift_times), interval=1000)
-    writer = FFMpegWriter(fps=5)
-    ani.save(f'{output_dir}/animation.mp4', writer=writer)
-    plt.close(fig)
+    #fig, ax = plt.subplots(figsize=(10, 8), tight_layout=True)
+    #anim_func = Animation(ax, sig, shifted_sigs, overlapped_sigs, shift_times, amplitude, t, output_dir)
+    #ani = FuncAnimation(fig, anim_func, frames=len(shift_times), interval=1000)
+    #writer = FFMpegWriter(fps=5)
+    #ani.save(f'{output_dir}/animation.mp4', writer=writer)
+    #plt.close(fig)
 
 
 
