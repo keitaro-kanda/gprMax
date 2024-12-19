@@ -20,7 +20,7 @@ data_path = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
 for rx in range(nrx):
-    sig, dt = get_output_data(data_path, (rx+1), 'Ez')
+    original_sig, dt = get_output_data(data_path, (rx+1), 'Ez')
 
 
 #* Define output directory
@@ -102,8 +102,8 @@ class Animation:
 
 
 #* Main part
-t = np.arange(len(sig)) * dt / 1e-9  # 時間をナノ秒に変換
-sig = sig / np.max(np.abs(sig))  # 正規化
+t = np.arange(len(original_sig)) * dt / 1e-9  # 時間をナノ秒に変換
+sig = original_sig / np.max(np.abs(original_sig))  # 正規化
 
 
 shift_times = np.arange(0, 5.02, 0.2) # [ns]
