@@ -49,8 +49,14 @@ def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time,
     #* Plot the envelope and peaks
     ax.plot(time, envelope - 6.0, label='Envelope', color='k', linestyle='-.')
     for i, info in enumerate(peak_info):
-        if info['distinguishable']:
+        if info['distinguishable'] == 'True':
             plt.plot(info['max_time'], info['max_amplitude'] - 6.0, 'ro', label='Peak' if i == 0 else "")
+        """
+        plt.hlines(envelope[info['peak_idx']] / 2 - 6.0,
+                            info['left_half_time'],
+                            info['right_half_time'],
+                            color='green', linestyle='--', label='FWHM' if i == 0 else "")
+        """
 
     ax.set_xlim(0, 20)
     ax.set_ylim(-8, 1)
@@ -123,7 +129,7 @@ def analyze_pulses(data, dt):
     #* Find the peaks
     peaks = []
     for i in range(1, len(data) - 1):
-        if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
+        if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 0.1:
             peaks.append(i)
 
 
@@ -168,13 +174,19 @@ def analyze_pulses(data, dt):
         if len(peaks) == 1:
             separation = None
             distinguishable = 'True'
-        elif i < len(peaks) - 1:
-            next_peak_idx = peaks[i + 1]
-            separation = time[next_peak_idx] - time[peak_idx]
-            distinguishable = separation >= hwhm
-        #elif i == len(peaks) - 1:
-        #    separation = None
-        #    distinguishable = 'True'
+        elif len(peaks) == 2:
+            separation = time[peaks[1]] - time[peaks[0]]
+            if separation >= fwhm:
+                distinguishable = 'True'
+            else:
+                if i == 0 and data[peaks[0]] > data[peaks[1]]:
+                    distinguishable = 'True'
+                elif i == 0 and data[peaks[0]] < data[peaks[1]]:
+                    distinguishable = 'False'
+                elif i == 1 and data[peaks[0]] > data[peaks[1]]:
+                    distinguishable = 'False'
+                elif i == 1 and data[peaks[0]] < data[peaks[1]]:
+                    distinguishable = 'True'
         else:
             separation = None
             distinguishable = None
@@ -199,8 +211,8 @@ def analyze_pulses(data, dt):
             'peak_idx': peak_idx,
             'peak_time': time[peak_idx],
             'peak_amplitude': peak_amplitude,
-            'width': fwhm,
-            'width_half': hwhm,
+            'fwhm': fwhm,
+            'hwhm': hwhm,
             'left_half_time': left_half_time,
             'right_half_time': right_half_time,
             'separation': separation,
@@ -239,6 +251,20 @@ for amplitude in amplitudes:
 
         #* detect peaks of the overlapped signal
         envelope_overlapped, peak_info_overlapped = analyze_pulses(overlapped_sig, dt)
+
+        peak_info = []
+        for info in peak_info_overlapped:
+            peak_info.append({
+                'Peak time (envelope) [ns]': info['peak_time'],
+                'Peak amplitude (envelope)': info['peak_amplitude'],
+                'FWHM': info['fwhm'],
+                'Distinguishable': info['distinguishable'],
+                'Max amplitude': info['max_amplitude'],
+                'Max time [ns]': info['max_time']
+            })
+        output_dir_peak_info = os.path.join(output_dir, 'peak_info')
+        os.makedirs(output_dir_peak_info, exist_ok=True)
+        np.savetxt(output_dir_peak_info + f'/{shift_time:.1f}ns_{amplitude:.1f}.txt', peak_info, delimiter=' ', fmt='%s')
 
         plot(sig, shifted_sig, overlapped_sig, shift_time, amplitude, t, envelope_overlapped, peak_info_overlapped, output_dir)
 
