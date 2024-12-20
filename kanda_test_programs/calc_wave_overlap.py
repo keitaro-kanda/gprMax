@@ -232,7 +232,7 @@ sig = original_sig / np.max(np.abs(original_sig))  # 正規化
 
 
 shift_times = np.arange(0, 5.02, 0.2) # [ns]
-amplitudes = np.arange(-1.0, 1.2, 0.2)
+amplitudes = np.arange(-1.4, 1.6, 0.2)
 
 
 for amplitude in amplitudes:
