@@ -7,25 +7,9 @@ from tqdm import tqdm
 from outputfiles_merge import get_output_data
 from scipy.signal import hilbert
 import json
-
-
-#* Parse command line arguments
-parser = argparse.ArgumentParser(
-    prog='k_make_Ascans.py',
-    description='Make normal A-scan, A-scan with peak detection, and A-scan with estimated two-way travel time',
-    epilog='End of help message',
-    usage='python -m tools.k_detect_peak [json] [-closeup] [-FWHM]',
-)
-parser.add_argument('json', help='Path to the json file')
-parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
-parser.add_argument('-FWHM', action='store_true', help='Plot the FWHM')
-args = parser.parse_args()
-
-
-
-#* Import json
-with open(args.json, 'r') as f:
-    path_group = json.load(f)
+import k_detect_peak # import the function from k_detect_peak.py
+import k_plot_TWT_estimation # import the function from k_plot_TWT_estimation.py
+import k_subtract # import the function from k_subtract.py
 
 
 
@@ -200,7 +184,7 @@ def detect_peaks(data, time, rx, closeup_x_start, closeup_x_end, closeup_y_start
 
 
 #* Define function to plot A-scan with estimated two-way travel time
-def plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, outputtext, rx=1):
+def plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end):
     #* Physical constants
     c0 = 299792458  # Speed of light in vacuum [m/s]
 
@@ -270,14 +254,40 @@ def plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x
 
 #* Main
 if __name__ == "__main__":
+    #* Parse command line arguments
+    parser = argparse.ArgumentParser(
+        prog='k_make_Ascans.py',
+        description='Make normal A-scan, A-scan with peak detection, and A-scan with estimated two-way travel time',
+        epilog='End of help message',
+        usage='python -m tools.k_detect_peak [json] [-closeup] [-FWHM]',
+    )
+    parser.add_argument('json', help='Path to the json file')
+    parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
+    parser.add_argument('-FWHM', action='store_true', help='Plot the FWHM')
+    args = parser.parse_args()
+
+
+
+    #* Import json
+    with open(args.json, 'r') as f:
+        path_group = json.load(f)
+
     # for closeup option
     closeup_x_start = 0 #[ns]
     closeup_x_end =100 #[ns]
     closeup_y_start = -60
     closeup_y_end = 60
 
+    #* Load the transmmit signal data for subtraction
+    transmmit_signal_path = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/direct/A-scan/direct.out' # 送信波形データを読み込む
+
+    f = h5py.File(transmmit_signal_path, 'r')
+    nrx = f.attrs['nrx']
+    for rx in range(nrx):
+        transmmit_signal, dt = get_output_data(transmmit_signal_path, (rx+1), 'Ez')
+
     #* Load the output data
-    for data_path in tqdm(path_group['path']):
+    for data_path in tqdm(path_group['path'], desc='Make A-scans'):
         output_dir = os.path.dirname(data_path)
 
         f = h5py.File(data_path, 'r')
@@ -291,11 +301,60 @@ if __name__ == "__main__":
         plot_Ascan(data_path, data, time, rx, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, 'Ez normalized')
 
         #* Run the pulse analysis and plot the A-scan with peak detection
-        pulse_info = detect_peaks(data, time, rx, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end)
+        #pulse_info = detect_peaks(data, time, rx, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end)
+        output_dir_peak_detection = os.path.join(os.path.dirname(data_path), 'peak_detection')
+        if not os.path.exists(output_dir_peak_detection):
+            os.makedirs(output_dir_peak_detection)
+        pulse_info = k_detect_peak.detect_plot_peaks(data, dt, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
+                                                            args.FWHM, output_dir_peak_detection, plt_show=False)
+
 
         #* Plot A-scan with estimated two-way travel time
         model_path = os.path.join(output_dir, 'model.json')
-        plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, 'Ez normalized', rx=1)
+        output_dir_TWT_estimation = os.path.join(os.path.dirname(data_path), 'TWT_estimation')
+        os.makedirs(output_dir_TWT_estimation, exist_ok=True)
+        k_plot_TWT_estimation.calc_plot_TWT(data, time, model_path, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
+                                                output_dir_TWT_estimation, plt_show=False)
+        #plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, 'Ez normalized', rx=1)
+
+
+        #* Subtract the transmit signal from the A-scan
+        #* Zero padding the transmmit signal
+        if len(transmmit_signal) < len(data):
+            transmmit_signal = np.pad(transmmit_signal, (0, len(data) - len(transmmit_signal)), 'constant')
+
+        #* Define output directory
+        output_dir_subtraction = os.path.join(os.path.dirname(data_path), 'subtracted')
+        os.makedirs(output_dir_subtraction, exist_ok=True)
+
+        time = np.arange(len(data)) * dt  / 1e-9 # [ns]
+
+
+        #* Load the model json file
+        with open(model_path, 'r') as f:
+            boundaries = json.load(f)
+
+
+        #* Detect the first peak in the transmmit signal
+        transmit_sig_first_peak_time, transmit_sig_first_peak_amp = k_subtract.detect_first_peak(transmmit_signal, dt)
+        print(f'Transmit signal first peak time: {transmit_sig_first_peak_time} ns')
+        print(f'Transmit signal first peak amplitude: {transmit_sig_first_peak_amp}')
+        print(' ')
+
+        #* Calculate the estimated two-way travel time
+        TWTs = k_subtract.calc_TWT(boundaries)
+
+        #* Subtract the transmmit signal from the A-scan
+        closeup_x_start = 0 #[ns]
+        closeup_x_end =100 #[ns]
+        closeup_y_start = -60
+        closeup_y_end = 60
+
+        for TWT in TWTs:
+            shifted_data, subtracted_data = k_subtract.subtract_signal(data, transmmit_signal, dt, TWT, transmit_sig_first_peak_time, transmit_sig_first_peak_amp)
+
+            #* Plot the subtracted signal
+            k_subtract.plot(data, subtracted_data, time, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir_subtraction, TWT, plt_show=False)
 
 
     print('Alls done')

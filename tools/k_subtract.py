@@ -12,26 +12,9 @@ import argparse
 import json
 
 
-#* Parse command line arguments
-parser = argparse.ArgumentParser(
-    prog='k_subtract.py',
-    description='subtranct the signal from the A-scan',
-    epilog='End of help message',
-    usage='python -m tools.k_plot_time_estimation [out_file] [model_json] [-closeup]',
-)
-parser.add_argument('out_file', help='Path to the .out file')
-parser.add_argument('model_json', help='Path to the model json file')
-parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
-args = parser.parse_args()
-
-
-#* Physical constants
-c0 = 299792458  # Speed of light in vacuum [m/s]
-
-
 
 #* Detect first peak in transmmit signal
-def detect_first_peak(transmmit_signal):
+def detect_first_peak(transmmit_signal, dt):
     for i in range(1, len(transmmit_signal) - 1):
         if transmmit_signal[i - 1] < transmmit_signal[i] > transmmit_signal[i + 1] and transmmit_signal[i] > 1:
             first_peak_idx = i
@@ -45,6 +28,10 @@ def detect_first_peak(transmmit_signal):
 
 #* Calculate the two-way travel path length
 def calc_TWT(boundary_model):
+    #* Physical constants
+    c0 = 299792458  # Speed of light in vacuum [m/s]
+
+
     optical_path_length = []
     boundary_names = []
     boundaries = boundary_model['boundaries']
@@ -62,23 +49,23 @@ def calc_TWT(boundary_model):
     delay = boundary_model['initial_pulse_delay']# [ns]
     two_way_travel_time = [t + delay for t in two_way_travel_time]
 
-    print('Two-way travel time [ns]:')
-    print(two_way_travel_time)
-    print(' ')
+    #print('Two-way travel time [ns]:')
+    #print(two_way_travel_time)
+    #print(' ')
 
     return two_way_travel_time
 
 
 
 #* Subtract the transmmit signal from the A-scan
-def subtract_signal(Ascan_data, transmmit_signal, TWT, reference_point_time, reference_point_amplitude):
+def subtract_signal(Ascan_data, transmmit_signal,dt,  TWT, reference_point_time, reference_point_amplitude):
     segment_start = TWT - 3 # [ns]
     segment_start_idx = int(segment_start * 1e-9 / dt)
     segment_end = TWT + 3 # [ns]
     segment_end_idx = int(segment_end * 1e-9 / dt)
-    print(f'Segment start: {segment_start} ns, {segment_start_idx}')
-    print(f'Segment end: {segment_end} ns, {segment_end_idx}')
-    print(' ')
+    #print(f'Segment start: {segment_start} ns, {segment_start_idx}')
+    #print(f'Segment end: {segment_end} ns, {segment_end_idx}')
+    #print(' ')
     data_segment = Ascan_data[segment_start_idx: segment_end_idx]
 
     #* Detect the peak
@@ -90,19 +77,19 @@ def subtract_signal(Ascan_data, transmmit_signal, TWT, reference_point_time, ref
             if data_segment_abs[i] > 1:
                 peak_time = segment_start + i * dt / 1e-9 # [ns]
                 peak_times.append(peak_time) # [ns]
-                print(data_segment[i])
+                #print(data_segment[i])
 
-    print(f'Found {len(peak_times)} peaks')
-    print(f'TWT of the peaks: {peak_times}')
-    print(' ')
+    #print(f'Found {len(peak_times)} peaks')
+    #print(f'TWT of the peaks: {peak_times}')
+    #print(' ')
 
     #* Subtract the transmmit signal
     first_peak_time = peak_times[0] # [ns]
     first_peak_idx = int(first_peak_time * 1e-9 / dt) # [index]
     first_peak_amplitude = Ascan_data[first_peak_idx]
-    print(f'First peak time: {first_peak_time} ns')
-    print(f'First peak amplitude: {first_peak_amplitude}')
-    print(' ')
+    #print(f'First peak time: {first_peak_time} ns')
+    #print(f'First peak amplitude: {first_peak_amplitude}')
+    #print(' ')
 
     #* Shift the transmmit signal to match the first peak
     time_shift = first_peak_time - reference_point_time # [ns]
@@ -110,7 +97,7 @@ def subtract_signal(Ascan_data, transmmit_signal, TWT, reference_point_time, ref
     shifted_transmmit_signal = np.roll(transmmit_signal, shift_idx)
 
     amp_ratio = first_peak_amplitude / reference_point_amplitude
-    print(f'Amplitude ratio: {amp_ratio}')
+    #print(f'Amplitude ratio: {amp_ratio}')
     shifted_transmmit_signal = shifted_transmmit_signal * amp_ratio
 
     #* Subtract the transmmit signal
@@ -120,7 +107,65 @@ def subtract_signal(Ascan_data, transmmit_signal, TWT, reference_point_time, ref
 
 
 
+def plot(original_data, subtracted_data, time, closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir, TWT, plt_show):
+    fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'),
+                                figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
+
+    #* Plot A-scan
+    ax.plot(time, original_data, label='Original A-scan', color='gray', linestyle='--')
+    #ax.plot(time, shifted_data, label='Shifted A-scan', color='blue', linestyle='-.')
+    ax.plot(time, subtracted_data, label='Subtracted A-scan', color='k', linestyle='-')
+
+
+    plt.xlabel('Time [ns]', fontsize=28)
+    plt.ylabel('Amplitude', fontsize=28)
+    #plt.title('Pulse Analysis')
+    plt.legend(fontsize=24, loc='lower right')
+    plt.tick_params(labelsize=24)
+    plt.grid(True)
+
+
+    #* for closeup option
+    closeup_x_start = 0 #[ns]
+    closeup_x_end =100 #[ns]
+    closeup_y_start = -60
+    closeup_y_end = 60
+
+    if closeup:
+            ax.set_xlim([closeup_x_start, closeup_x_end])
+            ax.set_ylim([closeup_y_start, closeup_y_end])
+    else:
+        ax.set_xlim([0, np.amax(time)])
+
+
+    #* Save the plot
+    if closeup:
+            fig.savefig(output_dir + '/subtracted_' + f'{TWT:.1f}' + '_closeup_x' + str(closeup_x_start) \
+                    + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
+                    ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+    else:
+        fig.savefig(output_dir + '/subtracted' + f'{TWT:.1f}' + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+
+    if plt_show:
+        plt.show()
+    else:
+        plt.close()
+
+
 if __name__ == '__main__':
+    #* Parse command line arguments
+    parser = argparse.ArgumentParser(
+        prog='k_subtract.py',
+        description='subtranct the signal from the A-scan',
+        epilog='End of help message',
+        usage='python -m tools.k_plot_time_estimation [out_file] [model_json] [-closeup]',
+    )
+    parser.add_argument('out_file', help='Path to the .out file')
+    parser.add_argument('model_json', help='Path to the model json file')
+    parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
+    args = parser.parse_args()
+
+
     #* Load the transmmit signal data
     transmmit_signal_path = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/direct/A-scan/direct.out' # 送信波形データを読み込む
 
@@ -141,6 +186,7 @@ if __name__ == '__main__':
     print(f'dt: {dt}')
     print(' ')
 
+
     #* Zero padding the transmmit signal
     if len(transmmit_signal) < len(data):
         transmmit_signal = np.pad(transmmit_signal, (0, len(data) - len(transmmit_signal)), 'constant')
@@ -159,7 +205,7 @@ if __name__ == '__main__':
 
 
     #* Detect the first peak in the transmmit signal
-    transmit_sig_first_peak_time, transmit_sig_first_peak_amp = detect_first_peak(transmmit_signal)
+    transmit_sig_first_peak_time, transmit_sig_first_peak_amp = detect_first_peak(transmmit_signal, dt)
     print(f'Transmit signal first peak time: {transmit_sig_first_peak_time} ns')
     print(f'Transmit signal first peak amplitude: {transmit_sig_first_peak_amp}')
     print(' ')
@@ -168,48 +214,13 @@ if __name__ == '__main__':
     TWTs = calc_TWT(boundaries)
 
     #* Subtract the transmmit signal from the A-scan
+    closeup_x_start = 0 #[ns]
+    closeup_x_end =100 #[ns]
+    closeup_y_start = -60
+    closeup_y_end = 60
+
     for TWT in TWTs:
-        shifted_data, subtracted_data = subtract_signal(data, transmmit_signal, TWT, transmit_sig_first_peak_time, transmit_sig_first_peak_amp)
+        shifted_data, subtracted_data = subtract_signal(data, transmmit_signal, dt, TWT, transmit_sig_first_peak_time, transmit_sig_first_peak_amp)
 
-
-
-        #* Plot
-        fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'), num='rx' + str(rx),
-                                figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-
-        #* Plot A-scan
-        ax.plot(time, data, label='Original A-scan', color='gray', linestyle='--')
-        #ax.plot(time, shifted_data, label='Shifted A-scan', color='blue', linestyle='-.')
-        ax.plot(time, subtracted_data, label='Subtracted A-scan', color='k', linestyle='-')
-
-
-        plt.xlabel('Time [ns]', fontsize=28)
-        plt.ylabel('Amplitude', fontsize=28)
-        #plt.title('Pulse Analysis')
-        plt.legend(fontsize=24, loc='lower right')
-        plt.tick_params(labelsize=24)
-        plt.grid(True)
-
-
-        #* for closeup option
-        closeup_x_start = 0 #[ns]
-        closeup_x_end =100 #[ns]
-        closeup_y_start = -60
-        closeup_y_end = 60
-
-        if args.closeup:
-                ax.set_xlim([closeup_x_start, closeup_x_end])
-                ax.set_ylim([closeup_y_start, closeup_y_end])
-        else:
-            ax.set_xlim([0, np.amax(time)])
-
-
-        #* Save the plot
-        if args.closeup:
-                fig.savefig(output_dir + '/subtracted_' + f'{TWT:.1f}' + '_closeup_x' + str(closeup_x_start) \
-                        + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
-                        ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-        else:
-            fig.savefig(output_dir + '/subtracted' + f'{TWT:.1f}' + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-
-        plt.show()
+        #* Plot the subtracted signal
+        plot(data, subtracted_data, time, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir, TWT, plt_show=True)

@@ -9,35 +9,8 @@ from scipy.signal import hilbert
 
 
 
-#* Parse command line arguments
-parser = argparse.ArgumentParser(
-    prog='k_detect_peak.py',
-    description='Detect the peak from the B-scan data',
-    epilog='End of help message',
-    usage='python -m tools.k_detect_peak [out_file] [-closeup] [-FWHM]',
-)
-parser.add_argument('out_file', help='Path to the .out file')
-parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
-parser.add_argument('-FWHM', action='store_true', help='Plot the FWHM')
-args = parser.parse_args()
-
-
-#* Define path
-data_path = args.out_file
-output_dir = os.path.join(os.path.dirname(data_path), 'peak_detection')
-os.makedirs(output_dir, exist_ok=True)
-
-#* Load the A-scan data
-f = h5py.File(data_path, 'r')
-nrx = f.attrs['nrx']
-for rx in range(nrx):
-    data, dt = get_output_data(data_path, (rx+1), 'Ez')
-
-#time = np.arange(len(data)) * dt
-
-
 #* Define the function to analyze the pulses
-def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end):
+def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, FWHM, output_dir, plt_show):
     time = np.arange(len(data)) * dt  / 1e-9 # ns
 
     #* Calculate the envelope of the signal
@@ -131,7 +104,7 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
 
 
     #* Plot A-scan
-    fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'), num='rx' + str(rx),
+    fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'),
                             figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
     ax.plot(time, data, label='A-scan', color='black')
     ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.')
@@ -141,7 +114,7 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
             plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
 
         # 半値全幅を描画
-        if args.FWHM:
+        if FWHM:
             if info['distinguishable'] or len(peaks) == 1:
                 plt.hlines(envelope[info['peak_idx']] / 2,
                         info['left_half_time'],
@@ -158,34 +131,65 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
     plt.tick_params(labelsize=20)
     plt.grid(True)
 
-    if args.closeup:
+    if FWHM:
         ax.set_xlim([closeup_x_start, closeup_x_end])
         ax.set_ylim([closeup_y_start, closeup_y_end])
     else:
         ax.set_xlim([0, np.amax(time)])
 
     #* Save the plot
-    if args.closeup:
+    if closeup:
         fig.savefig(output_dir + '/peak_detection' + '_closeup_x' + str(closeup_x_start) \
                 + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
                 ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
     else:
-        fig.savefig(output_dir + '/peak_detection' + str(rx+1) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.show()
+        fig.savefig(output_dir + '/peak_detection' + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+
+    if plt_show:
+        plt.show()
+    else:
+        plt.close()
 
     return pulse_info
 
 # 使用例
 if __name__ == "__main__":
+    #* Parse command line arguments
+    parser = argparse.ArgumentParser(
+        prog='k_detect_peak.py',
+        description='Detect the peak from the B-scan data',
+        epilog='End of help message',
+        usage='python -m tools.k_detect_peak [out_file] [-closeup] [-FWHM]',
+    )
+    parser.add_argument('out_file', help='Path to the .out file')
+    parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
+    parser.add_argument('-FWHM', action='store_true', help='Plot the FWHM')
+    args = parser.parse_args()
+
+
+    #* Define path
+    data_path = args.out_file
+    output_dir = os.path.join(os.path.dirname(data_path), 'peak_detection')
+    os.makedirs(output_dir, exist_ok=True)
+
+
+    #* Load the A-scan data
+    f = h5py.File(data_path, 'r')
+    nrx = f.attrs['nrx']
+    for rx in range(nrx):
+        data, dt = get_output_data(data_path, (rx+1), 'Ez')
+
+    time = np.arange(len(data)) * dt
+
+
     # for closeup option
     closeup_x_start = 0 #[ns]
     closeup_x_end = 100 #[ns]
     closeup_y_start = -60
     closeup_y_end = 60
 
-
     #* Run the pulse analysis
-    pulse_info = analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end)
+    pulse_info = detect_plot_peaks(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, args.FWHM, output_dir, plt_show=True)
 
 
     # 結果の表示
