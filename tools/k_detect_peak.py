@@ -24,7 +24,8 @@ args = parser.parse_args()
 
 #* Define path
 data_path = args.out_file
-output_dir = os.path.dirname(data_path)
+output_dir = os.path.join(os.path.dirname(data_path), 'peak_detection')
+os.makedirs(output_dir, exist_ok=True)
 
 #* Load the A-scan data
 f = h5py.File(data_path, 'r')
@@ -165,11 +166,11 @@ def analyze_pulses(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, cl
 
     #* Save the plot
     if args.closeup:
-        fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '_closeup_x' + str(closeup_x_start) \
+        fig.savefig(output_dir + '/peak_detection' + '_closeup_x' + str(closeup_x_start) \
                 + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
                 ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
     else:
-        fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(output_dir + '/peak_detection' + str(rx+1) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
     plt.show()
 
     return pulse_info
