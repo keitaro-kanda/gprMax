@@ -59,9 +59,9 @@ def calc_TWT(boundary_model):
 
 #* Subtract the transmmit signal from the A-scan
 def subtract_signal(Ascan_data, transmmit_signal,dt,  TWT, reference_point_time, reference_point_amplitude):
-    segment_start = TWT - 3 # [ns]
+    segment_start = TWT - 1.2 # [ns]
     segment_start_idx = int(segment_start * 1e-9 / dt)
-    segment_end = TWT + 3 # [ns]
+    segment_end = TWT + 1.2 # [ns]
     segment_end_idx = int(segment_end * 1e-9 / dt)
     #print(f'Segment start: {segment_start} ns, {segment_start_idx}')
     #print(f'Segment end: {segment_end} ns, {segment_end_idx}')
@@ -215,11 +215,11 @@ if __name__ == '__main__':
     for TWT in TWTs:
         shifted_data, subtracted_data = subtract_signal(data, transmmit_signal, dt, TWT, transmit_sig_first_peak_time, transmit_sig_first_peak_amp)
 
-        if TWT > 5:
-            closeup_x_start = TWT - 5
+        if TWT > 3:
+            closeup_x_start = TWT - 3
         else:
             closeup_x_start = 0
-        closeup_x_end = TWT + 5
+        closeup_x_end = TWT + 7
 
         #* Plot the subtracted signal
         plot(data, shifted_data, subtracted_data, time, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir, TWT, plt_show=True)
