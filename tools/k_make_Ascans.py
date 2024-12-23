@@ -345,16 +345,18 @@ if __name__ == "__main__":
         TWTs = k_subtract.calc_TWT(boundaries)
 
         #* Subtract the transmmit signal from the A-scan
-        closeup_x_start = 0 #[ns]
-        closeup_x_end =100 #[ns]
-        closeup_y_start = -60
-        closeup_y_end = 60
-
         for TWT in TWTs:
             shifted_data, subtracted_data = k_subtract.subtract_signal(data, transmmit_signal, dt, TWT, transmit_sig_first_peak_time, transmit_sig_first_peak_amp)
 
             #* Plot the subtracted signal
-            k_subtract.plot(data, subtracted_data, time, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir_subtraction, TWT, plt_show=False)
+            if TWT > 5:
+                closeup_x_start = TWT - 5
+            else:
+                closeup_x_start = 0
+            closeup_x_end = TWT + 5
+
+            k_subtract.plot(data, shifted_data, subtracted_data, time, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
+                                    output_dir_subtraction, TWT, plt_show=False)
 
 
     print('Alls done')

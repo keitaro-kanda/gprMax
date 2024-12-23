@@ -139,6 +139,9 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
 
     #* Save the plot
     if closeup:
+        plt.xlim([closeup_x_start, closeup_x_end])
+        plt.ylim([closeup_y_start, closeup_y_end])
+
         fig.savefig(output_dir + '/peak_detection' + '_closeup_x' + str(closeup_x_start) \
                 + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
                 ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)

@@ -107,14 +107,14 @@ def subtract_signal(Ascan_data, transmmit_signal,dt,  TWT, reference_point_time,
 
 
 
-def plot(original_data, subtracted_data, time, closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir, TWT, plt_show):
+def plot(original_data, shifted_data, subtracted_data, time, closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir, TWT, plt_show):
     fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'),
                                 figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
 
     #* Plot A-scan
-    ax.plot(time, original_data, label='Original A-scan', color='gray', linestyle='--')
-    #ax.plot(time, shifted_data, label='Shifted A-scan', color='blue', linestyle='-.')
-    ax.plot(time, subtracted_data, label='Subtracted A-scan', color='k', linestyle='-')
+    ax.plot(time, original_data, label='Original A-scan', color='k', linestyle='-')
+    ax.plot(time, shifted_data, label='Shifted A-scan', color='r', linestyle='-.')
+    ax.plot(time, subtracted_data, label='Subtracted A-scan', color='b', linestyle='-')
 
 
     plt.xlabel('Time [ns]', fontsize=28)
@@ -126,11 +126,6 @@ def plot(original_data, subtracted_data, time, closeup, closeup_x_start, closeup
 
 
     #* for closeup option
-    closeup_x_start = 0 #[ns]
-    closeup_x_end =100 #[ns]
-    closeup_y_start = -60
-    closeup_y_end = 60
-
     if closeup:
             ax.set_xlim([closeup_x_start, closeup_x_end])
             ax.set_ylim([closeup_y_start, closeup_y_end])
@@ -214,13 +209,17 @@ if __name__ == '__main__':
     TWTs = calc_TWT(boundaries)
 
     #* Subtract the transmmit signal from the A-scan
-    closeup_x_start = 0 #[ns]
-    closeup_x_end =100 #[ns]
     closeup_y_start = -60
     closeup_y_end = 60
 
     for TWT in TWTs:
         shifted_data, subtracted_data = subtract_signal(data, transmmit_signal, dt, TWT, transmit_sig_first_peak_time, transmit_sig_first_peak_amp)
 
+        if TWT > 5:
+            closeup_x_start = TWT - 5
+        else:
+            closeup_x_start = 0
+        closeup_x_end = TWT + 5
+
         #* Plot the subtracted signal
-        plot(data, subtracted_data, time, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir, TWT, plt_show=True)
+        plot(data, shifted_data, subtracted_data, time, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, output_dir, TWT, plt_show=True)
