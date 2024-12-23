@@ -7,6 +7,7 @@ from tqdm import tqdm
 from outputfiles_merge import get_output_data
 from scipy.signal import hilbert
 import json
+import shutil
 import k_detect_peak # import the function from k_detect_peak.py
 import k_plot_TWT_estimation # import the function from k_plot_TWT_estimation.py
 import k_subtract # import the function from k_subtract.py
@@ -41,7 +42,7 @@ def plot_Ascan(filename, data, time, rx, closeup_x_start, closeup_x_end, closeup
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
 
-
+"""
 #* Define function to detect peaks
 def detect_peaks(data, time, rx, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end):
 
@@ -247,7 +248,7 @@ def plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x
     else:
         fig.savefig(output_dir + '/delay_time' + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
-
+"""
 
 
 
@@ -295,27 +296,47 @@ if __name__ == "__main__":
         for rx in range(nrx):
             data, dt = get_output_data(data_path, (rx+1), 'Ez')
         time = np.arange(len(data)) * dt  / 1e-9
-        #print(time.shape, data.shape)
 
         #* Plot the A-scan
         plot_Ascan(data_path, data, time, rx, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, 'Ez normalized')
 
         #* Run the pulse analysis and plot the A-scan with peak detection
-        #pulse_info = detect_peaks(data, time, rx, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end)
         output_dir_peak_detection = os.path.join(os.path.dirname(data_path), 'peak_detection')
         if not os.path.exists(output_dir_peak_detection):
             os.makedirs(output_dir_peak_detection)
+        else:
+            shutil.rmtree(output_dir_peak_detection)
+            os.makedirs(output_dir_peak_detection)
+
         pulse_info = k_detect_peak.detect_plot_peaks(data, dt, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
                                                             args.FWHM, output_dir_peak_detection, plt_show=False)
+
+        #* Save the pulse information
+        filename = os.path.join(output_dir_peak_detection, 'peak_info.txt')
+        peak_info = []
+        for info in pulse_info:
+            peak_info.append({
+                'Peak time (envelope) [ns]': info['peak_time'],
+                'Peak amplitude (envelope)': info['peak_amplitude'],
+                'Distinguishable': info['distinguishable'],
+                'Max amplitude': info['max_amplitude'],
+                'Max time [ns]': info['max_time']
+            })
+        np.savetxt(filename, peak_info, delimiter=' ', fmt='%s')
 
 
         #* Plot A-scan with estimated two-way travel time
         model_path = os.path.join(output_dir, 'model.json')
+
         output_dir_TWT_estimation = os.path.join(os.path.dirname(data_path), 'TWT_estimation')
-        os.makedirs(output_dir_TWT_estimation, exist_ok=True)
+        if not os.path.exists(output_dir_TWT_estimation):
+            os.makedirs(output_dir_TWT_estimation)
+        else:
+            shutil.rmtree(output_dir_TWT_estimation)
+            os.makedirs(output_dir_TWT_estimation)
+
         k_plot_TWT_estimation.calc_plot_TWT(data, time, model_path, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
                                                 output_dir_TWT_estimation, plt_show=False)
-        #plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, 'Ez normalized', rx=1)
 
 
         #* Subtract the transmit signal from the A-scan
@@ -325,7 +346,11 @@ if __name__ == "__main__":
 
         #* Define output directory
         output_dir_subtraction = os.path.join(os.path.dirname(data_path), 'subtracted')
-        os.makedirs(output_dir_subtraction, exist_ok=True)
+        if not os.path.exists(output_dir_subtraction):
+            os.makedirs(output_dir_subtraction)
+        else:
+            shutil.rmtree(output_dir_subtraction)
+            os.makedirs(output_dir_subtraction)
 
         time = np.arange(len(data)) * dt  / 1e-9 # [ns]
 
@@ -350,10 +375,10 @@ if __name__ == "__main__":
 
             #* Plot the subtracted signal
             if TWT > 5:
-                closeup_x_start = TWT - 5
+                closeup_x_start = TWT - 3
             else:
                 closeup_x_start = 0
-            closeup_x_end = TWT + 5
+            closeup_x_end = TWT + 7
 
             k_subtract.plot(data, shifted_data, subtracted_data, time, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
                                     output_dir_subtraction, TWT, plt_show=False)
