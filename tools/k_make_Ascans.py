@@ -42,216 +42,6 @@ def plot_Ascan(filename, data, time, rx, closeup_x_start, closeup_x_end, closeup
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
 
-"""
-#* Define function to detect peaks
-def detect_peaks(data, time, rx, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end):
-
-    #* Calculate the envelope of the signal
-    analytic_signal = hilbert(data)
-    envelope = np.abs(analytic_signal)
-
-    #* Find the peaks
-    peaks = []
-    for i in tqdm(range(1, len(data) - 1)):
-        if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
-            peaks.append(i)
-    #print(f'Found {len(peaks)} peaks')
-
-
-    # Calculate the half-width of the pulses
-    pulse_info = []
-    for i, peak_idx in enumerate(peaks):
-        #peak_amplitude = np.abs(data[peak_idx])
-        peak_amplitude = envelope[peak_idx]
-        half_amplitude = peak_amplitude / 2
-
-        # 左側の半値位置を探索
-        left_idx = peak_idx
-        while left_idx > 0 and envelope[left_idx] > half_amplitude:
-            left_idx -= 1
-
-        if left_idx == 0:
-            left_half_time = time[0]
-        else:
-            # 線形補間で正確な半値位置を求める
-            left_slope = (envelope[left_idx + 1] - envelope[left_idx]) / (time[left_idx + 1] - time[left_idx])
-            left_half_time = time[left_idx] + (half_amplitude - envelope[left_idx]) / left_slope
-
-        # 右側の半値位置を探索
-        right_idx = peak_idx
-        while right_idx < len(envelope) - 1 and envelope[right_idx] > half_amplitude:
-            right_idx += 1
-
-        if right_idx == len(envelope) - 1:
-            right_half_time = time[-1]
-        else:
-            # 線形補間で正確な半値位置を求める
-            right_slope = (envelope[right_idx] - envelope[right_idx - 1]) / (time[right_idx] - time[right_idx - 1])
-            right_half_time = time[right_idx - 1] + (half_amplitude - envelope[right_idx - 1]) / right_slope
-
-        # 半値全幅を計算
-        hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)]) # [ns], Half width at half maximum
-        fwhm = hwhm * 2 # [ns], Full width at half maximum
-
-        # 次のピークとの時間差と判定
-        if i < len(peaks) - 1:
-            next_peak_idx = peaks[i + 1]
-            separation = time[next_peak_idx] - time[peak_idx]
-            distinguishable = separation >= hwhm
-            #distinguishable = separation >= right_half_time - time[peak_idx]
-        else:
-            separation = None
-            distinguishable = None
-
-        # 半値全幅内でのA-scanデータの最大値を探す
-        # 時間範囲をインデックス範囲に変換
-        left_time_idx = np.searchsorted(time, left_half_time)
-        right_time_idx = np.searchsorted(time, right_half_time)
-
-        # 範囲内での最大振幅とそのインデックスを取得
-        hwhm_idx = int(hwhm / (dt / 1e-9)) # [ns]
-        data_segment = data[peak_idx-hwhm_idx:peak_idx+hwhm_idx+1] # 半値全幅のデータ
-        if len(data_segment) > 0:
-            local_max_idx = np.argmax(np.abs(data_segment))
-            #max_idx = left_time_idx + local_max_idx
-            max_idx = peak_idx - hwhm_idx + local_max_idx
-            #print(max_idx)
-            max_time = time[max_idx]
-            max_amplitude = data[max_idx]
-        else:
-            max_idx = peak_idx
-            max_time = time[peak_idx]
-            max_amplitude = data[peak_idx]
-
-        pulse_info.append({
-            'peak_idx': peak_idx,
-            'peak_time': time[peak_idx],
-            'peak_amplitude': peak_amplitude,
-            'width': fwhm,
-            'width_half': hwhm,
-            'left_half_time': left_half_time,
-            'right_half_time': right_half_time,
-            'separation': separation,
-            'distinguishable': distinguishable,
-            'max_idx': max_idx,
-            'max_time': max_time,
-            'max_amplitude': max_amplitude
-        })
-
-
-    #* Plot A-scan
-    fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'), num='rx' + str(rx),
-                            figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-    ax.plot(time, data, label='A-scan', color='black', lw=2)
-    ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.', lw=2)
-
-    for i, info in enumerate(pulse_info):
-        peak_time = info['peak_time']
-        plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
-
-        # 半値全幅を描画
-        if args.FWHM:
-            if info['distinguishable']:
-                plt.hlines(envelope[info['peak_idx']] / 2,
-                        info['left_half_time'],
-                        info['right_half_time'],
-                        color='green', linestyle='--', label='FWHM' if i == 0 else "")
-        else:
-            continue
-
-
-    plt.xlabel('Time [ns]', fontsize=28)
-    plt.ylabel('Amplitude', fontsize=28)
-    #plt.title('Pulse Analysis')
-    plt.legend(fontsize=24, loc='lower right')
-    plt.tick_params(labelsize=24)
-    plt.grid(True)
-
-    if args.closeup:
-        ax.set_xlim([closeup_x_start, closeup_x_end])
-        ax.set_ylim([closeup_y_start, closeup_y_end])
-    else:
-        ax.set_xlim([0, np.amax(time)])
-
-    #* Save the plot
-    if args.closeup:
-            fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '_closeup_x' + str(closeup_x_start) \
-                    + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
-                    ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-    else:
-        fig.savefig(output_dir + '/peaks_rx' + str(rx+1) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.close(fig)
-
-
-
-#* Define function to plot A-scan with estimated two-way travel time
-def plot_Ascan_estimated_time(data, time, model_path, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end):
-    #* Physical constants
-    c0 = 299792458  # Speed of light in vacuum [m/s]
-
-    #* Load the model json
-    with open(model_path, 'r') as f:
-        model = json.load(f)
-
-    #* Calculate the two-way travel path length
-    optical_path_length = []
-    boundary_names = []
-    boundaries = model['boundaries']
-    for boundary in boundaries:
-        boundary_names.append(boundary['name'])
-        if optical_path_length == []:
-            optical_path_length.append(2 * boundary['length'] * np.sqrt(boundary['epsilon_r']))
-        else:
-            optical_path_length.append(optical_path_length[-1] +  2 * boundary['length'] * np.sqrt(boundary['epsilon_r']))
-
-    #* Calculate the two-way travel time
-    two_way_travel_time = [length / c0 /1e-9 for length in optical_path_length] # [ns]
-    #* Add the initial pulse delay
-    delay = model['initial_pulse_delay']# [ns]
-    two_way_travel_time = [t + delay for t in two_way_travel_time]
-
-    #* Save the two-way travel time as txt
-    np.savetxt(output_dir + '/delay_time.txt', two_way_travel_time, fmt='%.6f', delimiter=' ', header='Two-way travel time [ns]')
-
-    #* Plot
-    fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'), num='rx' + str(rx),
-                                figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-
-    #* Plot A-scan
-    ax.plot(time, data, label='A-scan', color='black', lw=2)
-
-    #* Plot the estimated two-way travel time
-    colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
-    for i, t in enumerate(two_way_travel_time):
-        label = ['vacuum-regolith', 'regolith-rock top', 'rock bottom-regolith']
-        ax.axvline(t, linestyle='--', label=label[i], color=colors[i], lw=3)
-
-    plt.xlabel('Time [ns]', fontsize=28)
-    plt.ylabel('Amplitude', fontsize=28)
-    #plt.title('Pulse Analysis')
-    plt.legend(fontsize=24, loc='lower right')
-    plt.tick_params(labelsize=24)
-    plt.grid(True)
-
-    if args.closeup:
-            ax.set_xlim([closeup_x_start, closeup_x_end])
-            ax.set_ylim([closeup_y_start, closeup_y_end])
-    else:
-        ax.set_xlim([0, np.amax(time)])
-
-
-    #* Save the plot
-    if args.closeup:
-            fig.savefig(output_dir + '/delay_time' + '_closeup_x' + str(closeup_x_start) \
-                    + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
-                    ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-    else:
-        fig.savefig(output_dir + '/delay_time' + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.close(fig)
-"""
-
-
-
 
 #* Main
 if __name__ == "__main__":
@@ -304,9 +94,9 @@ if __name__ == "__main__":
         output_dir_peak_detection = os.path.join(os.path.dirname(data_path), 'peak_detection')
         if not os.path.exists(output_dir_peak_detection):
             os.makedirs(output_dir_peak_detection)
-        else:
-            shutil.rmtree(output_dir_peak_detection)
-            os.makedirs(output_dir_peak_detection)
+        #else:
+        #    shutil.rmtree(output_dir_peak_detection)
+        #    os.makedirs(output_dir_peak_detection)
 
         pulse_info = k_detect_peak.detect_plot_peaks(data, dt, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
                                                             args.FWHM, output_dir_peak_detection, plt_show=False)
@@ -331,9 +121,9 @@ if __name__ == "__main__":
         output_dir_TWT_estimation = os.path.join(os.path.dirname(data_path), 'TWT_estimation')
         if not os.path.exists(output_dir_TWT_estimation):
             os.makedirs(output_dir_TWT_estimation)
-        else:
-            shutil.rmtree(output_dir_TWT_estimation)
-            os.makedirs(output_dir_TWT_estimation)
+        #else:
+        #    shutil.rmtree(output_dir_TWT_estimation)
+        #    os.makedirs(output_dir_TWT_estimation)
 
         k_plot_TWT_estimation.calc_plot_TWT(data, time, model_path, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
                                                 output_dir_TWT_estimation, plt_show=False)
@@ -348,9 +138,9 @@ if __name__ == "__main__":
         output_dir_subtraction = os.path.join(os.path.dirname(data_path), 'subtracted')
         if not os.path.exists(output_dir_subtraction):
             os.makedirs(output_dir_subtraction)
-        else:
-            shutil.rmtree(output_dir_subtraction)
-            os.makedirs(output_dir_subtraction)
+        #else:
+        #    shutil.rmtree(output_dir_subtraction)
+        #    os.makedirs(output_dir_subtraction)
 
         time = np.arange(len(data)) * dt  / 1e-9 # [ns]
 
@@ -375,12 +165,12 @@ if __name__ == "__main__":
 
             #* Plot the subtracted signal
             if TWT > 5:
-                closeup_x_start = TWT - 3
+                closeup_x_start_sub = TWT - 3
             else:
-                closeup_x_start = 0
-            closeup_x_end = TWT + 7
+                closeup_x_start_sub = 0
+            closeup_x_end_sub = TWT + 7
 
-            k_subtract.plot(data, shifted_data, subtracted_data, time, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end,
+            k_subtract.plot(data, shifted_data, subtracted_data, time, args.closeup, closeup_x_start_sub, closeup_x_end_sub, closeup_y_start, closeup_y_end,
                                     output_dir_subtraction, TWT, plt_show=False)
 
 
