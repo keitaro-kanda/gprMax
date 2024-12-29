@@ -59,13 +59,15 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
         # 半値全幅を計算
         hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)]) # [ns], Half width at half maximum
         fwhm = hwhm * 2 # [ns], Full width at half maximum
-        #width = right_half_time - left_half_time
-        #width_half = hwhm
 
         # 次のピークとの時間差と判定
         if i < len(peaks) - 1:
             next_peak_idx = peaks[i + 1]
             separation = time[next_peak_idx] - time[peak_idx]
+            distinguishable = separation >= hwhm
+        elif i == len(peaks) - 1:
+            former_peak_idx = peaks[i - 1]
+            separation = time[peak_idx] - time[former_peak_idx]
             distinguishable = separation >= hwhm
         else:
             separation = None
@@ -192,7 +194,7 @@ if __name__ == "__main__":
     closeup_y_end = 60
 
     #* Run the pulse analysis
-    pulse_info = detect_plot_peaks(data, dt, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, args.FWHM, output_dir, plt_show=True)
+    pulse_info = detect_plot_peaks(data, dt, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, args.FWHM, output_dir, plt_show=True)
 
 
     # 結果の表示
