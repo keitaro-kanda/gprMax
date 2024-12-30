@@ -79,9 +79,19 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
         data_segment = data[peak_idx-hwhm_idx:peak_idx+hwhm_idx+1] # 半値全幅のデータ
         if len(data_segment) > 0:
             local_max_idx = np.argmax(np.abs(data_segment))
-            #max_idx = left_time_idx + local_max_idx
+            #* FWHMの両端をピークとしてしまうことを避ける
+            if local_max_idx in [1, len(data_segment) - 2]:
+                continue
+            if local_max_idx == 0 or local_max_idx == len(data_segment) - 1:
+                local_max_idxs = []
+                local_max_amps = []
+                for j in range(1, len(data_segment) - 1):
+                    if data_segment[j - 1] < data_segment[j] > data_segment[j + 1]:
+                        local_max_idxs.append(j)
+                        local_max_amps.append(data_segment[j])
+                if len(local_max_idxs) > 0:
+                    local_max_idx = local_max_idxs[np.argmax(local_max_amps)]
             max_idx = peak_idx - hwhm_idx + local_max_idx
-            #print(max_idx)
             max_time = time[max_idx]
             max_amplitude = data[max_idx]
         else:
