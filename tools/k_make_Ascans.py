@@ -64,8 +64,8 @@ if __name__ == "__main__":
         path_group = json.load(f)
 
     # for closeup option
-    closeup_x_start = 0 #[ns]
-    closeup_x_end =100 #[ns]
+    closeup_x_start = 20 #[ns]
+    closeup_x_end =40 #[ns]
     closeup_y_start = -25
     closeup_y_end = 25
 
