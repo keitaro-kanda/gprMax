@@ -61,6 +61,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
         fwhm = hwhm * 2 # [ns], Full width at half maximum
 
         # 次のピークとの時間差と判定
+        
         if i < len(peaks) - 1:
             next_peak_idx = peaks[i + 1]
             separation = time[next_peak_idx] - time[peak_idx]
