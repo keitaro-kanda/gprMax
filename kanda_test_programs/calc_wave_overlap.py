@@ -171,15 +171,6 @@ def analyze_pulses(data, dt):
         #width_half = hwhm
 
         # 次のピークとの時間差と判定
-<<<<<<< HEAD
-        if i < len(peaks) - 1:
-            next_peak_idx = peaks[i + 1]
-            separation = time[next_peak_idx] - time[peak_idx]
-            distinguishable = separation >= hwhm
-        else:
-            separation = None
-            distinguishable = None
-=======
         if len(peaks) == 1:
             separation = None
             distinguishable = 'True'
@@ -196,7 +187,6 @@ def analyze_pulses(data, dt):
                     distinguishable = 'False'
                 elif i == 1 and data[peaks[0]] < data[peaks[1]]:
                     distinguishable = 'True'
->>>>>>> 40fe7098 (図の調整)
 
 
         # 範囲内での最大振幅とそのインデックスを取得
