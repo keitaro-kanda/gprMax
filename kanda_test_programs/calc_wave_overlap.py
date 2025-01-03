@@ -42,8 +42,8 @@ def env(data):
 #* Define the function to plot the wave overlap
 def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time, envelope, peak_info, output_dir):
     fig, ax = plt.subplots(figsize=(10, 8), tight_layout=True)
-    ax.plot(time, original_sig, label='Original', linewidth=2)
-    ax.plot(time, shifted_sig - 3.0, label=f'Shifted {shift_time:.1f} ns', linewidth=2)
+    ax.plot(time, original_sig, label='Bottom component', linewidth=2)
+    ax.plot(time, shifted_sig - 3.0, label='Side component', linewidth=2)
     ax.plot(time, overlapped_sig - 6.0, label='Overlapped', linewidth=2)
 
     #* Plot the envelope and peaks
@@ -60,9 +60,9 @@ def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time,
 
     ax.set_xlim(0, 20)
     ax.set_ylim(-8, 1)
-    ax.set_title(f'Amplitude: {amplitude:.1f}', fontsize=24)
+    ax.set_title(r'$A = $' + f'{amplitude:.1f} ' + r'$\Delta t = ' + f'{shift_time:.1f}$ ns', fontsize=28)
     ax.set_xlabel('Time [ns]', fontsize=24)
-    ax.set_ylabel('Amplitude', fontsize=24)
+    ax.set_ylabel('Normalized amplitude', fontsize=24)
     ax.tick_params(labelsize=20)
     ax.legend(fontsize=20, loc='lower right')
     ax.grid()
@@ -171,22 +171,10 @@ def analyze_pulses(data, dt):
         #width_half = hwhm
 
         # 次のピークとの時間差と判定
-        if len(peaks) == 1:
-            separation = None
-            distinguishable = 'True'
-        elif len(peaks) == 2:
-            separation = time[peaks[1]] - time[peaks[0]]
-            if separation >= fwhm:
-                distinguishable = 'True'
-            else:
-                if i == 0 and data[peaks[0]] > data[peaks[1]]:
-                    distinguishable = 'True'
-                elif i == 0 and data[peaks[0]] < data[peaks[1]]:
-                    distinguishable = 'False'
-                elif i == 1 and data[peaks[0]] > data[peaks[1]]:
-                    distinguishable = 'False'
-                elif i == 1 and data[peaks[0]] < data[peaks[1]]:
-                    distinguishable = 'True'
+        if i < len(peaks) - 1:
+            next_peak_idx = peaks[i + 1]
+            separation = time[next_peak_idx] - time[peak_idx]
+            distinguishable = separation >= hwhm
         else:
             separation = None
             distinguishable = None
