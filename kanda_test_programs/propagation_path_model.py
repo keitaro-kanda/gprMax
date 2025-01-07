@@ -19,11 +19,13 @@ er_rock = 9.0
 
 h_dash = antenna_height
 
+FWHM = 1.56e-9  # [s], 1.56 ns
+
 
 #* Parameters
 #rock_heights = np.arange(0, 2.101, 0.001)  # [m]
 #rock_widths = np.arange(0.3, 2.11, 0.3)  # [m]
-rock_heights = np.arange(0.30, 2.11, 0.30)  # [m]
+rock_heights = np.arange(0.15, 2.26, 0.15)  # [m]
 rock_widths = np.arange(0, 6.01, 0.01)  # [m]
 thetas = np.arange(0, np.pi * 1/2, np.pi / 1440)  # [rad], 0 ~ pi/2
 
@@ -40,11 +42,11 @@ def calc_side_component(height_index, Tb_at_height):
     Ls = np.zeros((len(thetas), len(rock_widths)))  # [m]
 
     height = rock_heights[height_index]
-    for i, theta in tenumerate(thetas, desc=f'Rock height: {height:.1f} m'):
+    for i, theta in tenumerate(thetas, desc=f'Rock height: {height:.2f} m'):
+        # Criteriaの計算
+        side_criteria_1 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(3 - np.sin(theta)**2))  # [m]
+        side_criteria_2 = side_criteria_1 + height * (np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
         for j, width in enumerate(rock_widths):
-            # Criteriaの計算
-            side_criteria_1 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(3 - np.sin(theta)**2))  # [m]
-            side_criteria_2 = side_criteria_1 + height * (np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
 
             # 条件を判定
             if side_criteria_1 < width / 2 < side_criteria_2:
@@ -158,7 +160,7 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T):
 
     #fig.suptitle(f'Rock height: {height:.1f} m', fontsize=28)
     plt.tight_layout()
-    plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/propagation_time_h{height:.1f}.png')
+    plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/propagation_time_h{height:.2f}.png')
     #plt.show()
     plt.close()
 
@@ -176,25 +178,8 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T):
     plt.grid()
     plt.legend(fontsize=20)
 
-    plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/min_time_difference_h{height:.1f}.png')
+    plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/min_time_difference_h{height:.2f}.png')
     plt.close()
-
-    """
-    #* Plot the mean and standard deviation of time difference
-    plt.figure(figsize=(8, 6), tight_layout=True)
-    plt.errorbar(rock_widths, delta_T_mean / 1e-9, yerr=delta_T_std / 1e-9, fmt='o', markersize=5, color='gray', alpha=0.5)
-    plt.plot(rock_widths, delta_T_mean / 1e-9, linewidth=2, color='orange')
-
-    plt.title(f'Rock height: {height:.1f} m', fontsize=24)
-    plt.xlabel('Rock width [m]', fontsize=20)
-    plt.ylabel('Minimum time difference [ns]', fontsize=20)
-    plt.tick_params(labelsize=18)
-    plt.grid()
-
-    plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/mean_std_time_difference_h{height:.1f}.png')
-    #plt.show()
-    plt.close()
-    """
 
 
 def compare_with_FDTD(height, min_delta_T):
@@ -220,19 +205,111 @@ def compare_with_FDTD(height, min_delta_T):
     plt.grid()
     plt.legend(fontsize=20)
 
-    plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/min_time_difference_h{height:.1f}_compare.png')
+    plt.savefig(f'/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/min_time_difference_h{height:.2f}_compare.png')
     plt.close()
 
+
+def plot_w_h_deltaT(w_h_matrix):
+    fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
+    max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
+    im = ax.imshow(w_h_matrix / 1e-9, cmap='jet',
+                    extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='auto',
+                    origin='lower',
+                    vmin=0, vmax=max_deltaT
+                    )
+
+    ax.set_xlabel('Width [m]', fontsize=24)
+    ax.set_ylabel('Height [m]', fontsize=24)
+    ax.set_xlim(0, 3.0)
+    ax.tick_params(labelsize=20)
+    ax.grid(which='both', axis='both', linestyle='-.')
+
+    #* x, y軸のメモリを0.3刻みにする
+    ax.set_xticks(np.arange(0, 3.01, 0.3))
+    ax.set_yticks(np.arange(0, np.max(rock_heights)+0.1, 0.3))
+
+    # --- ここから等高線の追加 ---
+    # imshow と同じ座標系に対応する x, y 軸配列を作成
+    x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_matrix.shape[1])
+    y = np.linspace(rock_heights[0], rock_heights[-1], w_h_matrix.shape[0])
+    X, Y = np.meshgrid(x, y)
+
+    # w_h_matrix = 1.56 の等高線(1本だけ)を描画
+    contour_level = FWHM / 1e-9  # [ns]
+    cs = ax.contour(X, Y, w_h_matrix/1e-9, levels=[contour_level], colors='k')
+
+    # 等高線にラベルを付ける場合
+    ax.clabel(cs, inline=True, fontsize=20, fmt=f"{contour_level:.2f}")
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.1)
+    cbar = plt.colorbar(im, cax=cax, orientation='vertical')
+    cbar.set_label('Time difference [ns]', fontsize=24)
+    cbar.ax.tick_params(labelsize=20)
+
+    plt.savefig('/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/w_h_deltaT.png')
+    plt.show()
+
+
+def compare_w_h_deltaT_FDTD(w_h_matrix):
+    expected_polarity_size = [[1.8, 0.3], [2.1, 0.3], [2.4, 0.3], [2.7, 0.3], [3.0, 0.3],
+                                [1.8, 0.6], [2.4, 0.6], [3.0, 0.6], [3.6, 0.6], [4.2, 0.6], [4.8, 0.6],
+                                [5.4, 0.6], [6.0, 0.6], [1.8, 1.8], [2.1, 2.1]]
+    fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
+    max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
+    im = ax.imshow(w_h_matrix / 1e-9, cmap='jet',
+                    extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='auto',
+                    origin='lower',
+                    vmin=0, vmax=max_deltaT
+                    )
+    for i in range(len(expected_polarity_size)):
+        ax.plot(expected_polarity_size[i][0], expected_polarity_size[i][1], 'o', markersize=5, color='r')
+
+    ax.set_xlabel('Width [m]', fontsize=24)
+    ax.set_ylabel('Height [m]', fontsize=24)
+    ax.set_xlim(0, 3.0)
+    ax.tick_params(labelsize=20)
+    ax.grid(which='both', axis='both', linestyle='-.')
+
+    #* x, y軸のメモリを0.3刻みにする
+    ax.set_xticks(np.arange(0, 3.01, 0.3))
+    ax.set_yticks(np.arange(0, np.max(rock_heights)+0.1, 0.3))
+
+    # --- ここから等高線の追加 ---
+    # imshow と同じ座標系に対応する x, y 軸配列を作成
+    x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_matrix.shape[1])
+    y = np.linspace(rock_heights[0], rock_heights[-1], w_h_matrix.shape[0])
+    X, Y = np.meshgrid(x, y)
+
+    # w_h_matrix = 1.56 の等高線(1本だけ)を描画
+    contour_level = FWHM / 1e-9  # [ns]
+    cs = ax.contour(X, Y, w_h_matrix/1e-9, levels=[contour_level], colors='k')
+
+    # 等高線にラベルを付ける場合
+    ax.clabel(cs, inline=True, fontsize=20, fmt=f"{contour_level:.2f}")
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.1)
+    cbar = plt.colorbar(im, cax=cax, orientation='vertical')
+    cbar.set_label('Time difference [ns]', fontsize=24)
+    cbar.ax.tick_params(labelsize=20)
+
+    plt.savefig('/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/w_h_deltaT_compare.png')
+    plt.show()
 
 
 
 #* main
 if __name__ == '__main__':
+    w_h_deltaT = np.zeros((len(rock_heights), len(rock_widths)))
     for i, h in tenumerate(rock_heights, desc='Rock height'):
         Tb_i = np.tile(Tb[i], (len(thetas), len(rock_widths)))  # [s]
         Ts, delta_T = calc_side_component(i, Tb_i)
         min_delta_T, mean_delta_T = calc_min_time_difference(delta_T)
         delta_T_mean, delta_T_std = calc_time_difference(delta_T)
+        w_h_deltaT[i] = min_delta_T
         plot(h, Ts, delta_T, min_delta_T, mean_delta_T)
         if h == 0.3 or h == 0.6:
             compare_with_FDTD(h, min_delta_T)
+    plot_w_h_deltaT(w_h_deltaT)
+    compare_w_h_deltaT_FDTD(w_h_deltaT)
