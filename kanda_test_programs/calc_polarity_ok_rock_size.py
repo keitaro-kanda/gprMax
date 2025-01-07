@@ -65,7 +65,7 @@ def calc(h_index, h):
 
         if np.all(np.isnan(w_theta_TorF[i])):
             w_h_TorF[h_index, i] = np.nan
-        elif np.any(w_theta_TorF[i] == 1):
+        elif np.nanmean(w_theta_TorF[i]) == 1: # nan以外の要素が全て1の場合
             w_h_TorF[h_index, i] = 1
 
 
