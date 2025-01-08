@@ -116,7 +116,7 @@ plt.savefig('/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/w_h_deltaT
 plt.show()
 
 
-#* Plot with FDTD results
+#* Plot True or False
 fig, ax = plt.subplots(figsize=(8, 8), facecolor='w', edgecolor='w', tight_layout=True)
 im = ax.imshow(w_h_TorF, cmap='coolwarm',
                 extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
@@ -133,4 +133,41 @@ ax.grid(which='both', axis='both', linestyle='-.')
 #ax.set_yticks(np.arange(0, 2.1, 0.3))
 
 plt.savefig('/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/w_h_TorF.png')
+plt.show()
+
+
+#* Plot True or False with FDTD results
+polarity_ok_size = [[1.8, 0.3], [2.1, 0.3], [2.4, 0.3], [2.7, 0.3], [3.0, 0.3],
+                                [1.8, 0.6], [2.4, 0.6], [3.0, 0.6], [3.6, 0.6], [4.2, 0.6], [4.8, 0.6],
+                                [5.4, 0.6], [6.0, 0.6],
+                                [2.0, 1.5], [2.5, 1.5], [3.0, 1.5],
+                                [2.5, 2.5], [3.0, 2.5],
+                                [1.8, 1.8], [2.1, 2.1]
+                                ]
+polarity_not_ok_size = [[0.15, 0.15], [0.3, 0.3], [0.6, 0.3], [0.9, 0.3], [1.2, 0.3], [1.5, 0.3],
+                            [0.6, 0.6], [1.2, 0.6], [0.9, 0.9], [1.2, 1.2], [1.5, 1.5], [2.0, 2.5]
+                            ]
+
+fig, ax = plt.subplots(figsize=(8, 8), facecolor='w', edgecolor='w', tight_layout=True)
+im = ax.imshow(w_h_TorF, cmap='coolwarm',
+                extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
+                origin='lower'
+                )
+for i in range(len(polarity_ok_size)):
+        ax.plot(polarity_ok_size[i][0], polarity_ok_size[i][1], 'o', markersize=5, color='w')
+for i in range(len(polarity_not_ok_size)):
+        ax.plot(polarity_not_ok_size[i][0], polarity_not_ok_size[i][1], 'o', markersize=5, color='gray')
+
+ax.set_xlabel('Width [m]', fontsize=24)
+ax.set_ylabel('Height [m]', fontsize=24)
+ax.set_xlim(0, 3.15)
+ax.set_ylim(0, 3.15)
+ax.tick_params(labelsize=20)
+ax.grid(which='both', axis='both', linestyle='-.')
+
+#* x, y軸のメモリを0.3刻みにする
+#ax.set_xticks(np.arange(0, 2.1, 0.3))
+#ax.set_yticks(np.arange(0, 2.1, 0.3))
+
+plt.savefig('/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/w_h_TorF_compare.png')
 plt.show()
