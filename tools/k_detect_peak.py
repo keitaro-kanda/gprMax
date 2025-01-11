@@ -58,21 +58,54 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
 
         # 半値全幅を計算
         hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)]) # [ns], Half width at half maximum
-        fwhm = hwhm * 2 # [ns], Full width at half maximum
+        #fwhm = hwhm * 2 # [ns], Full width at half maximum
+        fwhm = right_half_time - left_half_time # [ns], Full width at half maximum
 
-        # 次のピークとの時間差と判定
-        
+        # 前後のピークとの時間差と判定
+        separation_next = None
+        separation_prev = None
+        distinguishable_prev = True # デフォルトはTrue
+        distinguishable_next = True # デフォルトはTrue
+        distinguishable = True  # デフォルトはTrue
+
+        # 前のピークとの時間差を計算
+        if i > 0:
+            prev_peak_idx = peaks[i - 1]
+            separation_prev = time[peak_idx] - time[prev_peak_idx]
+            if separation_prev < fwhm:
+                distinguishable_prev = False
+
+        # 次のピークとの時間差を計算
         if i < len(peaks) - 1:
             next_peak_idx = peaks[i + 1]
-            separation = time[next_peak_idx] - time[peak_idx]
-            distinguishable = separation >= hwhm
-        elif i == len(peaks) - 1:
-            former_peak_idx = peaks[i - 1]
-            separation = time[peak_idx] - time[former_peak_idx]
-            distinguishable = separation >= hwhm
+            separation_next = time[next_peak_idx] - time[peak_idx]
+            if separation_next < fwhm:
+                distinguishable_next = False
+
+        # 孤立したピーク（前後にピークがない場合）
+        if i == 0 and len(peaks) == 1:
+            separation_prev = None
+            separation_next = None
+            distinguishable_prev = True
+            distinguishable_next = True
+        
+        #* Distinguishableの判定
+        if distinguishable_prev and distinguishable_next:
+            distinguishable = True
+        elif distinguishable_prev and not distinguishable_next:
+            if envelope[peak_idx] > envelope[next_peak_idx]:
+                distinguishable = True
+            else:
+                distinguishable = False
+        elif not distinguishable_prev and distinguishable_next:
+            if envelope[peak_idx] > envelope[prev_peak_idx]:
+                distinguishable = True
+            else:
+                distinguishable = False
         else:
-            separation = None
-            distinguishable = None
+            distinguishable = False
+
+        separation = min(separation_prev, separation_next) if separation_prev is not None and separation_next is not None else (separation_prev or separation_next)
 
 
         # 範囲内での最大振幅とそのインデックスを取得
@@ -82,7 +115,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
             local_max_idx = np.argmax(np.abs(data_segment))
             #* FWHMの両端をピークとしてしまうことを避ける
             if local_max_idx in [1, len(data_segment) - 2]:
-                continue
+                distinguishable = False
             if local_max_idx == 0 or local_max_idx == len(data_segment) - 1:
                 local_max_idxs = []
                 local_max_amps = []
@@ -123,7 +156,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.')
 
     for i, info in enumerate(pulse_info):
-        if info['distinguishable']:
+        if info['distinguishable']==True:
             plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
 
         # 半値全幅を描画
