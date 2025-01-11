@@ -3,5 +3,5 @@ Type: ricker
 Maximum (absolute) amplitude: 0.999982
 Centre frequency: 5e+08 Hz
 Time to centre of pulse: 2.82843e-09 s
-Time window: 1e-07 s (10001 iterations)
+Time window: 1e-05 s (1000001 iterations)
 Time step: 1e-11 s

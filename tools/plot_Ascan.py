@@ -142,12 +142,8 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 ax1.tick_params(labelsize=24)
 
                 # Plot frequency spectra
-                #markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.')
-                #plt.setp(baseline, 'linewidth', 0)
-                #plt.setp(stemlines, 'color', 'r')
-                #plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
-                line2 = ax2.plot(freqs[pltrange], power[pltrange], 'k', lw=2)
-                ax2.set_xlabel('Frequency [Hz]', fontsize=28)
+                line2 = ax2.plot(freqs[pltrange]/1e6, power[pltrange], 'k', lw=2)
+                ax2.set_xlabel('Frequency [MHz]', fontsize=28)
                 ax2.set_ylabel('Power [dB]', fontsize=28)
                 ax2.grid(which='both', axis='both', linestyle='-.')
                 ax2.tick_params(labelsize=24)
@@ -310,9 +306,9 @@ if __name__ == "__main__":
 
     # for closeup option
     closeup_x_start = 0 #[ns]
-    closeup_x_end = 100 #[ns]
-    closeup_y_start = -60
-    closeup_y_end = 60
+    closeup_x_end = 10 #[ns]
+    closeup_y_start = -3500
+    closeup_y_end = 3500
 
     plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
     plthandle.show()
