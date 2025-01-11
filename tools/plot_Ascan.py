@@ -147,6 +147,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 ax2.set_ylabel('Power [dB]', fontsize=28)
                 ax2.grid(which='both', axis='both', linestyle='-.')
                 ax2.tick_params(labelsize=24)
+                ax2.set_ylim([-20, 1])
 
                 # Change colours and labels for magnetic field components or currents
                 if 'H' in outputs[0]:
