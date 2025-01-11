@@ -22,7 +22,7 @@ args = parser.parse_args()
 
 #* Define the input and output folders
 input_folder = args.img_folder_path
-output_folder = os.path.join(os.path.dirname(input_folder), f'screenshot_trimmed_{args.area_L}_{args.area_R}_{args.area_T}_{args.area_B}')
+output_folder = input_folder + f'_{args.area_L}_{args.area_R}_{args.area_T}_{args.area_B}'
 os.makedirs(output_folder, exist_ok=True)
 
 #* Save settings in txt file

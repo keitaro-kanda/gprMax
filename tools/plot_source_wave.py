@@ -115,34 +115,27 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
 
         # Plot waveform
         ax1.plot(time * 1e9, waveform, 'k', lw=2)
-        ax1.set_xlabel('Time [ns]', size=18)
-        ax1.set_ylabel('Amplitude', size=18)
+        ax1.set_xlabel('Time [ns]', fontsize=28)
+        ax1.set_ylabel('Amplitude', fontsize=28)
         ax1.set_xlim([0, 10])
+        ax1.tick_params(labelsize=24)
 
         # Plot frequency spectra
-        #markerline, stemlines, baseline = ax2.stem(freqs[pltrange], power[pltrange], '-.')
-        #plt.setp(baseline, 'linewidth', 0)
-        #plt.setp(stemlines, 'color', 'r')
-        #plt.setp(markerline, 'markerfacecolor', 'r', 'markeredgecolor', 'r')
         ax2.plot(freqs[pltrange]/1e6, power[pltrange], 'k', lw=2)
-        ax2.set_xlabel('Frequency [MHz]', size=18)
-        ax2.set_ylabel('Power [dB]', size=18)
+        ax2.set_xlabel('Frequency [MHz]', fontsize=28)
+        ax2.set_ylabel('Power [dB]', fontsize=28)
         ax2.set_ylim([-20, 1])
-
-        # メモリサイズの変更
-        ax1.tick_params(labelsize=16)
-        ax2.tick_params(labelsize=16)
-        #plt.suptitle(str(args.type) + ', ' + str(args.freq / 1e6) + ' MHz', size=20)
-
+        ax2.tick_params(labelsize=24)
 
     else:
         fig, ax1 = plt.subplots(num=w.type, figsize=(16, 8), facecolor='w', edgecolor='w')
 
         # Plot waveform
         ax1.plot(time * 1e9, waveform, 'r', lw=2)
-        plt.supxtitle(args.type + ', ' + args.freq / 1e6 + ' MHz', size=20)
-        ax1.set_xlabel('Time [ns]', size=18)
-        ax1.set_ylabel('Amplitude', size=18)
+        plt.supxtitle(args.type + ', ' + args.freq / 1e6 + ' MHz', fontsize=28)
+        ax1.set_xlabel('Time [ns]', fontsize=28)
+        ax1.set_ylabel('Amplitude', fontsize=28)
+        ax1.tick_params(labelsize=24)
 
     [ax.grid(which='both', axis='both', linestyle='-.') for ax in fig.axes]  # Turn on grid
 
