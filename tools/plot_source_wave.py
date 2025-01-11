@@ -111,13 +111,15 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
             pltrange = np.where(freqs > 4 * w.freq)[0][0]
         pltrange = np.s_[0:pltrange]
 
-        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num=w.type, figsize=(16, 8), facecolor='w', edgecolor='w', tight_layout=True)
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num=w.type, figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
 
         # Plot waveform
         ax1.plot(time * 1e9, waveform, 'k', lw=2)
         ax1.set_xlabel('Time [ns]', fontsize=28)
         ax1.set_ylabel('Amplitude', fontsize=28)
         ax1.set_xlim([0, 10])
+        ax1.grid(which='both', axis='both', linestyle='--')
+        ax1.minorticks_on()
         ax1.tick_params(labelsize=24)
 
         # Plot frequency spectra
@@ -126,18 +128,19 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
         ax2.set_ylabel('Power [dB]', fontsize=28)
         ax2.set_ylim([-20, 1])
         ax2.tick_params(labelsize=24)
+        ax2.grid(which='both', axis='both', linestyle='--')
 
     else:
         fig, ax1 = plt.subplots(num=w.type, figsize=(16, 8), facecolor='w', edgecolor='w')
 
         # Plot waveform
         ax1.plot(time * 1e9, waveform, 'r', lw=2)
-        plt.supxtitle(args.type + ', ' + args.freq / 1e6 + ' MHz', fontsize=28)
+        plt.supxtitle(args.type + ', ' + str(args.freq / 1e6) + ' MHz', fontsize=28)
         ax1.set_xlabel('Time [ns]', fontsize=28)
         ax1.set_ylabel('Amplitude', fontsize=28)
+        ax1.grid(which='both', axis='both', linestyle='--')
+        ax1.minorticks_on()
         ax1.tick_params(labelsize=24)
-
-    [ax.grid(which='both', axis='both', linestyle='-.') for ax in fig.axes]  # Turn on grid
 
     output_dir = 'kanda/waveform'
     folder_name = str(args.type) + '_' + str(args.freq / 1e6) + 'MHz'
