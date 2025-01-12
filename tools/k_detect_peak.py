@@ -11,7 +11,7 @@ from scipy.signal import hilbert
 
 #* Define the function to analyze the pulses
 def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, FWHM, output_dir, plt_show):
-    time = np.arange(len(data)) * dt  / 1e-9 # ns
+    time = np.arange(len(data)) * dt  / 1e-9 # [ns]
 
     #* Calculate the envelope of the signal
     analytic_signal = hilbert(data)
@@ -42,7 +42,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
         else:
             # 線形補間で正確な半値位置を求める
             left_slope = (envelope[left_idx + 1] - envelope[left_idx]) / (time[left_idx + 1] - time[left_idx])
-            left_half_time = time[left_idx] + (half_amplitude - envelope[left_idx]) / left_slope
+            left_half_time = time[left_idx] + (half_amplitude - envelope[left_idx]) / left_slope # [ns]
 
         # 右側の半値位置を探索
         right_idx = peak_idx
@@ -54,7 +54,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
         else:
             # 線形補間で正確な半値位置を求める
             right_slope = (envelope[right_idx] - envelope[right_idx - 1]) / (time[right_idx] - time[right_idx - 1])
-            right_half_time = time[right_idx - 1] + (half_amplitude - envelope[right_idx - 1]) / right_slope
+            right_half_time = time[right_idx - 1] + (half_amplitude - envelope[right_idx - 1]) / right_slope # [ns]
 
         # 半値全幅を計算
         hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)]) # [ns], Half width at half maximum
@@ -110,24 +110,40 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
 
         # 範囲内での最大振幅とそのインデックスを取得
         hwhm_idx = int(hwhm / (dt / 1e-9)) # [ns]
-        data_segment = data[peak_idx-hwhm_idx:peak_idx+hwhm_idx+1] # 半値全幅のデータ
+        #data_segment = data[peak_idx-hwhm_idx:peak_idx+hwhm_idx+1] # 半値全幅のデータ
+        data_segment = np.abs(data[int(left_half_time*1e-9/dt):int(right_half_time*1e-9/dt)])
         if len(data_segment) > 0:
-            local_max_idx = np.argmax(np.abs(data_segment))
-            #* FWHMの両端をピークとしてしまうことを避ける
-            if local_max_idx in [1, len(data_segment) - 2]:
-                distinguishable = False
-            if local_max_idx == 0 or local_max_idx == len(data_segment) - 1:
-                local_max_idxs = []
-                local_max_amps = []
-                for j in range(1, len(data_segment) - 1):
-                    if data_segment[j - 1] < data_segment[j] > data_segment[j + 1]:
-                        local_max_idxs.append(j)
-                        local_max_amps.append(data_segment[j])
-                if len(local_max_idxs) > 0:
-                    local_max_idx = local_max_idxs[np.argmax(local_max_amps)]
-            max_idx = peak_idx - hwhm_idx + local_max_idx
+            # 最大と2番目に大きいピークのインデックスを取得
+            local_max_idxs = []
+            local_max_amps = []
+            for j in range(1, len(data_segment) - 1):
+                if data_segment[j - 1] < data_segment[j] > data_segment[j + 1]:
+                    local_max_idxs.append(j)
+                    local_max_amps.append(data_segment[j])
+            
+            if len(local_max_idxs) >= 2:
+                # 振幅の降順でソート
+                sorted_indices = np.argsort(local_max_amps)[::-1]
+                primary_max_idx = local_max_idxs[sorted_indices[0]]
+                secondary_max_idx = local_max_idxs[sorted_indices[1]]
+            elif len(local_max_idxs) == 1:
+                primary_max_idx = local_max_idxs[0]
+                secondary_max_idx = None
+            else:
+                primary_max_idx = np.argmax(np.abs(data_segment))
+                secondary_max_idx = None
+
+            max_idx = int(left_half_time*1e-9/dt) + primary_max_idx
             max_time = time[max_idx]
             max_amplitude = data[max_idx]
+
+            if secondary_max_idx is not None:
+                secondary_max_idx_global = int(left_half_time*1e-9/dt) + secondary_max_idx
+                secondary_max_time = time[secondary_max_idx_global]
+                secondary_max_amplitude = data[secondary_max_idx_global]
+            else:
+                secondary_max_time = None
+                secondary_max_amplitude = None
         else:
             max_idx = peak_idx
             max_time = time[peak_idx]
@@ -145,7 +161,9 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
             'distinguishable': distinguishable,
             'max_idx': max_idx,
             'max_time': max_time,
-            'max_amplitude': max_amplitude
+            'max_amplitude': max_amplitude,
+            'secondary_max_time': secondary_max_time,
+            'secondary_max_amplitude': secondary_max_amplitude
         })
 
 
@@ -157,7 +175,9 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
 
     for i, info in enumerate(pulse_info):
         if info['distinguishable']==True:
-            plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
+            plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Primary Peak' if i == 0 else "")
+            if info.get('secondary_max_time') is not None:
+                plt.plot(info['secondary_max_time'], info['secondary_max_amplitude'], 'go', label='Secondary Peak' if i == 0 else "")
 
         # 半値全幅を描画
         if FWHM:
