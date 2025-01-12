@@ -19,10 +19,10 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
 
     #* Find the peaks
     peaks = []
-    for i in tqdm(range(1, len(data) - 1)):
+    for i in range(1, len(data) - 1):
         if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
             peaks.append(i)
-    print(f'Found {len(peaks)} peaks')
+    #print(f'Found {len(peaks)} peaks')
 
 
     # Calculate the half-width of the pulses
@@ -193,7 +193,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     plt.xlabel('Time [ns]', fontsize=24)
     plt.ylabel('Amplitude', fontsize=24)
     #plt.title('Pulse Analysis')
-    plt.legend(fontsize=20, loc='lower right')
+    plt.legend(fontsize=20)
     plt.tick_params(labelsize=20)
     plt.grid(True)
 

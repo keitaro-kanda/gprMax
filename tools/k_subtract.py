@@ -71,7 +71,7 @@ def subtract_signal(Ascan_data, transmmit_signal,dt,  TWT, reference_point_time,
     #* Detect the peak
     peak_times = []
     data_segment_abs = np.abs(data_segment)
-    for i in tqdm(range(1, len(data_segment) - 1)):
+    for i in range(1, len(data_segment) - 1):
         #if (np.abs(data_segment[i - 1]) < np.abs(data_segment[i]) > np.abs(data_segment[i + 1])) and (np.abs(data_segment[i]) > 1):
         if (data_segment_abs[i - 1] < data_segment_abs[i] > data_segment_abs[i + 1]):
             if data_segment_abs[i] > 1:
