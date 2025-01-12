@@ -64,10 +64,16 @@ if __name__ == "__main__":
         path_group = json.load(f)
 
     # for closeup option
-    closeup_x_start = 0 #[ns]
-    closeup_x_end =100 #[ns]
-    closeup_y_start = -60
-    closeup_y_end = 60
+    if args.json == '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/path_under_resolution.json':
+        closeup_x_start = 20 #[ns]
+        closeup_x_end =40 #[ns]
+        closeup_y_start = -25
+        closeup_y_end = 25
+    else:
+        closeup_x_start = 0 #[ns]
+        closeup_x_end =100 #[ns]
+        closeup_y_start = -60
+        closeup_y_end = 60
 
     #* Load the transmmit signal data for subtraction
     transmmit_signal_path = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/direct/A-scan/direct.out' # 送信波形データを読み込む
@@ -152,9 +158,6 @@ if __name__ == "__main__":
 
         #* Detect the first peak in the transmmit signal
         transmit_sig_first_peak_time, transmit_sig_first_peak_amp = k_subtract.detect_first_peak(transmmit_signal, dt)
-        print(f'Transmit signal first peak time: {transmit_sig_first_peak_time} ns')
-        print(f'Transmit signal first peak amplitude: {transmit_sig_first_peak_amp}')
-        print(' ')
 
         #* Calculate the estimated two-way travel time
         TWTs = k_subtract.calc_TWT(boundaries)
