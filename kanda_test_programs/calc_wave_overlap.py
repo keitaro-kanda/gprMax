@@ -166,7 +166,7 @@ def analyze_pulses(data, dt):
 
         # 半値全幅を計算
         hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)]) # [ns], Half width at half maximum
-        fwhm = hwhm * 2 # [ns], Full width at half maximum
+        fwhm = right_half_time - left_half_time # [ns], Full width at half maximum
         #width = right_half_time - left_half_time
         #width_half = hwhm
 
@@ -179,14 +179,16 @@ def analyze_pulses(data, dt):
             if separation >= fwhm:
                 distinguishable = 'True'
             else:
-                if i == 0 and data[peaks[0]] > data[peaks[1]]:
-                    distinguishable = 'True'
-                elif i == 0 and data[peaks[0]] < data[peaks[1]]:
-                    distinguishable = 'False'
-                elif i == 1 and data[peaks[0]] > data[peaks[1]]:
-                    distinguishable = 'False'
-                elif i == 1 and data[peaks[0]] < data[peaks[1]]:
-                    distinguishable = 'True'
+                if i == 0:
+                    if np.abs(envelope[peaks[0]]) >= np.abs(envelope[peaks[1]]): # envelopeの振幅で判定
+                        distinguishable = 'True'
+                    elif np.abs(envelope[peaks[0]]) < np.abs(envelope[peaks[1]]):
+                        distinguishable = 'False'
+                elif i == 1:
+                    if np.abs(envelope[peaks[0]]) >= np.abs(envelope[peaks[1]]):
+                        distinguishable = 'False'
+                    elif np.abs(envelope[peaks[0]]) < np.abs(envelope[peaks[1]]):
+                        distinguishable = 'True'
 
 
         # 範囲内での最大振幅とそのインデックスを取得
@@ -229,7 +231,8 @@ sig = original_sig / np.max(np.abs(original_sig))  # 正規化
 
 
 shift_times = np.arange(0, 5.02, 0.1) # [ns]
-amplitudes = np.arange(-2.0, 2.01, 0.2)
+#amplitudes = np.arange(-2.0, 2.01, 0.2)
+amplitudes = (0.8, -0.8)
 
 
 for amplitude in amplitudes:
