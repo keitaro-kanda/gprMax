@@ -107,19 +107,19 @@ plt.imshow(map.epsilon_map,
         cmap='binary')
 
 if args.closeup:
-    plt.imshow(map.epsilon_map, aspect='auto',
-        extent=[0, map.epsilon_map.shape[1] * spatial_grid,
-                map.epsilon_map.shape[0] * spatial_grid , 0],
-        cmap='binary')
-    x_start = 1.5
-    x_end = 4.5
+    #plt.imshow(map.epsilon_map, aspect='auto',
+    #    extent=[0, map.epsilon_map.shape[1] * spatial_grid,
+    #            map.epsilon_map.shape[0] * spatial_grid , 0],
+    #    cmap='binary')
+    x_start = 4.75 # [m]
+    x_end = 5.25 # [m]
+    y_start = 2.75 # [m]
+    y_end = 3.25 # [m]
     ax.set_xlim(x_start, x_end)
-    y_start = 2.3
-    y_end = 8
     ax.set_ylim(y_end, y_start)
 
 #ax.set_yticks(np.arange(-vacuum_thickness, map.epsilon_map.shape[0] * spatial_grid - vacuum_thickness + 1, 5))
-ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 1))
+#ax.set_yticks(np.arange(0, map.epsilon_map.shape[0] * spatial_grid + 1, 1))
 
 plt.xlabel('x [m]', size=20)
 plt.ylabel('y [m]', size=20)
@@ -132,12 +132,14 @@ cbar = plt.colorbar(cax=cax)
 cbar.set_label(r"$\varepsilon_r$", size=20)
 cbar.ax.tick_params(labelsize=16)
 
-plt.savefig(output_dir+'/' + 'epsilon_map.png')
-plt.savefig(output_dir+'/' + 'epsilon_map.pdf', format='pdf', dpi=120)
+
 if args.closeup:
-    output_dir = os.path.join(output_dir, 'closeup')
+    output_dir = os.path.join(output_dir, 'geometry_closeup')
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     plt.savefig(output_dir +'/' + str(y_start) + '-' + str(y_end) + '.png')
     plt.savefig(output_dir +'/' + str(y_start) + '-' + str(y_end) + '.pdf', format='pdf', dpi=300)
+else:
+    plt.savefig(output_dir+'/' + 'epsilon_map.png')
+    plt.savefig(output_dir+'/' + 'epsilon_map.pdf', format='pdf', dpi=300)
 plt.show()
