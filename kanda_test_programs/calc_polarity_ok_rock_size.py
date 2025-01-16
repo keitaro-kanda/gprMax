@@ -18,12 +18,13 @@ thetas = np.arange(0, np.pi * 1/2, np.pi / 1440)  # [rad], 0 ~ pi/2
 er_regolith = 3.0
 er_rock = 9.0
 FWHM = 1.56e-9  # [s], 1.56 ns
+FWHM_2GHz = 0.4e-9  # [s], 0.4 ns
 
 
 
 
 #* Calculation
-def calc(h_index, h):
+def calc(h_index, h, fwhm):
     w_theta_matrix = np.zeros((len(rock_widths), len(thetas)))
     w_theta_TorF = np.zeros((len(rock_widths), len(thetas)))
 
@@ -47,7 +48,7 @@ def calc(h_index, h):
 
                 #* 不等式のやつ
                 left_hand = w * np.sin(theta) + 2 * h * (np.sqrt(er_rock - np.sin(theta)**2) - np.sqrt(er_rock)) # [m]
-                right_hand = c * FWHM - 2 * antenna_height * (np.cos(theta) - 1) - 2 * rock_depth * (np.sqrt(er_regolith - np.sin(theta)**2) - np.sqrt(er_regolith))  # [m]
+                right_hand = c * fwhm - 2 * antenna_height * (np.cos(theta) - 1) - 2 * rock_depth * (np.sqrt(er_regolith - np.sin(theta)**2) - np.sqrt(er_regolith))  # [m]
                 if left_hand >= right_hand:
                     w_theta_TorF[j, i] = 1
 
@@ -70,16 +71,28 @@ def calc(h_index, h):
 
 
 
-w_h_delta_T = np.zeros((len(rock_heights), len(rock_widths)))
-w_h_TorF = np.zeros((len(rock_heights), len(rock_widths)))
+w_h_delta_T_156ns = np.zeros((len(rock_heights), len(rock_widths)))
+w_h_TorF_156ns = np.zeros((len(rock_heights), len(rock_widths)))
+w_h_delta_T_04ns = np.zeros((len(rock_heights), len(rock_widths)))
+w_h_TorF_04ns = np.zeros((len(rock_heights), len(rock_widths)))
+
+# FWHM = 1.56nsの場合の計算
 for i, height in tenumerate(rock_heights):
-    calc(i, height)
+    w_h_delta_T = w_h_delta_T_156ns
+    w_h_TorF = w_h_TorF_156ns
+    calc(i, height, FWHM)
+
+# FWHM = 0.4nsの場合の計算
+for i, height in tenumerate(rock_heights):
+    w_h_delta_T = w_h_delta_T_04ns
+    w_h_TorF = w_h_TorF_04ns
+    calc(i, height, FWHM_2GHz)
 
 
 
 #* Plot
 fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
-im = ax.imshow(w_h_delta_T / 1e-9, cmap='jet',
+im = ax.imshow(w_h_delta_T_156ns / 1e-9, cmap='jet',
                 extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
                 origin='lower'
                 )
@@ -95,13 +108,13 @@ ax.grid(which='both', axis='both', linestyle='-.')
 
 # --- ここから等高線の追加 ---
 # imshow と同じ座標系に対応する x, y 軸配列を作成
-x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_delta_T.shape[1])
-y = np.linspace(rock_heights[0], rock_heights[-1], w_h_delta_T.shape[0])
+x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_delta_T_156ns.shape[1])
+y = np.linspace(rock_heights[0], rock_heights[-1], w_h_delta_T_156ns.shape[0])
 X, Y = np.meshgrid(x, y)
 
 # w_h_matrix = 1.56 の等高線(1本だけ)を描画
 contour_level = FWHM / 1e-9  # [ns]
-cs = ax.contour(X, Y, w_h_delta_T / 1e-9, levels=[contour_level], colors='w')  # [ns]
+cs = ax.contour(X, Y, w_h_delta_T_156ns / 1e-9, levels=[contour_level], colors='w')  # [ns]
 
 # 等高線にラベルを付ける場合
 ax.clabel(cs, inline=True, fontsize=20, fmt=f"{contour_level:.2f}")
@@ -118,7 +131,7 @@ plt.show()
 
 #* Plot True or False
 fig, ax = plt.subplots(figsize=(8, 8), facecolor='w', edgecolor='w', tight_layout=True)
-im = ax.imshow(w_h_TorF, cmap='coolwarm',
+im = ax.imshow(w_h_TorF_156ns, cmap='coolwarm',
                 extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
                 origin='lower'
                 )
@@ -149,7 +162,7 @@ polarity_not_ok_size = [[0.15, 0.15], [0.3, 0.3], [0.6, 0.3], [0.9, 0.3], [1.2, 
                             ]
 
 fig, ax = plt.subplots(figsize=(8, 8), facecolor='w', edgecolor='w', tight_layout=True)
-im = ax.imshow(w_h_TorF, cmap='coolwarm',
+im = ax.imshow(w_h_TorF_156ns, cmap='coolwarm',
                 extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
                 origin='lower'
                 )
@@ -174,6 +187,30 @@ plt.show()
 
 
 
+#* Plot the True of False with linear approximation
+a = (3.0 - 0.15)/ (2.6 - 1.7)
+b = - 1.7 * a
+y_approx = a * rock_widths + b
+
+fig, ax = plt.subplots(figsize=(8, 8), facecolor='w', edgecolor='w', tight_layout=True)
+im = ax.imshow(w_h_TorF_156ns, cmap='coolwarm',
+                extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
+                origin='lower'
+                )
+ax.plot(rock_widths, y_approx, color='w', linewidth=2)
+
+ax.set_xlabel('Width [m]', fontsize=24)
+ax.set_ylabel('Height [m]', fontsize=24)
+ax.set_xlim(0, 3.15)
+ax.set_ylim(0, 3.15)
+ax.tick_params(labelsize=20)
+ax.grid(which='both', axis='both', linestyle='-.')
+
+plt.savefig('/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/w_h_TorF_linear_approximation.png')
+plt.show()
+
+
+
 #* Plot the height-to-diameter ratio
 max_diam_Di = 1.53 # [m]
 min_diam_Di = 0.05 # [m]
@@ -186,26 +223,54 @@ min_diam_Li_Wu = 0.05 # [m]
 diam_range_Li_Wu = np.arange(min_diam_Li_Wu, max_diam_Li_Wu, 0.01)
 
 
-fig, ax = plt.subplots(figsize=(8, 8), facecolor='w', edgecolor='w', tight_layout=True)
-im = ax.imshow(w_h_TorF, cmap='coolwarm',
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), facecolor='w', edgecolor='w', tight_layout=True)
+
+# FWHM = 1.56nsの結果をプロット
+im1 = ax1.imshow(w_h_TorF_156ns, cmap='coolwarm',
                 extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
-                origin='lower'
-                )
+                origin='lower')
 
-#* Paint area covered by min_diam, max_diam, min_height, max_height
-ax.fill_between(diam_range_Di, min_height_Di, max_height_Di, color='y', alpha=0.7)
-ax.fill_between(diam_range_Li_Wu, min_diam_Li_Wu, max_diam_Li_Wu, color='w', alpha=0.5)
+ax1.fill_between(diam_range_Di, min_height_Di, max_height_Di, color='y', alpha=0.5)
+ax1.fill_between(diam_range_Li_Wu, min_diam_Li_Wu, max_diam_Li_Wu, color='w', alpha=0.5)
+# Diのデータ用の四角形
+ax1.plot([min_diam_Di, max_diam_Di, max_diam_Di, min_diam_Di, min_diam_Di],
+         [min_height_Di, min_height_Di, max_height_Di, max_height_Di, min_height_Di],
+         'k-', linewidth=2)
 
-ax.set_xlabel('Width [m]', fontsize=24)
-ax.set_ylabel('Height [m]', fontsize=24)
-ax.set_xlim(0, 3.15)
-ax.set_ylim(0, 3.15)
-ax.tick_params(labelsize=20)
-#ax.grid(which='both', axis='both', linestyle='-.')
+# Li & Wuのデータ用の四角形
+ax1.plot([min_diam_Li_Wu, max_diam_Li_Wu, max_diam_Li_Wu, min_diam_Li_Wu, min_diam_Li_Wu],
+         [min_diam_Li_Wu, min_diam_Li_Wu, max_diam_Li_Wu, max_diam_Li_Wu, min_diam_Li_Wu],
+         'k-', linewidth=2)
 
-#* x, y軸のメモリを0.3刻みにする
-#ax.set_xticks(np.arange(0, 2.1, 0.3))
-#ax.set_yticks(np.arange(0, 2.1, 0.3))
+ax1.set_xlabel('Width [m]', fontsize=24)
+ax1.set_ylabel('Height [m]', fontsize=24)
+ax1.set_xlim(0, 3.15)
+ax1.set_ylim(0, 3.15)
+ax1.tick_params(labelsize=20)
+ax1.set_title('FWHM = 1.56 ns', fontsize=24)
 
-plt.savefig('/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/w_h_TorF_HD.png')
+# FWHM = 0.4nsの結果をプロット
+im2 = ax2.imshow(w_h_TorF_04ns, cmap='coolwarm',
+                extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
+                origin='lower')
+
+ax2.fill_between(diam_range_Di, min_height_Di, max_height_Di, color='y', alpha=0.5)
+ax2.fill_between(diam_range_Li_Wu, min_diam_Li_Wu, max_diam_Li_Wu, color='w', alpha=0.5)
+# Diのデータ用の四角形
+ax2.plot([min_diam_Di, max_diam_Di, max_diam_Di, min_diam_Di, min_diam_Di],
+         [min_height_Di, min_height_Di, max_height_Di, max_height_Di, min_height_Di],
+         'k-', linewidth=2)
+# Li & Wuのデータ用の四角形
+ax2.plot([min_diam_Li_Wu, max_diam_Li_Wu, max_diam_Li_Wu, min_diam_Li_Wu, min_diam_Li_Wu],
+         [min_diam_Li_Wu, min_diam_Li_Wu, max_diam_Li_Wu, max_diam_Li_Wu, min_diam_Li_Wu],
+         'k-', linewidth=2)
+
+ax2.set_xlabel('Width [m]', fontsize=24)
+ax2.set_ylabel('Height [m]', fontsize=24)
+ax2.set_xlim(0, 3.15)
+ax2.set_ylim(0, 3.15)
+ax2.tick_params(labelsize=20)
+ax2.set_title('FWHM = 0.4 ns', fontsize=24)
+
+plt.savefig('/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/w_h_TorF_HD_comparison.png')
 plt.show()
