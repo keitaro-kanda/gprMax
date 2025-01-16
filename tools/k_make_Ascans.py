@@ -70,8 +70,8 @@ if __name__ == "__main__":
         closeup_y_start = -25
         closeup_y_end = 25
     else:
-        closeup_x_start = 0 #[ns]
-        closeup_x_end =100 #[ns]
+        closeup_x_start = 20 #[ns]
+        closeup_x_end =80 #[ns]
         closeup_y_start = -60
         closeup_y_end = 60
 
