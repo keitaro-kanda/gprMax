@@ -100,6 +100,46 @@ def calc_plot_TWT(data, time, model_path, closeup, closeup_x_start, closeup_x_en
         plt.close()
 
 
+    #* Plot with two_way_travel_time pm 1ns range
+    if closeup:
+        fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'),
+                                    figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
+
+        #* Plot A-scan
+        ax.plot(time, data, label='A-scan', color='black', linewidth=2)
+        ax.plot(time, envelope, label='Envelope', color='gray', linestyle='-.', linewidth=2)
+        #* Plot the estimated two-way travel time
+        colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        for i, t in enumerate(two_way_travel_time):
+            if i == 0:
+                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-0.2, t+0.2, color=colors[i], alpha=0.3)
+            else:
+                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-0.2, t+0.2, color=colors[i], alpha=0.3 , label=boundary_names[i])
+
+
+        plt.xlabel('Time [ns]', fontsize=28)
+        plt.ylabel('Amplitude', fontsize=28)
+        #plt.title('Pulse Analysis')
+        plt.legend(fontsize=20)
+        plt.tick_params(labelsize=24)
+        plt.grid(True)
+
+
+        ax.set_xlim([closeup_x_start, closeup_x_end])
+        ax.set_ylim([closeup_y_start, closeup_y_end])
+
+
+        #* Save the plot
+        fig.savefig(output_dir + '/TWT_estimation_pm1ns' + '_closeup_x' + str(closeup_x_start) \
+                + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
+                ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+
+        if plt_show:
+            plt.show()
+        else:
+            plt.close()
+
+
 
 #* Main
 if __name__ == "__main__":
@@ -139,8 +179,8 @@ if __name__ == "__main__":
 
 
     #* for closeup option
-    closeup_x_start = 25 #[ns]
-    closeup_x_end =50 #[ns]
+    closeup_x_start = 20 #[ns]
+    closeup_x_end =80 #[ns]
     closeup_y_start = -60
     closeup_y_end = 60
 
