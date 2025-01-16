@@ -26,6 +26,8 @@ FWHM = 1.56e-9  # [s], 1.56 ns
 #rock_heights = np.arange(0, 2.101, 0.001)  # [m]
 #rock_widths = np.arange(0.3, 2.11, 0.3)  # [m]
 rock_heights = np.arange(0.15, 2.26, 0.15)  # [m]
+rock_heights = np.insert(rock_heights, 0, 0.10)
+rock_heights = np.insert(rock_heights, 0, 0.05)
 rock_widths = np.arange(0, 6.01, 0.01)  # [m]
 thetas = np.arange(0, np.pi * 1/2, np.pi / 1440)  # [rad], 0 ~ pi/2
 
