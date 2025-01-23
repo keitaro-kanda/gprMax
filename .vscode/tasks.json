@@ -16,62 +16,42 @@
         {
             "label": "1st run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/1cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/circular/2cm/geometry.in"
         },
         {
             "label": "2nd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/2cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/circular/4cm/geometry.in"
         },
         {
             "label": "3rd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/3cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/circular/8cm/geometry.in"
         },
         {
             "label": "4th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/4cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/circular/9cm/geometry.in"
         },
         {
             "label": "5th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/6cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/circular/11cm/geometry.in"
         },
         {
             "label": "6th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/7cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/circular/12cm/geometry.in"
         },
         {
             "label": "7th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/8cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/circular/13cm/geometry.in"
         },
         {
             "label": "8th run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/9cm/geometry.in"
-        },
-        {
-            "label": "9th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/11cm/geometry.in"
-        },
-        {
-            "label": "10th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/12cm/geometry.in"
-        },
-        {
-            "label": "11th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/13cm/geometry.in"
-        },
-        {
-            "label": "12th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/rock_square/14cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/circular/14cm/geometry.in"
         },
         {
             "label": "task sequence",
@@ -85,12 +65,7 @@
                 "5th run",
                 "6th run",
                 "7th run",
-                "8th run",
-                "9th run",
-                "10th run",
-                "11th run",
-                "12th run"
-
+                "8th run"
             ],
             "problemMatcher": []
         }
