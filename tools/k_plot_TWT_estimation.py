@@ -179,8 +179,8 @@ if __name__ == "__main__":
 
 
     #* for closeup option
-    closeup_x_start = 20 #[ns]
-    closeup_x_end =80 #[ns]
+    closeup_x_start = 45 #[ns]
+    closeup_x_end = 60 #[ns]
     closeup_y_start = -60
     closeup_y_end = 60
 
