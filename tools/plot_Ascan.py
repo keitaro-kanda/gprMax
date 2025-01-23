@@ -168,7 +168,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
             #* Plotting if no FFT required
             else:
                 fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-                #ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
+                ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
                 line = ax.plot(time, outputdata, 'k', lw=2, label=outputtext)
                 #* Plot the peak
                 #ax.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
@@ -307,7 +307,7 @@ if __name__ == "__main__":
 
     # for closeup option
     closeup_x_start = 0 #[ns]
-    closeup_x_end = 10 #[ns]
+    closeup_x_end = 7 #[ns]
     closeup_y_start = -3500
     closeup_y_end = 3500
 
