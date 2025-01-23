@@ -20,8 +20,12 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     #* Find the peaks
     peaks = []
     for i in range(1, len(data) - 1):
-        if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
-            peaks.append(i)
+        if np.amax(envelope) > 1e12:
+            if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1e9:
+                peaks.append(i)
+        else:
+            if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
+                peaks.append(i)
     #print(f'Found {len(peaks)} peaks')
 
 
@@ -176,8 +180,8 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     for i, info in enumerate(pulse_info):
         if info['distinguishable']==True:
             plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Primary Peak' if i == 0 else "")
-            if info.get('secondary_max_time') is not None:
-                plt.plot(info['secondary_max_time'], info['secondary_max_amplitude'], 'go', label='Secondary Peak' if i == 0 else "")
+            #if info.get('secondary_max_time') is not None:
+           #     plt.plot(info['secondary_max_time'], info['secondary_max_amplitude'], 'go', label='Secondary Peak' if i == 0 else "")
 
         # 半値全幅を描画
         if FWHM:
@@ -252,10 +256,10 @@ if __name__ == "__main__":
 
 
     # for closeup option
-    closeup_x_start = 0 #[ns]
-    closeup_x_end = 100 #[ns]
-    closeup_y_start = -60
-    closeup_y_end = 60
+    closeup_x_start = 20 #[ns]
+    closeup_x_end = 40 #[ns]
+    closeup_y_start = -3e11
+    closeup_y_end = 3e11
 
     #* Run the pulse analysis
     pulse_info = detect_plot_peaks(data, dt, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, args.FWHM, output_dir, plt_show=True)
