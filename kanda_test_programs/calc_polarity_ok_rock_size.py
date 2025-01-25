@@ -124,6 +124,8 @@ if __name__ == '__main__':
     ax.set_ylabel('Height [m]', fontsize=24)
     ax.tick_params(labelsize=20)
     ax.grid(which='both', axis='both', linestyle='-.')
+    ax.set_xlim(0, 3.15)
+    ax.set_ylim(0, 3.15)
 
     #* x, y軸のメモリを0.3刻みにする
     #ax.set_xticks(np.arange(0, 2.1, 0.3))
@@ -163,6 +165,8 @@ if __name__ == '__main__':
     ax.set_ylabel('Height [m]', fontsize=24)
     ax.tick_params(labelsize=20)
     ax.grid(which='both', axis='both', linestyle='-.')
+    ax.set_xlim(0, 3.15)
+    ax.set_ylim(0, 3.15)
 
     #* x, y軸のメモリを0.3刻みにする
     #ax.set_xticks(np.arange(0, 2.1, 0.3))
