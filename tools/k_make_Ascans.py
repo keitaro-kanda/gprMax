@@ -57,6 +57,7 @@ if __name__ == "__main__":
     parser.add_argument('-TWT', action='store_true', help='Plot the A-scan with estimated two-way travel time')
     parser.add_argument('-subtraction', action='store_true', help='Plot the A-scan with subtracted signal')
     parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
+    parser.add_argument('-FWHM', action='store_true', help='Plot the FWHM')
     args = parser.parse_args()
 
 
@@ -74,8 +75,8 @@ if __name__ == "__main__":
     else: # closeup option for small rock simulations
         closeup_x_start = 20 #[ns]
         closeup_x_end =40 #[ns]
-        closeup_y_start = -25
-        closeup_y_end = 25
+        closeup_y_start = -3e11
+        closeup_y_end = 3e11
 
 
     #* Load the transmmit signal data for subtraction
