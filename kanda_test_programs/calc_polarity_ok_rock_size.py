@@ -12,7 +12,7 @@ c = 299792458  # Speed of light in vacuum [m/s]
 #* Global parameters
 rock_heights = np.arange(0.0, 6.01, 0.05)  # [m]
 rock_widths = np.arange(0.0, 6.01, 0.05)  # [m]
-thetas = np.arange(0, np.pi * 1/2, np.pi / 1440)  # [rad], 0 ~ pi/2
+thetas = np.arange(0, np.pi * 1/2, np.pi / 2880)  # [rad], 0 ~ pi/2
 
 #* Initialize arrays
 w_h_delta_T = np.zeros((len(rock_heights), len(rock_widths)))
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     FWHM = float(input("Enter FWHM [s] (default=1.56e-9): ") or "1.56e-9")
 
     #* Set output directory
-    output_dir = '/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model'
+    output_dir = '/Volumes/SSD_Kanda_BUFFALO/gprMax/propagation_path_model/polarity_size'
     param_dir = os.path.join(output_dir, f'H{antenna_height}_d{rock_depth}_er-reg{er_regolith}_er-rock{er_rock}_FWHM{FWHM:.2e}ns')
     os.makedirs(param_dir, exist_ok=True)
 
