@@ -20,11 +20,9 @@ FWHM = float(input("Enter FWHM [s] (default=1.56e-9): ") or "1.56e-9")
 #* Constants
 #rock_heights = np.arange(0, 2.101, 0.001)  # [m]
 #rock_widths = np.arange(0.3, 2.11, 0.3)  # [m]
-rock_heights = np.arange(0.15, 2.26, 0.15)  # [m]
-rock_heights = np.insert(rock_heights, 0, 0.10)
-rock_heights = np.insert(rock_heights, 0, 0.05)
-rock_widths = np.arange(0, 6.01, 0.01)  # [m]
-thetas = np.arange(0, np.pi * 1/2, np.pi / 1440)  # [rad], 0 ~ pi/2
+rock_heights = np.arange(0.0, 3.15, 0.05)  # [m]
+rock_widths = np.arange(0.0, 3.15, 0.05)  # [m]
+thetas = np.arange(0, np.pi * 1/2, np.pi / 2880)  # [rad], 0 ~ pi/2
 
 
 
@@ -41,18 +39,18 @@ def calc_side_component(height_index, Tb_at_height):
     height = rock_heights[height_index]
     for i, theta in tenumerate(thetas, desc=f'Rock height: {height:.2f} m'):
         # Criteriaの計算
-        side_criteria_1 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(3 - np.sin(theta)**2))  # [m]
-        side_criteria_2 = side_criteria_1 + height * (np.sin(theta)) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
+        side_criteria_1 = antenna_height * np.tan(theta) + rock_depth * (np.sin(theta)) / (np.sqrt(er_regolith - np.sin(theta)**2))  # [m]
+        side_criteria_2 = side_criteria_1 + height * (np.sin(theta)) / (np.sqrt(er_rock - np.sin(theta)**2))  # [m]
         for j, width in enumerate(rock_widths):
 
             # 条件を判定
             if side_criteria_1 < width / 2 < side_criteria_2:
                 h_dash = (2 * np.cos(theta)**2 - 1) * antenna_height + \
-                            (width - 2 * np.sin(theta) * (rock_depth / np.sqrt(3 - np.sin(theta)**2) + height / np.sqrt(9 - np.sin(theta)**2))) * \
+                            (width - 2 * np.sin(theta) * (rock_depth / np.sqrt(er_regolith - np.sin(theta)**2) + height / np.sqrt(er_rock - np.sin(theta)**2))) * \
                             np.sin(theta) * np.cos(theta) # [m]
                 Ls[i, j] = (antenna_height + h_dash) / np.cos(theta) \
-                    + (6 * rock_depth) / (np.sqrt(3 - np.sin(theta)**2)) \
-                    + (18 * height) / (np.sqrt(9 - np.sin(theta)**2))  # [m]
+                    + (2 * er_regolith * rock_depth) / (np.sqrt(er_regolith - np.sin(theta)**2)) \
+                    + (2 * er_rock * height) / (np.sqrt(er_rock - np.sin(theta)**2))  # [m]
             else:
                 Ls[i, j] = 'nan'
 
@@ -68,6 +66,7 @@ def calc_side_component(height_index, Tb_at_height):
 def calc_min_time_difference(delta_T):
     min_delta_T = np.zeros(len(rock_widths))  # 結果を格納する配列
     mean_delta_T = np.zeros(len(rock_widths))  # 結果を格納する配列
+    max_delta_T = np.zeros(len(rock_widths))  # 結果を格納する配列
     for i in range(len(rock_widths)):
         # delta_T[:, i] に NaN 以外の値があるかチェック
         if np.all(np.isnan(delta_T[:, i])):
@@ -75,26 +74,27 @@ def calc_min_time_difference(delta_T):
         else:
             min_delta_T[i] = np.nanmin(delta_T[:, i])  # NaN以外の最小値を取得
             mean_delta_T[i] = np.nanmean(delta_T[:, i])  # NaN以外の平均値を取得
-    return min_delta_T, mean_delta_T
+            max_delta_T[i] = np.nanmax(delta_T[:, i])  # NaN以外の最大値を取得
+    return min_delta_T, mean_delta_T, max_delta_T
 
 
-#* Define function to calculate mean and standard deviation of time difference
-def calc_time_difference(delta_T):
-    delta_T_mean = np.zeros(len(rock_widths))  # 結果を格納する配列
-    delta_T_std = np.zeros(len(rock_widths))  # 結果を格納する配列
-    for i in range(len(rock_widths)):
-        # delta_T[:, i] に NaN 以外の値があるかチェック
-        if np.all(np.isnan(delta_T[:, i])):
-            delta_T_mean[i] = np.nan
-            delta_T_std[i] = np.nan
-        else:
-            delta_T_mean[i] = np.nanmean(delta_T[:, i])
-            delta_T_std[i] = np.nanstd(delta_T[:, i])
-    return delta_T_mean, delta_T_std
+# #* Define function to calculate mean and standard deviation of time difference
+# def calc_time_difference(delta_T):
+#     delta_T_mean = np.zeros(len(rock_widths))  # 結果を格納する配列
+#     delta_T_std = np.zeros(len(rock_widths))  # 結果を格納する配列
+#     for i in range(len(rock_widths)):
+#         # delta_T[:, i] に NaN 以外の値があるかチェック
+#         if np.all(np.isnan(delta_T[:, i])):
+#             delta_T_mean[i] = np.nan
+#             delta_T_std[i] = np.nan
+#         else:
+#             delta_T_mean[i] = np.nanmean(delta_T[:, i])
+#             delta_T_std[i] = np.nanstd(delta_T[:, i])
+#     return delta_T_mean, delta_T_std
 
 
 
-def plot(height, Ts, delta_T, min_delta_T, mean_delta_T, output_dir):
+def plot(height, Ts, delta_T, min_delta_T, mean_delta_T, max_delta_T, output_dir):
     #* Create a GridSpec layout
     fig = plt.figure(figsize=(20, 8))
     gs = GridSpec(1, 3, figure=fig, width_ratios=[1, 1, 1])  # Equal-sized panels
@@ -166,7 +166,8 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T, output_dir):
     #* Plot the minimum time difference
     plt.figure(figsize=(8, 6), tight_layout=True)
     plt.plot(rock_widths, min_delta_T / 1e-9, linewidth=2, label='Min')
-    #plt.plot(rock_widths, mean_delta_T / 1e-9, linewidth=2, label='Mean', linestyle='-.')
+    plt.plot(rock_widths, mean_delta_T / 1e-9, linewidth=2, label='Mean', linestyle='-')
+    plt.plot(rock_widths, max_delta_T / 1e-9, linewidth=2, label='Max', linestyle='-')
 
     #plt.title(f'Rock height: {height:.1f} m', fontsize=28)
     plt.xlabel('Rock width [m]', fontsize=24)
@@ -208,11 +209,11 @@ def compare_with_FDTD(height, min_delta_T, output_dir):
 
 def plot_w_h_deltaT(w_h_matrix, output_dir):
     fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
-    max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
+    #max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
     im = ax.imshow(w_h_matrix / 1e-9, cmap='jet',
                     extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='auto',
                     origin='lower',
-                    vmin=0, vmax=max_deltaT
+                    #vmin=0, vmax=max_deltaT
                     )
 
     ax.set_xlabel('Width [m]', fontsize=24)
@@ -253,11 +254,11 @@ def compare_w_h_deltaT_FDTD(w_h_matrix, output_dir):
                                 [1.8, 0.6], [2.4, 0.6], [3.0, 0.6], [3.6, 0.6], [4.2, 0.6], [4.8, 0.6],
                                 [5.4, 0.6], [6.0, 0.6], [1.8, 1.8], [2.1, 2.1]]
     fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
-    max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
+    #max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
     im = ax.imshow(w_h_matrix / 1e-9, cmap='jet',
                     extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='auto',
                     origin='lower',
-                    vmin=0, vmax=max_deltaT
+                    #vmin=0, vmax=max_deltaT
                     )
     for i in range(len(expected_polarity_size)):
         ax.plot(expected_polarity_size[i][0], expected_polarity_size[i][1], 'o', markersize=5, color='r')
@@ -310,11 +311,18 @@ if __name__ == '__main__':
     for i, h in tenumerate(rock_heights, desc='Rock height'):
         Tb_i = np.tile(Tb[i], (len(thetas), len(rock_widths)))  # [s]
         Ts, delta_T = calc_side_component(i, Tb_i)
-        min_delta_T, mean_delta_T = calc_min_time_difference(delta_T)
-        delta_T_mean, delta_T_std = calc_time_difference(delta_T)
+        min_delta_T, mean_delta_T, max_delta_T = calc_min_time_difference(delta_T)
+        # delta_T_mean, delta_T_std = calc_time_difference(delta_T)
         w_h_deltaT[i] = min_delta_T
-        plot(h, Ts, delta_T, min_delta_T, mean_delta_T, param_dir)
+        plot(h, Ts, delta_T, min_delta_T, mean_delta_T, max_delta_T, param_dir)
         if h == 0.3 or h == 0.6:
             compare_with_FDTD(h, min_delta_T, param_dir)
     plot_w_h_deltaT(w_h_deltaT, param_dir)
-    compare_w_h_deltaT_FDTD(w_h_deltaT, param_dir)
+
+    # デフォルト値の場合のみFDTDとの比較を実行
+    if (antenna_height == 0.3 and
+        rock_depth == 2.0 and
+        er_regolith == 3.0 and
+        er_rock == 9.0 and
+        FWHM == 1.56e-9):
+        compare_w_h_deltaT_FDTD(w_h_deltaT, param_dir)
