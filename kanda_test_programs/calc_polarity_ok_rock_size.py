@@ -10,12 +10,13 @@ import os
 c = 299792458  # Speed of light in vacuum [m/s]
 
 #* Global parameters
-rock_heights = np.arange(0.0, 6.01, 0.05)  # [m]
-rock_widths = np.arange(0.0, 6.01, 0.05)  # [m]
+rock_heights = np.arange(0.0, 3.15, 0.05)  # [m]
+rock_widths = np.arange(0.0, 3.15, 0.05)  # [m]
 thetas = np.arange(0, np.pi * 1/2, np.pi / 2880)  # [rad], 0 ~ pi/2
 
 #* Initialize arrays
 w_h_delta_T = np.zeros((len(rock_heights), len(rock_widths)))
+w_h_delta_T_max = np.zeros((len(rock_heights), len(rock_widths)))
 w_h_TorF = np.zeros((len(rock_heights), len(rock_widths)))
 
 #* FDTD comparison data
@@ -82,7 +83,9 @@ def calc(h_index, h, fwhm):
             w_h_delta_T[h_index, i] = np.nan
         else:
             min_delta_T = np.nanmin(w_theta_matrix[i])  # [s]
+            max_delta_T = np.nanmax(w_theta_matrix[i])  # [s]
             w_h_delta_T[h_index, i] = min_delta_T # [s]
+            w_h_delta_T_max[h_index, i] = max_delta_T # [s]
 
         if np.all(np.isnan(w_theta_TorF[i])):
             w_h_TorF[h_index, i] = np.nan
@@ -113,7 +116,7 @@ if __name__ == '__main__':
     for i, height in tenumerate(rock_heights):
         calc(i, height, FWHM)
 
-    #* Plot
+    #* Plot the minimum time difference
     fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
     im = ax.imshow(w_h_delta_T / 1e-9, cmap='jet',
                     extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
@@ -153,6 +156,45 @@ if __name__ == '__main__':
     plt.savefig(os.path.join(param_dir, 'w_h_deltaT.png'))
     plt.show()
 
+
+    #* Plot the maximum time difference
+    fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
+    im = ax.imshow(w_h_delta_T_max / 1e-9, cmap='jet',
+                    extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='equal',
+                    origin='lower'
+                    )
+    ax.set_xlabel('Width [m]', fontsize=24)
+    ax.set_ylabel('Height [m]', fontsize=24)
+    ax.tick_params(labelsize=20)
+    ax.grid(which='both', axis='both', linestyle='-.')
+    ax.set_xlim(0, 3.15)
+    ax.set_ylim(0, 3.15)
+
+    #* x, y軸のメモリを0.3刻みにする
+    #ax.set_xticks(np.arange(0, 2.1, 0.3))
+    #ax.set_yticks(np.arange(0, 2.1, 0.3))
+
+    # --- ここから等高線の追加 ---
+    # imshow と同じ座標系に対応する x, y 軸配列を作成
+    x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_delta_T_max.shape[1])
+    y = np.linspace(rock_heights[0], rock_heights[-1], w_h_delta_T_max.shape[0])
+    X, Y = np.meshgrid(x, y)
+
+    # w_h_matrix = 1.56 の等高線(1本だけ)を描画
+    contour_level = FWHM / 1e-9  # [ns]
+    cs = ax.contour(X, Y, w_h_delta_T_max / 1e-9, levels=[contour_level], colors='w')  # [ns]
+
+    # 等高線にラベルを付ける場合
+    ax.clabel(cs, inline=True, fontsize=20, fmt=f"{contour_level:.2f}")
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.1)
+    cbar = plt.colorbar(im, cax=cax, orientation='vertical')
+    cbar.set_label('Time difference [ns]', fontsize=24)
+    cbar.ax.tick_params(labelsize=20)
+
+    plt.savefig(os.path.join(param_dir, 'w_h_deltaT_max.png'))
+    plt.show()
 
     #* Plot True or False
     fig, ax = plt.subplots(figsize=(8, 8), facecolor='w', edgecolor='w', tight_layout=True)
