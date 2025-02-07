@@ -16,77 +16,12 @@
         {
             "label": "1st run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/1cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_Bscan/circular/5cm/5cm.in -n 125"
         },
         {
             "label": "2nd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/2cm/geometry.in"
-        },
-        {
-            "label": "3rd run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/3cm/geometry.in"
-        },
-        {
-            "label": "4th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/4cm/geometry.in"
-        },
-        {
-            "label": "5th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/5cm/geometry.in"
-        },
-        {
-            "label": "6th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/6cm/geometry.in"
-        },
-        {
-            "label": "7th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/7cm/geometry.in"
-        },
-        {
-            "label": "8th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/8cm/geometry.in"
-        },
-        {
-            "label": "9th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/9cm/geometry.in"
-        },
-        {
-            "label": "10th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/10cm/geometry.in"
-        },
-        {
-            "label": "11th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/11cm/geometry.in"
-        },
-        {
-            "label": "12th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/12cm/geometry.in"
-        },
-        {
-            "label": "13th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/13cm/geometry.in"
-        },
-        {
-            "label": "14th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/14cm/geometry.in"
-        },
-        {
-            "label": "15th run",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification/square/15cm/geometry.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_Bscan/circular/15cm/15cm.in -n 125"
         },
         {
             "label": "task sequence",
@@ -94,20 +29,7 @@
             "dependsOrder": "sequence",
             "dependsOn": [
                 "1st run",
-                "2nd run",
-                "3rd run",
-                "4th run",
-                "5th run",
-                "6th run",
-                "7th run",
-                "8th run",
-                "9th run",
-                "10th run",
-                "11th run",
-                "12th run",
-                "13th run",
-                "14th run",
-                "15th run"
+                "2nd run"
             ],
             "problemMatcher": []
         }
