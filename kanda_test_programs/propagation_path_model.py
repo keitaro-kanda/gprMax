@@ -105,7 +105,7 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T, max_delta_T, output_dir
     ax0.axvline(height, color='red', linestyle='--', linewidth=3)
 
     ax0.set_xlabel('Rock height [m]', fontsize=24)
-    ax0.set_title('Bottom component', fontsize=28)
+    ax0.set_title(r'$R_B$ echo', fontsize=28)
     ax0.set_ylabel('Two-way travel time [ns]', fontsize=24)
 
     #* Side component
@@ -116,7 +116,7 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T, max_delta_T, output_dir
         origin='lower',
         cmap='jet',
     )
-    ax1.set_title('Side component', fontsize=28)
+    ax1.set_title(r'$R_S$ echo', fontsize=28)
     divider1 = make_axes_locatable(ax1)
     cax1 = divider1.append_axes('bottom', size='10%', pad=1)
     cbar1 = plt.colorbar(im1, cax=cax1, orientation='horizontal')
