@@ -73,10 +73,10 @@ if __name__ == "__main__":
         closeup_y_start = -60
         closeup_y_end = 60
     else: # closeup option for small rock simulations
-        closeup_x_start = 20 #[ns]
-        closeup_x_end =40 #[ns]
-        closeup_y_start = -3e11
-        closeup_y_end = 3e11
+        closeup_x_start = 25 #[ns]
+        closeup_x_end =35 #[ns]
+        closeup_y_start = -1.1e11
+        closeup_y_end = 1.1e11
 
 
     #* Load the transmmit signal data for subtraction

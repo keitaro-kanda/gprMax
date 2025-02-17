@@ -86,7 +86,8 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
         plt.imshow(outputdata,
                 extent=[antenna_start, antenna_start + outputdata.shape[1] * antenna_step, outputdata.shape[0] * dt, 0],
                 interpolation='nearest', aspect='auto', cmap='seismic',
-                vmin=-np.max(np.abs(outputdata))/100, vmax=np.max(np.abs(outputdata))/100
+                #vmin=-np.max(np.abs(outputdata))/100, vmax=np.max(np.abs(outputdata))/100
+                vmin=-1.1e11, vmax=1.1e11
                 )
     plt.xlabel('x [m]', fontsize=20)
     plt.ylabel('Time [ns]', fontsize=20)
@@ -96,8 +97,8 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
     #* Closeup settings
     if closeup:
-        closeup_start = 20 # [ns]
-        closeup_end = 70 # [ns]
+        closeup_start = 25 # [ns]
+        closeup_end = 45 # [ns]
         plt.ylim(closeup_end, closeup_start)
         #plt.minorticks_on( )
 
