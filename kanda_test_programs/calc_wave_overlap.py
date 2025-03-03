@@ -16,7 +16,11 @@ from tqdm.contrib import tenumerate
 
 
 # データの読み込み
-data_path = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/direct/A-scan/direct.out' # 送信波形データを読み込む
+data_path = input('データファイルのパスを入力してください（例：/path/to/direct.out）: ')
+
+if not os.path.exists(data_path):
+    print('指定されたファイルが存在しません。')
+    sys.exit(1)
 
 f = h5py.File(data_path, 'r')
 nrx = f.attrs['nrx']
@@ -25,7 +29,8 @@ for rx in range(nrx):
 
 
 #* Define output directory
-output_parent_dir = '/Volumes/SSD_Kanda_BUFFALO/gprMax/wave_overlap'
+output_parent_dir = os.path.join(os.path.dirname(data_path), 'wave_overlap')
+os.makedirs(output_parent_dir, exist_ok=True)
 
 
 
@@ -231,8 +236,7 @@ sig = original_sig / np.max(np.abs(original_sig))  # 正規化
 
 
 shift_times = np.arange(0, 5.02, 0.1) # [ns]
-#amplitudes = np.arange(-2.0, 2.01, 0.2)
-amplitudes = (0.8, -0.8)
+amplitudes = np.arange(-2.0, 2.01, 0.2)
 
 
 for amplitude in amplitudes:
