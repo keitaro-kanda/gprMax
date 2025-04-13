@@ -75,21 +75,6 @@ template_part3 = f"""\
 =====vti=====
 ＜地形vtiファイル作成＞
 #geometry_view: 0 0 0 {domain_x_val} {domain_y_val} {domain_z_gpr_val} {grid_size_val} {grid_size_val} {grid_size_val} geometry n
-
-<snapshot作成>
-#python:
-#* Snapshot
-n = 200
-time_step = {time_window_val} / n
-domain_x_snap = {domain_x_val}
-domain_y_snap = {domain_y_val}
-domain_z_snap = {domain_z_gpr_val} # スナップショットのz範囲
-grid_x_snap = {grid_size_val}
-grid_y_snap = {grid_size_val}
-grid_z_snap = {grid_size_val} # スナップショットのz解像度
-for i in range(1, n):
-    print(f'#snapshot: 0 0 0 {{domain_x_snap}} {{domain_y_snap}} {{domain_z_snap}} {{grid_x_snap}} {{grid_y_snap}} {{grid_z_snap}} {{i*time_step}} snapshot{{i}}')
-#end_python:
 ==========
 """
 # --- スクリプト本体 ---
@@ -129,7 +114,7 @@ for h_dec in heights_decimal:
         h_str_filename = format(h_dec, '.1f')
         w_str_filename = format(w_dec, '.1f')
         # 入力ファイル名のベース (例: input_h0.3_w0.3)
-        in_filename_base = f"input_h{h_str_filename}_w{w_str_filename}"
+        in_filename_base = f"h{h_str_filename}_w{w_str_filename}"
         # gprMax出力ディレクトリ名 (例: results_h0.3_w0.3)
         output_dir_name = f"results_h{h_str_filename}_w{w_str_filename}"
         # ★ 変更点: 出力ファイル名のベース (例: h0.3_w0.3 - ユーザー指定例に基づく)
