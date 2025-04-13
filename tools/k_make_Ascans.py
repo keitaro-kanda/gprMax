@@ -67,16 +67,20 @@ if __name__ == "__main__":
         path_group = json.load(f)
 
     # for closeup option
-    if args.json == '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/path.json':
-        closeup_x_start = 20 #[ns]
-        closeup_x_end =80 #[ns]
-        closeup_y_start = -60
-        closeup_y_end = 60
-    else: # closeup option for small rock simulations
-        closeup_x_start = 25 #[ns]
-        closeup_x_end =35 #[ns]
-        closeup_y_start = -1.1e11
-        closeup_y_end = 1.1e11
+    # if args.json == '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x6/20241111_polarity_v2/path.json':
+    #     closeup_x_start = 20 #[ns]
+    #     closeup_x_end =80 #[ns]
+    #     closeup_y_start = -60
+    #     closeup_y_end = 60
+    # else: # closeup option for small rock simulations
+    #     closeup_x_start = 25 #[ns]
+    #     closeup_x_end =35 #[ns]
+    #     closeup_y_start = -1.1e11
+    #     closeup_y_end = 1.1e11
+    closeup_x_start = 20 #[ns]
+    closeup_x_end = 100 #[ns]
+    closeup_y_start = -0.03
+    closeup_y_end = 0.03
 
 
     #* Load the transmmit signal data for subtraction
