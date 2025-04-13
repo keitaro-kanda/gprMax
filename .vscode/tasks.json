@@ -16,12 +16,252 @@
         {
             "label": "1st run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_Bscan/square/15cm/15cm.in -n 125"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_0.3/h1.8_w0.3.in"
         },
         {
             "label": "2nd run",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_Bscan/square/5cm/5cm.in -n 125"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_0.6/h1.8_w0.6.in"
+        },
+        {
+            "label": "3rd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_0.9/h1.8_w0.9.in"
+        },
+        {
+            "label": "4th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_1.2/h1.8_w1.2.in"
+        },
+        {
+            "label": "5th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_1.5/h1.8_w1.5.in"
+        },
+        {
+            "label": "6th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_1.8/h1.8_w1.8.in"
+        },
+        {
+            "label": "7th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_2.1/h1.8_w2.1.in"
+        },
+        {
+            "label": "8th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_2.4/h1.8_w2.4.in"
+        },
+        {
+            "label": "9th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_2.7/h1.8_w2.7.in"
+        },
+        {
+            "label": "10th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_1.8/width_3.0/h1.8_w3.0.in"
+        },
+        {
+            "label": "11th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_0.3/h2.1_w0.3.in"
+        },
+        {
+            "label": "12th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_0.6/h2.1_w0.6.in"
+        },
+        {
+            "label": "13th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_0.9/h2.1_w0.9.in"
+        },
+        {
+            "label": "14th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_1.2/h2.1_w1.2.in"
+        },
+        {
+            "label": "15th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_1.5/h2.1_w1.5.in"
+        },
+        {
+            "label": "16th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_1.8/h2.1_w1.8.in"
+        },
+        {
+            "label": "17th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_2.1/h2.1_w2.1.in"
+        },
+        {
+            "label": "18th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_2.4/h2.1_w2.4.in"
+        },
+        {
+            "label": "19th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_2.7/h2.1_w2.7.in"
+        },
+        {
+            "label": "20th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.1/width_3.0/h2.1_w3.0.in"
+        },
+        {
+            "label": "21st run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_0.3/h2.4_w0.3.in"
+        },
+        {
+            "label": "22nd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_0.6/h2.4_w0.6.in"
+        },
+        {
+            "label": "23rd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_0.9/h2.4_w0.9.in"
+        },
+        {
+            "label": "24th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_1.2/h2.4_w1.2.in"
+        },
+        {
+            "label": "25th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_1.5/h2.4_w1.5.in"
+        },
+        {
+            "label": "26th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_1.8/h2.4_w1.8.in"
+        },
+        {
+            "label": "27th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_2.1/h2.4_w2.1.in"
+        },
+        {
+            "label": "28th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_2.4/h2.4_w2.4.in"
+        },
+        {
+            "label": "29th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_2.7/h2.4_w2.7.in"
+        },
+        {
+            "label": "30th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.4/width_3.0/h2.4_w3.0.in"
+        },
+        {
+            "label": "31st run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_0.3/h2.7_w0.3.in"
+        },
+        {
+            "label": "32nd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_0.6/h2.7_w0.6.in"
+        },
+        {
+            "label": "33rd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_0.9/h2.7_w0.9.in"
+        },
+        {
+            "label": "34th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_1.2/h2.7_w1.2.in"
+        },
+        {
+            "label": "35th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_1.5/h2.7_w1.5.in"
+        },
+        {
+            "label": "36th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_1.8/h2.7_w1.8.in"
+        },
+        {
+            "label": "37th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_2.1/h2.7_w2.1.in"
+        },
+        {
+            "label": "38th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_2.4/h2.7_w2.4.in"
+        },
+        {
+            "label": "39th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_2.7/h2.7_w2.7.in"
+        },
+        {
+            "label": "40th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_2.7/width_3.0/h2.7_w3.0.in"
+        },
+        {
+            "label": "41st run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_0.3/h3.0_w0.3.in"
+        },
+        {
+            "label": "42nd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_0.6/h3.0_w0.6.in"
+        },
+        {
+            "label": "43rd run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_0.9/h3.0_w0.9.in"
+        },
+        {
+            "label": "44th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_1.2/h3.0_w1.2.in"
+        },
+        {
+            "label": "45th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_1.5/h3.0_w1.5.in"
+        },
+        {
+            "label": "46th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_1.8/h3.0_w1.8.in"
+        },
+        {
+            "label": "47th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_2.1/h3.0_w2.1.in"
+        },
+        {
+            "label": "48th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_2.4/h3.0_w2.4.in"
+        },
+        {
+            "label": "49th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_2.7/h3.0_w2.7.in"
+        },
+        {
+            "label": "50th run",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle/height_3.0/width_3.0/h3.0_w3.0.in"
         },
         {
             "label": "task sequence",
@@ -29,7 +269,55 @@
             "dependsOrder": "sequence",
             "dependsOn": [
                 "1st run",
-                "2nd run"
+                "2nd run",
+                "3rd run",
+                "4th run",
+                "5th run",
+                "6th run",
+                "7th run",
+                "8th run",
+                "9th run",
+                "10th run",
+                "11th run",
+                "12th run",
+                "13th run",
+                "14th run",
+                "15th run",
+                "16th run",
+                "17th run",
+                "18th run",
+                "19th run",
+                "20th run",
+                "21st run",
+                "22nd run",
+                "23rd run",
+                "24th run",
+                "25th run",
+                "26th run",
+                "27th run",
+                "28th run",
+                "29th run",
+                "30th run",
+                "31st run",
+                "32nd run",
+                "33rd run",
+                "34th run",
+                "35th run",
+                "36th run",
+                "37th run",
+                "38th run",
+                "39th run",
+                "40th run",
+                "41st run",
+                "42nd run",
+                "43rd run",
+                "44th run",
+                "45th run",
+                "46th run",
+                "47th run",
+                "48th run",
+                "49th run",
+                "50th run"
             ],
             "problemMatcher": []
         }
