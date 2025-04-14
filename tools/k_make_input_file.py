@@ -8,7 +8,7 @@ heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.
 widths_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.3)]
 
 # 出力ディレクトリ (絶対パス推奨)
-output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/ricker/rectangle"
+output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/LPR_like/rectangle"
 # ローカルテスト用パス (必要に応じてコメントアウト解除)
 # output_base_dir = "generated_inputs_hw_json_summary"
 
@@ -62,7 +62,7 @@ box(2.5-width/2, bottom_y, 0, 2.5+width/2, top_y, {domain_z_gpr_val}, 'ep9', 'n'
 
 =====A-scan用=====
 ＜波源設定＞
-#waveform: ricker 1 500e6 my_src
+#waveform: gaussiandot 1 500e6 my_src
 
 #hertzian_dipole: z 2.5 6.3 0 my_src
 #rx: 2.5 6.3 0
