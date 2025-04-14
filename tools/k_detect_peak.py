@@ -20,12 +20,14 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     #* Find the peaks
     peaks = []
     for i in range(1, len(data) - 1):
-        if np.amax(envelope) > 1e12:
-            if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1e9:
-                peaks.append(i)
-        else:
-            if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
-                peaks.append(i)
+        # if np.amax(envelope) > 1e12:
+        #     if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1e9:
+        #         peaks.append(i)
+        # else:
+        #     if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
+        #         peaks.append(i)
+        if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > np.amax(envelope) / 1000:
+            peaks.append(i)
     #print(f'Found {len(peaks)} peaks')
 
 
