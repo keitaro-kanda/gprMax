@@ -8,7 +8,7 @@ heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.
 widths_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.3)]
 
 # 出力ディレクトリ (絶対パス推奨)
-output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/Ricker/rectangle"
+output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/LPR_like/rectangle"
 # ローカルテスト用パス (必要に応じてコメントアウト解除)
 # output_base_dir = "generated_inputs_hw_json_summary"
 
@@ -174,7 +174,8 @@ width = {w_val_for_python}  # [m] (Generated value: {w_float_str})
 
         # --- シミュレーション設定のJSONファイル生成 ---
         sim_config = {
-            "initial_pulse_delay": 2.571,
+            #! 使う波形によって変更が必要
+            "initial_pulse_delay": 2.07, # [ns], 最大ピークの時刻
             "boundaries": [
                 {"name": "vacuum-ground", "length": 0.30, "epsilon_r": 1.0},
                 {"name": "ground-rock_top", "length": 2.0, "epsilon_r": 3.0},
