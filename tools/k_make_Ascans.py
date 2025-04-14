@@ -63,6 +63,9 @@ def main():
         print("Error reading JSON file:", e)
         sys.exit(1)
 
+    # ズーム設定のキャッシュファイルパスを設定
+    zoom_cache_path = os.path.join(os.path.dirname(data_json_path), "zoom_settings.json")
+
     # 2. 使用する機能の選択
     print("\nSelect function mode:")
     print("1: A-scan plot (default)")
@@ -92,19 +95,55 @@ def main():
 
     # 3. 拡大表示の指定
     zoom_input = input("\nDo you want to use zoom view? (y/n) [default: n]: ").strip().lower()
+    
+    use_zoom = False
+    x_min = x_max = y_min = y_max = None
+    
     if zoom_input == "y":
-        try:
-            x_min = float(input("Enter x-axis lower limit: ").strip())
-            x_max = float(input("Enter x-axis upper limit: ").strip())
-            y_min = float(input("Enter y-axis lower limit: ").strip())
-            y_max = float(input("Enter y-axis upper limit: ").strip())
-        except Exception as e:
-            print("Invalid numeric input for zoom parameters.", e)
-            sys.exit(1)
-        use_zoom = True
-    else:
-        use_zoom = False
-        x_min = x_max = y_min = y_max = None
+        # ズーム設定のキャッシュファイルが存在するか確認
+        cached_settings = {}
+        if os.path.exists(zoom_cache_path):
+            try:
+                with open(zoom_cache_path, 'r') as f:
+                    cached_settings = json.load(f)
+                print(f"Found cached zoom settings: x: [{cached_settings.get('x_min', 'N/A')}, {cached_settings.get('x_max', 'N/A')}], y: [{cached_settings.get('y_min', 'N/A')}, {cached_settings.get('y_max', 'N/A')}]")
+                use_cached = input("Use cached zoom settings? (y/n) [default: y]: ").strip().lower()
+                
+                if use_cached == "" or use_cached == "y":
+                    x_min = cached_settings.get('x_min')
+                    x_max = cached_settings.get('x_max')
+                    y_min = cached_settings.get('y_min')
+                    y_max = cached_settings.get('y_max')
+                    use_zoom = True
+            except Exception as e:
+                print(f"Error reading cached zoom settings: {e}")
+                print("Will create new zoom settings.")
+        
+        # キャッシュが存在しないか、ユーザーがキャッシュを使用しない場合
+        if not use_zoom:
+            try:
+                x_min = float(input("Enter x-axis lower limit: ").strip())
+                x_max = float(input("Enter x-axis upper limit: ").strip())
+                y_min = float(input("Enter y-axis lower limit: ").strip())
+                y_max = float(input("Enter y-axis upper limit: ").strip())
+                use_zoom = True
+                
+                # 新しいズーム設定をキャッシュに保存
+                new_settings = {
+                    'x_min': x_min,
+                    'x_max': x_max,
+                    'y_min': y_min,
+                    'y_max': y_max
+                }
+                try:
+                    with open(zoom_cache_path, 'w') as f:
+                        json.dump(new_settings, f, indent=2)
+                    print(f"Zoom settings saved to {zoom_cache_path}")
+                except Exception as e:
+                    print(f"Error saving zoom settings: {e}")
+            except Exception as e:
+                print("Invalid numeric input for zoom parameters.", e)
+                sys.exit(1)
 
     # 4. 各データファイルごとにA-scanプロットと解析を実施
     print("\nProcessing data files...\n")
