@@ -84,9 +84,9 @@ def main():
     if mode == "TWT":
         for key, data_path in path_group.items():
             folder = os.path.dirname(data_path)
-            model_path = os.path.join(folder, "model.json")
+            model_path = data_path.replace('.out', '_config.json')
             if not os.path.exists(model_path):
-                print(f"Error: model.json not found in directory: {folder}.")
+                print(f"Error: simulation configuration file ({model_path}) not found in directory: {folder}.")
                 print("TWT mode requires model.json to be present. Aborting.")
                 sys.exit(1)
 
@@ -159,7 +159,7 @@ def main():
                 output_dir_twt = os.path.join(os.path.dirname(data_path), "TWT_estimation")
                 if not os.path.exists(output_dir_twt):
                     os.makedirs(output_dir_twt)
-                model_path = os.path.join(os.path.dirname(data_path), "model.json")
+                model_path = data_path.replace('.out', '_config.json')
                 if not os.path.exists(model_path):
                     print(f"Error: model.json not found in {os.path.dirname(data_path)}. Aborting TWT estimation.")
                     sys.exit(1)

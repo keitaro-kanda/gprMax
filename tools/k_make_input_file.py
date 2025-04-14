@@ -8,7 +8,7 @@ heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.
 widths_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.3)]
 
 # 出力ディレクトリ (絶対パス推奨)
-output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/LPR_like/rectangle"
+output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/Ricker/rectangle"
 # ローカルテスト用パス (必要に応じてコメントアウト解除)
 # output_base_dir = "generated_inputs_hw_json_summary"
 
@@ -62,7 +62,7 @@ box(2.5-width/2, bottom_y, 0, 2.5+width/2, top_y, {domain_z_gpr_val}, 'ep9', 'n'
 
 =====A-scan用=====
 ＜波源設定＞
-#waveform: gaussiandot 1 500e6 my_src
+#waveform: ricker 1 500e6 my_src
 
 #hertzian_dipole: z 2.5 6.3 0 my_src
 #rx: 2.5 6.3 0
@@ -171,6 +171,28 @@ width = {w_val_for_python}  # [m] (Generated value: {w_float_str})
         out_file_path_abs = os.path.abspath(out_file_path).replace(os.sep, '/')
         # 辞書に追加
         output_paths_dict[sim_key] = out_file_path_abs
+
+        # --- シミュレーション設定のJSONファイル生成 ---
+        sim_config = {
+            "initial_pulse_delay": 2.571,
+            "boundaries": [
+                {"name": "vacuum-ground", "length": 0.30, "epsilon_r": 1.0},
+                {"name": "ground-rock_top", "length": 2.0, "epsilon_r": 3.0},
+                {"name": "rock_top-bottom", "length": h_val_for_python, "epsilon_r": 9.0}
+            ]
+        }
+        # out_file_path_absは *.out のパスになっているので、その拡張子を _config.json に置換
+        config_json_filepath = out_file_path_abs.replace('.out', '_config.json')
+        # config_json_filepath のあるディレクトリは存在するはずですが念のため作成
+        os.makedirs(os.path.dirname(config_json_filepath), exist_ok=True)
+        try:
+            with open(config_json_filepath, 'w', encoding='utf-8') as config_file:
+                json.dump(sim_config, config_file, indent=4, ensure_ascii=False)
+            print(f"Simulation config JSON file created: {config_json_filepath}")
+        except IOError as e:
+            print(f"Error writing simulation config JSON file {config_json_filepath}: {e}")
+
+
 
         # 進捗表示 (まとめて表示)
         relative_path_base = os.path.relpath(target_dir)
