@@ -112,9 +112,9 @@ def calc_plot_TWT(data, time, model_path, closeup, closeup_x_start, closeup_x_en
         colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
         for i, t in enumerate(two_way_travel_time):
             if i == 0:
-                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-0.2, t+0.2, color=colors[i], alpha=0.3)
+                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-1.2, t+1.5, color=colors[i], alpha=0.3)
             else:
-                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-0.2, t+0.2, color=colors[i], alpha=0.3 , label=boundary_names[i])
+                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-1.2, t+1.5, color=colors[i], alpha=0.3 , label=boundary_names[i]) # fill_betweenxの区間はパルス幅で設定してる
 
 
         plt.xlabel('Time [ns]', fontsize=28)
