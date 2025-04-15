@@ -111,10 +111,13 @@ def calc_plot_TWT(data, time, model_path, closeup, closeup_x_start, closeup_x_en
         #* Plot the estimated two-way travel time
         colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
         for i, t in enumerate(two_way_travel_time):
+            #! 使う波形によって変える！！
+            #* Ricker: -1.5, +2.3
+            #* LPR_like: -1.3, +1.5
             if i == 0:
-                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-1.2, t+1.5, color=colors[i], alpha=0.3)
+                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-1.5, t+2.3, color=colors[i], alpha=0.3)
             else:
-                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-1.2, t+1.5, color=colors[i], alpha=0.3 , label=boundary_names[i]) # fill_betweenxの区間はパルス幅で設定してる
+                ax.fill_betweenx([closeup_y_start, closeup_y_end], t-1.5, t+2.3, color=colors[i], alpha=0.3 , label=boundary_names[i]) # fill_betweenxの区間はパルス幅で設定してる
 
 
         plt.xlabel('Time [ns]', fontsize=28)
