@@ -37,3 +37,5 @@ dist/
 .venv/
 
 tools/test_output/
+
+api.txt
