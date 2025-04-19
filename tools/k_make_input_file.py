@@ -8,7 +8,7 @@ heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.
 widths_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.3)]
 
 # 出力ディレクトリ (絶対パス推奨)
-output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/LPR_like/rectangle"
+output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/polarity_obs4journal/LPR_like/circle"
 # ローカルテスト用パス (必要に応じてコメントアウト解除)
 # output_base_dir = "generated_inputs_hw_json_summary"
 
@@ -49,9 +49,39 @@ template_part2 = f"""\
 
 top_y = 4.0 # [m]
 bottom_y = top_y - height # [m]
+center_y = top_y - height / 2 # [m]
 
 #* Main body of rock
-box(2.5-width/2, bottom_y, 0, 2.5+width/2, top_y, {domain_z_gpr_val}, 'ep9', 'n')
+# ---rectangle---
+# box(2.5-width/2, bottom_y, 0, 2.5+width/2, top_y, {domain_z_gpr_val}, 'ep9', 'n')
+
+# ---ellipse---
+def create_ellipse_with_boxes(x_center, y_center, z_center, a, b, height, material, box_size, c1='n'):
+    boxes = []
+    x_min = x_center - a
+    x_max = x_center + a
+    y_min = y_center - b
+    y_max = y_center + b
+
+    x_range = int(2 * a / box_size)
+    y_range = int(2 * b / box_size)
+
+    for i in range(x_range):
+        for j in range(y_range):
+            x = x_min + i * box_size + box_size / 2
+            y = y_min + j * box_size + box_size / 2
+            # 楕円の内部かどうかを判定
+            if ((x - x_center) ** 2) / (a ** 2) + ((y - y_center) ** 2) / (b ** 2) <= 1:
+                f1 = x - box_size / 2
+                f2 = y - box_size / 2
+                f4 = x + box_size / 2
+                f5 = y + box_size / 2
+
+                box(f1, f2, 0, f4, f5, 0.005, material, c1)
+
+    return boxes
+
+ellipse = create_ellipse_with_boxes(2.5, center_y, 0, width/2, height/2, {domain_z_gpr_val}, 'ep9', {domain_z_gpr_val})
 
 #end_python:
 
@@ -62,7 +92,7 @@ box(2.5-width/2, bottom_y, 0, 2.5+width/2, top_y, {domain_z_gpr_val}, 'ep9', 'n'
 
 =====A-scan用=====
 ＜波源設定＞
-#waveform: ricker 1 500e6 my_src
+#waveform: gaussiandot 1 500e6 my_src
 
 #hertzian_dipole: z 2.5 6.3 0 my_src
 #rx: 2.5 6.3 0
