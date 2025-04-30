@@ -115,19 +115,40 @@ def main():
         raise RuntimeError("No Ez data.")
     vmin, vmax = -max_abs, max_abs
 
-    # Initialize plot
+            # Initialize plot
     print("[INFO] Initializing plot...")
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.set_xlabel("X [m]")
     ax.set_ylabel("Y [m]")
-    # Geometry background
-    ax.imshow(geom_mask, extent=[xs.min(), xs.max(), ys.min(), ys.max()],
-              origin='lower', cmap='gray', interpolation='nearest', zorder=0)
-    # Snapshot overlay
-    ez_im = ax.imshow(np.zeros((ny, nx)), extent=[xs.min(), xs.max(), ys.min(), ys.max()],
-                      origin='lower', cmap='viridis', vmin=vmin, vmax=vmax,
-                      alpha=0.3, interpolation='nearest', zorder=1)
-    cbar = fig.colorbar(ez_im, ax=ax)
+    # Create 2D meshgrid for pcolormesh
+    X, Y = np.meshgrid(xs, ys)
+    # Geometry background: material classification (3 media)
+    geom_grid = np.zeros((ny, nx))
+    # Populate geometry grid with material IDs
+    geom_grid[iy, ix] = geom_vals  # geom_vals are IDs for each slice point
+    from matplotlib.colors import ListedColormap, BoundaryNorm
+    unique_ids = np.unique(geom_vals)
+    cmap_geom = ListedColormap(['lightgray', 'saddlebrown', 'peru'][:len(unique_ids)])
+    norm = BoundaryNorm(unique_ids - 0.5, len(unique_ids))
+    geom_pc = ax.pcolormesh(
+        X, Y, geom_grid,
+        cmap=cmap_geom,
+        norm=norm,
+        alpha=1,
+        shading='auto',
+        zorder=0
+    )
+    # Snapshot overlay: empty grid via pcolormesh
+    ez_grid = np.zeros((ny, nx))
+    snap_pc = ax.pcolormesh(
+        X, Y, ez_grid,
+        cmap='viridis',
+        vmin=vmin, vmax=vmax,
+        alpha=0.4,
+        shading='auto',
+        zorder=1
+    )
+    cbar = fig.colorbar(snap_pc, ax=ax)
     cbar.set_label("Ez [V/m]")
 
     dt_ns = 0.5
@@ -137,11 +158,12 @@ def main():
         ix_i = np.searchsorted(xs, coords[:, 0])
         iy_i = np.searchsorted(ys, coords[:, 1])
         grid[iy_i, ix_i] = vals
-        ez_im.set_data(grid)
+        # Update pcolormesh array
+        snap_pc.set_array(grid.ravel())
         ax.set_title(f"Time = {(i+1)*dt_ns:.1f} ns")
         if (i+1) % 10 == 0 or (i+1) == len(snap_paths):
             print(f"[INFO] Frame {i+1}/{len(snap_paths)} rendered")
-        return [ez_im]
+        return [snap_pc]
 
     print(f"[INFO] Saving animation to {output_video}...")
     ani = animation.FuncAnimation(fig, update, frames=len(snap_paths), blit=True)
