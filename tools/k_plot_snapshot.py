@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import glob
+from matplotlib.ticker import FormatStrFormatter
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -9,7 +10,6 @@ from vtkmodules.vtkFiltersCore import vtkCellCenters
 from vtkmodules.util.numpy_support import vtk_to_numpy
 from matplotlib.colors import ListedColormap, BoundaryNorm
 import mpl_toolkits.axes_grid1 as axgrid1
-from matplotlib.ticker import FormatStrFormatter
 
 
 def read_vti_image(filename):
@@ -62,6 +62,16 @@ def main():
         raise FileNotFoundError(f"Cannot find file: {geometry_path}")
     parent_dir = os.path.dirname(geometry_path)
     print(f"[INFO] Parent directory: {parent_dir}")
+
+    # Zoom option
+    do_zoom = input("Generate zoomed plot? (y/n): ").strip().lower() == 'y'
+    if do_zoom:
+        x_min = float(input("Enter zoom x_min [m]: ").strip())
+        x_max = float(input("Enter zoom x_max [m]: ").strip())
+        y_min = float(input("Enter zoom y_min [m]: ").strip())
+        y_max = float(input("Enter zoom y_max [m]: ").strip())
+        print(f"[INFO] Zoom region set to x:[{x_min}, {x_max}], y:[{y_min}, {y_max}]")
+
     snap_dirs = [d for d in os.listdir(parent_dir) if d.endswith("_snaps")]
     if len(snap_dirs)==1:
         snap_dir = os.path.join(parent_dir, snap_dirs[0])
@@ -74,7 +84,7 @@ def main():
     ez_field = "E-field"
     fps = 10
     output_video = os.path.join(parent_dir, "snapshot_animation.mp4")
-    print(f"[INFO] Output video will be saved to: {output_video}")
+    print(f"[INFO] Video output path: {output_video}")
 
     # Geometry slice
     print("[INFO] Reading geometry VTI and extracting slice...")
@@ -94,10 +104,10 @@ def main():
 
     xs = np.unique(geom_coords[:,0])
     ys = np.unique(geom_coords[:,1])
-    nx,ny = xs.size, ys.size
+    nx, ny = xs.size, ys.size
+    print(f"[INFO] Grid dimensions: nx={nx}, ny={ny}")
     ix = np.searchsorted(xs, geom_coords[:,0])
     iy = np.searchsorted(ys, geom_coords[:,1])
-    print(f"[INFO] Grid size: nx={nx}, ny={ny}")
 
     # Snapshot list
     snap_paths = sorted(
@@ -109,95 +119,82 @@ def main():
     # Compute max_abs from first 20 frames
     print("[INFO] Computing Ez max_abs from first 20 frames...")
     max_abs = 0.0
-    for idx,path in enumerate(snap_paths[:20], start=1):
+    for idx, path in enumerate(snap_paths[:20], start=1):
         coords, vals = extract_slice(read_vti_image(path), ez_field)
         if vals.size:
             frame_max = abs(vals).max()
             max_abs = max(max_abs, frame_max)
-        print(f"  [INFO] Frame {idx}: max_abs_local={frame_max:.3e}, current max_abs={max_abs:.3e}")
-    if max_abs==0.0:
+        print(f"  [INFO] Frame {idx}: local max={frame_max:.3e}, current global max={max_abs:.3e}")
+    if max_abs == 0.0:
         raise RuntimeError("No Ez data found in first 20 frames.")
     print(f"[INFO] Final max_abs for normalization: {max_abs:.3e}")
 
-    vmin,vmax = -0.01, 0.01
-    print(f"[INFO] Ez normalization range set to [{vmin},{vmax}]")
+    vmin, vmax = -0.01, 0.01
+    print(f"[INFO] Ez normalization range: [{vmin}, {vmax}]")
 
-    # Prepare geometry grid
-    print("[INFO] Preparing geometry grid...")
-    geom_grid = np.zeros((ny,nx))
-    geom_grid[iy,ix] = geom_vals
+    # Prepare geometry grid and axes
+    print("[INFO] Preparing geometry grid and setting up plot...")
+    geom_grid = np.zeros((ny, nx))
+    geom_grid[iy, ix] = geom_vals
     unique_ids = np.unique(geom_vals)
-
-    # Setup plot
-    print("[INFO] Initializing plot...")
-    fig, ax = plt.subplots(figsize=(8,12), dpi=300, tight_layout=True)
-    ax.set_aspect('equal','box')
+    # Setup figure
+    fig, ax = plt.subplots(figsize=(8,8), dpi=300)
+    ax.set_aspect('equal', 'box')
     ax.set_xlabel("X [m]", fontsize=20)
     ax.set_ylabel("Y [m]", fontsize=20)
     ax.tick_params(labelsize=16)
+    # Apply zoom if requested
+    if do_zoom:
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        print("[INFO] Axes limits set for zoom.")
 
-    # Plot geometry via imshow
+    # Plot geometry
     extent = [xs.min(), xs.max(), ys.min(), ys.max()]
-
-    # 単色（たとえば淡いグレー）で塗りつぶし
     cmap_geom = ListedColormap(['gray'])
-    # unique_ids が複数でも、norm はダミーでOK（色は1色しかないので常に lightgray）
-    norm_geom = BoundaryNorm([unique_ids.min() - 0.5, unique_ids.max() + 0.5], ncolors=1)
-
-    geom_im = ax.imshow(
-        geom_grid, extent=extent, origin='lower',
-        cmap=cmap_geom, norm=norm_geom, zorder=0
-    )
-
+    norm_geom = BoundaryNorm([unique_ids.min()-0.5, unique_ids.max()+0.5], ncolors=1)
+    ax.imshow(geom_grid, extent=extent, origin='lower', cmap=cmap_geom, norm=norm_geom, zorder=0)
     print("[INFO] Geometry plotted.")
     # Draw material boundaries
-    levels = unique_ids[:-1]+0.5
+    levels = unique_ids[:-1] + 0.5
     ax.contour(
-        np.linspace(xs.min(),xs.max(),nx),
-        np.linspace(ys.min(),ys.max(),ny),
+        np.linspace(xs.min(), xs.max(), nx),
+        np.linspace(ys.min(), ys.max(), ny),
         geom_grid, levels=levels,
         colors='white', linewidths=1.0, zorder=1
     )
     print("[INFO] Material boundaries drawn.")
 
-    # Prepare Ez overlay via imshow
-    ez_grid = np.zeros((ny,nx))
+    # Prepare Ez overlay
+    ez_grid = np.zeros((ny, nx))
     ez_im = ax.imshow(
         ez_grid, extent=extent, origin='lower',
-        cmap='viridis', vmin=vmin, vmax=vmax,
-        alpha=0.4, zorder=2
+        cmap='seismic', vmin=vmin, vmax=vmax,
+        alpha=0.6, zorder=2
     )
     divider = axgrid1.make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
-    # カラーバー：両端と中央の目盛を表示
     cbar = plt.colorbar(ez_im, cax=cax, ticks=[vmin, 0.0, vmax])
-    # 目盛ラベルのフォーマット（小数2桁）
     cbar.ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     cbar.ax.tick_params(labelsize=16)
     cbar.set_label("Normalized Ez", fontsize=20)
     print("[INFO] Ez overlay prepared.")
 
-    # cbar.ax.yaxis.set_label_position('left')
-    # cbar = fig.colorbar(ez_im, ax=ax)
-    # cbar.set_label("Normalized Ez", fontsize=20)
-    # cbar.ax.tick_params(labelsize=16)
-    print("[INFO] Ez overlay prepared.")
-
-    # Frame output dir
-    frame_dir = os.path.join(parent_dir,'snapshot_frames')
+    # Frame directory
+    frame_dir = os.path.join(parent_dir, 'snapshot_frames')
     os.makedirs(frame_dir, exist_ok=True)
-    print(f"[INFO] Frames directory: {frame_dir}")
+    print(f"[INFO] Frame directory: {frame_dir}")
 
     dt_ns = 0.5
     def update(i):
         coords, vals = extract_slice(read_vti_image(snap_paths[i]), ez_field)
-        grid = np.zeros((ny,nx))
+        grid = np.zeros((ny, nx))
         ix_i = np.searchsorted(xs, coords[:,0])
         iy_i = np.searchsorted(ys, coords[:,1])
-        grid[iy_i,ix_i] = vals / max_abs
+        grid[iy_i, ix_i] = vals / max_abs
         ez_im.set_data(grid)
         ax.set_title(f"Time = {(i+1)*dt_ns:.1f} ns", fontsize=20)
-        frame_path = os.path.join(frame_dir,f"frame_{i+1:03d}.png")
+        frame_path = os.path.join(frame_dir, f"frame_{i+1:03d}.png")
         fig.savefig(frame_path, dpi=300)
         print(f"[INFO] Saved frame {i+1}/{len(snap_paths)} to {frame_path}")
         return [ez_im]
@@ -205,7 +202,7 @@ def main():
     print("[INFO] Starting animation...")
     ani = animation.FuncAnimation(fig, update, frames=len(snap_paths), blit=True)
     Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=fps,metadata={'artist':'gprMax'})
+    writer = Writer(fps=fps, metadata={'artist':'gprMax'})
     ani.save(output_video, writer=writer)
     print(f"[INFO] Saved animation to {output_video}")
 
