@@ -83,8 +83,11 @@ def main():
 
     ez_field = "E-field"
     fps = 10
-    output_video = os.path.join(parent_dir, "snapshot_animation.mp4")
-    print(f"[INFO] Video output path: {output_video}")
+    output_dir = os.path.join(parent_dir, "snapshot")
+    if do_zoom:
+        output_dir = os.path.join(output_dir, f'snapshot_zoom_{x_min}_{x_max}_{y_min}_{y_max}')
+    output_video_path = os.path.join(output_dir, "snapshot_animation.mp4")
+    print(f"[INFO] Video output path: {output_video_path}")
 
     # Geometry slice
     print("[INFO] Reading geometry VTI and extracting slice...")
@@ -181,7 +184,7 @@ def main():
     print("[INFO] Ez overlay prepared.")
 
     # Frame directory
-    frame_dir = os.path.join(parent_dir, 'snapshot_frames')
+    frame_dir = os.path.join(output_dir, 'snapshot_frames')
     os.makedirs(frame_dir, exist_ok=True)
     print(f"[INFO] Frame directory: {frame_dir}")
 
@@ -203,8 +206,8 @@ def main():
     ani = animation.FuncAnimation(fig, update, frames=len(snap_paths), blit=True)
     Writer = animation.writers['ffmpeg']
     writer = Writer(fps=fps, metadata={'artist':'gprMax'})
-    ani.save(output_video, writer=writer)
-    print(f"[INFO] Saved animation to {output_video}")
+    ani.save(output_video_path, writer=writer)
+    print(f"[INFO] Saved animation to {output_video_path}")
 
 if __name__=='__main__':
     main()
