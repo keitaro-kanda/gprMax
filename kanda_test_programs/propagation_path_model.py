@@ -114,7 +114,7 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T, max_delta_T, output_dir
         Ts / 1e-9,
         extent=(rock_widths[0], rock_widths[-1], thetas[0], thetas[-1]),
         origin='lower',
-        cmap='jet',
+        cmap='turbo',
     )
     ax1.set_title(r'$R_S$ echo', fontsize=28)
     divider1 = make_axes_locatable(ax1)
@@ -129,7 +129,7 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T, max_delta_T, output_dir
         delta_T / 1e-9,
         extent=(rock_widths[0], rock_widths[-1], thetas[0], thetas[-1]),
         origin='lower',
-        cmap='jet',
+        cmap='turbo',
     )
     ax2.set_title('Time difference', fontsize=28)
     divider2 = make_axes_locatable(ax2)
@@ -209,11 +209,11 @@ def compare_with_FDTD(height, min_delta_T, output_dir):
 
 def plot_w_h_deltaT(w_h_matrix, output_dir):
     fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
-    #max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
-    im = ax.imshow(w_h_matrix / 1e-9, cmap='jet',
+    max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.05)]) / 1e-9 # [ns]
+    im = ax.imshow(w_h_matrix / 1e-9, cmap='turbo',
                     extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='auto',
                     origin='lower',
-                    #vmin=0, vmax=max_deltaT
+                    vmin=0, vmax=max_deltaT
                     )
 
     ax.set_xlabel('Width [m]', fontsize=24)
@@ -226,18 +226,18 @@ def plot_w_h_deltaT(w_h_matrix, output_dir):
     ax.set_xticks(np.arange(0, 3.01, 0.3))
     ax.set_yticks(np.arange(0, np.max(rock_heights)+0.1, 0.3))
 
-    # --- ここから等高線の追加 ---
-    # imshow と同じ座標系に対応する x, y 軸配列を作成
-    x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_matrix.shape[1])
-    y = np.linspace(rock_heights[0], rock_heights[-1], w_h_matrix.shape[0])
-    X, Y = np.meshgrid(x, y)
+    # # --- ここから等高線の追加 ---
+    # # imshow と同じ座標系に対応する x, y 軸配列を作成
+    # x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_matrix.shape[1])
+    # y = np.linspace(rock_heights[0], rock_heights[-1], w_h_matrix.shape[0])
+    # X, Y = np.meshgrid(x, y)
 
-    # w_h_matrix = 1.56 の等高線(1本だけ)を描画
-    contour_level = FWHM / 1e-9  # [ns]
-    cs = ax.contour(X, Y, w_h_matrix/1e-9, levels=[contour_level], colors='k')
+    # # w_h_matrix = 1.56 の等高線(1本だけ)を描画
+    # contour_level = FWHM / 1e-9  # [ns]
+    # cs = ax.contour(X, Y, w_h_matrix/1e-9, levels=[contour_level], colors='k')
 
-    # 等高線にラベルを付ける場合
-    ax.clabel(cs, inline=True, fontsize=20, fmt=f"{contour_level:.2f}")
+    # # 等高線にラベルを付ける場合
+    # ax.clabel(cs, inline=True, fontsize=20, fmt=f"{contour_level:.2f}")
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
@@ -255,7 +255,7 @@ def compare_w_h_deltaT_FDTD(w_h_matrix, output_dir):
                                 [5.4, 0.6], [6.0, 0.6], [1.8, 1.8], [2.1, 2.1]]
     fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
     #max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
-    im = ax.imshow(w_h_matrix / 1e-9, cmap='jet',
+    im = ax.imshow(w_h_matrix / 1e-9, cmap='turbo',
                     extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='auto',
                     origin='lower',
                     #vmin=0, vmax=max_deltaT
