@@ -32,6 +32,15 @@ for key, values in data.items():
     col = unique_widths.index(w)
     grid[row, col] = label
 
+# 各ラベル番号が得られた数をカウントし、txt形式で出力
+label_counts = {label: np.sum(grid == label) for label in np.unique(grid)}
+output_dir = os.path.dirname(file_path)
+output_path = os.path.join(output_dir, "label_counts.txt")
+with open(output_path, 'w') as f:
+    for label, count in label_counts.items():
+        f.write(f"Label {label}: {count}\n")
+print(f"[INFO] Label counts saved to {output_path}")
+
 # 離散カラーマップの定義（例：1→red, 2→blue, 3→green, 4→orange, 5→purple）
 cmap = colors.ListedColormap(["red", "blue", "green", "orange", "purple"])
 norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5, 3.5, 4.5, 5.5], ncolors=5)
