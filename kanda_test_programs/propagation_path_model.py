@@ -228,18 +228,18 @@ def plot_w_h_deltaT(w_h_matrix, output_dir):
     #ax.set_xticks(np.arange(0, 3.01, 0.3))
     #ax.set_yticks(np.arange(0, np.max(rock_heights)+0.1, 0.3))
 
-    # # --- ここから等高線の追加 ---
-    # # imshow と同じ座標系に対応する x, y 軸配列を作成
-    # x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_matrix.shape[1])
-    # y = np.linspace(rock_heights[0], rock_heights[-1], w_h_matrix.shape[0])
-    # X, Y = np.meshgrid(x, y)
+    # --- ここから等高線の追加 ---
+    # imshow と同じ座標系に対応する x, y 軸配列を作成
+    x = np.linspace(rock_widths[0],  rock_widths[-1],  w_h_matrix.shape[1])
+    y = np.linspace(rock_heights[0], rock_heights[-1], w_h_matrix.shape[0])
+    X, Y = np.meshgrid(x, y)
 
-    # # w_h_matrix = 1.56 の等高線(1本だけ)を描画
-    # contour_level = FWHM / 1e-9  # [ns]
-    # cs = ax.contour(X, Y, w_h_matrix/1e-9, levels=[contour_level], colors='k')
+    # w_h_matrix = 1.56 の等高線(1本だけ)を描画
+    contour_level = FWHM / 1e-9  # [ns]
+    cs = ax.contour(X, Y, w_h_matrix/1e-9, levels=[contour_level], colors='k')
 
     # # 等高線にラベルを付ける場合
-    # ax.clabel(cs, inline=True, fontsize=20, fmt=f"{contour_level:.2f}")
+    ax.clabel(cs, inline=True, fontsize=20, fmt=f"{contour_level:.2f}")
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
