@@ -5,6 +5,7 @@ from matplotlib.gridspec import GridSpec
 from tqdm import tqdm
 from tqdm.contrib import tenumerate
 import os
+import json
 
 # Physical constants
 c0 = 299792458  # Speed of light in vacuum [m/s]
@@ -16,12 +17,13 @@ rock_depth = float(input("Enter rock depth [m] (default=2.0): ") or "2.0")
 er_regolith = float(input("Enter relative permittivity of regolith (default=3.0): ") or "3.0")
 er_rock = float(input("Enter relative permittivity of rock (default=9.0): ") or "9.0")
 FWHM = float(input("Enter FWHM [s] (default=1.56e-9): ") or "1.56e-9")
+result_json_path = input("Enter path to result JSON file: ").strip()
 
 #* Constants
 #rock_heights = np.arange(0, 2.101, 0.001)  # [m]
 #rock_widths = np.arange(0.3, 2.11, 0.3)  # [m]
-rock_heights = np.arange(0.0, 3.15, 0.05)  # [m]
-rock_widths = np.arange(0.0, 3.15, 0.05)  # [m]
+rock_heights = np.arange(0.0, 3.05, 0.05)  # [m]
+rock_widths = np.arange(0.0, 3.05, 0.05)  # [m]
 thetas = np.arange(0, np.pi * 1/2, np.pi / 2880)  # [rad], 0 ~ pi/2
 
 
@@ -180,51 +182,51 @@ def plot(height, Ts, delta_T, min_delta_T, mean_delta_T, max_delta_T, output_dir
     plt.close()
 
 
-def compare_with_FDTD(height, min_delta_T, output_dir):
-    #* 現状計算している高さ30 cm, 60 cmの場合のFDTD結果のみ実装
-    if height == 0.3:
-        time_difference_FDTD = [[1.8, 1.82], [2.1, 2.38], [2.4, 3.04], [2.7, 3.74], [3.0, 4.53]]
-    elif height == 0.6:
-        time_difference_FDTD = [[1.8, 1.66], [2.4, 2.83], [3.0, 4.26], [3.6, 5.91], [4.2, 7.71], [4.8, 9.62],
-                                [5.4, 11.59], [6.0, 13.55]]
-    #* Plot the minimum time difference
-    plt.figure(figsize=(8, 6), tight_layout=True)
-    plt.plot(rock_widths, min_delta_T / 1e-9, linewidth=2, label='Model', color = 'b')
-    plt.axhline(FWHM / 1e-9, color='k', linestyle='--', label='FWHM')
+# def compare_with_FDTD(height, min_delta_T, output_dir):
+#     #* 現状計算している高さ30 cm, 60 cmの場合のFDTD結果のみ実装
+#     if height == 0.3:
+#         time_difference_FDTD = [[1.8, 1.82], [2.1, 2.38], [2.4, 3.04], [2.7, 3.74], [3.0, 4.53]]
+#     elif height == 0.6:
+#         time_difference_FDTD = [[1.8, 1.66], [2.4, 2.83], [3.0, 4.26], [3.6, 5.91], [4.2, 7.71], [4.8, 9.62],
+#                                 [5.4, 11.59], [6.0, 13.55]]
+#     #* Plot the minimum time difference
+#     plt.figure(figsize=(8, 6), tight_layout=True)
+#     plt.plot(rock_widths, min_delta_T / 1e-9, linewidth=2, label='Model', color = 'b')
+#     plt.axhline(FWHM / 1e-9, color='k', linestyle='--', label='FWHM')
 
-    #* Plt the FDTD results
-    for i in range(len(time_difference_FDTD)):
-        plt.plot(time_difference_FDTD[i][0], time_difference_FDTD[i][1], 'o', markersize=5, color='r', label='FDTD' if i == 0 else None)
+#     #* Plt the FDTD results
+#     for i in range(len(time_difference_FDTD)):
+#         plt.plot(time_difference_FDTD[i][0], time_difference_FDTD[i][1], 'o', markersize=5, color='r', label='FDTD' if i == 0 else None)
 
-    #plt.title(f'Rock height: {height:.1f} m', fontsize=28)
-    plt.xlabel('Rock width [m]', fontsize=24)
-    plt.ylabel('Minimum time difference [ns]', fontsize=24)
-    plt.tick_params(labelsize=20)
-    plt.grid()
-    plt.legend(fontsize=20)
+#     #plt.title(f'Rock height: {height:.1f} m', fontsize=28)
+#     plt.xlabel('Rock width [m]', fontsize=24)
+#     plt.ylabel('Minimum time difference [ns]', fontsize=24)
+#     plt.tick_params(labelsize=20)
+#     plt.grid()
+#     plt.legend(fontsize=20)
 
-    plt.savefig(os.path.join(output_dir, f'min_time_difference_h{height:.2f}_compare.png'))
-    plt.close()
+#     plt.savefig(os.path.join(output_dir, f'min_time_difference_h{height:.2f}_compare.png'))
+#     plt.close()
 
 
 def plot_w_h_deltaT(w_h_matrix, output_dir):
     fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
     max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.05)]) / 1e-9 # [ns]
     im = ax.imshow(w_h_matrix / 1e-9, cmap='turbo',
-                    extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='auto',
+                    extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], # [cm]
+                    aspect='equal',
                     origin='lower',
                     vmin=0, vmax=max_deltaT
                     )
 
     ax.set_xlabel('Width [m]', fontsize=24)
     ax.set_ylabel('Height [m]', fontsize=24)
-    ax.set_xlim(0, 3.0)
     ax.tick_params(labelsize=20)
     ax.grid(which='both', axis='both', linestyle='-.')
 
     #* x, y軸のメモリを0.3刻みにする
-    ax.set_xticks(np.arange(0, 3.01, 0.3))
-    ax.set_yticks(np.arange(0, np.max(rock_heights)+0.1, 0.3))
+    #ax.set_xticks(np.arange(0, 3.01, 0.3))
+    #ax.set_yticks(np.arange(0, np.max(rock_heights)+0.1, 0.3))
 
     # # --- ここから等高線の追加 ---
     # # imshow と同じ座標系に対応する x, y 軸配列を作成
@@ -250,28 +252,55 @@ def plot_w_h_deltaT(w_h_matrix, output_dir):
 
 
 def compare_w_h_deltaT_FDTD(w_h_matrix, output_dir):
-    expected_polarity_size = [[1.8, 0.3], [2.1, 0.3], [2.4, 0.3], [2.7, 0.3], [3.0, 0.3],
-                                [1.8, 0.6], [2.4, 0.6], [3.0, 0.6], [3.6, 0.6], [4.2, 0.6], [4.8, 0.6],
-                                [5.4, 0.6], [6.0, 0.6], [1.8, 1.8], [2.1, 2.1]]
+    #* load polarity result from JSON
+    # 各データを抽出し、ユニークなheightおよびwidthのリスト（m単位）を作成
+    heights_all = []
+    widths_all = []
+    for key, values in data.items():
+        # valuesの形式: [height, width, 計算結果]
+        h, w, _ = values
+        heights_all.append(h) # [m]
+        widths_all.append(w) # [m]
+    unique_heights = sorted(set(heights_all))
+    unique_widths = sorted(set(widths_all))
+
+    # グリッドの形状（行: height, 列: width）を確定し、各セルに計算結果を格納
+    grid = np.empty((len(unique_heights), len(unique_widths)), dtype=int)
+    for key, values in data.items():
+        h, w, label = values
+        row = unique_heights.index(h)
+        col = unique_widths.index(w)
+        if label == 1 or label == 3: # 予想通りの極性
+            grid[row, col] = 1
+        else: # 予想外の極性
+            grid[row, col] = 2
+
+
     fig, ax = plt.subplots(figsize=(10, 8), facecolor='w', edgecolor='w', tight_layout=True)
     #max_deltaT = np.nanmax(w_h_matrix[:, int(3.0/0.01)]) / 1e-9 # [ns]
     im = ax.imshow(w_h_matrix / 1e-9, cmap='turbo',
-                    extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], aspect='auto',
+                    extent=[rock_widths[0], rock_widths[-1], rock_heights[0], rock_heights[-1]], # [m]
+                    aspect='auto',
                     origin='lower',
                     #vmin=0, vmax=max_deltaT
                     )
-    for i in range(len(expected_polarity_size)):
-        ax.plot(expected_polarity_size[i][0], expected_polarity_size[i][1], 'o', markersize=5, color='r')
+
+    #* Plot the polarity result as a scatter plot
+    for i in range(len(unique_heights)):
+        for j in range(len(unique_widths)):
+            if grid[i, j] == 1:
+                ax.scatter(unique_widths[j], unique_heights[i], marker='o', color='w', s=10)
+            elif grid[i, j] == 2:
+                ax.scatter(unique_widths[j], unique_heights[i], marker='o', color='gray', s=10)
 
     ax.set_xlabel('Width [m]', fontsize=24)
     ax.set_ylabel('Height [m]', fontsize=24)
-    ax.set_xlim(0, 3.0)
     ax.tick_params(labelsize=20)
     ax.grid(which='both', axis='both', linestyle='-.')
 
     #* x, y軸のメモリを0.3刻みにする
-    ax.set_xticks(np.arange(0, 3.01, 0.3))
-    ax.set_yticks(np.arange(0, np.max(rock_heights)+0.1, 0.3))
+    #ax.set_xticks(np.arange(0, 3.01, 0.3))
+    #ax.set_yticks(np.arange(0, np.max(rock_heights)+0.1, 0.3))
 
     # --- ここから等高線の追加 ---
     # imshow と同じ座標系に対応する x, y 軸配列を作成
@@ -307,6 +336,11 @@ if __name__ == '__main__':
     print(f"\nResults will be saved in: {param_dir}")
     print("\nStarting calculations...\n")
 
+    #* Load the result JSON file
+    with open(result_json_path, 'r') as f:
+        data = json.load(f)
+    output_dir_result_compare = os.path.dirname(result_json_path)
+
     w_h_deltaT = np.zeros((len(rock_heights), len(rock_widths)))
     for i, h in tenumerate(rock_heights, desc='Rock height'):
         Tb_i = np.tile(Tb[i], (len(thetas), len(rock_widths)))  # [s]
@@ -315,8 +349,8 @@ if __name__ == '__main__':
         # delta_T_mean, delta_T_std = calc_time_difference(delta_T)
         w_h_deltaT[i] = min_delta_T
         plot(h, Ts, delta_T, min_delta_T, mean_delta_T, max_delta_T, param_dir)
-        if h == 0.3 or h == 0.6:
-            compare_with_FDTD(h, min_delta_T, param_dir)
+        # if h == 0.3 or h == 0.6:
+        #     compare_with_FDTD(h, min_delta_T, param_dir)
     plot_w_h_deltaT(w_h_deltaT, param_dir)
 
     # デフォルト値の場合のみFDTDとの比較を実行
@@ -325,4 +359,4 @@ if __name__ == '__main__':
         er_regolith == 3.0 and
         er_rock == 9.0 and
         FWHM == 1.56e-9):
-        compare_w_h_deltaT_FDTD(w_h_deltaT, param_dir)
+        compare_w_h_deltaT_FDTD(w_h_deltaT, output_dir_result_compare)
