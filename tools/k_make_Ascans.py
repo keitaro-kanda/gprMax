@@ -34,9 +34,8 @@ def plot_Ascan(filename, data, time, use_zoom=False, x_min=None, x_max=None, y_m
     else:
         ax.set_xlim([0, np.amax(time)])
     ax.grid(which='both', axis='both', linestyle='-.')
-    ax.minorticks_on()
     ax.set_xlabel('Time [ns]', fontsize=28)
-    ax.set_ylabel('Ez normalized field strength [V/m]', fontsize=28)
+    ax.set_ylabel('Normalized Ez', fontsize=28)
     ax.tick_params(labelsize=24)
     plt.tight_layout()
 
