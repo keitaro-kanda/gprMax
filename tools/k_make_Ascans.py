@@ -186,8 +186,17 @@ def main():
                 pulse_info = k_detect_peak.detect_plot_peaks(data_norm, dt, use_zoom, x_min, x_max, y_min, y_max, False, output_dir_peak, plt_show=False)
                 peak_info_filename = os.path.join(output_dir_peak, "peak_info.txt")
                 try:
+                    # with open(peak_info_filename, "w") as fout:
+                    #     json.dump(pulse_info, fout, indent=2)
+                    # NumPy 型（np.generic）を Python の組み込み型に変換
+                    serializable_pulse = []
+                    for info in pulse_info:
+                        serializable_pulse.append({
+                            key: (value.item() if isinstance(value, np.generic) else value)
+                            for key, value in info.items()
+                        })
                     with open(peak_info_filename, "w") as fout:
-                        json.dump(pulse_info, fout, indent=2)
+                        json.dump(serializable_pulse, fout, indent=2, ensure_ascii=False)
                     print(f"Saved peak detection info: {peak_info_filename}")
                 except Exception as e:
                     print(f"Error saving peak info for rx {rx+1}: {e}")
