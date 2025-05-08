@@ -307,10 +307,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # for closeup option
-    closeup_x_start = 0 #[ns]
-    closeup_x_end = 10 #[ns]
-    closeup_y_start = -1.1
-    closeup_y_end = 1.1
+    closeup_x_start = 25 #[ns]
+    closeup_x_end = 35 #[ns]
+    closeup_y_start = -0.01
+    closeup_y_end = 0.01
 
     plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
     plthandle.show()
