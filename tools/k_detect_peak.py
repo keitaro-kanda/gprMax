@@ -11,22 +11,20 @@ from scipy.signal import hilbert
 
 #* Define the function to analyze the pulses
 def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, FWHM, output_dir, plt_show):
-    time = np.arange(len(data)) * dt  / 1e-9 # [ns]
+    data_norm = data / np.amax(np.abs(data)) # Normalize the data
+    time = np.arange(len(data_norm)) * dt  / 1e-9 # [ns]
 
     #* Calculate the envelope of the signal
-    analytic_signal = hilbert(data)
+    analytic_signal = hilbert(data_norm)
     envelope = np.abs(analytic_signal)
+    evnvelope_moving_average = np.convolve(envelope, np.ones(10)/10, mode='same') # Moving average
 
     #* Find the peaks
     peaks = []
-    for i in range(1, len(data) - 1):
-        # if np.amax(envelope) > 1e12:
-        #     if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1e9:
-        #         peaks.append(i)
-        # else:
-        #     if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1:
-        #         peaks.append(i)
-        if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > np.amax(envelope) / 1000:
+    for i in range(1, len(data_norm) - 1):
+        # if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1e-3:
+        #     peaks.append(i)
+        if evnvelope_moving_average[i - 1] < evnvelope_moving_average[i] > evnvelope_moving_average[i + 1] and evnvelope_moving_average[i] > 1e-3:
             peaks.append(i)
     #print(f'Found {len(peaks)} peaks')
 
@@ -34,7 +32,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     # Calculate the half-width of the pulses
     pulse_info = []
     for i, peak_idx in enumerate(peaks):
-        #peak_amplitude = np.abs(data[peak_idx])
+        #peak_amplitude = np.abs(data_norm[peak_idx])
         peak_amplitude = envelope[peak_idx]
         half_amplitude = peak_amplitude / 2
 
@@ -116,8 +114,8 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
 
         # 範囲内での最大振幅とそのインデックスを取得
         hwhm_idx = int(hwhm / (dt / 1e-9)) # [ns]
-        #data_segment = data[peak_idx-hwhm_idx:peak_idx+hwhm_idx+1] # 半値全幅のデータ
-        data_segment = np.abs(data[int(left_half_time*1e-9/dt):int(right_half_time*1e-9/dt)])
+        #data_norm_segment = data_norm[peak_idx-hwhm_idx:peak_idx+hwhm_idx+1] # 半値全幅のデータ
+        data_segment = np.abs(data_norm[int(left_half_time*1e-9/dt):int(right_half_time*1e-9/dt)])
         if len(data_segment) > 0:
             # 最大と2番目に大きいピークのインデックスを取得
             local_max_idxs = []
@@ -141,19 +139,19 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
 
             max_idx = int(left_half_time*1e-9/dt) + primary_max_idx
             max_time = time[max_idx]
-            max_amplitude = data[max_idx]
+            max_amplitude = data_norm[max_idx]
 
             if secondary_max_idx is not None:
                 secondary_max_idx_global = int(left_half_time*1e-9/dt) + secondary_max_idx
                 secondary_max_time = time[secondary_max_idx_global]
-                secondary_max_amplitude = data[secondary_max_idx_global]
+                secondary_max_amplitude = data_norm[secondary_max_idx_global]
             else:
                 secondary_max_time = None
                 secondary_max_amplitude = None
         else:
             max_idx = peak_idx
             max_time = time[peak_idx]
-            max_amplitude = data[peak_idx]
+            max_amplitude = data_norm[peak_idx]
 
         pulse_info.append({
             'peak_idx': peak_idx,
@@ -176,7 +174,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     #* Plot A-scan
     fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel='Ez normalized field strength'),
                             figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-    ax.plot(time, data, label='A-scan', color='black')
+    ax.plot(time, data_norm, label='A-scan', color='black')
     ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.')
 
     for i, info in enumerate(pulse_info):
