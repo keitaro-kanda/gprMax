@@ -17,137 +17,142 @@
         {
             "label": "run1",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.02/h0.02.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.01/h0.01.in"
         },
         {
             "label": "ru2",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.03/h0.03.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.02/h0.02.in"
         },
         {
             "label": "run3",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.04/h0.04.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.03/h0.03.in"
         },
         {
             "label": "run4",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.05/h0.05.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.04/h0.04.in"
         },
         {
             "label": "run5",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.06/h0.06.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.05/h0.05.in"
         },
         {
             "label": "run6",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.07/h0.07.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.06/h0.06.in"
         },
         {
             "label": "run7",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.08/h0.08.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.07/h0.07.in"
         },
         {
             "label": "run8",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.09/h0.09.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.08/h0.08.in"
         },
         {
             "label": "run9",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.10/h0.10.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.09/h0.09.in"
         },
         {
             "label": "run10",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.11/h0.11.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.10/h0.10.in"
         },
         {
             "label": "run11",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.12/h0.12.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.11/h0.11.in"
         },
         {
             "label": "run12",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.13/h0.13.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.12/h0.12.in"
         },
         {
             "label": "run13",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/circular/height_0.14/h0.14.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.13/h0.13.in"
         },
         {
             "label": "run14",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.01/h0.01.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/square/height_0.14/h0.14.in"
         },
         {
             "label": "run15",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.02/h0.02.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.01/h0.01.in"
         },
         {
             "label": "run16",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.03/h0.03.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.02/h0.02.in"
         },
         {
             "label": "run17",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.04/h0.04.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.03/h0.03.in"
         },
         {
             "label": "run18",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.05/h0.05.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.04/h0.04.in"
         },
         {
             "label": "run19",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.06/h0.06.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.05/h0.05.in"
         },
         {
             "label": "run20",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.07/h0.07.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.06/h0.06.in"
         },
         {
             "label": "run21",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.08/h0.08.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.07/h0.07.in"
         },
         {
             "label": "run22",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.09/h0.09.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.08/h0.08.in"
         },
         {
             "label": "run23",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.10/h0.10.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.09/h0.09.in"
         },
         {
             "label": "run24",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.11/h0.11.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.10/h0.10.in"
         },
         {
             "label": "run25",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.12/h0.12.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.11/h0.11.in"
         },
         {
             "label": "run26",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.13/h0.13.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.12/h0.12.in"
         },
         {
             "label": "run27",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square/height_0.14/h0.14.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.13/h0.13.in"
+        },
+        {
+            "label": "run27",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular/height_0.14/h0.14.in"
         },
         {
             "label": "task sequence",
@@ -155,6 +160,8 @@
             "dependsOrder": "sequence",
             "dependsOn": [
                 "run2",
+                "run3",
+                "run4",
                 "run5",
                 "run6",
                 "run7",
@@ -177,7 +184,8 @@
                 "run24",
                 "run25",
                 "run26",
-                "run27"
+                "run27",
+                "run28",
             ],
             "problemMatcher": []
         }

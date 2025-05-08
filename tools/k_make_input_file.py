@@ -8,7 +8,7 @@ heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.01, 0.16, 0.01)]
 widths_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.3)]
 
 # 出力ディレクトリ (絶対パス推奨)
-output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/Ricker_waveform_verification/square"
+output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular"
 # ローカルテスト用パス (必要に応じてコメントアウト解除)
 # output_base_dir = "generated_inputs_hw_json_summary"
 
@@ -54,10 +54,10 @@ radius = height / 2 # [m]
 
 #* Main body of rock
 # ---rectangle---
-box({domain_x_val / 2}-width/2, bottom_y, 0, {domain_x_val / 2}+width/2, top_y, {domain_z_gpr_val}, 'ep9', 'n')
+# box({domain_x_val / 2}-width/2, bottom_y, 0, {domain_x_val / 2}+width/2, top_y, {domain_z_gpr_val}, 'ep9', 'n')
 
 # --- circle---
-# cylinder({domain_x_val / 2}, center_y, 0, {domain_x_val / 2}, center_y, {domain_z_gpr_val}, radius, 'ep9', 'n')
+cylinder({domain_x_val / 2}, center_y, 0, {domain_x_val / 2}, center_y, {domain_z_gpr_val}, radius, 'ep9', 'n')
 
 # ---ellipse---
 def create_ellipse_with_boxes(x_center, y_center, z_center, a, b, height, material, box_size, c1='n'):
@@ -96,7 +96,7 @@ def create_ellipse_with_boxes(x_center, y_center, z_center, a, b, height, materi
 
 =====A-scan用=====
 ＜波源設定＞
-#waveform: ricker 1 500e6 my_src
+#waveform: gaussiandot 1 500e6 my_src
 
 #hertzian_dipole: z {domain_x_val / 2}　{ground_y_max_val + 0.3} 0 my_src
 #rx: {domain_x_val / 2} {ground_y_max_val + 0.3} 0
