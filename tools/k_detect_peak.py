@@ -179,7 +179,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
 
     for i, info in enumerate(pulse_info):
         if info['distinguishable']==True:
-            plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Primary Peak' if i == 0 else "")
+            plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Primary Peak' if i == 0 else "", markersize=10)
             #if info.get('secondary_max_time') is not None:
            #     plt.plot(info['secondary_max_time'], info['secondary_max_amplitude'], 'go', label='Secondary Peak' if i == 0 else "")
 
