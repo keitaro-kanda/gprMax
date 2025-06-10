@@ -13,7 +13,7 @@ results_LPR_square = ['x', 'x', 's', 's', 's', 'd', '2', '2', '2', '2', '2', '2'
 results = [results_Ricker_circle, results_Ricker_square, results_LPR_circle, results_LPR_square]
 
 sizes = np.arange(1, 16, 1)
-model_names = ['Ricker-circle', 'Ricker-square', 'LPR-circle', 'LPR-square']
+model_names = ['Bipolar-circle', 'Bipolar-square', 'LPR-circle', 'LPR-square']
 
 
 cat_to_int = {'x':0, 's':1, 'd':2, '2':3}
