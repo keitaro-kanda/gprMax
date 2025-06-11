@@ -55,9 +55,11 @@ er_regolith = 3.0
 er_rock = 9.0
 wavelength = 60 # [cm]
 # 光路長の計算
-L_optical = h_antenna * 2 + d_rock * np.sqrt(er_regolith) * 2 + h_rock * np.sqrt(er_rock) * 2
+L_top = h_antenna * 2 + d_rock * np.sqrt(er_regolith) * 2
+L_bottom = h_antenna * 2 + d_rock * np.sqrt(er_regolith) * 2 + h_rock * np.sqrt(er_rock) * 2
 # Fresnel半径の計算
-r_fresnel = np.sqrt(wavelength * L_optical) / 2 # [cm]
+r_fresnel_top = np.sqrt(wavelength * L_top) / 2 # [cm]
+r_fresnel_bottom = np.sqrt(wavelength * L_bottom) / 2 # [cm]
 
 # r_fresnel_multi_medium = np.sqrt(wavelength * h_antenna * 2 + wavelength / np.sqrt(er_regolith) * d_rock * np.sqrt(er_regolith) * 2 + wavelength / np.sqrt(er_rock) * h_rock * np.sqrt(er_rock)) / 2
 
@@ -101,7 +103,8 @@ plt.show()
 fig, ax = plt.subplots(figsize=(8, 6))
 im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm,
                 extent = [0, w*100, 0, h*100])
-ax.plot(r_fresnel, h_rock, color='w', linestyle='-.')
+# ax.vlines(r_fresnel_top, ymin=0, ymax=300,  color='w', linestyle='-')
+ax.plot(r_fresnel_bottom, h_rock, color='w', linestyle='-.')
 # ax.plot(r_fresnel_multi_medium, h_rock, color='k', linestyle='-.')
 
 # 軸ラベルとタイトル（m単位の値をcm単位に変換して表示）
