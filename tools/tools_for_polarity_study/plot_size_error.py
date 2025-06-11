@@ -24,6 +24,7 @@ LPR_circle = []
 LPR_square = []
 Bipolar_circle = []
 Bipolar_square = []
+list4save = []
 for i in range(size_error_data.shape[0]):
     true_size = float(size_error_data[i, 2])
     estimated_size = (float(size_error_data[i, 4]) - float(size_error_data[i, 3])) * 1e-9 * c / np.sqrt(epsilon_r) / 2 * 100 # [cm]
@@ -45,6 +46,12 @@ for i in range(size_error_data.shape[0]):
             print(f'Invarid type in rock shape: row {i}')
     else:
         print(f'Invarid type in waveform: row {i}')
+    list4save.append([true_size, estimated_size, error])
+
+
+### save list4save
+header = ['true_size [cm]', 'estimated_size [cm]', 'error [%]']
+np.savetxt(os.path.join(output_dir, 'size_error_output.txt'), list4save, fmt='%f', delimiter=' ', header=' '.join(header))
 
 LPR_circle = np.array(LPR_circle)
 LPR_square = np.array(LPR_square)
