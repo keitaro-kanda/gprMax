@@ -90,6 +90,7 @@ ax[1].plot(Bipolar_square[:, 0], Bipolar_square[:, 2], label='LPR-square', color
 ax[1].set_xlabel('True size [cm]', fontsize=20)
 ax[1].set_ylabel('Error [%]', fontsize=20)
 # ax[1].legend(fontsize=16)
+ax[1].set_ylim(-30, 30)
 ax[1].tick_params(labelsize=16)
 ax[1].grid()
 # save
