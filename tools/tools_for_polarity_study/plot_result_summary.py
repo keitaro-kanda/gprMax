@@ -45,9 +45,26 @@ print(f"[INFO] Label counts saved to {output_path}")
 cmap = colors.ListedColormap(["red", "blue", "green", "orange", "purple"])
 norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5, 3.5, 4.5, 5.5], ncolors=5)
 
-# プロット作成（subplotsを利用）
+
+### Fresnel半径の計算
+# 各種パラメータの設定
+h_antenna = 30 # [cm]
+d_rock = 200 # [cm]
+h_rock = np.arange(0, 301, 1.0) # [cm]
+er_regolith = 3.0
+er_rock = 9.0
+wavelength = 60 # [cm]
+# 光路長の計算
+L_optical = h_antenna * 2 + d_rock * np.sqrt(er_regolith) * 2 + h_rock * np.sqrt(er_rock) * 2
+# Fresnel半径の計算
+r_fresnel = np.sqrt(wavelength * L_optical) / 2 # [cm]
+
+# r_fresnel_multi_medium = np.sqrt(wavelength * h_antenna * 2 + wavelength / np.sqrt(er_regolith) * d_rock * np.sqrt(er_regolith) * 2 + wavelength / np.sqrt(er_rock) * h_rock * np.sqrt(er_rock)) / 2
+
+
+### プロット作成
 fig, ax = plt.subplots(figsize=(8, 6))
-im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm)
+im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm,)
 
 # 軸ラベルとタイトル（m単位の値をcm単位に変換して表示）
 ax.set_xlabel("Rock width (cm)", fontsize=20)
@@ -72,7 +89,45 @@ cbar.ax.tick_params(labelsize=16)
 # JSONファイルと同じディレクトリにpngおよびpdfで保存
 directory = os.path.dirname(os.path.abspath(file_path))
 png_path = os.path.join(directory, "result_summary.png")
-pdf_path = os.path.join(directory, "result_.pdf")
+pdf_path = os.path.join(directory, "result_summary.pdf")
+plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight', pad_inches=0.1)
+
+# プロット表示
+plt.show()
+
+
+### Fresnel半径を含めたプロット
+fig, ax = plt.subplots(figsize=(8, 6))
+im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm,
+                extent = [0, w*100, 0, h*100])
+ax.plot(r_fresnel, h_rock, color='w', linestyle='-.')
+# ax.plot(r_fresnel_multi_medium, h_rock, color='k', linestyle='-.')
+
+# 軸ラベルとタイトル（m単位の値をcm単位に変換して表示）
+ax.set_xlabel("Rock width (cm)", fontsize=20)
+ax.set_ylabel("Rock height (cm)", fontsize=20)
+ax.tick_params(labelsize=16)
+
+# 軸目盛りの設定（m単位の値をcmに変換して表示）
+# xtick_labels = [f"{w*100:.0f}" for w in unique_widths]
+# ytick_labels = [f"{h*100:.0f}" for h in unique_heights]
+# ax.set_xticks(np.arange(len(unique_widths)))
+# ax.set_xticklabels(xtick_labels)
+# ax.set_yticks(np.arange(len(unique_heights)))
+# ax.set_yticklabels(ytick_labels)
+
+# カラーバーの作成：make_axes_locatableを利用してメインプロットの高さに合わせる
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.05)
+cbar = fig.colorbar(im, cax=cax, ticks=[1, 2, 3, 4, 5])
+cbar.ax.set_yticklabels([f"Type {i}" for i in [1, 2, 3, 4, 5]], fontsize=20)
+cbar.ax.tick_params(labelsize=16)
+
+# JSONファイルと同じディレクトリにpngおよびpdfで保存
+directory = os.path.dirname(os.path.abspath(file_path))
+png_path = os.path.join(directory, "result_summary_with_fresnel.png")
+pdf_path = os.path.join(directory, "result_summary_with_fresnel.pdf")
 plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
 plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight', pad_inches=0.1)
 
