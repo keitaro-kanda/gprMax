@@ -143,17 +143,17 @@ def main():
     # Setup figure
     fig, ax = plt.subplots(figsize=(8,8), dpi=300)
     ax.set_aspect('equal', 'box')
-    ax.set_xlabel("X [m]", fontsize=20)
-    ax.set_ylabel("Y [m]", fontsize=20)
+    ax.set_xlabel("X [cm]", fontsize=20)
+    ax.set_ylabel("Y [cm]", fontsize=20)
     ax.tick_params(labelsize=16)
     # Apply zoom if requested
     if do_zoom:
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
+        ax.set_xlim(x_min*100, x_max*100) # Convert to cm
+        ax.set_ylim(y_min*100, y_max*100) # Convert to cm
         print("[INFO] Axes limits set for zoom.")
 
     # Plot geometry
-    extent = [xs.min(), xs.max(), ys.min(), ys.max()]
+    extent = [xs.min()*100, xs.max()*100, ys.min()*100, ys.max()*100] # Convert to cm
     cmap_geom = ListedColormap(['gray'])
     norm_geom = BoundaryNorm([unique_ids.min()-0.5, unique_ids.max()+0.5], ncolors=1)
     ax.imshow(geom_grid, extent=extent, origin='lower', cmap=cmap_geom, norm=norm_geom, zorder=0)
@@ -161,8 +161,8 @@ def main():
     # Draw material boundaries
     levels = unique_ids[:-1] + 0.5
     ax.contour(
-        np.linspace(xs.min(), xs.max(), nx),
-        np.linspace(ys.min(), ys.max(), ny),
+        np.linspace(xs.min()*100, xs.max()*100, nx),
+        np.linspace(ys.min()*100, ys.max()*100, ny),
         geom_grid, levels=levels,
         colors='white', linewidths=1.0, zorder=1
     )
