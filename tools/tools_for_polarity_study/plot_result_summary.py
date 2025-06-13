@@ -41,9 +41,15 @@ with open(output_path, 'w') as f:
         f.write(f"Label {label}: {count}\n")
 print(f"[INFO] Label counts saved to {output_path}")
 
-# 離散カラーマップの定義（例：1→red, 2→blue, 3→green, 4→orange, 5→purple）
-cmap = colors.ListedColormap(["red", "blue", "green", "orange", "purple"])
-norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5, 3.5, 4.5, 5.5], ncolors=5)
+
+# 離散カラーマップの定義（例：1→red, 2→blue, 3, 4, 5→green）
+cmap = colors.ListedColormap(["red", "blue", "green", "green", "green"])
+norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5, 3.5], ncolors=3)
+
+### 旧バージョン：Type1-5
+# # 離散カラーマップの定義（例：1→red, 2→blue, 3→green, 4→orange, 5→purple）
+# cmap = colors.ListedColormap(["red", "blue", "green", "orange", "purple"])
+# norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5, 3.5, 4.5, 5.5], ncolors=5)
 
 
 ### Fresnel半径の計算
@@ -90,8 +96,8 @@ cbar.ax.tick_params(labelsize=16)
 
 # JSONファイルと同じディレクトリにpngおよびpdfで保存
 directory = os.path.dirname(os.path.abspath(file_path))
-png_path = os.path.join(directory, "result_summary.png")
-pdf_path = os.path.join(directory, "result_summary.pdf")
+png_path = os.path.join(directory, "result_summary_3types.png")
+pdf_path = os.path.join(directory, "result_summary_3types.pdf")
 plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
 plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight', pad_inches=0.1)
 
@@ -129,8 +135,8 @@ cbar.ax.tick_params(labelsize=16)
 
 # JSONファイルと同じディレクトリにpngおよびpdfで保存
 directory = os.path.dirname(os.path.abspath(file_path))
-png_path = os.path.join(directory, "result_summary_with_fresnel.png")
-pdf_path = os.path.join(directory, "result_summary_with_fresnel.pdf")
+png_path = os.path.join(directory, "result_summary_with_fresnel_3types.png")
+pdf_path = os.path.join(directory, "result_summary_with_fresnel_3types.pdf")
 plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
 plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight', pad_inches=0.1)
 
