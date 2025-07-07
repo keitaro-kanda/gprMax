@@ -20,7 +20,7 @@
             "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.10/h0.10.in"
         },
         {
-            "label": "ru2",
+            "label": "run2",
             "type": "shell",
             "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.15/h0.15.in"
         },
@@ -64,14 +64,8 @@
             "type": "shell",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "run2",
-                "run3",
-                "run4",
-                "run5",
-                "run6",
-                "run7",
-                "run8",
-                "run9"
+                "run1",
+                "run2"
             ],
             "problemMatcher": []
         }
