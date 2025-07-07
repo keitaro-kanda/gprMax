@@ -17,47 +17,22 @@
         {
             "label": "run1",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.10/h0.10.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_antennah0.6/height_0.15/h0.15.in"
         },
         {
             "label": "run2",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.15/h0.15.in"
+            "command": "${command:python.interpreterPath} -m /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.15/h0.15.in"
         },
         {
             "label": "run3",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.20/h0.20.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_ricker/height_0.15/h0.15.in"
         },
         {
             "label": "run4",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.25/h0.25.in"
-        },
-        {
-            "label": "run5",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.30/h0.30.in"
-        },
-        {
-            "label": "run6",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.35/h0.35.in"
-        },
-        {
-            "label": "run7",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.40/h0.40.in"
-        },
-        {
-            "label": "run8",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.45/h0.45.in"
-        },
-        {
-            "label": "run9",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void/height_0.50/h0.50.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_gaussian/height_0.15/h0.15.in"
         },
         {
             "label": "task sequence",
@@ -65,7 +40,9 @@
             "dependsOrder": "sequence",
             "dependsOn": [
                 "run1",
-                "run2"
+                "run2",
+                "run3",
+                "run4"
             ],
             "problemMatcher": []
         }
