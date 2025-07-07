@@ -8,7 +8,7 @@ heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.05, 0.20, 0.05)]
 widths_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.3)]
 
 # 出力ディレクトリ (絶対パス推奨)
-output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular"
+output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_gaussian"
 # ローカルテスト用パス (必要に応じてコメントアウト解除)
 # output_base_dir = "generated_inputs_hw_json_summary"
 
@@ -99,10 +99,10 @@ def create_ellipse_with_boxes(x_center, y_center, z_center, a, b, height, materi
 
 =====A-scan用=====
 ＜波源設定＞
-#waveform: gaussiandot 1 500e6 my_src
+#waveform: gaussian 1 500e6 my_src
 
-#hertzian_dipole: z {domain_x_val / 2}　{ground_y_max_val + 0.3} 1.0 my_src
-#rx: {domain_x_val / 2} {ground_y_max_val + 0.3} 1.0
+#hertzian_dipole: z {domain_x_val / 2}　{ground_y_max_val + 0.3} {domain_z_gpr_val / 2} my_src
+#rx: {domain_x_val / 2} {ground_y_max_val + 0.3} {domain_z_gpr_val / 2}
 """
 
 template_part3 = f"""\
