@@ -4,11 +4,11 @@ import decimal # 浮動小数点数の正確な表現のため
 import json  # JSONライブラリ
 
 # --- 設定 ---
-heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.01, 0.16, 0.01)]
+heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.05, 0.55, 0.05)]
 widths_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.3)]
 
 # 出力ディレクトリ (絶対パス推奨)
-output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular"
+output_base_dir = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/LPR_waveform_verification_2/circular_void"
 # ローカルテスト用パス (必要に応じてコメントアウト解除)
 # output_base_dir = "generated_inputs_hw_json_summary"
 
@@ -54,10 +54,10 @@ radius = height / 2 # [m]
 
 #* Main body of rock
 # ---rectangle---
-# box({domain_x_val / 2}-width/2, bottom_y, 0, {domain_x_val / 2}+width/2, top_y, {domain_z_gpr_val}, 'ep9', 'n')
+# box({domain_x_val / 2}-width/2, bottom_y, 0, {domain_x_val / 2}+width/2, top_y, {domain_z_gpr_val}, 'free_space', 'n')
 
 # --- circle---
-cylinder({domain_x_val / 2}, center_y, 0, {domain_x_val / 2}, center_y, {domain_z_gpr_val}, radius, 'ep9', 'n')
+cylinder({domain_x_val / 2}, center_y, 0, {domain_x_val / 2}, center_y, {domain_z_gpr_val}, radius, 'free_space', 'n')
 
 # ---ellipse---
 def create_ellipse_with_boxes(x_center, y_center, z_center, a, b, height, material, box_size, c1='n'):
@@ -85,7 +85,7 @@ def create_ellipse_with_boxes(x_center, y_center, z_center, a, b, height, materi
 
     return boxes
 
-#ellipse = create_ellipse_with_boxes(2.5, center_y, 0, width/2, height/2, {domain_z_gpr_val}, 'ep9', {domain_z_gpr_val})
+#ellipse = create_ellipse_with_boxes(2.5, center_y, 0, width/2, height/2, {domain_z_gpr_val}, 'free_space', {domain_z_gpr_val})
 
 #end_python:
 
