@@ -22,7 +22,7 @@
         {
             "label": "run2",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.15/h0.15.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.15/h0.15.in"
         },
         {
             "label": "run3",
@@ -39,7 +39,6 @@
             "type": "shell",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "run1",
                 "run2",
                 "run3",
                 "run4"
