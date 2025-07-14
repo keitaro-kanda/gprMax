@@ -57,16 +57,16 @@ python -m gprMax input_file.in -n 60 -mpi 8
 ### Visualization and Analysis
 ```bash
 # Plot A-scan results
-python -m tools.plot_Ascan output_file.out
+python -m tools.visualization.basic.plot_Ascan output_file.out
 
 # Plot B-scan results  
-python -m tools.plot_Bscan output_file.out
+python -m tools.visualization.basic.plot_Bscan output_file.out
 
 # Plot antenna parameters
-python -m tools.plot_antenna_params output_file.out
+python -m tools.utilities.plot_antenna_params output_file.out
 
 # Plot source waveform
-python -m tools.plot_source_wave output_file.out
+python -m tools.core.plot_source_wave output_file.out
 ```
 
 ## Testing
@@ -97,11 +97,11 @@ The `kanda/` directory contains extensive GPR research focused on:
 
 ### Analysis Tools
 Located in `kanda_test_programs/` and `tools/`:
-- **Velocity analysis**: `estimate_Vrms.py`, `estimate_Vrms_CMP.py`
-- **Migration and imaging**: `k_migration.py`, `k_fk_migration.py`
-- **Signal processing**: `k_matched_filter.py`, `k_pulse_compression.py`
-- **Fitting algorithms**: `k_fitting.py` for hyperbola fitting
-- **Visualization**: `k_plot_geometry.py`, `k_plot_velocity_structure.py`
+- **Velocity analysis**: `tools/velocity_analysis/estimate_Vrms.py`, `estimate_Vrms_CMP.py`
+- **Migration and imaging**: `tools/migration_imaging/k_migration.py`, `k_fk_migration.py`
+- **Signal processing**: `tools/signal_processing/enhancement/k_matched_filter.py`, `k_pulse_compression.py`
+- **Fitting algorithms**: `tools/analysis/k_fitting.py` for hyperbola fitting
+- **Visualization**: `tools/visualization/advanced/k_plot_geometry.py`, `k_plot_velocity_structure.py`
 
 ### Research Workflow
 1. Create geological models with `.in` files
@@ -139,6 +139,122 @@ Located in `kanda_test_programs/` and `tools/`:
 - Documentation written in reStructuredText (docs/source/)
 - Custom Japanese documentation in `kanda/doc/memo.md`
 - Extensive validation against analytical solutions in `tests/`
+
+## Tools Directory Structure and Management
+
+The `tools/` directory has been organized into a functional hierarchy to improve maintainability and ease of use:
+
+### Directory Structure
+```
+tools/
+├── core/                     # Basic gprMax tools (4 files)
+├── visualization/            # Visualization tools (8 files)
+│   ├── basic/               # Basic plotting (3 files)
+│   ├── advanced/            # Advanced visualization (4 files)
+│   └── analysis/            # Analysis visualization (1 file)
+├── signal_processing/        # Signal processing (9 files)
+│   ├── frequency_domain/    # Frequency domain (3 files)
+│   ├── time_domain/         # Time domain (3 files)
+│   └── enhancement/         # Signal enhancement (3 files)
+├── velocity_analysis/        # Velocity analysis (7 files)
+├── migration_imaging/        # Migration & imaging (6 files)
+├── data_processing/          # Data processing (7 files)
+├── analysis/                # Analysis tools (5 files)
+├── utilities/               # Utility tools (5 files)
+├── legacy/                  # Legacy tools (empty)
+└── specialized/             # Specialized studies
+    └── polarity_study/      # Polarity study (3 files)
+```
+
+### Tool Naming Convention
+- **Default gprMax tools**: Follow original naming (e.g., `plot_Ascan.py`)
+- **Kanda's custom tools**: Use `k_XXXX.py` naming convention
+- **Legacy tools**: Older versions moved to appropriate categories or `legacy/`
+
+### Tool Categories
+
+#### Core Tools (`core/`)
+Essential gprMax functionality:
+- File format conversion (`convert_png2h5.py`)
+- Input file processing (`inputfile_old2new.py`)
+- Output data merging (`outputfiles_merge.py`)
+- Basic source visualization (`plot_source_wave.py`)
+
+#### Visualization Tools (`visualization/`)
+- **Basic**: A-scan, B-scan plotting
+- **Advanced**: Geometry, snapshots, velocity structure
+- **Analysis**: TWT estimation, specialized analysis plots
+
+#### Signal Processing Tools (`signal_processing/`)
+- **Frequency domain**: Spectrograms, wavelets, Fourier transforms
+- **Time domain**: Envelopes, autocorrelation, correlation analysis
+- **Enhancement**: Gain functions, matched filtering, pulse compression
+
+#### Velocity Analysis Tools (`velocity_analysis/`)
+- RMS velocity estimation (Su method, CMP analysis, DePue method)
+- Internal velocity calculation (Dix formula)
+- Theoretical velocity estimation
+
+#### Migration & Imaging Tools (`migration_imaging/`)
+- Time-domain migration (`k_migration.py`)
+- F-k domain migration (`k_fk_migration.py`)
+- Imaging algorithms (`imaging.py`, `imaging_mono.py`)
+
+#### Data Processing Tools (`data_processing/`)
+- Data extraction and trimming
+- Signal averaging and enhancement
+- Noise addition and subtraction
+- Gain function processing
+
+#### Analysis Tools (`analysis/`)
+- Peak detection and fitting
+- Hyperbola fitting for velocity analysis
+- Gradient calculations
+- Echo extraction and analysis
+
+#### Utilities (`utilities/`)
+- Input file generation
+- Antenna parameter analysis
+- Error analysis and quality assessment
+- Specialized visualization utilities
+
+#### Specialized Tools (`specialized/`)
+- **Polarity Study**: Specialized tools for polarity analysis research
+
+### Usage Examples
+
+```bash
+# Basic visualization
+python -m tools.visualization.basic.plot_Ascan data.out
+
+# Advanced signal processing
+python -m tools.signal_processing.enhancement.k_matched_filter config.json
+
+# Velocity analysis
+python -m tools.velocity_analysis.estimate_Vrms_CMP config.json
+
+# Migration processing
+python -m tools.migration_imaging.k_migration config.json
+
+# Data analysis
+python -m tools.analysis.k_fitting config.json
+```
+
+### Configuration Management
+Most k_XXXX.py tools use JSON configuration files for parameter management:
+- Consistent parameter structure across tools
+- Easy batch processing and automation
+- Version control of analysis parameters
+- Reproducible research workflows
+
+### Tool Development Guidelines
+1. **New tools**: Place in appropriate functional directory
+2. **Naming**: Follow `k_XXXX.py` convention for custom tools
+3. **Documentation**: Each directory has README.md explaining its tools
+4. **Configuration**: Use JSON files for complex parameter sets
+5. **Testing**: Validate tools with known datasets before deployment
+
+This organization improves code maintainability, makes tools easier to find, and provides clear separation between different types of functionality.
 
 ## 絶対禁止事項
 
