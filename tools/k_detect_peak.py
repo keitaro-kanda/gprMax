@@ -24,7 +24,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     for i in range(1, len(data_norm) - 1):
         # if envelope[i - 1] < envelope[i] > envelope[i + 1] and envelope[i] > 1e-3:
         #     peaks.append(i)
-        if evnvelope_moving_average[i - 1] < evnvelope_moving_average[i] > evnvelope_moving_average[i + 1] and evnvelope_moving_average[i] > 1e-3:
+        if evnvelope_moving_average[i - 1] < evnvelope_moving_average[i] > evnvelope_moving_average[i + 1] and evnvelope_moving_average[i] > 0.5e-3:
             peaks.append(i)
     #print(f'Found {len(peaks)} peaks')
 
