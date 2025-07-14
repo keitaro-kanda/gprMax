@@ -3,28 +3,29 @@ input: raw .out file, described in json file
 output: CMP B-scan plot and txt file
 """
 
-import argparse
-
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import json
 
-
-from ..outputfiles_merge import get_output_data
+from tools.core.outputfiles_merge import get_output_data
 import mpl_toolkits.axes_grid1 as axgrid1
 
+print("Processing estimate Vrms in De Pue et al. method")
+print("Input: raw .out file, described in json file")
+print("Output: CMP B-scan plot and txt file")
 
-parser = argparse.ArgumentParser(description='Processing estimate Vrms in De Pue et al. method',
-                                usage='cd gprMax; python -m tools.plot_Bscan_CMP jsonfile')
-parser.add_argument('jsonfile', help='.out file path')
-args = parser.parse_args()
+# Get jsonfile path through interactive input
+jsonfile = input("Enter the path to the JSON file: ").strip()
+if not os.path.exists(jsonfile):
+    print("Error: JSON file {} does not exist".format(jsonfile))
+    exit(1)
 
 
 
 #* load jason data
-with open (args.jsonfile) as f:
+with open (jsonfile) as f:
     params = json.load(f)
 
 
@@ -57,7 +58,7 @@ data_list_CMP = data_lits_CMP / np.max(data_lits_CMP) # normalize
 
 
 #* save data
-outputdir = os.path.dirname(args.jsonfile)
+outputdir = os.path.dirname(jsonfile)
 if not os.path.exists(outputdir):
     os.mkdir(outputdir)
 np.savetxt(outputdir + '/Bscan_CMP.txt', data_list_CMP, delimiter=',')

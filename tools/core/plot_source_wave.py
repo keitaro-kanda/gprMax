@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with gprMax.  If not, see <http://www.gnu.org/licenses/>.
 
-import argparse
 import os
 import sys
 
@@ -135,7 +134,7 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
 
         # Plot waveform
         ax1.plot(time * 1e9, waveform, 'r', lw=2)
-        plt.supxtitle(args.type + ', ' + str(args.freq / 1e6) + ' MHz', fontsize=28)
+        plt.supxtitle(w.type + ', ' + str(w.freq / 1e6) + ' MHz', fontsize=28)
         ax1.set_xlabel('Time [ns]', fontsize=28)
         ax1.set_ylabel('Amplitude', fontsize=28)
         ax1.grid(which='both', axis='both', linestyle='--')
@@ -143,7 +142,7 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
         ax1.tick_params(labelsize=24)
 
     output_dir = 'kanda/waveform'
-    folder_name = str(args.type) + '_' + str(args.freq / 1e6) + 'MHz'
+    folder_name = str(w.type) + '_' + str(w.freq / 1e6) + 'MHz'
     output_dir = os.path.join(output_dir, folder_name)
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
@@ -175,34 +174,37 @@ def mpl_plot(w, timewindow, dt, iterations, fft=False, power=False):
 
 if __name__ == "__main__":
 
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        prog='plot_source_wave.py',
-        description='Plot built-in waveforms that can be used for sources.',
-        epilog='End of help message',
-        usage='python tools/plot_source_wave.py [type] [amp] [freq] [timewindow] [dt] [-fft] [-power]'
-        )
-    parser.add_argument('type', help='type of waveform', choices=Waveform.types)
-    parser.add_argument('amp', type=float, help='amplitude of waveform')
-    parser.add_argument('freq', type=float, help='centre frequency of waveform')
-    parser.add_argument('timewindow', help='time window to view waveform')
-    parser.add_argument('dt', type=float, help='time step to view waveform')
-    parser.add_argument('-fft', action='store_true', help='plot FFT of waveform', default=False)
-    parser.add_argument('-power', action='store_true', help='plot power of waveform', default=False)
-    args = parser.parse_args()
-
+    print("Plot built-in waveforms that can be used for sources.")
+    print("Available waveform types: {}".format(', '.join(Waveform.types)))
+    
+    # Get waveform parameters through interactive input
+    waveform_type = input("Enter waveform type: ").strip()
+    
     # Check waveform parameters
-    if args.type.lower() not in Waveform.types:
+    if waveform_type.lower() not in Waveform.types:
         raise CmdInputError('The waveform must have one of the following types {}'.format(', '.join(Waveform.types)))
-    if args.freq <= 0:
+    
+    try:
+        amplitude = float(input("Enter amplitude of waveform: ").strip())
+        frequency = float(input("Enter centre frequency of waveform [Hz]: ").strip())
+        timewindow_input = input("Enter time window to view waveform: ").strip()
+        dt = float(input("Enter time step to view waveform [s]: ").strip())
+    except ValueError:
+        raise CmdInputError('Invalid numeric input for waveform parameters')
+    
+    if frequency <= 0:
         raise CmdInputError('The waveform requires an excitation frequency value of greater than zero')
-
+    
+    # Get FFT option
+    fft_option = input("Plot FFT of waveform? (y/n) [default: n]: ").strip().lower()
+    use_fft = fft_option == 'y'
+    
     # Create waveform instance
     w = Waveform()
-    w.type = args.type
-    w.amp = args.amp
-    w.freq = args.freq
+    w.type = waveform_type
+    w.amp = amplitude
+    w.freq = frequency
 
-    timewindow, iterations = check_timewindow(args.timewindow, args.dt)
-    plthandle = mpl_plot(w, timewindow, args.dt, iterations, args.fft)
+    timewindow, iterations = check_timewindow(timewindow_input, dt)
+    plthandle = mpl_plot(w, timewindow, dt, iterations, use_fft)
     plthandle.show()

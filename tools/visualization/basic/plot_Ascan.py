@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with gprMax.  If not, see <http://www.gnu.org/licenses/>.
 
-import argparse
 import os
 import sys
 
@@ -132,7 +131,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 ax1.set_xlabel('Time [ns]', fontsize=28)
                 ax1.set_ylabel(outputtext + ' field strength [V/m]', fontsize=28)
                 #* Closeup otpion
-                if args.closeup:
+                if use_closeup:
                     ax1.set_xlim([closeup_x_start, closeup_x_end])
                     ax1.set_ylim([closeup_y_start, closeup_y_end])
                 else:
@@ -177,7 +176,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                 #ax.hlines(background, 0, np.amax(time), colors='gray', linestyles='--', label='Background')
                 #ax.hlines(-background, 0, np.amax(time), colors='gray', linestyles='--')
 
-                if args.closeup:
+                if use_closeup:
                     ax.set_xlim([closeup_x_start, closeup_x_end])
                     ax.set_ylim([closeup_y_start, closeup_y_end])
                 else:
@@ -272,7 +271,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     ax.plot(time, outputdata, 'b', lw=2, label=outputtext)
                     ax.set_ylabel(outputtext + ', current [A]')
             for ax in fig.axes:
-                if args.closeup:
+                if use_closeup:
                     ax.set_xlim([closeup_x_start*10**(-9), closeup_x_end*10**(-9)])
                 else:
                     ax.set_xlim([0, np.amax(time)])
@@ -281,9 +280,9 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
         # Save a PDF/PNG of the figure
         # fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.pdf', dpi=None, format='pdf', bbox_inches='tight', pad_inches=0.1)
-        if args.fft:
+        if use_fft:
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fft.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-        elif args.closeup:
+        elif use_closeup:
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_closeup_x' + str(closeup_x_start) \
                             + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
                             ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
@@ -297,20 +296,43 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
 if __name__ == "__main__":
 
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Plots electric and magnetic fields and currents from all receiver points in the given output file. Each receiver point is plotted in a new figure window.',
-                                        usage='cd gprMax; python -m tools.plot_Ascan outputfile')
-    parser.add_argument('outputfile', help='name of output file including path')
-    parser.add_argument('--outputs', help='outputs to be plotted', default=Rx.defaultoutputs, choices=['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz', 'Ex-', 'Ey-', 'Ez-', 'Hx-', 'Hy-', 'Hz-', 'Ix-', 'Iy-', 'Iz-'], nargs='+')
-    parser.add_argument('-fft', action='store_true', help='plot FFT (single output must be specified)', default=False)
-    parser.add_argument('-closeup', action='store_true', help='plot close up of time domain signal', default=False)
-    args = parser.parse_args()
-
+    print("Plots electric and magnetic fields and currents from all receiver points in the given output file.")
+    print("Each receiver point is plotted in a new figure window.")
+    
+    # Get output file path through interactive input
+    outputfile = input("Enter the path to the output file: ").strip()
+    if not os.path.exists(outputfile):
+        raise CmdInputError('Output file {} does not exist'.format(outputfile))
+    
+    # Get output components
+    print("\nAvailable output components: Ex, Ey, Ez, Hx, Hy, Hz, Ix, Iy, Iz")
+    print("You can also use negative polarity (e.g., Ex-, Ey-, etc.)")
+    print("Default outputs: {}".format(', '.join(Rx.defaultoutputs)))
+    outputs_input = input("Enter output components to plot (space-separated) [default: {}]: ".format(' '.join(Rx.defaultoutputs))).strip()
+    
+    if outputs_input == "":
+        outputs = Rx.defaultoutputs
+    else:
+        outputs = outputs_input.split()
+        # Validate outputs
+        valid_outputs = ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz', 'Ex-', 'Ey-', 'Ez-', 'Hx-', 'Hy-', 'Hz-', 'Ix-', 'Iy-', 'Iz-']
+        for output in outputs:
+            if output not in valid_outputs:
+                raise CmdInputError('Invalid output component: {}. Valid options: {}'.format(output, ', '.join(valid_outputs)))
+    
+    # Get FFT option
+    fft_input = input("Plot FFT? (y/n) [default: n]: ").strip().lower()
+    use_fft = fft_input == 'y'
+    
+    # Get closeup option
+    closeup_input = input("Plot close up of time domain signal? (y/n) [default: n]: ").strip().lower()
+    use_closeup = closeup_input == 'y'
+    
     # for closeup option
     closeup_x_start = 25 #[ns]
     closeup_x_end = 35 #[ns]
     closeup_y_start = -0.01
     closeup_y_end = 0.01
 
-    plthandle = mpl_plot(args.outputfile, args.outputs, fft=args.fft)
+    plthandle = mpl_plot(outputfile, outputs, fft=use_fft)
     plthandle.show()
