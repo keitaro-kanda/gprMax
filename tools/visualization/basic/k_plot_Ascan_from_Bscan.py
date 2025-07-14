@@ -5,7 +5,7 @@ import h5py
 import mpl_toolkits.axes_grid1 as axgrid1
 import os
 import argparse
-from outputfiles_merge import get_output_data
+from tools.core.outputfiles_merge import get_output_data
 from tqdm import tqdm
 from scipy import signal
 

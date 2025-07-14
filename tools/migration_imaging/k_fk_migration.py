@@ -6,7 +6,7 @@ import mpl_toolkits.axes_grid1 as axgrid1
 import os
 import argparse
 from tqdm import tqdm
-from outputfiles_merge import get_output_data
+from tools.core.outputfiles_merge import get_output_data
 from scipy.interpolate import RectBivariateSpline
 
 

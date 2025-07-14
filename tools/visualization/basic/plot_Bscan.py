@@ -26,7 +26,7 @@ import numpy as np
 
 from gprMax.exceptions import CmdInputError
 
-from outputfiles_merge import get_output_data
+from tools.core.outputfiles_merge import get_output_data
 from scipy import signal
 import mpl_toolkits.axes_grid1 as axgrid1
 

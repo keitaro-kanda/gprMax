@@ -4,8 +4,7 @@ import h5py
 import os
 from scipy.signal import hilbert
 import sys
-sys.path.append('tools')
-from outputfiles_merge import get_output_data
+from tools.core.outputfiles_merge import get_output_data
 from tqdm import tqdm
 from tqdm.contrib import tenumerate
 import argparse

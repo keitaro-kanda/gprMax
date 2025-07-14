@@ -6,13 +6,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 from tqdm import tqdm
-from tools.core.outputfiles_merge import get_output_data
-from scipy.signal import hilbert
-import shutil
 
-# 外部モジュール（既存の解析処理）
-import tools.analysis.k_detect_peak as k_detect_peak     # ピーク検出処理
-import tools.visualization.analysis.k_plot_TWT_estimation as k_plot_TWT_estimation  # TWT推定処理
+# gprMaxのルートディレクトリをPythonパスに追加
+gprmax_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if gprmax_root not in sys.path:
+    sys.path.insert(0, gprmax_root)
+
+# toolsパッケージからのインポート
+try:
+    from tools.core.outputfiles_merge import get_output_data
+    import tools.analysis.k_detect_peak as k_detect_peak
+    import tools.visualization.analysis.k_plot_TWT_estimation as k_plot_TWT_estimation
+except ImportError:
+    # gprMaxディレクトリに移動してからインポートを試行
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(gprmax_root)
+        from tools.core.outputfiles_merge import get_output_data
+        import tools.analysis.k_detect_peak as k_detect_peak
+        import tools.visualization.analysis.k_plot_TWT_estimation as k_plot_TWT_estimation
+    finally:
+        os.chdir(original_cwd)
 
 
 def plot_Ascan(filename, data, time, use_zoom=False, x_min=None, x_max=None, y_min=None, y_max=None):

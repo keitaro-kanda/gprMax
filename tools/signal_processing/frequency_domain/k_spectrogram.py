@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import h5py
 import json
-from outputfiles_merge import get_output_data
+from tools.core.outputfiles_merge import get_output_data
 import os
 from scipy import signal
 import argparse

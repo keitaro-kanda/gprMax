@@ -1,5 +1,5 @@
 import json
-from outputfiles_merge import get_output_data
+from tools.core.outputfiles_merge import get_output_data
 import numpy as np
 import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
