@@ -6,14 +6,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 from tqdm import tqdm
-from outputfiles_merge import get_output_data
+from tools.core.outputfiles_merge import get_output_data
 from scipy.signal import hilbert
 import shutil
 
 # 外部モジュール（既存の解析処理）
-import k_detect_peak     # ピーク検出処理
-import k_plot_TWT_estimation  # TWT推定処理
-import k_subtract        # ※将来的に送信波形引き算・FWHM機能追加のためのモジュール（未実装）
+import tools.analysis.k_detect_peak as k_detect_peak     # ピーク検出処理
+import tools.visualization.analysis.k_plot_TWT_estimation as k_plot_TWT_estimation  # TWT推定処理
 
 
 def plot_Ascan(filename, data, time, use_zoom=False, x_min=None, x_max=None, y_min=None, y_max=None):
