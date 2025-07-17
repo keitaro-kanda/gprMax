@@ -4,7 +4,7 @@ import decimal # 浮動小数点数の正確な表現のため
 import json  # JSONライブラリ
 
 # --- 設定 ---
-heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.01, 0.15, 0.01)]
+heights_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.01, 0.55, 0.01)]
 widths_decimal = [decimal.Decimal(str(x)) for x in np.arange(0.3, 3.0 + 0.1, 0.3)]
 
 # 出力ディレクトリ (絶対パス推奨)
