@@ -17,32 +17,37 @@
         {
             "label": "run1",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.09/h0.09.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.20/h0.20.in"
         },
         {
             "label": "run2",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.10/h0.10.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.25/h0.25.in"
         },
         {
             "label": "run3",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.11/h0.11.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.30/h0.30.in"
         },
         {
             "label": "run4",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.12/h0.12.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.35/h0.35.in"
         },
         {
             "label": "run5",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.13/h0.13.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.40/h0.40.in"
         },
         {
             "label": "run6",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.14/h0.14.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.45/h0.45.in"
+        },
+        {
+            "label": "run7",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.50/h0.50.in"
         },
         {
             "label": "task sequence",
@@ -54,7 +59,8 @@
                 "run3",
                 "run4",
                 "run5",
-                "run6"
+                "run6",
+                "run7"
             ],
             "problemMatcher": []
         }
