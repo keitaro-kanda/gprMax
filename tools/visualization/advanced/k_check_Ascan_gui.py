@@ -1,4 +1,3 @@
-import argparse
 import json
 import sys
 import os
@@ -6,6 +5,12 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import TextBox, Button
+
+# Add project root to Python path for VS Code execution
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '../../..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Import the refactored functions
 from tools.analysis.k_detect_peak import detect_peaks
@@ -41,8 +46,17 @@ def read_ascan_data(filepath):
         return None, None, None, None
 
 class AscanViewer:
-    def __init__(self, file_list):
-        self.file_list = file_list
+    def __init__(self, file_data):
+        # file_data can be either a list or dict
+        if isinstance(file_data, dict):
+            self.file_keys = list(file_data.keys())
+            self.file_list = list(file_data.values())
+            self.has_keys = True
+        else:
+            self.file_keys = None
+            self.file_list = file_data
+            self.has_keys = False
+        
         self.current_index = 0
         self.current_data = None
         self.current_dt = None
@@ -106,7 +120,13 @@ class AscanViewer:
             self.current_dt = None
             self.ax.text(0.5, 0.5, f"Could not load data from\n{filepath}", ha='center')
 
-        self.ax.set_title(f"File {self.current_index + 1}/{len(self.file_list)}: {os.path.basename(filepath)}\nComponent: {component or 'N/A'}")
+        # Create title with key name if available
+        if self.has_keys and self.file_keys:
+            key_name = self.file_keys[self.current_index]
+            title = f"File {self.current_index + 1}/{len(self.file_list)}: {key_name}\nPath: {os.path.basename(filepath)}\nComponent: {component or 'N/A'}"
+        else:
+            title = f"File {self.current_index + 1}/{len(self.file_list)}: {os.path.basename(filepath)}\nComponent: {component or 'N/A'}"
+        self.ax.set_title(title)
         self.ax.set_xlabel("Time [ns]")
         self.ax.set_ylabel("Amplitude")
         self.ax.grid(True)
@@ -173,26 +193,71 @@ class AscanViewer:
             print("Could not calculate TWTs.")
 
 def main():
-    parser = argparse.ArgumentParser(description="GUI tool to check and analyze A-scan files.")
-    parser.add_argument("json_file", help="Path to the JSON file containing a list of .out file paths.")
-    args = parser.parse_args()
+    print("=== A-scan GUI Viewer ===")
+    
+    # Get JSON file path from user input
+    while True:
+        json_file = input("JSONファイルのパスを入力してください (終了する場合は 'quit' を入力): ").strip()
+        
+        if json_file.lower() == 'quit':
+            print("プログラムを終了します。")
+            sys.exit(0)
+            
+        if not json_file:
+            print("パスが入力されていません。再度入力してください。")
+            continue
+            
+        # Convert relative path to absolute path if needed
+        if not os.path.isabs(json_file):
+            json_file = os.path.abspath(json_file)
+            
+        try:
+            with open(json_file, 'r') as f:
+                config = json.load(f)
+                
+                # Check for new format (direct key-value pairs)
+                if "ascan_files" in config:
+                    # Old format
+                    file_data = config["ascan_files"]
+                    if not file_data:
+                        print("エラー: JSONファイル内の 'ascan_files' キーが空です。")
+                        continue
+                else:
+                    # New format - assume all key-value pairs are file entries
+                    file_data = config
+                    if not file_data:
+                        print("エラー: JSONファイルが空か、有効なファイルエントリがありません。")
+                        continue
+            break
+        except FileNotFoundError:
+            print(f"エラー: JSONファイルが見つかりません: {json_file}")
+            print("正しいパスを入力してください。")
+            continue
+        except json.JSONDecodeError:
+            print(f"エラー: JSONファイルの形式が正しくありません: {json_file}")
+            continue
+        except Exception as e:
+            print(f"エラー: ファイル読み込み中にエラーが発生しました: {e}")
+            continue
 
-    try:
-        with open(args.json_file, 'r') as f:
-            config = json.load(f)
-            file_list = config.get("ascan_files", [])
-    except FileNotFoundError:
-        print(f"Error: JSON file not found at {args.json_file}", file=sys.stderr)
-        sys.exit(1)
-    except json.JSONDecodeError:
-        print(f"Error: Could not decode JSON from {args.json_file}", file=sys.stderr)
-        sys.exit(1)
-
-    if not file_list:
-        print("Error: The 'ascan_files' key in the JSON is empty or missing.", file=sys.stderr)
-        sys.exit(1)
-
-    viewer = AscanViewer(file_list)
+    # Get count for display
+    file_count = len(file_data) if isinstance(file_data, dict) else len(file_data)
+    print(f"読み込み完了: {file_count} 個のファイルが見つかりました。")
+    
+    if isinstance(file_data, dict):
+        print("JSON形式: キー-ファイルパス形式")
+        # Show first few keys as examples
+        keys_sample = list(file_data.keys())[:3]
+        print(f"例: {', '.join(keys_sample)}{'...' if len(file_data) > 3 else ''}")
+    else:
+        print("JSON形式: ファイルパス配列形式")
+    print("操作方法:")
+    print("- 左右矢印キー: ファイル切り替え")
+    print("- Detect Peaks ボタン: ピーク検出")
+    print("- Show Estimated TWT ボタン: 推定TWT表示")
+    print("- Apply Zoom ボタン: 時間範囲指定でズーム")
+    
+    viewer = AscanViewer(file_data)
     plt.show()
 
 if __name__ == "__main__":
