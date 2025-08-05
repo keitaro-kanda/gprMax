@@ -7,6 +7,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # JSONファイルのパスをinput()で取得
 file_path = input("jsonファイルのパスを入力してください: ")
+if not os.path.isfile(file_path):
+    raise FileNotFoundError(f"指定されたファイルが存在しません: {file_path}")
+
+# 上端か下端かの選択
+top_or_bottom = input("Select 'top' or 'bottom': ").strip().lower()
+if top_or_bottom not in ['top', 'bottom']:
+    raise ValueError("Invalid selection. Please choose 'top' or 'bottom'.")
 
 # JSONファイルの読み込み
 with open(file_path, 'r', encoding='utf-8') as f:
@@ -55,8 +62,10 @@ norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5, 3.5], ncolors=3)
 ### Fresnel半径の計算
 # 各種パラメータの設定
 h_antenna = 30 # [cm]
-d_rock = 200 # [cm]
-h_rock = np.arange(0, 301, 1.0) # [cm]
+d_rock = np.ones(300) * 200 # [cm]
+print(d_rock.shape)
+h_rock = np.arange(0, 300, 1.0) # [cm]
+print(h_rock.shape)
 er_regolith = 3.0
 er_rock = 9.0
 wavelength = 60 # [cm]
@@ -96,8 +105,12 @@ cbar.ax.tick_params(labelsize=16)
 
 # JSONファイルと同じディレクトリにpngおよびpdfで保存
 directory = os.path.dirname(os.path.abspath(file_path))
-png_path = os.path.join(directory, "result_summary_3types.png")
-pdf_path = os.path.join(directory, "result_summary_3types.pdf")
+if top_or_bottom == 'top':
+    png_path = os.path.join(directory, "result_summary_top.png")
+    pdf_path = os.path.join(directory, "result_summary_top.pdf")
+elif top_or_bottom == 'bottom':
+    png_path = os.path.join(directory, "result_summary_bottom.png")
+    pdf_path = os.path.join(directory, "result_summary_bottom.pdf")
 plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
 plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight', pad_inches=0.1)
 
@@ -110,7 +123,10 @@ fig, ax = plt.subplots(figsize=(8, 6))
 im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm,
                 extent = [0, w*100, 0, h*100])
 # ax.vlines(r_fresnel_top, ymin=0, ymax=300,  color='w', linestyle='-')
-ax.plot(r_fresnel_bottom, h_rock, color='w', linestyle='-.')
+if top_or_bottom == 'top':
+    ax.plot(r_fresnel_top, h_rock, color='w', linestyle='-.')
+elif top_or_bottom == 'bottom':
+    ax.plot(r_fresnel_bottom, h_rock, color='w', linestyle='-')
 # ax.plot(r_fresnel_multi_medium, h_rock, color='k', linestyle='-.')
 
 # 軸ラベルとタイトル（m単位の値をcm単位に変換して表示）
