@@ -541,8 +541,9 @@ class AscanViewer:
         if self.show_twts:
             try:
                 current_file_path = self.file_list[self.current_index]
-                model_path = os.path.join(os.path.dirname(current_file_path), 'model.json')
-                
+                #model_path = os.path.join(os.path.dirname(current_file_path), 'model.json')
+                model_path = current_file_path.replace('.out', '_config.json')
+
                 if os.path.exists(model_path):
                     tw_travel_time, boundary_names = calculate_TWT(model_path)
                     self.current_twts = (tw_travel_time, boundary_names)
@@ -717,7 +718,8 @@ class AscanViewer:
     def run_twt_estimation(self, event):
         """Manually trigger TWT estimation and enable persistent display mode"""
         current_file_path = self.file_list[self.current_index]
-        model_path = os.path.join(os.path.dirname(current_file_path), 'model.json')
+        #model_path = os.path.join(os.path.dirname(current_file_path), 'model.json')
+        model_path = current_file_path.replace('.out', '_config.json')
 
         if not os.path.exists(model_path):
             print(f"Error: model.json not found in the same directory as the .out file.", file=sys.stderr)
