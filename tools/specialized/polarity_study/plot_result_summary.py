@@ -111,8 +111,8 @@ if top_or_bottom == 'top':
 elif top_or_bottom == 'bottom':
     png_path = os.path.join(directory, "result_summary_bottom.png")
     pdf_path = os.path.join(directory, "result_summary_bottom.pdf")
-plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight', pad_inches=0.1)
+plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight')
+#plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight')
 
 # プロット表示
 plt.show()
@@ -126,7 +126,7 @@ im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm,
 if top_or_bottom == 'top':
     ax.plot(r_fresnel_top, h_rock, color='w', linestyle='-.')
 elif top_or_bottom == 'bottom':
-    ax.plot(r_fresnel_bottom, h_rock, color='w', linestyle='-')
+    ax.plot(r_fresnel_bottom, h_rock, color='w', linestyle='-.')
 # ax.plot(r_fresnel_multi_medium, h_rock, color='k', linestyle='-.')
 
 # 軸ラベルとタイトル（m単位の値をcm単位に変換して表示）
@@ -151,10 +151,14 @@ cbar.ax.tick_params(labelsize=16)
 
 # JSONファイルと同じディレクトリにpngおよびpdfで保存
 directory = os.path.dirname(os.path.abspath(file_path))
-png_path = os.path.join(directory, "result_summary_with_fresnel_3types.png")
-pdf_path = os.path.join(directory, "result_summary_with_fresnel_3types.pdf")
-plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight', pad_inches=0.1)
+if top_or_bottom == 'top':
+    png_path = os.path.join(directory, "result_summary_with_fresnel_top.png")
+    pdf_path = os.path.join(directory, "result_summary_with_fresnel_top.pdf")
+elif top_or_bottom == 'bottom':
+    png_path = os.path.join(directory, "result_summary_with_fresnel_bottom.png")
+    pdf_path = os.path.join(directory, "result_summary_with_fresnel_bottom.pdf")
+plt.savefig(png_path, dpi=150, format='png', bbox_inches='tight')
+#plt.savefig(pdf_path, dpi=300, format='pdf', bbox_inches='tight')
 
 # プロット表示
 plt.show()
