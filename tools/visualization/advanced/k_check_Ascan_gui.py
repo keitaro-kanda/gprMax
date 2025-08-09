@@ -53,16 +53,26 @@ def load_zoom_settings(json_dir):
     Load zoom_settings.json from the same directory as the input JSON file.
     """
     zoom_settings_path = os.path.join(json_dir, 'zoom_settings.json')
+    print(f"[DEBUG] Looking for zoom_settings.json at: {zoom_settings_path}")
+    
     try:
         if os.path.exists(zoom_settings_path):
+            print(f"[DEBUG] zoom_settings.json found, loading...")
             with open(zoom_settings_path, 'r') as f:
                 settings = json.load(f)
-                return {
-                    'time_start': settings.get('time_start', 0.0),
-                    'time_end': settings.get('time_end', 10.0),
-                    'intensity_min': settings.get('intensity_min', -0.1),
-                    'intensity_max': settings.get('intensity_max', 0.1)
+                print(settings)
+                print(f"[DEBUG] Raw zoom_settings content: {settings}")
+                
+                zoom_config = {
+                    'time_start': settings.get('x_min'),
+                    'time_end': settings.get('x_max'),
+                    'intensity_min': settings.get('y_min'),
+                    'intensity_max': settings.get('y_max')
                 }
+                print(f"[DEBUG] Processed zoom_settings: {zoom_config}")
+                return zoom_config
+        else:
+            print(f"[DEBUG] zoom_settings.json not found at {zoom_settings_path}")
     except Exception as e:
         print(f"Warning: Could not load zoom_settings.json: {e}", file=sys.stderr)
     return None
@@ -123,7 +133,7 @@ def calculate_envelope(data):
         return None
 
 class AscanViewer:
-    def __init__(self, file_data, json_dir, output_base_dir):
+    def __init__(self, file_data, json_dir, output_base_dir, waveform_type):
         # file_data can be either a list or dict
         if isinstance(file_data, dict):
             self.file_keys = list(file_data.keys())
@@ -161,6 +171,9 @@ class AscanViewer:
         # Display mode persistence
         self.show_peaks = False
         self.show_twts = False
+        
+        # Waveform type
+        self.waveform_type = waveform_type
         
         # Output directories for labeling results
         self.output_peak_dir = os.path.join(output_base_dir, 'result_use_peak')
@@ -299,7 +312,7 @@ class AscanViewer:
             self.current_time = time
             self.current_data = data
             self.current_dt = dt
-            self.ax.plot(time, data, label='A-scan', color='blue', linewidth=1.0)
+            self.ax.plot(time, data, label='A-scan', color='black', linewidth=1.0)
             
             # Plot envelope if enabled
             if self.show_envelope:
@@ -312,13 +325,17 @@ class AscanViewer:
             if reset_zoom:
                 if self.auto_zoom_enabled and self.zoom_settings:
                     # Apply auto zoom settings
+                    print(f"[DEBUG] update_plot: Applying auto zoom - time_start:{self.zoom_settings['time_start']}, time_end:{self.zoom_settings['time_end']}")
+                    print(f"[DEBUG] update_plot: Applying auto zoom - intensity_min:{self.zoom_settings['intensity_min']}, intensity_max:{self.zoom_settings['intensity_max']}")
                     self.ax.set_xlim(self.zoom_settings['time_start'], self.zoom_settings['time_end'])
                     self.ax.set_ylim(self.zoom_settings['intensity_min'], self.zoom_settings['intensity_max'])
                     self.text_box_start.set_val(str(self.zoom_settings['time_start']))
                     self.text_box_end.set_val(str(self.zoom_settings['time_end']))
                     self.text_box_int_min.set_val(str(self.zoom_settings['intensity_min']))
                     self.text_box_int_max.set_val(str(self.zoom_settings['intensity_max']))
+                    print(f"[DEBUG] update_plot: Auto zoom applied successfully")
                 else:
+                    print(f"[DEBUG] update_plot: Using default zoom (auto_zoom_enabled: {self.auto_zoom_enabled}, zoom_settings: {bool(self.zoom_settings)})")
                     self.ax.set_xlim(time[0], time[-1])
                     self.text_box_start.set_val('')
                     self.text_box_end.set_val('')
@@ -326,6 +343,7 @@ class AscanViewer:
                     self.text_box_int_max.set_val('')
             else:
                 # Restore saved zoom if available
+                print(f"[DEBUG] update_plot: Restoring saved zoom")
                 self.restore_zoom()
             
             # Apply persistent display modes after plotting data
@@ -382,12 +400,21 @@ class AscanViewer:
 
     def toggle_auto_zoom(self, label):
         self.auto_zoom_enabled = not self.auto_zoom_enabled
+        print(f"[DEBUG] Auto zoom toggled to: {self.auto_zoom_enabled}")
+        print(f"[DEBUG] Current zoom_settings: {self.zoom_settings}")
+        
         if self.auto_zoom_enabled and self.zoom_settings:
+            print(f"[DEBUG] Applying auto zoom settings...")
             self.text_box_start.set_val(str(self.zoom_settings['time_start']))
             self.text_box_end.set_val(str(self.zoom_settings['time_end']))
             self.text_box_int_min.set_val(str(self.zoom_settings['intensity_min']))
             self.text_box_int_max.set_val(str(self.zoom_settings['intensity_max']))
+            print(f"[DEBUG] Text boxes updated, calling zoom...")
             self.zoom(None)
+        elif self.auto_zoom_enabled and not self.zoom_settings:
+            print(f"[DEBUG] Auto zoom enabled but no zoom_settings available")
+        else:
+            print(f"[DEBUG] Auto zoom disabled")
     
     def toggle_envelope(self, label):
         """Toggle envelope display on/off"""
@@ -547,13 +574,23 @@ class AscanViewer:
                 if os.path.exists(model_path):
                     tw_travel_time, boundary_names = calculate_TWT(model_path)
                     self.current_twts = (tw_travel_time, boundary_names)
-                    
+
                     if tw_travel_time:
                         colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown']
                         for i, (twt, name) in enumerate(zip(tw_travel_time, boundary_names)):
-                            line = self.ax.axvline(twt, linestyle='--', color=colors[i % len(colors)], 
-                                                 label=f'{name}: {twt:.2f} ns')
-                            self.twt_lines.append(line)
+                            # Calculate TWT start and end for each individual TWT value
+                            if self.waveform_type == '1':
+                                TWT_start = twt - 1.544
+                                TWT_end = twt + 2.327
+                            else:
+                                TWT_start = twt - 1.255
+                                TWT_end = twt + 1.530
+                            
+                            region = self.ax.axvspan(TWT_start, TWT_end, color=colors[i % len(colors)], alpha=0.3)
+                            self.ax.add_patch(region)
+                            # line = self.ax.axvline(twt, linestyle='--', color=colors[i % len(colors)], 
+                            #                      label=f'{name}: {twt:.2f} ns')
+                            # self.twt_lines.append(line)
                         print(f"Auto-calculated {len(tw_travel_time)} TWTs.")
                     else:
                         print("Could not calculate TWTs for current data.")
@@ -792,6 +829,12 @@ def main():
         except Exception as e:
             print(f"エラー: ファイル読み込み中にエラーが発生しました: {e}")
             continue
+    
+    # Get waveform type from user input
+    waveform_type = input("波形タイプを選択してください (1: Bipolar, 2: Unipolar): ").strip()
+    if waveform_type not in ['1', '2']:
+        print("無効な波形タイプです。プログラムを終了します。")
+        sys.exit(1)
 
     # Get directories for configuration and output
     json_dir = os.path.dirname(json_file)
@@ -819,7 +862,7 @@ def main():
     print("- Top/Bottom ラジオボタン: エコー特性ラベル選択")
     print("- Save Labels ボタン: ラベル結果をJSON保存")
     
-    viewer = AscanViewer(file_data, json_dir, output_base_dir)
+    viewer = AscanViewer(file_data, json_dir, output_base_dir, waveform_type)
     
     print("\n既存ラベルの読み込み完了")
     if viewer.label_stats['labeled_count'] > 0:
