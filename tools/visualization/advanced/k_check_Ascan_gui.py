@@ -588,9 +588,8 @@ class AscanViewer:
                             
                             region = self.ax.axvspan(TWT_start, TWT_end, color=colors[i % len(colors)], alpha=0.3)
                             self.ax.add_patch(region)
-                            # line = self.ax.axvline(twt, linestyle='--', color=colors[i % len(colors)], 
-                            #                      label=f'{name}: {twt:.2f} ns')
-                            # self.twt_lines.append(line)
+                            line = self.ax.axvline(twt, linestyle='--', color=colors[i % len(colors)])
+                            self.twt_lines.append(line)
                         print(f"Auto-calculated {len(tw_travel_time)} TWTs.")
                     else:
                         print("Could not calculate TWTs for current data.")
