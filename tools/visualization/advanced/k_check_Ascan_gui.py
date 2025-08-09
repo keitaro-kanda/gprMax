@@ -179,25 +179,29 @@ class AscanViewer:
         self.output_peak_dir = os.path.join(output_base_dir, 'result_use_peak')
         self.output_twt_dir = os.path.join(output_base_dir, 'result_use_TWT')
         
-        # Labeling state for current file
-        self.top_echo_label = 1
-        self.bottom_echo_label = 1
+        # Labeling state for current file - separate for Peak and TWT modes
+        self.peak_top_label = 1
+        self.peak_bottom_label = 1
+        self.twt_top_label = 1
+        self.twt_bottom_label = 1
         
-        # Load existing labeling results
-        self.labeling_results = {
+        # Current labeling mode (either 'peak' or 'twt')
+        self.current_mode = 'peak'
+        
+        # Load existing labeling results - separate for Peak and TWT
+        self.peak_labeling_results = {
             'top': load_existing_labels(self.output_peak_dir, 'top'),
             'bottom': load_existing_labels(self.output_peak_dir, 'bottom')
         }
         
-        # Merge with TWT directory labels if different
-        if self.output_twt_dir != self.output_peak_dir:
-            twt_top_labels = load_existing_labels(self.output_twt_dir, 'top')
-            twt_bottom_labels = load_existing_labels(self.output_twt_dir, 'bottom')
-            self.labeling_results['top'].update(twt_top_labels)
-            self.labeling_results['bottom'].update(twt_bottom_labels)
+        self.twt_labeling_results = {
+            'top': load_existing_labels(self.output_twt_dir, 'top'),
+            'bottom': load_existing_labels(self.output_twt_dir, 'bottom')
+        }
         
-        # Label statistics
-        self.label_stats = self.calculate_label_stats()
+        # Label statistics - separate for Peak and TWT
+        self.peak_label_stats = self.calculate_label_stats('peak')
+        self.twt_label_stats = self.calculate_label_stats('twt')
         
         self.fig = plt.figure(figsize=(16, 10))
         plt.subplots_adjust(bottom=0.35, right=0.75)
@@ -245,13 +249,18 @@ class AscanViewer:
         self.twt_button = Button(ax_twt_btn, 'Show Estimated TWT')
         self.twt_button.on_clicked(self.run_twt_estimation)
         
+        # Mode switching button
+        ax_mode_btn = plt.axes([0.78, 0.30, 0.12, 0.04])
+        self.mode_button = Button(ax_mode_btn, 'Peak Mode')
+        self.mode_button.on_clicked(self.toggle_mode)
+        
         # Top Echo labeling
-        ax_top_label = plt.axes([0.78, 0.22, 0.15, 0.12])
+        ax_top_label = plt.axes([0.78, 0.20, 0.15, 0.08])
         self.top_radio = RadioButtons(ax_top_label, ['Top Label 1', 'Top Label 2', 'Top Label 3'])
         self.top_radio.on_clicked(self.set_top_label)
         
         # Bottom Echo labeling
-        ax_bottom_label = plt.axes([0.78, 0.06, 0.15, 0.12])
+        ax_bottom_label = plt.axes([0.78, 0.08, 0.15, 0.08])
         self.bottom_radio = RadioButtons(ax_bottom_label, ['Bottom Label 1', 'Bottom Label 2', 'Bottom Label 3'])
         self.bottom_radio.on_clicked(self.set_bottom_label)
         
@@ -264,6 +273,12 @@ class AscanViewer:
         ax_reset_btn = plt.axes([0.20, 0.06, 0.10, 0.04])
         self.reset_button = Button(ax_reset_btn, 'Reset Zoom')
         self.reset_button.on_clicked(self.reset_zoom)
+        
+        # Mode display text
+        ax_mode_text = plt.axes([0.78, 0.02, 0.15, 0.04])
+        ax_mode_text.axis('off')
+        self.mode_text = ax_mode_text.text(0.5, 0.5, 'Current: Peak Mode', ha='center', va='center', 
+                                         fontsize=10, bbox=dict(boxstyle='round', facecolor='lightblue'))
 
     def clear_overlays(self):
         if self.peak_scatter:
@@ -371,12 +386,26 @@ class AscanViewer:
         if self.current_config:
             title += f"\nConfig: Loaded"
         
-        # Add label info if available
+        # Add label info if available (for current mode)
         current_key = self.get_current_file_key()
-        if current_key in self.labeling_results['top'] or current_key in self.labeling_results['bottom']:
-            top_label = self.labeling_results['top'].get(current_key, [0, 0, 0])[2]
-            bottom_label = self.labeling_results['bottom'].get(current_key, [0, 0, 0])[2]
-            title += f"\nLabels: Top={top_label}, Bottom={bottom_label}"
+        if self.current_mode == 'peak':
+            labeling_results = self.peak_labeling_results
+            current_top_label = self.peak_top_label
+            current_bottom_label = self.peak_bottom_label
+            mode_text = "Peak"
+        else:
+            labeling_results = self.twt_labeling_results
+            current_top_label = self.twt_top_label
+            current_bottom_label = self.twt_bottom_label
+            mode_text = "TWT"
+            
+        # Show saved labels if exist, otherwise show current selection
+        if current_key in labeling_results['top'] or current_key in labeling_results['bottom']:
+            top_label = labeling_results['top'].get(current_key, [0, 0, 0])[2]
+            bottom_label = labeling_results['bottom'].get(current_key, [0, 0, 0])[2]
+            title += f"\n{mode_text} Labels (Saved): Top={top_label}, Bottom={bottom_label}"
+        else:
+            title += f"\n{mode_text} Labels (Current): Top={current_top_label}, Bottom={current_bottom_label}"
         
         self.ax.set_title(title)
         self.ax.set_xlabel("Time [ns]")
@@ -454,8 +483,8 @@ class AscanViewer:
         
         self.fig.canvas.draw()
     
-    def calculate_label_stats(self):
-        """Calculate statistics for labeled data"""
+    def calculate_label_stats(self, mode='peak'):
+        """Calculate statistics for labeled data for specified mode"""
         stats = {
             'total_files': len(self.file_list),
             'labeled_files': set(),
@@ -463,14 +492,19 @@ class AscanViewer:
             'bottom_labels': {1: 0, 2: 0, 3: 0}
         }
         
-        for key, data in self.labeling_results['top'].items():
+        if mode == 'peak':
+            labeling_results = self.peak_labeling_results
+        else:
+            labeling_results = self.twt_labeling_results
+        
+        for key, data in labeling_results['top'].items():
             stats['labeled_files'].add(key)
             if len(data) >= 3:
                 label = data[2]
                 if label in stats['top_labels']:
                     stats['top_labels'][label] += 1
         
-        for key, data in self.labeling_results['bottom'].items():
+        for key, data in labeling_results['bottom'].items():
             stats['labeled_files'].add(key)
             if len(data) >= 3:
                 label = data[2]
@@ -481,24 +515,37 @@ class AscanViewer:
         return stats
     
     def update_label_gui(self):
-        """Update GUI radio buttons based on current file's existing labels"""
+        """Update GUI radio buttons based on current file's existing labels and current mode"""
         current_key = self.get_current_file_key()
         
-        # Update top label radio button
-        if current_key in self.labeling_results['top']:
-            top_data = self.labeling_results['top'][current_key]
-            if len(top_data) >= 3:
-                self.top_echo_label = top_data[2]
-                # Update radio button selection (1-based to 0-based index)
-                self.top_radio.set_active(self.top_echo_label - 1)
-        
-        # Update bottom label radio button
-        if current_key in self.labeling_results['bottom']:
-            bottom_data = self.labeling_results['bottom'][current_key]
-            if len(bottom_data) >= 3:
-                self.bottom_echo_label = bottom_data[2]
-                # Update radio button selection (1-based to 0-based index)
-                self.bottom_radio.set_active(self.bottom_echo_label - 1)
+        if self.current_mode == 'peak':
+            labeling_results = self.peak_labeling_results
+            # Update current labels for peak mode
+            if current_key in labeling_results['top']:
+                top_data = labeling_results['top'][current_key]
+                if len(top_data) >= 3:
+                    self.peak_top_label = top_data[2]
+            if current_key in labeling_results['bottom']:
+                bottom_data = labeling_results['bottom'][current_key]
+                if len(bottom_data) >= 3:
+                    self.peak_bottom_label = bottom_data[2]
+            # Update radio button selections
+            self.top_radio.set_active(self.peak_top_label - 1)
+            self.bottom_radio.set_active(self.peak_bottom_label - 1)
+        else:
+            labeling_results = self.twt_labeling_results
+            # Update current labels for TWT mode
+            if current_key in labeling_results['top']:
+                top_data = labeling_results['top'][current_key]
+                if len(top_data) >= 3:
+                    self.twt_top_label = top_data[2]
+            if current_key in labeling_results['bottom']:
+                bottom_data = labeling_results['bottom'][current_key]
+                if len(bottom_data) >= 3:
+                    self.twt_bottom_label = bottom_data[2]
+            # Update radio button selections
+            self.top_radio.set_active(self.twt_top_label - 1)
+            self.bottom_radio.set_active(self.twt_bottom_label - 1)
     
     def zoom(self, event):
         try:
@@ -580,11 +627,11 @@ class AscanViewer:
                         for i, (twt, name) in enumerate(zip(tw_travel_time, boundary_names)):
                             # Calculate TWT start and end for each individual TWT value
                             if self.waveform_type == '1':
-                                TWT_start = twt - 1.544
-                                TWT_end = twt + 2.327
+                                TWT_start = twt - 0.365 # (2.57 - 1.84) / 2
+                                TWT_end = twt + 0.345 # (3.26 - 2.57) / 2
                             else:
-                                TWT_start = twt - 1.255
-                                TWT_end = twt + 1.530
+                                TWT_start = twt - 0.29 # (2.07 - 1.49) / 2
+                                TWT_end = twt + 0.28 # (2.63 - 2.07) / 2
                             
                             region = self.ax.axvspan(TWT_start, TWT_end, color=colors[i % len(colors)], alpha=0.3)
                             self.ax.add_patch(region)
@@ -606,21 +653,50 @@ class AscanViewer:
         if self.show_peaks or self.show_twts or self.show_envelope:
             self.ax.legend()
     
+    def toggle_mode(self, event):
+        """Toggle between Peak and TWT labeling modes"""
+        if self.current_mode == 'peak':
+            self.current_mode = 'twt'
+            self.mode_button.label.set_text('TWT Mode')
+            self.mode_text.set_text('Current: TWT Mode')
+            self.mode_text.set_bbox(dict(boxstyle='round', facecolor='lightgreen'))
+        else:
+            self.current_mode = 'peak'
+            self.mode_button.label.set_text('Peak Mode')
+            self.mode_text.set_text('Current: Peak Mode')
+            self.mode_text.set_bbox(dict(boxstyle='round', facecolor='lightblue'))
+        
+        # Update GUI to reflect current mode's labels
+        self.update_label_gui()
+        self.fig.canvas.draw()
+    
     def set_top_label(self, label):
+        label_num = 1
         if 'Label 1' in label:
-            self.top_echo_label = 1
+            label_num = 1
         elif 'Label 2' in label:
-            self.top_echo_label = 2
+            label_num = 2
         elif 'Label 3' in label:
-            self.top_echo_label = 3
+            label_num = 3
+        
+        if self.current_mode == 'peak':
+            self.peak_top_label = label_num
+        else:
+            self.twt_top_label = label_num
     
     def set_bottom_label(self, label):
+        label_num = 1
         if 'Label 1' in label:
-            self.bottom_echo_label = 1
+            label_num = 1
         elif 'Label 2' in label:
-            self.bottom_echo_label = 2
+            label_num = 2
         elif 'Label 3' in label:
-            self.bottom_echo_label = 3
+            label_num = 3
+        
+        if self.current_mode == 'peak':
+            self.peak_bottom_label = label_num
+        else:
+            self.twt_bottom_label = label_num
     
     def get_current_file_key(self):
         if self.has_keys and self.file_keys:
@@ -658,17 +734,27 @@ class AscanViewer:
         current_key = self.get_current_file_key()
         height, width = self.get_geometry_from_filename()
         
+        # Get current labels based on mode
+        if self.current_mode == 'peak':
+            current_top_label = self.peak_top_label
+            current_bottom_label = self.peak_bottom_label
+            labeling_results = self.peak_labeling_results
+        else:
+            current_top_label = self.twt_top_label
+            current_bottom_label = self.twt_bottom_label
+            labeling_results = self.twt_labeling_results
+        
         # Check if labels have changed
         old_top_label = None
         old_bottom_label = None
-        if current_key in self.labeling_results['top']:
-            old_top_label = self.labeling_results['top'][current_key][2]
-        if current_key in self.labeling_results['bottom']:
-            old_bottom_label = self.labeling_results['bottom'][current_key][2]
+        if current_key in labeling_results['top']:
+            old_top_label = labeling_results['top'][current_key][2]
+        if current_key in labeling_results['bottom']:
+            old_bottom_label = labeling_results['bottom'][current_key][2]
         
-        # Update labeling results
-        self.labeling_results['top'][current_key] = [height, width, self.top_echo_label]
-        self.labeling_results['bottom'][current_key] = [height, width, self.bottom_echo_label]
+        # Update labeling results for current mode
+        labeling_results['top'][current_key] = [height, width, current_top_label]
+        labeling_results['bottom'][current_key] = [height, width, current_bottom_label]
         
         # Create output directories if they don't exist
         os.makedirs(self.output_peak_dir, exist_ok=True)
@@ -676,51 +762,71 @@ class AscanViewer:
         
         # Save to JSON files with backup and incremental update
         try:
-            # Define file paths
-            top_peak_path = os.path.join(self.output_peak_dir, 'top_echo_labels.json')
-            top_twt_path = os.path.join(self.output_twt_dir, 'top_echo_labels.json')
-            bottom_peak_path = os.path.join(self.output_peak_dir, 'bottom_echo_labels.json')
-            bottom_twt_path = os.path.join(self.output_twt_dir, 'bottom_echo_labels.json')
+            if self.current_mode == 'peak':
+                # Save Peak mode labels
+                top_peak_path = os.path.join(self.output_peak_dir, 'top_echo_labels.json')
+                bottom_peak_path = os.path.join(self.output_peak_dir, 'bottom_echo_labels.json')
+                
+                # Create backups
+                create_backup(top_peak_path)
+                create_backup(bottom_peak_path)
+                
+                # Load existing data and merge
+                existing_top_peak = load_existing_labels(self.output_peak_dir, 'top')
+                existing_bottom_peak = load_existing_labels(self.output_peak_dir, 'bottom')
+                
+                # Update only current file's labels
+                existing_top_peak[current_key] = [height, width, current_top_label]
+                existing_bottom_peak[current_key] = [height, width, current_bottom_label]
+                
+                # Save updated data
+                with open(top_peak_path, 'w') as f:
+                    json.dump(existing_top_peak, f, indent=2)
+                with open(bottom_peak_path, 'w') as f:
+                    json.dump(existing_bottom_peak, f, indent=2)
+                    
+                mode_text = "Peak"
+            else:
+                # Save TWT mode labels
+                top_twt_path = os.path.join(self.output_twt_dir, 'top_echo_labels.json')
+                bottom_twt_path = os.path.join(self.output_twt_dir, 'bottom_echo_labels.json')
+                
+                # Create backups
+                create_backup(top_twt_path)
+                create_backup(bottom_twt_path)
+                
+                # Load existing data and merge
+                existing_top_twt = load_existing_labels(self.output_twt_dir, 'top')
+                existing_bottom_twt = load_existing_labels(self.output_twt_dir, 'bottom')
+                
+                # Update only current file's labels
+                existing_top_twt[current_key] = [height, width, current_top_label]
+                existing_bottom_twt[current_key] = [height, width, current_bottom_label]
+                
+                # Save updated data
+                with open(top_twt_path, 'w') as f:
+                    json.dump(existing_top_twt, f, indent=2)
+                with open(bottom_twt_path, 'w') as f:
+                    json.dump(existing_bottom_twt, f, indent=2)
+                    
+                mode_text = "TWT"
             
-            # Create backups
-            create_backup(top_peak_path)
-            create_backup(top_twt_path)
-            create_backup(bottom_peak_path)
-            create_backup(bottom_twt_path)
-            
-            # Load existing data and merge
-            existing_top_peak = load_existing_labels(self.output_peak_dir, 'top')
-            existing_top_twt = load_existing_labels(self.output_twt_dir, 'top')
-            existing_bottom_peak = load_existing_labels(self.output_peak_dir, 'bottom')
-            existing_bottom_twt = load_existing_labels(self.output_twt_dir, 'bottom')
-            
-            # Update only current file's labels
-            existing_top_peak[current_key] = [height, width, self.top_echo_label]
-            existing_top_twt[current_key] = [height, width, self.top_echo_label]
-            existing_bottom_peak[current_key] = [height, width, self.bottom_echo_label]
-            existing_bottom_twt[current_key] = [height, width, self.bottom_echo_label]
-            
-            # Save updated data
-            with open(top_peak_path, 'w') as f:
-                json.dump(existing_top_peak, f, indent=2)
-            with open(top_twt_path, 'w') as f:
-                json.dump(existing_top_twt, f, indent=2)
-            with open(bottom_peak_path, 'w') as f:
-                json.dump(existing_bottom_peak, f, indent=2)
-            with open(bottom_twt_path, 'w') as f:
-                json.dump(existing_bottom_twt, f, indent=2)
-            
-            # Update statistics
-            self.label_stats = self.calculate_label_stats()
+            # Update statistics for current mode
+            if self.current_mode == 'peak':
+                self.peak_label_stats = self.calculate_label_stats('peak')
+                current_stats = self.peak_label_stats
+            else:
+                self.twt_label_stats = self.calculate_label_stats('twt')
+                current_stats = self.twt_label_stats
             
             # Show save status
             if old_top_label is not None or old_bottom_label is not None:
-                print(f"Labels updated for {current_key}: Top={old_top_label}→{self.top_echo_label}, Bottom={old_bottom_label}→{self.bottom_echo_label}")
+                print(f"{mode_text} labels updated for {current_key}: Top={old_top_label}→{current_top_label}, Bottom={old_bottom_label}→{current_bottom_label}")
             else:
-                print(f"Labels saved for {current_key}: Top={self.top_echo_label}, Bottom={self.bottom_echo_label}")
+                print(f"{mode_text} labels saved for {current_key}: Top={current_top_label}, Bottom={current_bottom_label}")
             
-            # Show progress
-            print(f"Progress: {self.label_stats['labeled_count']}/{self.label_stats['total_files']} files labeled")
+            # Show progress for current mode
+            print(f"{mode_text} Progress: {current_stats['labeled_count']}/{current_stats['total_files']} files labeled")
             
         except Exception as e:
             print(f"Error saving labels: {e}", file=sys.stderr)
@@ -858,18 +964,33 @@ def main():
     print("- Reset Zoom ボタン: ズーム範囲をリセット")
     print("- Detect Peaks ボタン: ピーク検出")
     print("- Show Estimated TWT ボタン: 推定TWT表示")
-    print("- Top/Bottom ラジオボタン: エコー特性ラベル選択")
-    print("- Save Labels ボタン: ラベル結果をJSON保存")
+    print("- Peak Mode / TWT Mode ボタン: ラベリングモード切り替え")
+    print("- Top/Bottom ラジオボタン: エコー特性ラベル選択 (現在のモード用)")
+    print("- Save Labels ボタン: 現在のモードのラベル結果をJSON保存")
     
     viewer = AscanViewer(file_data, json_dir, output_base_dir, waveform_type)
     
     print("\n既存ラベルの読み込み完了")
-    if viewer.label_stats['labeled_count'] > 0:
-        print(f"ラベル統計: {viewer.label_stats['labeled_count']}/{viewer.label_stats['total_files']} ファイルがラベル付け済み")
-        print(f"Topラベル: {dict(viewer.label_stats['top_labels'])}")
-        print(f"Bottomラベル: {dict(viewer.label_stats['bottom_labels'])}")
+    
+    # Show Peak mode statistics
+    print("\n=== Peak Mode Statistics ===")
+    if viewer.peak_label_stats['labeled_count'] > 0:
+        print(f"Peak ラベル統計: {viewer.peak_label_stats['labeled_count']}/{viewer.peak_label_stats['total_files']} ファイルがラベル付け済み")
+        print(f"Peak Topラベル: {dict(viewer.peak_label_stats['top_labels'])}")
+        print(f"Peak Bottomラベル: {dict(viewer.peak_label_stats['bottom_labels'])}")
     else:
-        print("ラベル付け済みファイルはありません")
+        print("Peak: ラベル付け済みファイルはありません")
+    
+    # Show TWT mode statistics
+    print("\n=== TWT Mode Statistics ===")
+    if viewer.twt_label_stats['labeled_count'] > 0:
+        print(f"TWT ラベル統計: {viewer.twt_label_stats['labeled_count']}/{viewer.twt_label_stats['total_files']} ファイルがラベル付け済み")
+        print(f"TWT Topラベル: {dict(viewer.twt_label_stats['top_labels'])}")
+        print(f"TWT Bottomラベル: {dict(viewer.twt_label_stats['bottom_labels'])}")
+    else:
+        print("TWT: ラベル付け済みファイルはありません")
+    
+    print("\n現在のモード: Peak Mode (ボタンで切り替え可能)")
     
     plt.show()
 
