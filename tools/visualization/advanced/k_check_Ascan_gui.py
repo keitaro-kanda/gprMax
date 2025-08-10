@@ -8,6 +8,15 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import TextBox, Button, CheckButtons, RadioButtons
 from scipy.signal import hilbert
 
+# Try to import tkinter - if not available, use fallback
+try:
+    import tkinter as tk
+    from tkinter import messagebox
+    TKINTER_AVAILABLE = True
+except (ImportError, ModuleNotFoundError):
+    TKINTER_AVAILABLE = False
+    print("Warning: tkinter is not available. GUI mode selection will use console input.")
+
 # Add project root to Python path for VS Code execution
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, '../../..'))
@@ -132,8 +141,130 @@ def calculate_envelope(data):
         print(f"Warning: Could not calculate envelope: {e}", file=sys.stderr)
         return None
 
+def show_mode_selection_dialog():
+    """
+    Show initial mode selection dialog using tkinter if available, otherwise use console input.
+    Returns: 'peak', 'twt', or None (if cancelled)
+    """
+    def console_mode_selection():
+        """Console fallback for mode selection"""
+        print("\n=== 初期保存モード選択 ===")
+        print("保存モードを選択してください:")
+        print("1. Peak Mode: ピーク検出結果を基にしたラベリング")
+        print("2. TWT Mode: TWT推定結果を基にしたラベリング")
+        print("3. quit: プログラムを終了")
+        
+        while True:
+            try:
+                choice = input("\n選択してください (1/2/3 または peak/twt/quit): ").strip().lower()
+                
+                if choice in ['1', 'peak']:
+                    return 'peak'
+                elif choice in ['2', 'twt']:
+                    return 'twt'
+                elif choice in ['3', 'quit']:
+                    return None
+                else:
+                    print("無効な選択です。1, 2, 3 または peak, twt, quit を入力してください。")
+            except (EOFError, KeyboardInterrupt):
+                print("\n操作がキャンセルされました。")
+                return None
+    
+    # Check if tkinter is available
+    if not TKINTER_AVAILABLE:
+        print("注意: GUI ダイアログが利用できません。コンソールモードで選択してください。")
+        return console_mode_selection()
+    
+    # Try to create GUI dialog
+    class ModeSelectionDialog:
+        def __init__(self):
+            self.result = None
+            self.root = tk.Tk()
+            self.root.title("初期モード選択")
+            self.root.geometry("400x200")
+            self.root.resizable(False, False)
+            
+            # Center the window
+            try:
+                self.root.eval('tk::PlaceWindow . center')
+            except tk.TclError:
+                # Fallback centering for older tkinter versions
+                self.root.update_idletasks()
+                x = (self.root.winfo_screenwidth() - self.root.winfo_width()) // 2
+                y = (self.root.winfo_screenheight() - self.root.winfo_height()) // 2
+                self.root.geometry(f"+{x}+{y}")
+            
+            # Make it topmost and modal
+            self.root.attributes('-topmost', True)
+            self.root.grab_set()
+            
+            self.setup_ui()
+            
+        def setup_ui(self):
+            # Title label
+            title_label = tk.Label(self.root, text="保存モードを選択してください", 
+                                 font=("Arial", 14, "bold"))
+            title_label.pack(pady=20)
+            
+            # Description label
+            desc_label = tk.Label(self.root, 
+                                text="Peak Mode: ピーク検出結果を基にしたラベリング\nTWT Mode: TWT推定結果を基にしたラベリング",
+                                font=("Arial", 10))
+            desc_label.pack(pady=10)
+            
+            # Button frame
+            button_frame = tk.Frame(self.root)
+            button_frame.pack(pady=20)
+            
+            # Peak Mode button
+            peak_button = tk.Button(button_frame, text="Peak Mode", 
+                                  font=("Arial", 12), width=12, height=2,
+                                  bg="lightblue", command=self.select_peak)
+            peak_button.pack(side=tk.LEFT, padx=10)
+            
+            # TWT Mode button
+            twt_button = tk.Button(button_frame, text="TWT Mode", 
+                                 font=("Arial", 12), width=12, height=2,
+                                 bg="lightgreen", command=self.select_twt)
+            twt_button.pack(side=tk.LEFT, padx=10)
+            
+            # Cancel button
+            cancel_button = tk.Button(self.root, text="キャンセル", 
+                                    font=("Arial", 10), width=10,
+                                    command=self.cancel)
+            cancel_button.pack(pady=10)
+            
+        def select_peak(self):
+            self.result = 'peak'
+            self.root.destroy()
+            
+        def select_twt(self):
+            self.result = 'twt'
+            self.root.destroy()
+            
+        def cancel(self):
+            self.result = None
+            self.root.destroy()
+            
+        def show(self):
+            try:
+                self.root.mainloop()
+                return self.result
+            except Exception as e:
+                print(f"GUI ダイアログでエラーが発生しました: {e}")
+                self.root.destroy()
+                raise
+    
+    try:
+        dialog = ModeSelectionDialog()
+        return dialog.show()
+    except Exception as e:
+        print(f"Warning: GUI ダイアログを表示できませんでした: {e}")
+        print("コンソールモードに切り替えます...")
+        return console_mode_selection()
+
 class AscanViewer:
-    def __init__(self, file_data, json_dir, output_base_dir, waveform_type):
+    def __init__(self, file_data, json_dir, output_base_dir, waveform_type, initial_mode='peak'):
         # file_data can be either a list or dict
         if isinstance(file_data, dict):
             self.file_keys = list(file_data.keys())
@@ -186,7 +317,7 @@ class AscanViewer:
         self.twt_bottom_label = 1
         
         # Current labeling mode (either 'peak' or 'twt')
-        self.current_mode = 'peak'
+        self.current_mode = initial_mode
         
         # Load existing labeling results - separate for Peak and TWT
         self.peak_labeling_results = {
@@ -251,7 +382,8 @@ class AscanViewer:
         
         # Mode switching button
         ax_mode_btn = plt.axes([0.78, 0.30, 0.12, 0.04])
-        self.mode_button = Button(ax_mode_btn, 'Peak Mode')
+        initial_button_text = 'Peak Mode' if self.current_mode == 'peak' else 'TWT Mode'
+        self.mode_button = Button(ax_mode_btn, initial_button_text)
         self.mode_button.on_clicked(self.toggle_mode)
         
         # Top Echo labeling
@@ -277,8 +409,10 @@ class AscanViewer:
         # Mode display text
         ax_mode_text = plt.axes([0.78, 0.02, 0.15, 0.04])
         ax_mode_text.axis('off')
-        self.mode_text = ax_mode_text.text(0.5, 0.5, 'Current: Peak Mode', ha='center', va='center', 
-                                         fontsize=10, bbox=dict(boxstyle='round', facecolor='lightblue'))
+        initial_mode_text = 'Current: Peak Mode' if self.current_mode == 'peak' else 'Current: TWT Mode'
+        initial_color = 'lightblue' if self.current_mode == 'peak' else 'lightgreen'
+        self.mode_text = ax_mode_text.text(0.5, 0.5, initial_mode_text, ha='center', va='center', 
+                                         fontsize=10, bbox=dict(boxstyle='round', facecolor=initial_color))
 
     def clear_overlays(self):
         if self.peak_scatter:
@@ -890,6 +1024,23 @@ class AscanViewer:
 def main():
     print("=== A-scan GUI Viewer ===")
     
+    # Show initial mode selection dialog
+    if TKINTER_AVAILABLE:
+        print("初期保存モードを選択してください...")
+    
+    try:
+        selected_mode = show_mode_selection_dialog()
+    except Exception as e:
+        print(f"エラー: モード選択中に問題が発生しました: {e}")
+        print("プログラムを終了します。")
+        sys.exit(1)
+    
+    if selected_mode is None:
+        print("モード選択がキャンセルされました。プログラムを終了します。")
+        sys.exit(0)
+    
+    print(f"選択されたモード: {selected_mode.upper()} Mode")
+    
     # Get JSON file path from user input
     while True:
         json_file = input("output_file_paths.jsonファイルのパスを入力してください (終了する場合は 'quit' を入力): ").strip()
@@ -968,7 +1119,7 @@ def main():
     print("- Top/Bottom ラジオボタン: エコー特性ラベル選択 (現在のモード用)")
     print("- Save Labels ボタン: 現在のモードのラベル結果をJSON保存")
     
-    viewer = AscanViewer(file_data, json_dir, output_base_dir, waveform_type)
+    viewer = AscanViewer(file_data, json_dir, output_base_dir, waveform_type, selected_mode)
     
     print("\n既存ラベルの読み込み完了")
     
@@ -990,7 +1141,7 @@ def main():
     else:
         print("TWT: ラベル付け済みファイルはありません")
     
-    print("\n現在のモード: Peak Mode (ボタンで切り替え可能)")
+    print(f"\n現在の初期モード: {selected_mode.upper()} Mode (ボタンで切り替え可能)")
     
     plt.show()
 
