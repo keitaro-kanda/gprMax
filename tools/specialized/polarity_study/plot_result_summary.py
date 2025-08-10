@@ -70,11 +70,11 @@ er_regolith = 3.0
 er_rock = 9.0
 wavelength = 60 # [cm]
 # 光路長の計算
-L_top = h_antenna * 2 + d_rock * np.sqrt(er_regolith) * 2
-L_bottom = h_antenna * 2 + d_rock * np.sqrt(er_regolith) * 2 + h_rock * np.sqrt(er_rock) * 2
+L_top = h_antenna  + d_rock * np.sqrt(er_regolith)
+L_bottom = h_antenna + d_rock * np.sqrt(er_regolith) + h_rock * np.sqrt(er_rock) # [cm]
 # Fresnel半径の計算
-r_fresnel_top = np.sqrt(wavelength * L_top) / 2 # [cm]
-r_fresnel_bottom = np.sqrt(wavelength * L_bottom) / 2 # [cm]
+r_fresnel_top = np.sqrt(wavelength * L_top / 2) # [cm]
+r_fresnel_bottom = np.sqrt(wavelength * L_bottom / 2) # [cm]
 
 # r_fresnel_multi_medium = np.sqrt(wavelength * h_antenna * 2 + wavelength / np.sqrt(er_regolith) * d_rock * np.sqrt(er_regolith) * 2 + wavelength / np.sqrt(er_rock) * h_rock * np.sqrt(er_rock)) / 2
 
