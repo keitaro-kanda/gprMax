@@ -760,10 +760,10 @@ class AscanViewer:
                         colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown']
                         for i, (twt, name) in enumerate(zip(tw_travel_time, boundary_names)):
                             # Calculate TWT start and end for each individual TWT value
-                            if self.waveform_type == '1':
+                            if self.waveform_type == '1': #Bipolar (Ricker)
                                 TWT_start = twt - 0.365 # (2.57 - 1.84) / 2
                                 TWT_end = twt + 0.345 # (3.26 - 2.57) / 2
-                            else:
+                            else: # Unipolar (LPR-like)
                                 TWT_start = twt - 0.29 # (2.07 - 1.49) / 2
                                 TWT_end = twt + 0.28 # (2.63 - 2.07) / 2
                             
