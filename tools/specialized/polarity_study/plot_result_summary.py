@@ -62,9 +62,9 @@ norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5, 3.5], ncolors=3)
 ### Fresnel半径の計算
 # 各種パラメータの設定
 h_antenna = 30 # [cm]
-d_rock = np.ones(300) * 200 # [cm]
+d_rock = np.ones(316) * 200 # [cm]
 print(d_rock.shape)
-h_rock = np.arange(0, 300, 1.0) # [cm]
+h_rock = np.arange(0, 316, 1.0) # [cm]
 print(h_rock.shape)
 er_regolith = 3.0
 er_rock = 9.0
@@ -81,20 +81,28 @@ r_fresnel_bottom = np.sqrt(wavelength * L_bottom / 2) # [cm]
 
 ### プロット作成
 fig, ax = plt.subplots(figsize=(8, 6))
-im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm,)
+
+# extentを設定してbinの中心が実際のcm値になるようにする
+width_cm = np.array(unique_widths) * 100  # m to cm
+height_cm = np.array(unique_heights) * 100  # m to cm
+width_step = width_cm[1] - width_cm[0] if len(width_cm) > 1 else 1
+height_step = height_cm[1] - height_cm[0] if len(height_cm) > 1 else 1
+
+extent = [width_cm[0] - width_step/2, width_cm[-1] + width_step/2,
+          height_cm[0] - height_step/2, height_cm[-1] + height_step/2]
+
+im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm, extent=extent)
 
 # 軸ラベルとタイトル（m単位の値をcm単位に変換して表示）
 ax.set_xlabel("Rock width (cm)", fontsize=20)
 ax.set_ylabel("Rock height (cm)", fontsize=20)
 ax.tick_params(labelsize=16)
 
-# 軸目盛りの設定（m単位の値をcmに変換して表示）
-xtick_labels = [f"{w*100:.0f}" for w in unique_widths]
-ytick_labels = [f"{h*100:.0f}" for h in unique_heights]
-ax.set_xticks(np.arange(len(unique_widths)))
-ax.set_xticklabels(xtick_labels)
-ax.set_yticks(np.arange(len(unique_heights)))
-ax.set_yticklabels(ytick_labels)
+# 軸目盛りの設定（実際のcm値をtick位置に設定）
+ax.set_xticks(width_cm)
+ax.set_xticklabels([f"{w:.0f}" for w in width_cm])
+ax.set_yticks(height_cm)
+ax.set_yticklabels([f"{h:.0f}" for h in height_cm])
 
 # カラーバーの作成：make_axes_locatableを利用してメインプロットの高さに合わせる
 divider = make_axes_locatable(ax)
@@ -120,8 +128,10 @@ plt.show()
 
 ### Fresnel半径を含めたプロット
 fig, ax = plt.subplots(figsize=(8, 6))
+
+# 2番目のプロットでも同じextent設定を使用
 im = ax.imshow(grid, origin="lower", interpolation="none", cmap=cmap, norm=norm,
-                extent = [0, w*100, 0, h*100])
+                extent=extent)
 # ax.vlines(r_fresnel_top, ymin=0, ymax=300,  color='w', linestyle='-')
 if top_or_bottom == 'top':
     ax.plot(r_fresnel_top, h_rock, color='w', linestyle='-.')
@@ -134,13 +144,14 @@ ax.set_xlabel("Rock width (cm)", fontsize=20)
 ax.set_ylabel("Rock height (cm)", fontsize=20)
 ax.tick_params(labelsize=16)
 
-# 軸目盛りの設定（m単位の値をcmに変換して表示）
-# xtick_labels = [f"{w*100:.0f}" for w in unique_widths]
-# ytick_labels = [f"{h*100:.0f}" for h in unique_heights]
-# ax.set_xticks(np.arange(len(unique_widths)))
-# ax.set_xticklabels(xtick_labels)
-# ax.set_yticks(np.arange(len(unique_heights)))
-# ax.set_yticklabels(ytick_labels)
+# 軸目盛りの設定（実際のcm値をtick位置に設定）
+ax.set_xticks(width_cm)
+ax.set_xticklabels([f"{w:.0f}" for w in width_cm])
+ax.set_yticks(height_cm)
+ax.set_yticklabels([f"{h:.0f}" for h in height_cm])
+
+ax.set_xlim([width_cm[0] - width_step/2, width_cm[-1] + width_step/2])
+ax.set_ylim([height_cm[0] - height_step/2, height_cm[-1] + height_step/2])
 
 # カラーバーの作成：make_axes_locatableを利用してメインプロットの高さに合わせる
 divider = make_axes_locatable(ax)
