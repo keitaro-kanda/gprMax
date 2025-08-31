@@ -23,45 +23,59 @@ data = np.array([[cat_to_int[c] for c in row] for row in results])
 # 整数配列に変換
 data = np.array([[cat_to_int[c] for c in row] for row in results])
 
-# 描画
-fig, ax = plt.subplots(figsize=(12, 8))
-im = ax.imshow(data, aspect='auto', cmap=plt.matplotlib.colors.ListedColormap(colors),
-                vmin=0, vmax=3, origin='upper')
+# 描画 - 縦に4つのsubplotを作成
+fig, axes = plt.subplots(4, 1, figsize=(12, 6), sharex=True)
 
-# --- メジャー・ティックとラベルはセル中央に ---
-ax.set_xticks(np.arange(len(sizes)))
-ax.set_xticklabels(sizes, fontsize=16)
-ax.set_xlabel('Rock size [cm]', fontsize=20)
+# 各subplotに1x15のデータを表示
+for i, ax in enumerate(axes):
+    # 1x15のデータを表示（1行のデータを2D配列として渡すために reshape）
+    im = ax.imshow(data[i:i+1], aspect='auto', cmap=plt.matplotlib.colors.ListedColormap(colors),
+                   vmin=0, vmax=3, origin='upper')
 
-ax.set_yticks(np.arange(len(model_names)))
-ax.set_yticklabels(model_names, fontsize=20)
+    # --- メジャー・ティックとラベルはセル中央に ---
+    ax.set_xticks(np.arange(len(sizes)))
+    
+    # X軸ラベルは最下段のsubplotのみ表示
+    if i == len(axes) - 1:
+        ax.set_xticklabels(sizes, fontsize=16)
+        ax.set_xlabel('Rock size / wavelength in the rock', fontsize=20)
 
-# --- マイナー・ティックをビンの端に設定 --- 
-# x 軸
-N = len(sizes)
-x_edge = np.arange(N+1) - 0.5
-ax.xaxis.set_minor_locator(FixedLocator(x_edge))
-# y 軸
-M = len(model_names)
-y_edge = np.arange(M+1) - 0.5
-ax.yaxis.set_minor_locator(FixedLocator(y_edge))
+        # 波長で規格化した岩石サイズを軸ラベルに設定
+        wavelength_in_rock = 3e8 / np.sqrt(9) / 500e6 * 100  # cm
+        ax.set_xticklabels([f"{s / wavelength_in_rock:.2f}" for s in sizes], fontsize=16)
+    else:
+        ax.set_xticklabels([])
+    
+    # Y軸は各subplotでモデル名をタイトルとして表示
+    ax.set_yticks([0])
+    ax.set_yticklabels([model_names[i]], fontsize=20)
+    ax.set_ylabel('')
 
-# --- グリッド設定 --- 
-# メジャー・グリッドはすべてオフ
-ax.grid(which='major', visible=False)
-# マイナー・グリッドのみ描画（ビン境界）
-ax.grid(which='minor', axis='both', color='white', linewidth=1, linestyle='-.')
+    # --- マイナー・ティックをビンの端に設定 --- 
+    # x 軸
+    N = len(sizes)
+    x_edge = np.arange(N+1) - 0.5
+    ax.xaxis.set_minor_locator(FixedLocator(x_edge))
+    # y 軸（各subplotでは1行のみなので0.5と-0.5）
+    y_edge = np.array([-0.5, 0.5])
+    ax.yaxis.set_minor_locator(FixedLocator(y_edge))
 
-# --- 凡例 ---
+    # --- グリッド設定 --- 
+    # メジャー・グリッドはすべてオフ
+    ax.grid(which='major', visible=False)
+    # マイナー・グリッドのみ描画（ビン境界）
+    ax.grid(which='minor', axis='both', color='white', linewidth=1, linestyle='-.')
+
+# --- 凡例を全体の下部に配置 ---
 labels = ['Not detected', 'One echo', 'One echo with dipression',
             'Two echoes']
 legend_patches = [Patch(color=colors[i], label=labels[i]) for i in range(len(labels))]
-ax.legend(
+fig.legend(
     handles=legend_patches,
     loc='upper center',            # 凡例の基準点を上中央に
-    bbox_to_anchor=(0.4, -0.12),   # プロット域の下中央 (x=0.5, y=-0.15)
+    bbox_to_anchor=(0.5, 0.02),    # 全体図の下部中央
     ncol=4,                        # アイテムを横4列に
-    frameon=False,                  # 枠線なし、必要に応じて True に
+    frameon=False,                 # 枠線なし
     fontsize=16
 )
 
