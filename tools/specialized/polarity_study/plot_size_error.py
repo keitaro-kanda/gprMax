@@ -71,8 +71,8 @@ fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
 # true size VS estimated size
 ax[0].plot(LPR_circle[:, 0], LPR_circle[:, 1], label='Bipolar-circle', color='r', linestyle='-', marker='o')
 ax[0].plot(LPR_square[:, 0], LPR_square[:, 1], label='Bipolar-square', color='r', linestyle='--', marker='o')
-ax[0].plot(Bipolar_circle[:, 0], Bipolar_circle[:, 1], label='LPR-circle', color='b', linestyle='-', marker='o')
-ax[0].plot(Bipolar_square[:, 0], Bipolar_square[:, 1], label='LPR-square', color='b', linestyle='--', marker='o')
+ax[0].plot(Bipolar_circle[:, 0], Bipolar_circle[:, 1], label='Unipolar-circle', color='b', linestyle='-', marker='o')
+ax[0].plot(Bipolar_square[:, 0], Bipolar_square[:, 1], label='Unipolar-square', color='b', linestyle='--', marker='o')
 ax[0].plot(x, y, label='y = x', color='k', linestyle='-')
 
 ax[0].set_xlabel('True size [cm]', fontsize=20)
@@ -84,8 +84,8 @@ ax[0].grid()
 # True size VS error
 ax[1].plot(LPR_circle[:, 0], np.abs(LPR_circle[:, 2]), label='Bipolar-circle', color='r', linestyle='-', marker='o')
 ax[1].plot(LPR_square[:, 0], np.abs(LPR_square[:, 2]), label='Bipolar-square', color='r', linestyle='--', marker='o')
-ax[1].plot(Bipolar_circle[:, 0], np.abs(Bipolar_circle[:, 2]), label='LPR-circle', color='b', linestyle='-', marker='o')
-ax[1].plot(Bipolar_square[:, 0], np.abs(Bipolar_square[:, 2]), label='LPR-square', color='b', linestyle='--', marker='o')
+ax[1].plot(Bipolar_circle[:, 0], np.abs(Bipolar_circle[:, 2]), label='Unipolar-circle', color='b', linestyle='-', marker='o')
+ax[1].plot(Bipolar_square[:, 0], np.abs(Bipolar_square[:, 2]), label='Unipolar-square', color='b', linestyle='--', marker='o')
 
 ax[1].set_xlabel('True size [cm]', fontsize=20)
 ax[1].set_ylabel('Error [%]', fontsize=20)
