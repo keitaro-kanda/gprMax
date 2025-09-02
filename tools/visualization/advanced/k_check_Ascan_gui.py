@@ -1101,8 +1101,56 @@ class AscanViewer:
             # Show progress for current mode
             print(f"{mode_text} Progress: {current_stats['labeled_count']}/{current_stats['total_files']} files labeled")
             
+            # Save label count summary for current mode
+            self.save_label_count_summary()
+            
         except Exception as e:
             print(f"Error saving labels: {e}", file=sys.stderr)
+
+    def save_label_count_summary(self):
+        """Save label count summary JSON file for current mode"""
+        try:
+            if self.current_mode == 'peak':
+                output_dir = self.output_peak_dir
+                stats = self.peak_label_stats
+                mode_text = "Peak"
+            elif self.current_mode == 'twt':
+                output_dir = self.output_twt_dir
+                stats = self.twt_label_stats
+                mode_text = "TWT"
+            else:  # two-peaks
+                output_dir = self.output_two_peaks_dir
+                stats = self.two_peaks_label_stats
+                mode_text = "Two-peaks"
+            
+            # Create summary data structure
+            summary_data = {
+                "mode": self.current_mode,
+                "total_files": stats['total_files'],
+                "labeled_files": stats['labeled_count'],
+                "top_labels": {
+                    "label_1": stats['top_labels'][1],
+                    "label_2": stats['top_labels'][2],
+                    "label_3": stats['top_labels'][3]
+                },
+                "bottom_labels": {
+                    "label_1": stats['bottom_labels'][1],
+                    "label_2": stats['bottom_labels'][2],
+                    "label_3": stats['bottom_labels'][3]
+                }
+            }
+            
+            # Save to JSON file
+            summary_path = os.path.join(output_dir, 'label_count_summary.json')
+            create_backup(summary_path)
+            
+            with open(summary_path, 'w') as f:
+                json.dump(summary_data, f, indent=2)
+            
+            print(f"{mode_text} label count summary saved to: {summary_path}")
+            
+        except Exception as e:
+            print(f"Error saving label count summary: {e}", file=sys.stderr)
 
     def run_peak_detection(self, event):
         """Manually trigger peak detection and enable persistent display mode"""
