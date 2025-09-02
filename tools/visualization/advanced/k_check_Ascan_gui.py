@@ -24,7 +24,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import the refactored functions
-from tools.analysis.k_detect_peak import detect_peaks
+from tools.analysis.k_detect_peak import detect_peaks, detect_two_peaks
 from tools.visualization.analysis.k_plot_TWT_estimation import calculate_TWT
 
 def read_ascan_data(filepath):
@@ -297,6 +297,7 @@ class AscanViewer:
         
         # Current peaks and TWTs for persistence
         self.current_peaks = None
+        self.current_two_peaks = None
         self.current_twts = None
         
         # Load zoom settings
@@ -532,6 +533,7 @@ class AscanViewer:
             self.current_dt = None
             self.current_config = None
             self.current_peaks = None
+            self.current_two_peaks = None
             self.current_twts = None
             self.ax.text(0.5, 0.5, f"Could not load data from\n{filepath}", ha='center')
 
@@ -629,11 +631,20 @@ class AscanViewer:
                                                 linestyle='--', alpha=0.8)[0]
         
         # Re-plot peaks if enabled
-        if self.show_peaks and self.current_peaks is not None:
-            peak_times, peak_amps = self.current_peaks
-            if peak_times:
-                self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x', 
-                                                  label='Detected Peaks', zorder=5)
+        if self.show_peaks:
+            if self.current_mode == 'two-peaks' and self.current_two_peaks is not None:
+                primary_times, primary_amps, secondary_times, secondary_amps = self.current_two_peaks
+                if primary_times:
+                    self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x', 
+                                                      label='Primary Peaks', zorder=5, s=80)
+                if secondary_times:
+                    secondary_scatter = self.ax.scatter(secondary_times, secondary_amps, c='orange', marker='+', 
+                                                      label='Secondary Peaks', zorder=5, s=80)
+            elif self.current_peaks is not None:
+                peak_times, peak_amps = self.current_peaks
+                if peak_times:
+                    self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x', 
+                                                      label='Detected Peaks', zorder=5)
         
         # Re-plot TWTs if enabled
         if self.show_twts and self.current_twts is not None:
@@ -779,21 +790,58 @@ class AscanViewer:
         # Auto-calculate peaks if peak display mode is enabled
         if self.show_peaks and self.current_data is not None and self.current_dt is not None:
             try:
-                pulse_info = detect_peaks(self.current_data, self.current_dt)
-                peak_times = [info['max_time'] for info in pulse_info if info['distinguishable']]
-                peak_amps = [info['max_amplitude'] for info in pulse_info if info['distinguishable']]
-                self.current_peaks = (peak_times, peak_amps)
-                
-                if peak_times:
-                    self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x', 
-                                                      label='Detected Peaks', zorder=5)
-                    print(f"Auto-detected {len(peak_times)} distinguishable peaks.")
+                if self.current_mode == 'two-peaks':
+                    # Use two-peaks detection for two-peaks mode
+                    pulse_info = detect_two_peaks(self.current_data, self.current_dt)
+                    
+                    primary_times = []
+                    primary_amps = []
+                    secondary_times = []
+                    secondary_amps = []
+                    
+                    for info in pulse_info:
+                        if info['distinguishable']:
+                            # Add primary peak
+                            if info['primary']:
+                                primary_times.append(info['primary']['max_time'])
+                                primary_amps.append(info['primary']['max_amplitude'])
+                            
+                            # Add secondary peak if it exists
+                            if info['secondary']:
+                                secondary_times.append(info['secondary']['max_time'])
+                                secondary_amps.append(info['secondary']['max_amplitude'])
+                    
+                    self.current_two_peaks = (primary_times, primary_amps, secondary_times, secondary_amps)
+                    
+                    # Plot primary peaks
+                    if primary_times:
+                        self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x', 
+                                                          label='Primary Peaks', zorder=5, s=80)
+                    
+                    # Plot secondary peaks
+                    if secondary_times:
+                        secondary_scatter = self.ax.scatter(secondary_times, secondary_amps, c='orange', marker='+', 
+                                                          label='Secondary Peaks', zorder=5, s=80)
+                    
+                    print(f"Auto-detected {len(primary_times)} primary and {len(secondary_times)} secondary peaks.")
                 else:
-                    print("No distinguishable peaks found in current data.")
+                    # Use original single peak detection for peak mode
+                    pulse_info = detect_peaks(self.current_data, self.current_dt)
+                    peak_times = [info['max_time'] for info in pulse_info if info['distinguishable']]
+                    peak_amps = [info['max_amplitude'] for info in pulse_info if info['distinguishable']]
+                    self.current_peaks = (peak_times, peak_amps)
+                    
+                    if peak_times:
+                        self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x', 
+                                                          label='Detected Peaks', zorder=5)
+                        print(f"Auto-detected {len(peak_times)} distinguishable peaks.")
+                    else:
+                        print("No distinguishable peaks found in current data.")
             except Exception as e:
                 print(f"Error in auto peak detection: {e}", file=sys.stderr)
                 self.show_peaks = False
                 self.current_peaks = None
+                self.current_two_peaks = None
         
         # Auto-calculate TWTs if TWT display mode is enabled
         if self.show_twts:

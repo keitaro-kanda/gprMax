@@ -93,6 +93,189 @@ def detect_peaks(data, dt):
         })
     return pulse_info
 
+
+def detect_two_peaks(data, dt):
+    """
+    Detects the two largest peaks in A-scan data (first and second largest).
+    This improved version uses better peak detection and masking strategies.
+
+    Args:
+        data (np.ndarray): Amplitude data of the A-scan.
+        dt (float): Time step of the simulation.
+
+    Returns:
+        list: A list of dictionaries, where each dictionary contains information about the two largest detected peaks.
+              Each entry has 'primary' and 'secondary' peak information.
+    """
+    from scipy.signal import find_peaks
+    
+    data_norm = data / np.amax(np.abs(data)) # Normalize the data
+    time = np.arange(len(data_norm)) * dt  / 1e-9 # [ns]
+
+    analytic_signal = hilbert(data_norm)
+    envelope = np.abs(analytic_signal)
+    evnvelope_moving_average = np.convolve(envelope, np.ones(10)/10, mode='same')
+
+    # Find envelope peaks (same as original)
+    peaks = []
+    for i in range(1, len(data_norm) - 1):
+        if evnvelope_moving_average[i - 1] < evnvelope_moving_average[i] > evnvelope_moving_average[i + 1] and evnvelope_moving_average[i] > 0.5e-3:
+            peaks.append(i)
+
+    pulse_info = []
+    for i, peak_idx in enumerate(peaks):
+        peak_amplitude = envelope[peak_idx]
+        half_amplitude = peak_amplitude / 2
+
+        # Calculate FWHM boundaries (same as original)
+        left_idx = peak_idx
+        while left_idx > 0 and envelope[left_idx] > half_amplitude:
+            left_idx -= 1
+
+        if left_idx == 0:
+            left_half_time = time[0]
+        else:
+            left_slope = (envelope[left_idx + 1] - envelope[left_idx]) / (time[left_idx + 1] - time[left_idx])
+            left_half_time = time[left_idx] + (half_amplitude - envelope[left_idx]) / left_slope
+
+        right_idx = peak_idx
+        while right_idx < len(envelope) - 1 and envelope[right_idx] > half_amplitude:
+            right_idx += 1
+
+        if right_idx == len(envelope) - 1:
+            right_half_time = time[-1]
+        else:
+            right_slope = (envelope[right_idx] - envelope[right_idx - 1]) / (time[right_idx] - time[right_idx - 1])
+            right_half_time = time[right_idx - 1] + (half_amplitude - envelope[right_idx - 1]) / right_slope
+
+        fwhm = right_half_time - left_half_time
+        hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)])
+
+        separation_prev = time[peak_idx] - time[peaks[i - 1]] if i > 0 else None
+        separation_next = time[peaks[i + 1]] - time[peak_idx] if i < len(peaks) - 1 else None
+
+        distinguishable = True
+        if separation_prev is not None and separation_prev < fwhm:
+            distinguishable = False
+        if separation_next is not None and separation_next < fwhm:
+            distinguishable = False
+
+        # Improved peak detection: Expand search range to 1.5x FWHM
+        if fwhm > 0 and dt > 0:
+            fwhm_idx = max(1, int(fwhm * 1e-9 / dt))  # FWHM in index units, at least 1
+            search_radius = max(int(1.5 * fwhm_idx), 20)  # At least 20 samples
+        else:
+            search_radius = 50  # Default search radius
+        
+        data_segment_start = max(0, peak_idx - search_radius)
+        data_segment_end = min(len(data_norm), peak_idx + search_radius)
+        data_segment = np.abs(data_norm[data_segment_start:data_segment_end])
+        
+        # Initialize peak info structure
+        peak_info = {
+            'peak_idx': peak_idx,
+            'peak_time': time[peak_idx],
+            'peak_amplitude': peak_amplitude,
+            'width': fwhm,
+            'width_half': hwhm,
+            'left_half_time': left_half_time,
+            'right_half_time': right_half_time,
+            'separation': min(separation_prev or np.inf, separation_next or np.inf),
+            'distinguishable': distinguishable,
+            'primary': None,
+            'secondary': None
+        }
+        
+        if len(data_segment) > 5:  # Need minimum samples for reliable detection
+            # Calculate noise level for adaptive threshold with safety checks
+            max_val = np.max(data_segment)
+            if max_val > 0:
+                noise_data = data_segment[data_segment < 0.1 * max_val]
+                if len(noise_data) > 1:
+                    noise_level = np.std(noise_data)
+                else:
+                    noise_level = 0.01 * max_val  # Fallback noise level
+            else:
+                noise_level = 0.001  # Minimal noise level
+                
+            min_peak_height = max(0.05 * max_val, 3 * noise_level)
+            
+            # Calculate minimum distance between peaks with safety check
+            if fwhm > 0 and dt > 0:
+                fwhm_idx = max(1, int(fwhm * 1e-9 / dt))
+                min_distance = max(2, int(0.1 * fwhm_idx))
+            else:
+                min_distance = 3  # Default minimum distance
+            
+            # Find all local maxima using scipy
+            try:
+                local_peaks, properties = find_peaks(data_segment, 
+                                                    height=min_peak_height,
+                                                    distance=min_distance)
+            except Exception as e:
+                # Fallback if find_peaks fails
+                local_peaks = []
+            
+            if len(local_peaks) > 0:
+                # Sort peaks by amplitude
+                peak_amplitudes = data_segment[local_peaks]
+                sorted_indices = np.argsort(peak_amplitudes)[::-1]  # Descending order
+                
+                # Primary peak (largest)
+                primary_local_idx = local_peaks[sorted_indices[0]]
+                primary_global_idx = data_segment_start + primary_local_idx
+                primary_max_time = time[primary_global_idx]
+                primary_max_amplitude = data_norm[primary_global_idx]
+                
+                peak_info['primary'] = {
+                    'max_idx': primary_global_idx,
+                    'max_time': primary_max_time,
+                    'max_amplitude': primary_max_amplitude,
+                }
+                
+                # Secondary peak (second largest) if exists
+                if len(local_peaks) > 1:
+                    secondary_local_idx = local_peaks[sorted_indices[1]]
+                    secondary_global_idx = data_segment_start + secondary_local_idx
+                    secondary_max_time = time[secondary_global_idx]
+                    secondary_max_amplitude = data_norm[secondary_global_idx]
+                    
+                    # More flexible threshold: 10% of primary or 5x noise level
+                    min_secondary_threshold = max(0.1 * abs(primary_max_amplitude), 
+                                                 5 * noise_level)
+                    
+                    if abs(secondary_max_amplitude) >= min_secondary_threshold:
+                        peak_info['secondary'] = {
+                            'max_idx': secondary_global_idx,
+                            'max_time': secondary_max_time,
+                            'max_amplitude': secondary_max_amplitude,
+                        }
+                
+                # For backwards compatibility
+                peak_info['max_idx'] = primary_global_idx
+                peak_info['max_time'] = primary_max_time
+                peak_info['max_amplitude'] = primary_max_amplitude
+            else:
+                # Fallback to original method if no peaks found
+                primary_max_idx = np.argmax(data_segment)
+                primary_global_idx = data_segment_start + primary_max_idx
+                primary_max_time = time[primary_global_idx]
+                primary_max_amplitude = data_norm[primary_global_idx]
+                
+                peak_info['primary'] = {
+                    'max_idx': primary_global_idx,
+                    'max_time': primary_max_time,
+                    'max_amplitude': primary_max_amplitude,
+                }
+                
+                peak_info['max_idx'] = primary_global_idx
+                peak_info['max_time'] = primary_max_time
+                peak_info['max_amplitude'] = primary_max_amplitude
+
+        pulse_info.append(peak_info)
+    
+    return pulse_info
+
 #* Define the function to analyze the pulses
 def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, FWHM, output_dir, plt_show):
     pulse_info = detect_peaks(data, dt)
