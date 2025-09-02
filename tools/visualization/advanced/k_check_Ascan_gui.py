@@ -144,7 +144,7 @@ def calculate_envelope(data):
 def show_mode_selection_dialog():
     """
     Show initial mode selection dialog using tkinter if available, otherwise use console input.
-    Returns: 'peak', 'twt', or None (if cancelled)
+    Returns: 'peak', 'twt', 'two-peaks', or None (if cancelled)
     """
     def console_mode_selection():
         """Console fallback for mode selection"""
@@ -152,20 +152,23 @@ def show_mode_selection_dialog():
         print("保存モードを選択してください:")
         print("1. Peak Mode: ピーク検出結果を基にしたラベリング")
         print("2. TWT Mode: TWT推定結果を基にしたラベリング")
-        print("3. quit: プログラムを終了")
+        print("3. Two-peaks Mode: 2つのピーク検出結果を基にしたラベリング")
+        print("4. quit: プログラムを終了")
         
         while True:
             try:
-                choice = input("\n選択してください (1/2/3 または peak/twt/quit): ").strip().lower()
+                choice = input("\n選択してください (1/2/3/4 または peak/twt/two-peaks/quit): ").strip().lower()
                 
                 if choice in ['1', 'peak']:
                     return 'peak'
                 elif choice in ['2', 'twt']:
                     return 'twt'
-                elif choice in ['3', 'quit']:
+                elif choice in ['3', 'two-peaks']:
+                    return 'two-peaks'
+                elif choice in ['4', 'quit']:
                     return None
                 else:
-                    print("無効な選択です。1, 2, 3 または peak, twt, quit を入力してください。")
+                    print("無効な選択です。1, 2, 3, 4 または peak, twt, two-peaks, quit を入力してください。")
             except (EOFError, KeyboardInterrupt):
                 print("\n操作がキャンセルされました。")
                 return None
@@ -181,7 +184,7 @@ def show_mode_selection_dialog():
             self.result = None
             self.root = tk.Tk()
             self.root.title("初期モード選択")
-            self.root.geometry("400x200")
+            self.root.geometry("500x250")
             self.root.resizable(False, False)
             
             # Center the window
@@ -208,7 +211,7 @@ def show_mode_selection_dialog():
             
             # Description label
             desc_label = tk.Label(self.root, 
-                                text="Peak Mode: ピーク検出結果を基にしたラベリング\nTWT Mode: TWT推定結果を基にしたラベリング",
+                                text="Peak Mode: ピーク検出結果を基にしたラベリング\nTWT Mode: TWT推定結果を基にしたラベリング\nTwo-peaks Mode: 2つのピーク検出結果を基にしたラベリング",
                                 font=("Arial", 10))
             desc_label.pack(pady=10)
             
@@ -228,6 +231,12 @@ def show_mode_selection_dialog():
                                  bg="lightgreen", command=self.select_twt)
             twt_button.pack(side=tk.LEFT, padx=10)
             
+            # Two-peaks Mode button
+            two_peaks_button = tk.Button(button_frame, text="Two-peaks Mode", 
+                                       font=("Arial", 12), width=12, height=2,
+                                       bg="lightyellow", command=self.select_two_peaks)
+            two_peaks_button.pack(side=tk.LEFT, padx=10)
+            
             # Cancel button
             cancel_button = tk.Button(self.root, text="キャンセル", 
                                     font=("Arial", 10), width=10,
@@ -240,6 +249,10 @@ def show_mode_selection_dialog():
             
         def select_twt(self):
             self.result = 'twt'
+            self.root.destroy()
+            
+        def select_two_peaks(self):
+            self.result = 'two-peaks'
             self.root.destroy()
             
         def cancel(self):
@@ -309,17 +322,20 @@ class AscanViewer:
         # Output directories for labeling results
         self.output_peak_dir = os.path.join(output_base_dir, 'result_use_peak')
         self.output_twt_dir = os.path.join(output_base_dir, 'result_use_TWT')
+        self.output_two_peaks_dir = os.path.join(output_base_dir, 'result_use_two_peaks')
         
-        # Labeling state for current file - separate for Peak and TWT modes
+        # Labeling state for current file - separate for Peak, TWT, and Two-peaks modes
         self.peak_top_label = 1
         self.peak_bottom_label = 1
         self.twt_top_label = 1
         self.twt_bottom_label = 1
+        self.two_peaks_top_label = 1
+        self.two_peaks_bottom_label = 1
         
-        # Current labeling mode (either 'peak' or 'twt')
+        # Current labeling mode ('peak', 'twt', or 'two-peaks')
         self.current_mode = initial_mode
         
-        # Load existing labeling results - separate for Peak and TWT
+        # Load existing labeling results - separate for Peak, TWT, and Two-peaks
         self.peak_labeling_results = {
             'top': load_existing_labels(self.output_peak_dir, 'top'),
             'bottom': load_existing_labels(self.output_peak_dir, 'bottom')
@@ -330,9 +346,15 @@ class AscanViewer:
             'bottom': load_existing_labels(self.output_twt_dir, 'bottom')
         }
         
-        # Label statistics - separate for Peak and TWT
+        self.two_peaks_labeling_results = {
+            'top': load_existing_labels(self.output_two_peaks_dir, 'top'),
+            'bottom': load_existing_labels(self.output_two_peaks_dir, 'bottom')
+        }
+        
+        # Label statistics - separate for Peak, TWT, and Two-peaks
         self.peak_label_stats = self.calculate_label_stats('peak')
         self.twt_label_stats = self.calculate_label_stats('twt')
+        self.two_peaks_label_stats = self.calculate_label_stats('two-peaks')
         
         self.fig = plt.figure(figsize=(16, 10))
         plt.subplots_adjust(bottom=0.35, right=0.75)
@@ -382,7 +404,7 @@ class AscanViewer:
         
         # Mode switching button
         ax_mode_btn = plt.axes([0.78, 0.30, 0.12, 0.04])
-        initial_button_text = 'Peak Mode' if self.current_mode == 'peak' else 'TWT Mode'
+        initial_button_text = 'Peak Mode' if self.current_mode == 'peak' else ('TWT Mode' if self.current_mode == 'twt' else 'Two-peaks Mode')
         self.mode_button = Button(ax_mode_btn, initial_button_text)
         self.mode_button.on_clicked(self.toggle_mode)
         
@@ -409,8 +431,15 @@ class AscanViewer:
         # Mode display text
         ax_mode_text = plt.axes([0.78, 0.02, 0.15, 0.04])
         ax_mode_text.axis('off')
-        initial_mode_text = 'Current: Peak Mode' if self.current_mode == 'peak' else 'Current: TWT Mode'
-        initial_color = 'lightblue' if self.current_mode == 'peak' else 'lightgreen'
+        if self.current_mode == 'peak':
+            initial_mode_text = 'Current: Peak Mode'
+            initial_color = 'lightblue'
+        elif self.current_mode == 'twt':
+            initial_mode_text = 'Current: TWT Mode'
+            initial_color = 'lightgreen'
+        else:  # two-peaks
+            initial_mode_text = 'Current: Two-peaks Mode'
+            initial_color = 'lightyellow'
         self.mode_text = ax_mode_text.text(0.5, 0.5, initial_mode_text, ha='center', va='center', 
                                          fontsize=10, bbox=dict(boxstyle='round', facecolor=initial_color))
 
@@ -527,11 +556,16 @@ class AscanViewer:
             current_top_label = self.peak_top_label
             current_bottom_label = self.peak_bottom_label
             mode_text = "Peak"
-        else:
+        elif self.current_mode == 'twt':
             labeling_results = self.twt_labeling_results
             current_top_label = self.twt_top_label
             current_bottom_label = self.twt_bottom_label
             mode_text = "TWT"
+        else:  # two-peaks
+            labeling_results = self.two_peaks_labeling_results
+            current_top_label = self.two_peaks_top_label
+            current_bottom_label = self.two_peaks_bottom_label
+            mode_text = "Two-peaks"
             
         # Show saved labels if exist, otherwise show current selection
         if current_key in labeling_results['top'] or current_key in labeling_results['bottom']:
@@ -628,8 +662,10 @@ class AscanViewer:
         
         if mode == 'peak':
             labeling_results = self.peak_labeling_results
-        else:
+        elif mode == 'twt':
             labeling_results = self.twt_labeling_results
+        else:  # two-peaks
+            labeling_results = self.two_peaks_labeling_results
         
         for key, data in labeling_results['top'].items():
             stats['labeled_files'].add(key)
@@ -666,7 +702,7 @@ class AscanViewer:
             # Update radio button selections
             self.top_radio.set_active(self.peak_top_label - 1)
             self.bottom_radio.set_active(self.peak_bottom_label - 1)
-        else:
+        elif self.current_mode == 'twt':
             labeling_results = self.twt_labeling_results
             # Update current labels for TWT mode
             if current_key in labeling_results['top']:
@@ -680,6 +716,20 @@ class AscanViewer:
             # Update radio button selections
             self.top_radio.set_active(self.twt_top_label - 1)
             self.bottom_radio.set_active(self.twt_bottom_label - 1)
+        else:  # two-peaks mode
+            labeling_results = self.two_peaks_labeling_results
+            # Update current labels for Two-peaks mode
+            if current_key in labeling_results['top']:
+                top_data = labeling_results['top'][current_key]
+                if len(top_data) >= 3:
+                    self.two_peaks_top_label = top_data[2]
+            if current_key in labeling_results['bottom']:
+                bottom_data = labeling_results['bottom'][current_key]
+                if len(bottom_data) >= 3:
+                    self.two_peaks_bottom_label = bottom_data[2]
+            # Update radio button selections
+            self.top_radio.set_active(self.two_peaks_top_label - 1)
+            self.bottom_radio.set_active(self.two_peaks_bottom_label - 1)
     
     def zoom(self, event):
         try:
@@ -788,13 +838,18 @@ class AscanViewer:
             self.ax.legend()
     
     def toggle_mode(self, event):
-        """Toggle between Peak and TWT labeling modes"""
+        """Toggle between Peak, TWT, and Two-peaks labeling modes"""
         if self.current_mode == 'peak':
             self.current_mode = 'twt'
             self.mode_button.label.set_text('TWT Mode')
             self.mode_text.set_text('Current: TWT Mode')
             self.mode_text.set_bbox(dict(boxstyle='round', facecolor='lightgreen'))
-        else:
+        elif self.current_mode == 'twt':
+            self.current_mode = 'two-peaks'
+            self.mode_button.label.set_text('Two-peaks Mode')
+            self.mode_text.set_text('Current: Two-peaks Mode')
+            self.mode_text.set_bbox(dict(boxstyle='round', facecolor='lightyellow'))
+        else:  # two-peaks
             self.current_mode = 'peak'
             self.mode_button.label.set_text('Peak Mode')
             self.mode_text.set_text('Current: Peak Mode')
@@ -815,8 +870,10 @@ class AscanViewer:
         
         if self.current_mode == 'peak':
             self.peak_top_label = label_num
-        else:
+        elif self.current_mode == 'twt':
             self.twt_top_label = label_num
+        else:  # two-peaks
+            self.two_peaks_top_label = label_num
     
     def set_bottom_label(self, label):
         label_num = 1
@@ -829,8 +886,10 @@ class AscanViewer:
         
         if self.current_mode == 'peak':
             self.peak_bottom_label = label_num
-        else:
+        elif self.current_mode == 'twt':
             self.twt_bottom_label = label_num
+        else:  # two-peaks
+            self.two_peaks_bottom_label = label_num
     
     def get_current_file_key(self):
         if self.has_keys and self.file_keys:
@@ -873,10 +932,14 @@ class AscanViewer:
             current_top_label = self.peak_top_label
             current_bottom_label = self.peak_bottom_label
             labeling_results = self.peak_labeling_results
-        else:
+        elif self.current_mode == 'twt':
             current_top_label = self.twt_top_label
             current_bottom_label = self.twt_bottom_label
             labeling_results = self.twt_labeling_results
+        else:  # two-peaks
+            current_top_label = self.two_peaks_top_label
+            current_bottom_label = self.two_peaks_bottom_label
+            labeling_results = self.two_peaks_labeling_results
         
         # Check if labels have changed
         old_top_label = None
@@ -893,6 +956,7 @@ class AscanViewer:
         # Create output directories if they don't exist
         os.makedirs(self.output_peak_dir, exist_ok=True)
         os.makedirs(self.output_twt_dir, exist_ok=True)
+        os.makedirs(self.output_two_peaks_dir, exist_ok=True)
         
         # Save to JSON files with backup and incremental update
         try:
@@ -920,7 +984,7 @@ class AscanViewer:
                     json.dump(existing_bottom_peak, f, indent=2)
                     
                 mode_text = "Peak"
-            else:
+            elif self.current_mode == 'twt':
                 # Save TWT mode labels
                 top_twt_path = os.path.join(self.output_twt_dir, 'top_echo_labels.json')
                 bottom_twt_path = os.path.join(self.output_twt_dir, 'bottom_echo_labels.json')
@@ -944,14 +1008,41 @@ class AscanViewer:
                     json.dump(existing_bottom_twt, f, indent=2)
                     
                 mode_text = "TWT"
+            else:  # two-peaks
+                # Save Two-peaks mode labels
+                top_two_peaks_path = os.path.join(self.output_two_peaks_dir, 'top_echo_labels.json')
+                bottom_two_peaks_path = os.path.join(self.output_two_peaks_dir, 'bottom_echo_labels.json')
+                
+                # Create backups
+                create_backup(top_two_peaks_path)
+                create_backup(bottom_two_peaks_path)
+                
+                # Load existing data and merge
+                existing_top_two_peaks = load_existing_labels(self.output_two_peaks_dir, 'top')
+                existing_bottom_two_peaks = load_existing_labels(self.output_two_peaks_dir, 'bottom')
+                
+                # Update only current file's labels
+                existing_top_two_peaks[current_key] = [height, width, current_top_label]
+                existing_bottom_two_peaks[current_key] = [height, width, current_bottom_label]
+                
+                # Save updated data
+                with open(top_two_peaks_path, 'w') as f:
+                    json.dump(existing_top_two_peaks, f, indent=2)
+                with open(bottom_two_peaks_path, 'w') as f:
+                    json.dump(existing_bottom_two_peaks, f, indent=2)
+                    
+                mode_text = "Two-peaks"
             
             # Update statistics for current mode
             if self.current_mode == 'peak':
                 self.peak_label_stats = self.calculate_label_stats('peak')
                 current_stats = self.peak_label_stats
-            else:
+            elif self.current_mode == 'twt':
                 self.twt_label_stats = self.calculate_label_stats('twt')
                 current_stats = self.twt_label_stats
+            else:  # two-peaks
+                self.two_peaks_label_stats = self.calculate_label_stats('two-peaks')
+                current_stats = self.two_peaks_label_stats
             
             # Show save status
             if old_top_label is not None or old_bottom_label is not None:
@@ -1140,6 +1231,15 @@ def main():
         print(f"TWT Bottomラベル: {dict(viewer.twt_label_stats['bottom_labels'])}")
     else:
         print("TWT: ラベル付け済みファイルはありません")
+    
+    # Show Two-peaks mode statistics
+    print("\n=== Two-peaks Mode Statistics ===")
+    if viewer.two_peaks_label_stats['labeled_count'] > 0:
+        print(f"Two-peaks ラベル統計: {viewer.two_peaks_label_stats['labeled_count']}/{viewer.two_peaks_label_stats['total_files']} ファイルがラベル付け済み")
+        print(f"Two-peaks Topラベル: {dict(viewer.two_peaks_label_stats['top_labels'])}")
+        print(f"Two-peaks Bottomラベル: {dict(viewer.two_peaks_label_stats['bottom_labels'])}")
+    else:
+        print("Two-peaks: ラベル付け済みファイルはありません")
     
     print(f"\n現在の初期モード: {selected_mode.upper()} Mode (ボタンで切り替え可能)")
     
