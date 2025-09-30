@@ -66,13 +66,14 @@ print('Bipolar_square: ', Bipolar_square.shape)
 ### y = x
 y = x = np.linspace(6, 15, 100)
 ### plot
-fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
-
-size_estimations = [LPR_circle, LPR_square, Bipolar_circle, Bipolar_square]
-names = ['LPR_circle', 'LPR_square', 'Bipolar_circle', 'Bipolar_square']
+names = ['Unipolar_circle', 'Unipolar_square', 'Bipolar_circle', 'Bipolar_square']
 colors = ['r', 'r', 'b', 'b']
 linestyles = ['-', '--', '-', '--']
 # true size VS estimated size
+fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
+
+size_estimations = [LPR_circle, LPR_square, Bipolar_circle, Bipolar_square]
+
 for i, data in enumerate(size_estimations):
     if data.shape[0] == 0:
         print('No data for one of the configurations. Please check the input txt file.')
@@ -112,11 +113,6 @@ plt.savefig(os.path.join(output_dir, 'size_error_abs.pdf'))
 
 # --- plot for non-abs error ---
 fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
-
-size_estimations = [LPR_circle, LPR_square, Bipolar_circle, Bipolar_square]
-names = ['LPR_circle', 'LPR_square', 'Bipolar_circle', 'Bipolar_square']
-colors = ['r', 'r', 'b', 'b']
-linestyles = ['-', '--', '-', '--']
 # true size VS estimated size
 for i, data in enumerate(size_estimations):
     if data.shape[0] == 0:
