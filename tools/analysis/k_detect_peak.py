@@ -444,7 +444,8 @@ if __name__ == "__main__":
                 'Peak amplitude (envelope)': info['peak_amplitude'],
                 'Distinguishable': info['distinguishable'],
                 'Max amplitude': info['max_amplitude'],
-                'Max time [ns]': info['max_time']
+                'Max time [ns]': info['max_time'],
+                'FWHM [ns]': info['width'],
             })
         np.savetxt(filename, peak_info_save, delimiter=' ', fmt='%s')
         
