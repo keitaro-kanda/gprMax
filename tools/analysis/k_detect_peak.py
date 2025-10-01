@@ -5,6 +5,7 @@ import h5py
 import os
 import importlib.util
 from scipy.signal import hilbert
+import json
 
 # 絶対パスでoutputfiles_merge.pyを動的にロード
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -437,17 +438,32 @@ if __name__ == "__main__":
 
         #* Save the pulse information
         filename = os.path.join(output_dir, 'peak_info.txt')
-        peak_info_save = []
-        for info in pulse_info:
-            peak_info_save.append({
-                'Peak time (envelope) [ns]': info['peak_time'],
-                'Peak amplitude (envelope)': info['peak_amplitude'],
-                'Distinguishable': info['distinguishable'],
-                'Max amplitude': info['max_amplitude'],
-                'Max time [ns]': info['max_time'],
-                'FWHM [ns]': info['width'],
-            })
-        np.savetxt(filename, peak_info_save, delimiter=' ', fmt='%s')
+        try:
+            # with open(peak_info_filename, "w") as fout:
+            #     json.dump(pulse_info, fout, indent=2)
+            # NumPy 型（np.generic）を Python の組み込み型に変換
+            serializable_pulse = []
+            for info in pulse_info:
+                serializable_pulse.append({
+                    key: (value.item() if isinstance(value, np.generic) else value)
+                    for key, value in info.items()
+                })
+            with open(filename, "w") as fout:
+                json.dump(serializable_pulse, fout, indent=2, ensure_ascii=False)
+            print(f"Saved peak detection info: {filename}")
+        except Exception as e:
+            print(f"Error saving peak info for rx {rx+1}: {e}")
+        # peak_info_save = []
+        # for info in pulse_info:
+        #     peak_info_save.append({
+        #         'Peak time (envelope) [ns]': info['peak_time'],
+        #         'Peak amplitude (envelope)': info['peak_amplitude'],
+        #         'Distinguishable': info['distinguishable'],
+        #         'Max amplitude': info['max_amplitude'],
+        #         'Max time [ns]': info['max_time'],
+        #         'FWHM [ns]': info['width'],
+        #     })
+        # np.savetxt(filename, peak_info_save, delimiter=' ', fmt='%s')
         
         print(f"\nPeak information saved to: {filename}")
         print("Analysis completed successfully!")
