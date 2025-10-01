@@ -1,11 +1,22 @@
+#!/usr/bin/env python3
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 import os
-import argparse
-from tqdm import tqdm
-from tools.core.outputfiles_merge import get_output_data
+import importlib.util
 from scipy.signal import hilbert
+
+# 絶対パスでoutputfiles_merge.pyを動的にロード
+script_dir = os.path.dirname(os.path.abspath(__file__))
+gprmax_root = os.path.dirname(os.path.dirname(script_dir))
+outputfiles_merge_path = os.path.join(gprmax_root, 'tools', 'core', 'outputfiles_merge.py')
+
+spec = importlib.util.spec_from_file_location("outputfiles_merge", outputfiles_merge_path)
+outputfiles_merge = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(outputfiles_merge)
+
+# get_output_data関数を取得
+get_output_data = outputfiles_merge.get_output_data
 
 def detect_peaks(data, dt):
     """
@@ -61,12 +72,14 @@ def detect_peaks(data, dt):
         separation_prev = time[peak_idx] - time[peaks[i - 1]] if i > 0 else None
         separation_next = time[peaks[i + 1]] - time[peak_idx] if i < len(peaks) - 1 else None
 
+        # Check if the peaks are distinguishable
         distinguishable = True
-        if separation_prev is not None and separation_prev < fwhm:
+        if separation_prev is not None and separation_prev < fwhm: # 
             distinguishable = False
         if separation_next is not None and separation_next < fwhm:
             distinguishable = False
 
+        # Find the maximum amplitude of the E-field within the FWHM range
         data_segment = np.abs(data_norm[int(left_half_time*1e-9/dt):int(right_half_time*1e-9/dt)])
         max_idx = peak_idx
         max_time = time[peak_idx]
@@ -76,6 +89,7 @@ def detect_peaks(data, dt):
             max_idx = int(left_half_time*1e-9/dt) + primary_max_idx
             max_time = time[max_idx]
             max_amplitude = data_norm[max_idx]
+            distinguishable = True # We can find the peak within the FWHM range at least once.
 
         pulse_info.append({
             'peak_idx': peak_idx,
@@ -209,10 +223,10 @@ def detect_two_peaks(data, dt):
             
             # Find all local maxima using scipy
             try:
-                local_peaks, properties = find_peaks(data_segment, 
-                                                    height=min_peak_height,
-                                                    distance=min_distance)
-            except Exception as e:
+                local_peaks, _ = find_peaks(data_segment, 
+                                           height=min_peak_height,
+                                           distance=min_distance)
+            except Exception:
                 # Fallback if find_peaks fails
                 local_peaks = []
             
@@ -289,6 +303,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
                             figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
     ax.plot(time, data_norm, label='A-scan', color='black')
     ax.plot(time, envelope, label='Envelope', color='blue', linestyle='-.')
+    ax.plot(time, -envelope, color='blue', linestyle='-.')
 
     for i, info in enumerate(pulse_info):
         if info['distinguishable']==True:
@@ -328,60 +343,115 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
     return pulse_info
 
 
-# 使用例
 if __name__ == "__main__":
-    #* Parse command line arguments
-    parser = argparse.ArgumentParser(
-        prog='k_detect_peak.py',
-        description='Detect the peak from the B-scan data',
-        epilog='End of help message',
-        usage='python -m tools.k_detect_peak [out_file] [-closeup] [-FWHM]',
-    )
-    parser.add_argument('out_file', help='Path to the .out file')
-    parser.add_argument('-closeup', action='store_true', help='Zoom in the plot')
-    parser.add_argument('-FWHM', action='store_true', help='Plot the FWHM')
-    args = parser.parse_args()
-
+    print("=== Peak Detection Tool ===")
+    print("Detect the peak from the A-scan data")
+    print()
+    
+    # Get output file path
+    while True:
+        data_path = input("Enter path to the .out file: ").strip()
+        if os.path.exists(data_path) and data_path.endswith('.out'):
+            break
+        else:
+            print("Error: File does not exist or is not a .out file. Please try again.")
+    
+    # Get closeup option
+    while True:
+        closeup_input = input("Enable closeup zoom? (y/n): ").strip().lower()
+        if closeup_input in ['y', 'yes']:
+            closeup = True
+            break
+        elif closeup_input in ['n', 'no']:
+            closeup = False
+            break
+        else:
+            print("Please enter 'y' or 'n'.")
+    
+    # Get FWHM option
+    while True:
+        fwhm_input = input("Plot FWHM? (y/n): ").strip().lower()
+        if fwhm_input in ['y', 'yes']:
+            fwhm = True
+            break
+        elif fwhm_input in ['n', 'no']:
+            fwhm = False
+            break
+        else:
+            print("Please enter 'y' or 'n'.")
+    
+    # Get closeup parameters if enabled
+    if closeup:
+        print("\nEnter closeup parameters:")
+        while True:
+            try:
+                closeup_x_start = float(input("X-axis start [ns] (default: 20): ") or "20")
+                closeup_x_end = float(input("X-axis end [ns] (default: 40): ") or "40")
+                if closeup_x_start >= closeup_x_end:
+                    print("Error: X-axis start must be less than end. Please try again.")
+                    continue
+                break
+            except ValueError:
+                print("Error: Please enter valid numbers.")
+        
+        while True:
+            try:
+                closeup_y_start = float(input("Y-axis start (default: -3e11): ") or "-3e11")
+                closeup_y_end = float(input("Y-axis end (default: 3e11): ") or "3e11")
+                if closeup_y_start >= closeup_y_end:
+                    print("Error: Y-axis start must be less than end. Please try again.")
+                    continue
+                break
+            except ValueError:
+                print("Error: Please enter valid numbers.")
+    else:
+        # Default values
+        closeup_x_start = 20
+        closeup_x_end = 40
+        closeup_y_start = -3e11
+        closeup_y_end = 3e11
 
     #* Define path
-    data_path = args.out_file
     output_dir = os.path.join(os.path.dirname(data_path), 'peak_detection')
     os.makedirs(output_dir, exist_ok=True)
 
+    print(f"\nProcessing file: {data_path}")
+    print(f"Output directory: {output_dir}")
 
-    #* Load the A-scan data
-    f = h5py.File(data_path, 'r')
-    nrx = f.attrs['nrx']
-    for rx in range(nrx):
-        data, dt = get_output_data(data_path, (rx+1), 'Ez')
+    try:
+        #* Load the A-scan data
+        f = h5py.File(data_path, 'r')
+        nrx = f.attrs['nrx']
+        for rx in range(nrx):
+            data, dt = get_output_data(data_path, (rx+1), 'Ez')
 
-    time = np.arange(len(data)) * dt
+        time = np.arange(len(data)) * dt
 
+        #* Run the pulse analysis
+        pulse_info = detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, fwhm, output_dir, plt_show=True)
 
-    # for closeup option
-    closeup_x_start = 20 #[ns]
-    closeup_x_end = 40 #[ns]
-    closeup_y_start = -3e11
-    closeup_y_end = 3e11
+        # 結果の表示
+        print("\n=== Peak Detection Results ===")
+        for info in pulse_info:
+            print(f"Peak at {info['peak_time']:.4f} ns: Width={info['width']:.4f} ns, Distinguishable={info['distinguishable']}")
 
-    #* Run the pulse analysis
-    pulse_info = detect_plot_peaks(data, dt, args.closeup, closeup_x_start, closeup_x_end, closeup_y_start, closeup_y_end, args.FWHM, output_dir, plt_show=True)
-
-
-    # 結果の表示
-    for info in pulse_info:
-        print(f"Peak at {info['peak_time']:.4f} ns: Width={info['width']:.4f} ns, Distinguishable={info['distinguishable']}")
-
-    #* Save the pulse information
-    filename = os.path.join(output_dir, 'peak_info.txt')
-    peak_info = []
-    for info in pulse_info:
-        peak_info.append({
-            'Peak time (envelope) [ns]': info['peak_time'],
-            'Peak amplitude (envelope)': info['peak_amplitude'],
-            'Distinguishable': info['distinguishable'],
-            'Max amplitude': info['max_amplitude'],
-            'Max time [ns]': info['max_time']
-        })
-    np.savetxt(filename, peak_info, delimiter=' ', fmt='%s')
+        #* Save the pulse information
+        filename = os.path.join(output_dir, 'peak_info.txt')
+        peak_info_save = []
+        for info in pulse_info:
+            peak_info_save.append({
+                'Peak time (envelope) [ns]': info['peak_time'],
+                'Peak amplitude (envelope)': info['peak_amplitude'],
+                'Distinguishable': info['distinguishable'],
+                'Max amplitude': info['max_amplitude'],
+                'Max time [ns]': info['max_time']
+            })
+        np.savetxt(filename, peak_info_save, delimiter=' ', fmt='%s')
+        
+        print(f"\nPeak information saved to: {filename}")
+        print("Analysis completed successfully!")
+        
+    except Exception as e:
+        print(f"Error during processing: {str(e)}")
+        print("Please check your input file and try again.")
 
