@@ -6,10 +6,10 @@ from matplotlib.patches import Patch
 from matplotlib.ticker import FixedLocator
 
 
-results_Ricker_circle = ['x', 'x', 's', 's', 's', 's', 's', 'd', 'd', '2', '2', '2', '2', '2', '2']
+results_Ricker_circle = ['x', 's', 's', 's', 's', 's', 's', 'd', 'd', '2', '2', '2', '2', '2', '2']
 results_Ricker_square = ['x', 'x', 's', 's', 's', 's', 'd', 'd', '2', '2', '2', '2', '2', '2', '2']
 results_LPR_circle = ['x', 'x', 's', 's', 's', 's', 'd', 'd', '2', '2', '2', '2', '2', '2', '2']
-results_LPR_square = ['x', 'x', 's', 's', 's', 'd', '2', '2', '2', '2', '2', '2', '2', '2', '2']
+results_LPR_square = ['x', 's', 's', 's', 's', 'd', '2', '2', '2', '2', '2', '2', '2', '2', '2']
 results = [results_Ricker_circle, results_Ricker_square, results_LPR_circle, results_LPR_square]
 
 sizes = np.arange(1, 16, 1)
