@@ -6,8 +6,13 @@ from scipy import signal
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 from scipy.signal import hilbert
 import sys
-sys.path.append('tools')
-from outputfiles_merge import get_output_data
+import os
+
+# gprMaxのルートディレクトリをパスに追加
+gprmax_root = os.path.join(os.path.dirname(__file__), '..')
+sys.path.insert(0, gprmax_root)
+
+from tools.core.outputfiles_merge import get_output_data
 from tqdm import tqdm
 from tqdm.contrib import tenumerate
 
