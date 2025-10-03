@@ -37,12 +37,17 @@ for i, ax in enumerate(axes):
     
     # X軸ラベルは最下段のsubplotのみ表示
     if i == len(axes) - 1:
-        ax.set_xticklabels(sizes, fontsize=16)
-        ax.set_xlabel('Rock size / wavelength in the rock', fontsize=20)
-
         # 波長で規格化した岩石サイズを軸ラベルに設定
         wavelength_in_rock = 3e8 / np.sqrt(9) / 500e6 * 100  # cm
         ax.set_xticklabels([f"{s / wavelength_in_rock:.2f}" for s in sizes], fontsize=16)
+        ax.set_xlabel('Rock size / wavelength in the rock', fontsize=20)
+    elif i == 0:
+        # 最上段のsubplotに第２横軸を追加（規格化していないサイズ）
+        ax2 = ax.twiny()
+        ax2.set_xlim(ax.get_xlim())
+        ax2.set_xticks(np.arange(len(sizes)))
+        ax2.set_xticklabels(sizes, fontsize=16)
+        ax2.set_xlabel('Rock size [cm]', fontsize=20)
     else:
         ax.set_xticklabels([])
     
