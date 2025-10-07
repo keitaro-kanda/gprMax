@@ -121,6 +121,30 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
 
                 pltrange = np.s_[0:pltrange]
 
+                # Calculate center frequency and bandwidth (-3dB)
+                center_freq = freqs[freqmaxpower]
+                lower_freq_3db = None
+                upper_freq_3db = None
+                bandwidth_3db = None
+
+                # Find -3dB points
+                try:
+                    # Search for lower -3dB point (below center frequency)
+                    lower_indices = np.where(power[:freqmaxpower] <= -3)[0]
+                    if len(lower_indices) > 0:
+                        lower_freq_3db = freqs[lower_indices[-1]]
+
+                    # Search for upper -3dB point (above center frequency)
+                    upper_indices = np.where(power[freqmaxpower:] <= -3)[0]
+                    if len(upper_indices) > 0:
+                        upper_freq_3db = freqs[upper_indices[0] + freqmaxpower]
+
+                    # Calculate bandwidth if both points found
+                    if lower_freq_3db is not None and upper_freq_3db is not None:
+                        bandwidth_3db = upper_freq_3db - lower_freq_3db
+                except:
+                    pass
+
                 # Plot time history of output component
                 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
                 line1 = ax1.plot(time, outputdata_norm, 'k', lw=2, label=outputtext)
@@ -282,6 +306,16 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
         # fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.pdf', dpi=None, format='pdf', bbox_inches='tight', pad_inches=0.1)
         if use_fft:
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fft.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+
+            # Save FFT parameters to txt file
+            if len(outputs) == 1 and fft:
+                txt_filename = os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fft_params.txt'
+                if bandwidth_3db is not None:
+                    with open(txt_filename, 'w') as txt_file:
+                        txt_file.write(f'Center Frequency: {center_freq/1e6:.2f} MHz\n')
+                        txt_file.write(f'Bandwidth (-3dB): {bandwidth_3db/1e6:.2f} MHz\n')
+                        txt_file.write(f'Lower Frequency (-3dB): {lower_freq_3db/1e6:.2f} MHz\n')
+                        txt_file.write(f'Upper Frequency (-3dB): {upper_freq_3db/1e6:.2f} MHz\n')
         elif use_closeup:
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_closeup_x' + str(closeup_x_start) \
                             + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
@@ -326,13 +360,13 @@ if __name__ == "__main__":
     
     # Get closeup option
     closeup_input = input("Plot close up of time domain signal? (y/n) [default: n]: ").strip().lower()
+    if closeup_input == 'y':
+        closeup_x_start = float(input("Enter close up x-axis start [ns]: ").strip())
+        closeup_x_end = float(input("Enter close up x-axis end [ns]: ").strip())
+        closeup_y_range = np.abs(float(input("Enter close up y-axis range [ns]: ").strip()))
+        closeup_y_start = - closeup_y_range
+        closeup_y_end = closeup_y_range
     use_closeup = closeup_input == 'y'
-    
-    # for closeup option
-    closeup_x_start = 25 #[ns]
-    closeup_x_end = 35 #[ns]
-    closeup_y_start = -0.01
-    closeup_y_end = 0.01
 
     plthandle = mpl_plot(outputfile, outputs, fft=use_fft)
     plthandle.show()
