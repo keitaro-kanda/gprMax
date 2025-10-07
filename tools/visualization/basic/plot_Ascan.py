@@ -32,13 +32,16 @@ from gprMax.utilities import fft_power
 from scipy import signal
 
 
-def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
+def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width=False, pulse_measure_start=None, pulse_measure_end=None):
     """Plots electric and magnetic fields and currents from all receiver points in the given output file. Each receiver point is plotted in a new figure window.
 
     Args:
         filename (string): Filename (including path) of output file.
         outputs (list): List of field/current components to plot.
         fft (boolean): Plot FFT switch.
+        measure_pulse_width (boolean): Measure pulse width switch.
+        pulse_measure_start (float): Pulse measurement start time [ns].
+        pulse_measure_end (float): Pulse measurement end time [ns].
 
     Returns:
         plt (object): matplotlib plot object.
@@ -105,6 +108,34 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
                     peak_idx.append(np.argmax(np.abs(outputdata[start:end])) + start)
                 i += 1
             """
+
+            # Measure pulse width if requested
+            pulse_start_time = None
+            pulse_end_time = None
+            pulse_width = None
+
+            if measure_pulse_width and pulse_measure_start is not None and pulse_measure_end is not None:
+                # Convert time range from ns to seconds for indexing
+                start_idx = int(pulse_measure_start * 1e-9 / dt)
+                end_idx = int(pulse_measure_end * 1e-9 / dt)
+
+                # Ensure indices are within bounds
+                start_idx = max(0, min(start_idx, len(outputdata_norm) - 1))
+                end_idx = max(0, min(end_idx, len(outputdata_norm)))
+
+                # Find all indices where |normalized amplitude| >= 0.01 within the measurement range
+                threshold = 0.01
+                pulse_indices = np.where(np.abs(outputdata_norm[start_idx:end_idx]) >= threshold)[0]
+
+                if len(pulse_indices) > 0:
+                    # Get the first and last indices (consolidating all ranges)
+                    first_pulse_idx = pulse_indices[0] + start_idx
+                    last_pulse_idx = pulse_indices[-1] + start_idx
+
+                    # Convert to time in ns
+                    pulse_start_time = time[first_pulse_idx]
+                    pulse_end_time = time[last_pulse_idx]
+                    pulse_width = pulse_end_time - pulse_start_time
 
             # Plotting if FFT required
             if fft:
@@ -323,6 +354,15 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False):
         else:
             fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
 
+        # Save pulse width measurement to txt file
+        if measure_pulse_width and len(outputs) == 1 and pulse_width is not None:
+            txt_filename = os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_pulse_width.txt'
+            with open(txt_filename, 'w') as txt_file:
+                txt_file.write(f'Measurement Range: {pulse_measure_start:.2f} - {pulse_measure_end:.2f} ns\n')
+                txt_file.write(f'Pulse Start Time: {pulse_start_time:.2f} ns\n')
+                txt_file.write(f'Pulse End Time: {pulse_end_time:.2f} ns\n')
+                txt_file.write(f'Pulse Width: {pulse_width:.2f} ns\n')
+
     f.close()
 
     return plt
@@ -368,5 +408,17 @@ if __name__ == "__main__":
         closeup_y_end = closeup_y_range
     use_closeup = closeup_input == 'y'
 
-    plthandle = mpl_plot(outputfile, outputs, fft=use_fft)
+    # Get pulse width measurement option
+    pulse_width_input = input("Measure pulse width? (y/n) [default: n]: ").strip().lower()
+    use_pulse_width = pulse_width_input == 'y'
+
+    if use_pulse_width:
+        pulse_measure_start = float(input("Enter pulse measurement start time [ns]: ").strip())
+        pulse_measure_end = float(input("Enter pulse measurement end time [ns]: ").strip())
+    else:
+        pulse_measure_start = None
+        pulse_measure_end = None
+
+    plthandle = mpl_plot(outputfile, outputs, fft=use_fft, measure_pulse_width=use_pulse_width,
+                         pulse_measure_start=pulse_measure_start, pulse_measure_end=pulse_measure_end)
     plthandle.show()
