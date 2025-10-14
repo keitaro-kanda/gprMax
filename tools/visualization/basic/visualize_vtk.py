@@ -19,55 +19,42 @@ material_info = {
 
 try:
     grid = pv.read(VTK_FILE_PATH)
-    # スライス表示は元の'Material'データを使うため、ここではアクティブ設定しない
     plotter = pv.Plotter(shape=(1, 2), window_size=[1600, 800])
 
     # --- 左側のプロット：ボリュームレンダリング (最終修正版) ---
     plotter.subplot(0, 0)
-    plotter.add_text("Volume Rendering (PML Corrected)", font_size=15)
+    plotter.add_text("Volume Rendering (Final Correction)", font_size=15)
     
-    # ★★★ ここからが改善点 ★★★
     # 1. PMLをマスクするための新しいデータ配列を作成
-    material_array = grid['Material'].copy() # 元のデータをコピー
+    material_array = grid['Material'].copy()
     pml_array = grid['Sources_PML']
-    
-    # PML用の新しいIDを定義（既存のIDと衝突しないように大きな値を選ぶ）
     PML_ID = 99 
-    
-    # 'Sources_PML'が0より大きい場所（PML層）を新しいIDで上書き
     material_array[pml_array > 0] = PML_ID
-    
-    # 作成した配列を'Material_masked'という名前でグリッドに追加
     grid['Material_masked'] = material_array
-    
-    # ボリュームレンダリングでは、このマスク済みデータをアクティブにする
     grid.set_active_scalars('Material_masked')
 
     # 2. マテリアルID -> 不透明度 の対応リストを作成
-    #    リストのインデックスがIDに対応する
-    
-    # マテリアルIDの最大値（PML_IDを含む）に合わせてリストを初期化
     max_id = max(int(grid['Material_masked'].max()), max(material_info.keys()))
     opacities = [0.5] * (max_id + 1) # デフォルトは少し透明
-
-    # 各マテリアルの不透明度を設定
     opacities[1] = 0.0  # free_spaceは完全に透明
     opacities[3] = 1.0  # basaltは不透明
     opacities[PML_ID] = 0.0 # PML (ID=99) は完全に透明
 
     # 3. 色のリストもPML_IDに対応させる
     color_names = [material_info.get(mid, {}).get('color', 'white') for mid in range(max_id + 1)]
-    # PMLの色は描画されないが、念のため設定
-    color_names[PML_ID] = 'black' 
+    color_names[PML_ID] = 'white'  # PML (ID=99) は白色（透明に見える）
     
     # 4. 修正した設定でボリュームレンダリングを追加
     vol = plotter.add_volume(
-        grid, # active_scalars ('Material_masked') が使われる
+        grid,
         cmap=color_names,
         opacity=opacities,
         show_scalar_bar=False,
+        # ★★★ 修正点1: ここから 'interpolation' 引数を削除 ★★★
     )
-    # ★★★ 改善点ここまで ★★★
+    
+    # ★★★ 修正点2: ボリュームオブジェクトのプロパティとして補間方法を設定 ★★★
+    vol.prop.interpolation_type = 'nearest'
     
     vol.prop.shade = True
     
@@ -81,8 +68,6 @@ try:
     # --- 右側のプロット：スライス表示 ---
     plotter.subplot(0, 1)
     plotter.add_text("Interactive Slicer", font_size=15)
-    
-    # スライサーでは元のマテリアル情報を表示したいので、'scalars'を明示的に指定
     slicer_colors = [material_info.get(mid, {}).get('color', 'white') for mid in range(max(material_info.keys()) + 1)]
     plotter.add_mesh_slice_orthogonal(grid, scalars='Material', cmap=slicer_colors)
 
