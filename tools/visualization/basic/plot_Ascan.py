@@ -274,57 +274,58 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
                     raise CmdInputError('Output(s) requested to plot: {}, but available output(s) for receiver {} in the file: {}'.format(', '.join(outputs), rx, ', '.join(availableoutputs)))
 
                 outputdata = f[path + output][:] * polarity
+                outputdata_norm = outputdata
+                env = np.abs(signal.hilbert(outputdata_norm))
 
                 if output == 'Ex':
                     ax = plt.subplot(gs[0, 0])
-                    ax.plot(time, outputdata, 'r', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', field strength [V/m]')
+                    ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext)
+                    ax.set_ylabel('Normalized ' + outputtext)
                 # ax.set_ylim([-15, 20])
                 elif output == 'Ey':
                     ax = plt.subplot(gs[1, 0])
-                    ax.plot(time, outputdata, 'r', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', field strength [V/m]')
+                    ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext)
+                    ax.set_ylabel('Normalized ' + outputtext)
                 # ax.set_ylim([-15, 20])
 
                 # =====Ezのプロット=====
                 elif output == 'Ez':
-                    outputdata_norm = outputdata/np.amax(np.abs(outputdata)) * 100
                     ax = plt.subplot(gs[2, 0])
                     ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext)
                     #ax.set_ylim([-3, 3])
                     ax.set_xlim([5e-8, 5e-6])
                     #ax.set_xscale('log')
-                    ax.set_ylabel(outputtext + ' strength [%]', size=18)
+                    ax.set_ylabel('Normalized ' + outputtext, size=18)
                     ax.tick_params(labelsize=18)
 
 
                 elif output == 'Hx':
                     ax = plt.subplot(gs[0, 1])
-                    ax.plot(time, outputdata, 'g', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', field strength [A/m]')
+                    ax.plot(time, outputdata_norm, 'g', lw=2, label=outputtext)
+                    ax.set_ylabel('Normalized ' + outputtext)
                 # ax.set_ylim([-0.03, 0.03])
                 elif output == 'Hy':
                     ax = plt.subplot(gs[1, 1])
-                    ax.plot(time, outputdata, 'g', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', field strength [A/m]')
+                    ax.plot(time, outputdata_norm, 'g', lw=2, label=outputtext)
+                    ax.set_ylabel('Normalized ' + outputtext)
                 # ax.set_ylim([-0.03, 0.03])
                 elif output == 'Hz':
                     ax = plt.subplot(gs[2, 1])
-                    ax.plot(time, outputdata, 'g', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', field strength [A/m]')
+                    ax.plot(time, outputdata_norm, 'g', lw=2, label=outputtext)
+                    ax.set_ylabel('Normalized ' + outputtext)
                 # ax.set_ylim([-0.03, 0.03])
                 elif output == 'Ix':
                     ax = plt.subplot(gs[0, 2])
-                    ax.plot(time, outputdata, 'b', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', current [A]')
+                    ax.plot(time, outputdata_norm, 'b', lw=2, label=outputtext)
+                    ax.set_ylabel('Normalized ' + outputtext)
                 elif output == 'Iy':
                     ax = plt.subplot(gs[1, 2])
-                    ax.plot(time, outputdata, 'b', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', current [A]')
+                    ax.plot(time, outputdata_norm, 'b', lw=2, label=outputtext)
+                    ax.set_ylabel('Normalized ' + outputtext)
                 elif output == 'Iz':
                     ax = plt.subplot(gs[2, 2])
-                    ax.plot(time, outputdata, 'b', lw=2, label=outputtext)
-                    ax.set_ylabel(outputtext + ', current [A]')
+                    ax.plot(time, outputdata_norm, 'b', lw=2, label=outputtext)
+                    ax.set_ylabel('Normalized ' + outputtext)
             for ax in fig.axes:
                 if use_closeup:
                     ax.set_xlim([closeup_x_start*10**(-9), closeup_x_end*10**(-9)])
