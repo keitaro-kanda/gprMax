@@ -190,6 +190,7 @@ for i, data in enumerate(unipolar_estimations):
 ax[1].set_xlabel('True size [cm]', fontsize=20)
 ax[1].set_ylabel('Error [%]', fontsize=20)
 ax[1].tick_params(labelsize=16)
+ax[1].set_ylim(0, 20)
 ax[1].grid()
 # save
 plt.savefig(os.path.join(output_dir_unipolar, 'size_error_unipolar_abs.png'), dpi=300)
@@ -257,6 +258,7 @@ for i, data in enumerate(bipolar_estimations):
 ax[1].set_xlabel('True size [cm]', fontsize=20)
 ax[1].set_ylabel('Error [%]', fontsize=20)
 ax[1].tick_params(labelsize=16)
+ax[1].set_ylim(0, 30)
 ax[1].grid()
 # save
 plt.savefig(os.path.join(output_dir_bipolar, 'size_error_bipolar_abs.png'), dpi=300)
