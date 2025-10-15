@@ -12,6 +12,14 @@ print()
 
 ### output dir path
 output_dir = os.path.dirname(txt_file_path)
+output_dir_all = os.path.join(output_dir, 'error_all')
+output_dir_unipolar = os.path.join(output_dir, 'error_unipolar')
+output_dir_bipolar = os.path.join(output_dir, 'error_bipolar')
+
+# Create directories if they don't exist
+os.makedirs(output_dir_all, exist_ok=True)
+os.makedirs(output_dir_unipolar, exist_ok=True)
+os.makedirs(output_dir_bipolar, exist_ok=True)
 
 
 ### set constants
@@ -108,8 +116,8 @@ ax[1].set_ylabel('Error [%]', fontsize=20)
 ax[1].tick_params(labelsize=16)
 ax[1].grid()
 # save
-plt.savefig(os.path.join(output_dir, 'size_error_abs.png'), dpi=300)
-plt.savefig(os.path.join(output_dir, 'size_error_abs.pdf'))
+plt.savefig(os.path.join(output_dir_all, 'size_error_abs.png'), dpi=300)
+plt.savefig(os.path.join(output_dir_all, 'size_error_abs.pdf'))
 
 # --- plot for non-abs error ---
 fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
@@ -148,7 +156,141 @@ ax[1].set_ylabel('Error [%]', fontsize=20)
 ax[1].tick_params(labelsize=16)
 ax[1].grid()
 # save
-plt.savefig(os.path.join(output_dir, 'size_error.png'), dpi=300)
-plt.savefig(os.path.join(output_dir, 'size_error.pdf'))
+plt.savefig(os.path.join(output_dir_all, 'size_error.png'), dpi=300)
+plt.savefig(os.path.join(output_dir_all, 'size_error.pdf'))
+
+# --- plot for Unipolar only ---
+fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
+unipolar_names = ['Unipolar_circle', 'Unipolar_square']
+unipolar_colors = ['r', 'r']
+unipolar_linestyles = ['-', '--']
+unipolar_estimations = [LPR_circle, LPR_square]
+
+# true size VS estimated size
+for i, data in enumerate(unipolar_estimations):
+    if data.shape[0] == 0:
+        print('No data for one of the Unipolar configurations. Please check the input txt file.')
+    else:
+        ax[0].plot(data[:, 0], data[:, 1], label=unipolar_names[i], marker='o', color=unipolar_colors[i], linestyle=unipolar_linestyles[i])
+ax[0].plot(x, y, label='y = x', color='k', linestyle='-')
+
+ax[0].set_xlabel('True size [cm]', fontsize=20)
+ax[0].set_ylabel('Estimated size [cm]', fontsize=20)
+ax[0].legend(fontsize=16)
+ax[0].tick_params(labelsize=16)
+ax[0].grid()
+
+# True size VS error (abs)
+for i, data in enumerate(unipolar_estimations):
+    if data.shape[0] == 0:
+        print('No data for one of the Unipolar configurations. Please check the input txt file.')
+    else:
+        ax[1].plot(data[:, 0], np.abs(data[:, 2]), label=unipolar_names[i], marker='o', color=unipolar_colors[i], linestyle=unipolar_linestyles[i])
+
+ax[1].set_xlabel('True size [cm]', fontsize=20)
+ax[1].set_ylabel('Error [%]', fontsize=20)
+ax[1].tick_params(labelsize=16)
+ax[1].grid()
+# save
+plt.savefig(os.path.join(output_dir_unipolar, 'size_error_unipolar_abs.png'), dpi=300)
+plt.savefig(os.path.join(output_dir_unipolar, 'size_error_unipolar_abs.pdf'))
+
+# --- plot for Unipolar only (non-abs) ---
+fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
+# true size VS estimated size
+for i, data in enumerate(unipolar_estimations):
+    if data.shape[0] == 0:
+        print('No data for one of the Unipolar configurations. Please check the input txt file.')
+    else:
+        ax[0].plot(data[:, 0], data[:, 1], label=unipolar_names[i], marker='o', color=unipolar_colors[i], linestyle=unipolar_linestyles[i])
+ax[0].plot(x, y, label='y = x', color='k', linestyle='-')
+
+ax[0].set_xlabel('True size [cm]', fontsize=20)
+ax[0].set_ylabel('Estimated size [cm]', fontsize=20)
+ax[0].legend(fontsize=16)
+ax[0].tick_params(labelsize=16)
+ax[0].grid()
+
+# True size VS error
+for i, data in enumerate(unipolar_estimations):
+    if data.shape[0] == 0:
+        print('No data for one of the Unipolar configurations. Please check the input txt file.')
+    else:
+        ax[1].plot(data[:, 0], data[:, 2], label=unipolar_names[i], marker='o', color=unipolar_colors[i], linestyle=unipolar_linestyles[i])
+
+ax[1].set_xlabel('True size [cm]', fontsize=20)
+ax[1].set_ylabel('Error [%]', fontsize=20)
+ax[1].tick_params(labelsize=16)
+ax[1].grid()
+# save
+plt.savefig(os.path.join(output_dir_unipolar, 'size_error_unipolar.png'), dpi=300)
+plt.savefig(os.path.join(output_dir_unipolar, 'size_error_unipolar.pdf'))
+
+# --- plot for Bipolar only ---
+fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
+bipolar_names = ['Bipolar_circle', 'Bipolar_square']
+bipolar_colors = ['b', 'b']
+bipolar_linestyles = ['-', '--']
+bipolar_estimations = [Bipolar_circle, Bipolar_square]
+
+# true size VS estimated size
+for i, data in enumerate(bipolar_estimations):
+    if data.shape[0] == 0:
+        print('No data for one of the Bipolar configurations. Please check the input txt file.')
+    else:
+        ax[0].plot(data[:, 0], data[:, 1], label=bipolar_names[i], marker='o', color=bipolar_colors[i], linestyle=bipolar_linestyles[i])
+ax[0].plot(x, y, label='y = x', color='k', linestyle='-')
+
+ax[0].set_xlabel('True size [cm]', fontsize=20)
+ax[0].set_ylabel('Estimated size [cm]', fontsize=20)
+ax[0].legend(fontsize=16)
+ax[0].tick_params(labelsize=16)
+ax[0].grid()
+
+# True size VS error (abs)
+for i, data in enumerate(bipolar_estimations):
+    if data.shape[0] == 0:
+        print('No data for one of the Bipolar configurations. Please check the input txt file.')
+    else:
+        ax[1].plot(data[:, 0], np.abs(data[:, 2]), label=bipolar_names[i], marker='o', color=bipolar_colors[i], linestyle=bipolar_linestyles[i])
+
+ax[1].set_xlabel('True size [cm]', fontsize=20)
+ax[1].set_ylabel('Error [%]', fontsize=20)
+ax[1].tick_params(labelsize=16)
+ax[1].grid()
+# save
+plt.savefig(os.path.join(output_dir_bipolar, 'size_error_bipolar_abs.png'), dpi=300)
+plt.savefig(os.path.join(output_dir_bipolar, 'size_error_bipolar_abs.pdf'))
+
+# --- plot for Bipolar only (non-abs) ---
+fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
+# true size VS estimated size
+for i, data in enumerate(bipolar_estimations):
+    if data.shape[0] == 0:
+        print('No data for one of the Bipolar configurations. Please check the input txt file.')
+    else:
+        ax[0].plot(data[:, 0], data[:, 1], label=bipolar_names[i], marker='o', color=bipolar_colors[i], linestyle=bipolar_linestyles[i])
+ax[0].plot(x, y, label='y = x', color='k', linestyle='-')
+
+ax[0].set_xlabel('True size [cm]', fontsize=20)
+ax[0].set_ylabel('Estimated size [cm]', fontsize=20)
+ax[0].legend(fontsize=16)
+ax[0].tick_params(labelsize=16)
+ax[0].grid()
+
+# True size VS error
+for i, data in enumerate(bipolar_estimations):
+    if data.shape[0] == 0:
+        print('No data for one of the Bipolar configurations. Please check the input txt file.')
+    else:
+        ax[1].plot(data[:, 0], data[:, 2], label=bipolar_names[i], marker='o', color=bipolar_colors[i], linestyle=bipolar_linestyles[i])
+
+ax[1].set_xlabel('True size [cm]', fontsize=20)
+ax[1].set_ylabel('Error [%]', fontsize=20)
+ax[1].tick_params(labelsize=16)
+ax[1].grid()
+# save
+plt.savefig(os.path.join(output_dir_bipolar, 'size_error_bipolar.png'), dpi=300)
+plt.savefig(os.path.join(output_dir_bipolar, 'size_error_bipolar.pdf'))
 
 plt.show()
