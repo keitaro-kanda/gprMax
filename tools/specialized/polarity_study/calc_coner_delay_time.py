@@ -2,7 +2,7 @@ import numpy as np
 from scipy.optimize import brentq
 
 # 既知の値を設定（例）
-W = 1.8 # 岩石の幅 [m]
+W = 3.0 # 岩石の幅 [m]
 epsilon_r = 3.0  # 比誘電率 (例: 水や湿った土)
 h = 0.3 # アンテナ高さ [m]
 d = 2.0 # 岩石の深さ [m]

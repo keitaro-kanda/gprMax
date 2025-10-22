@@ -141,6 +141,66 @@ def calculate_envelope(data):
         print(f"Warning: Could not calculate envelope: {e}", file=sys.stderr)
         return None
 
+def calculate_corner_echo_time(W, epsilon_r, h, d, transmission_delay):
+    """
+    Calculate corner echo delay time based on geometric parameters.
+
+    Args:
+        W (float): Rock width [m]
+        epsilon_r (float): Relative permittivity
+        h (float): Antenna height [m]
+        d (float): Rock depth [m]
+        transmission_delay (float): Transmission line delay [s]
+
+    Returns:
+        float: Corner echo delay time [ns], or None if calculation fails
+    """
+    from scipy.optimize import brentq
+
+    # Define the function to solve
+    def f(theta_2, W, epsilon_r, h, d):
+        if theta_2 <= 0 or theta_2 >= np.pi/2:
+            return -np.inf
+
+        sin_theta_2 = np.sin(theta_2)
+        cos_theta_2 = np.cos(theta_2)
+
+        # Check for total reflection condition
+        sqrt_term_1_val = 1 - epsilon_r * (sin_theta_2**2)
+        if sqrt_term_1_val <= 0:
+            return np.inf
+
+        term1 = h / np.sqrt(sqrt_term_1_val)
+        term2 = d / cos_theta_2
+
+        val = np.sqrt(epsilon_r) * sin_theta_2 * (term1 + term2) - (W / 2)
+        return val
+
+    try:
+        # Critical angle
+        theta_critical = np.arcsin(1 / np.sqrt(epsilon_r))
+
+        # Search range
+        search_min = 1e-9
+        search_max = theta_critical - 1e-9
+
+        # Solve for theta_2
+        theta_2_rad = brentq(f, search_min, search_max, args=(W, epsilon_r, h, d))
+
+        # Calculate propagation distance
+        L = h / np.sqrt(1 - epsilon_r * np.sin(theta_2_rad)**2) + d * np.sqrt(epsilon_r) / np.cos(theta_2_rad)
+
+        # Calculate delay time
+        c0 = 3e8  # Speed of light [m/s]
+        delay_time = L * 2 / c0 + transmission_delay  # [s]
+        delay_time_ns = delay_time * 1e9  # Convert to [ns]
+
+        return delay_time_ns
+
+    except Exception as e:
+        print(f"Warning: Could not calculate corner echo time: {e}", file=sys.stderr)
+        return None
+
 def show_mode_selection_dialog():
     """
     Show initial mode selection dialog using tkinter if available, otherwise use console input.
@@ -294,11 +354,13 @@ class AscanViewer:
         self.current_config = None
         self.peak_scatter = None
         self.twt_lines = []
-        
+        self.corner_echo_lines = []
+
         # Current peaks and TWTs for persistence
         self.current_peaks = None
         self.current_two_peaks = None
         self.current_twts = None
+        self.current_corner_echo = None
         
         # Load zoom settings
         self.zoom_settings = load_zoom_settings(json_dir)
@@ -316,6 +378,7 @@ class AscanViewer:
         # Display mode persistence
         self.show_peaks = False
         self.show_twts = False
+        self.show_corner_echo = False
         
         # Waveform type
         self.waveform_type = waveform_type
@@ -402,6 +465,11 @@ class AscanViewer:
         ax_twt_btn = plt.axes([0.62, 0.22, 0.12, 0.04])
         self.twt_button = Button(ax_twt_btn, 'Show Estimated TWT')
         self.twt_button.on_clicked(self.run_twt_estimation)
+
+        # Corner echo button
+        ax_corner_btn = plt.axes([0.50, 0.16, 0.10, 0.04])
+        self.corner_button = Button(ax_corner_btn, 'Show Corner Echo')
+        self.corner_button.on_clicked(self.run_corner_echo_calculation)
         
         # Mode switching button
         ax_mode_btn = plt.axes([0.78, 0.30, 0.12, 0.04])
@@ -451,6 +519,9 @@ class AscanViewer:
         for line in self.twt_lines:
             line.remove()
         self.twt_lines = []
+        for line in self.corner_echo_lines:
+            line.remove()
+        self.corner_echo_lines = []
         if self.envelope_line:
             self.envelope_line.remove()
             self.envelope_line = None
@@ -652,14 +723,20 @@ class AscanViewer:
             if tw_travel_time:
                 colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown']
                 for i, (twt, name) in enumerate(zip(tw_travel_time, boundary_names)):
-                    line = self.ax.axvline(twt, linestyle='--', color=colors[i % len(colors)], 
+                    line = self.ax.axvline(twt, linestyle='--', color=colors[i % len(colors)],
                                          label=f'{name}: {twt:.2f} ns')
                     self.twt_lines.append(line)
-        
+
+        # Re-plot corner echo if enabled
+        if self.show_corner_echo and self.current_corner_echo is not None:
+            line = self.ax.axvline(self.current_corner_echo, linestyle='--', color='purple',
+                                 linewidth=2, label=f'Corner Echo: {self.current_corner_echo:.2f} ns')
+            self.corner_echo_lines.append(line)
+
         # Update legend if any displays are active
-        if self.show_peaks or self.show_twts or self.show_envelope:
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo:
             self.ax.legend()
-        
+
         self.fig.canvas.draw()
     
     def calculate_label_stats(self, mode='peak'):
@@ -881,8 +958,49 @@ class AscanViewer:
                 self.show_twts = False
                 self.current_twts = None
         
+        # Auto-calculate corner echo if display mode is enabled
+        if self.show_corner_echo:
+            try:
+                current_file_path = self.file_list[self.current_index]
+                config_path = current_file_path.replace('.out', '_config.json')
+
+                if os.path.exists(config_path):
+                    # Get W from filename
+                    height, width = self.get_geometry_from_filename()
+
+                    # Get transmission delay from config
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+                        transmission_delay_ns = config.get('initial_pulse_delay', 0)  # [ns]
+                        transmission_delay = transmission_delay_ns * 1e-9  # Convert to [s]
+
+                    # Fixed parameters
+                    epsilon_r = 3.0
+                    h = 0.3  # [m]
+                    d = 2.0  # [m]
+
+                    # Calculate corner echo time
+                    corner_echo_time = calculate_corner_echo_time(width, epsilon_r, h, d, transmission_delay)
+                    self.current_corner_echo = corner_echo_time
+
+                    if corner_echo_time is not None:
+                        line = self.ax.axvline(corner_echo_time, linestyle='--', color='purple',
+                                             linewidth=2, label=f'Corner Echo: {corner_echo_time:.2f} ns')
+                        self.corner_echo_lines.append(line)
+                        print(f"Auto-calculated corner echo time: {corner_echo_time:.2f} ns")
+                    else:
+                        print("Could not calculate corner echo time for current data.")
+                else:
+                    print(f"Warning: config.json not found for corner echo calculation: {config_path}", file=sys.stderr)
+                    self.show_corner_echo = False
+                    self.current_corner_echo = None
+            except Exception as e:
+                print(f"Error in auto corner echo calculation: {e}", file=sys.stderr)
+                self.show_corner_echo = False
+                self.current_corner_echo = None
+
         # Update legend if any displays are active
-        if self.show_peaks or self.show_twts or self.show_envelope:
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo:
             self.ax.legend()
     
     def toggle_mode(self, event):
@@ -1190,21 +1308,50 @@ class AscanViewer:
 
         # Enable TWT display mode
         self.show_twts = True
-        
+
         # Clear and redraw with all active displays (auto-calculation will occur)
         self.clear_overlays()
         self.apply_persistent_displays()
-        
+
         # Re-plot envelope if enabled
         if self.show_envelope and self.current_data is not None:
             envelope = calculate_envelope(self.current_data)
             if envelope is not None:
-                self.envelope_line = self.ax.plot(self.current_time, envelope, label='Envelope', 
-                                                color='gray', linewidth=1.5, 
+                self.envelope_line = self.ax.plot(self.current_time, envelope, label='Envelope',
+                                                color='gray', linewidth=1.5,
                                                 linestyle='--', alpha=0.8)[0]
-        
+
         # Update legend and redraw
-        if self.show_peaks or self.show_twts or self.show_envelope:
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo:
+            self.ax.legend()
+        self.fig.canvas.draw()
+
+    def run_corner_echo_calculation(self, event):
+        """Manually trigger corner echo calculation and enable persistent display mode"""
+        current_file_path = self.file_list[self.current_index]
+        config_path = current_file_path.replace('.out', '_config.json')
+
+        if not os.path.exists(config_path):
+            print(f"Error: config.json not found in the same directory as the .out file.", file=sys.stderr)
+            return
+
+        # Enable corner echo display mode
+        self.show_corner_echo = True
+
+        # Clear and redraw with all active displays (auto-calculation will occur)
+        self.clear_overlays()
+        self.apply_persistent_displays()
+
+        # Re-plot envelope if enabled
+        if self.show_envelope and self.current_data is not None:
+            envelope = calculate_envelope(self.current_data)
+            if envelope is not None:
+                self.envelope_line = self.ax.plot(self.current_time, envelope, label='Envelope',
+                                                color='gray', linewidth=1.5,
+                                                linestyle='--', alpha=0.8)[0]
+
+        # Update legend and redraw
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo:
             self.ax.legend()
         self.fig.canvas.draw()
 
