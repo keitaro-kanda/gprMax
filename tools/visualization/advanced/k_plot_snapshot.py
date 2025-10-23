@@ -132,7 +132,7 @@ def main():
         raise RuntimeError("No Ez data found in first 20 frames.")
     print(f"[INFO] Final max_abs for normalization: {max_abs:.3e}")
 
-    vmin, vmax = -0.01, 0.01
+    vmin, vmax = -0.03, 0.03
     print(f"[INFO] Ez normalization range: [{vmin}, {vmax}]")
 
     # Prepare geometry grid and axes
@@ -188,7 +188,7 @@ def main():
     os.makedirs(frame_dir, exist_ok=True)
     print(f"[INFO] Frame directory: {frame_dir}")
 
-    dt_ns = 0.5
+    dt_ns = 0.2
     def update(i):
         coords, vals = extract_slice(read_vti_image(snap_paths[i]), ez_field)
         grid = np.zeros((ny, nx))
