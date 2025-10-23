@@ -41,7 +41,7 @@ def main():
     output_dir = input("Enter output directory path: ").strip()
 
     dt = 4.71731e-12 # dx=dy=dz=0.002m
-    t_max = 6e-9
+    t_max = 5e-9
     f = 500e6
     amplitude = 1.0
 
