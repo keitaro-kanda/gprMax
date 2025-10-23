@@ -49,9 +49,7 @@ def main():
     plot_source_file(time, Ez_array, output_dir)
 
     # Save to file
-    header = ['time', 'my_pulse']
-    data = np.column_stack((time, Ez_array))
-    np.savetxt(f"{output_dir}/my_pulse.txt", data, header=' '.join(header), comments='')
+    np.savetxt(f"{output_dir}/my_pulse.txt", Ez_array, header='my_pulse', comments='')
 
 if __name__ == "__main__":
     main()
