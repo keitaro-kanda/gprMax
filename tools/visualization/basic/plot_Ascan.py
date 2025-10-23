@@ -184,7 +184,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
                 #* Plot the peak
                 #ax1.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
                 ax1.set_xlabel('Time [ns]', fontsize=28)
-                ax1.set_ylabel(outputtext + ' field strength [V/m]', fontsize=28)
+                ax1.set_ylabel('Normalized ' + outputtext, fontsize=28)
                 #* Closeup otpion
                 if use_closeup:
                     ax1.set_xlim([closeup_x_start, closeup_x_end])
@@ -239,7 +239,7 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
                 ax.grid(which='both', axis='both', linestyle='-.')
                 ax.minorticks_on()
                 ax.set_xlabel('Time [ns]', fontsize=28)
-                ax.set_ylabel(outputtext + ' field strength [V/m]', fontsize=28)
+                ax.set_ylabel('Normalized ' + outputtext, fontsize=28)
                 ax.tick_params(labelsize=24)
                 plt.tight_layout()
                 ax.legend(fontsize = 24)
