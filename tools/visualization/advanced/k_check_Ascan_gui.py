@@ -391,7 +391,8 @@ class AscanViewer:
         self.output_peak_dir = os.path.join(output_base_dir, 'result_use_peak')
         self.output_twt_dir = os.path.join(output_base_dir, 'result_use_TWT')
         self.output_two_peaks_dir = os.path.join(output_base_dir, 'result_use_two_peaks')
-        
+        self.output_fwhm_dir = os.path.join(output_base_dir, 'result_fwhm')
+
         # Labeling state for current file - separate for Peak, TWT, and Two-peaks modes
         self.peak_top_label = 1
         self.peak_bottom_label = 1
@@ -399,6 +400,10 @@ class AscanViewer:
         self.twt_bottom_label = 1
         self.two_peaks_top_label = 1
         self.two_peaks_bottom_label = 1
+
+        # FWHM labeling state ('OK'/'NG')
+        self.fwhm_top_label = 'OK'
+        self.fwhm_bottom_label = 'OK'
         
         # Current labeling mode ('peak', 'twt', or 'two-peaks')
         self.current_mode = initial_mode
@@ -418,11 +423,18 @@ class AscanViewer:
             'top': load_existing_labels(self.output_two_peaks_dir, 'top'),
             'bottom': load_existing_labels(self.output_two_peaks_dir, 'bottom')
         }
-        
+
+        # FWHM labeling results (independent from detection modes)
+        self.fwhm_labeling_results = {
+            'top': self.load_fwhm_labels('top'),
+            'bottom': self.load_fwhm_labels('bottom')
+        }
+
         # Label statistics - separate for Peak, TWT, and Two-peaks
         self.peak_label_stats = self.calculate_label_stats('peak')
         self.twt_label_stats = self.calculate_label_stats('twt')
         self.two_peaks_label_stats = self.calculate_label_stats('two-peaks')
+        self.fwhm_label_stats = self.calculate_fwhm_label_stats()
         
         self.fig = plt.figure(figsize=(16, 10))
         plt.subplots_adjust(bottom=0.35, right=0.75)
@@ -495,7 +507,17 @@ class AscanViewer:
         ax_bottom_label = plt.axes([0.78, 0.08, 0.15, 0.08])
         self.bottom_radio = RadioButtons(ax_bottom_label, ['Bottom Label 1', 'Bottom Label 2', 'Bottom Label 3'])
         self.bottom_radio.on_clicked(self.set_bottom_label)
-        
+
+        # FWHM Top labeling
+        ax_fwhm_top = plt.axes([0.40, 0.03, 0.10, 0.06])
+        self.fwhm_top_radio = RadioButtons(ax_fwhm_top, ['FWHM Top: OK', 'FWHM Top: NG'])
+        self.fwhm_top_radio.on_clicked(self.set_fwhm_top_label)
+
+        # FWHM Bottom labeling
+        ax_fwhm_bottom = plt.axes([0.52, 0.03, 0.12, 0.06])
+        self.fwhm_bottom_radio = RadioButtons(ax_fwhm_bottom, ['FWHM Bottom: OK', 'FWHM Bottom: NG'])
+        self.fwhm_bottom_radio.on_clicked(self.set_fwhm_bottom_label)
+
         # Save labels button
         ax_save_btn = plt.axes([0.05, 0.06, 0.12, 0.04])
         self.save_button = Button(ax_save_btn, 'Save Labels')
@@ -661,7 +683,15 @@ class AscanViewer:
             title += f"\n{mode_text} Labels (Saved): Top={top_label}, Bottom={bottom_label}"
         else:
             title += f"\n{mode_text} Labels (Current): Top={current_top_label}, Bottom={current_bottom_label}"
-        
+
+        # Add FWHM label info (independent from mode)
+        if current_key in self.fwhm_labeling_results['top'] or current_key in self.fwhm_labeling_results['bottom']:
+            fwhm_top_label = self.fwhm_labeling_results['top'].get(current_key, [0, 0, 'OK'])[2]
+            fwhm_bottom_label = self.fwhm_labeling_results['bottom'].get(current_key, [0, 0, 'OK'])[2]
+            title += f"\nFWHM Labels (Saved): Top={fwhm_top_label}, Bottom={fwhm_bottom_label}"
+        else:
+            title += f"\nFWHM Labels (Current): Top={self.fwhm_top_label}, Bottom={self.fwhm_bottom_label}"
+
         self.ax.set_title(title)
         self.ax.set_xlabel("Time [ns]")
         self.ax.set_ylabel("Amplitude")
@@ -814,6 +844,17 @@ class AscanViewer:
 
         self.fig.canvas.draw()
 
+    def load_fwhm_labels(self, label_type):
+        """Load FWHM label JSON files from output directory."""
+        label_file = os.path.join(self.output_fwhm_dir, f'fwhm_{label_type}_labels.json')
+        try:
+            if os.path.exists(label_file):
+                with open(label_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Warning: Could not load existing FWHM labels from {label_file}: {e}", file=sys.stderr)
+        return {}
+
     def redraw_fwhm(self):
         """Redraw FWHM lines from stored pulse info"""
         # Determine which pulse_info to use based on current mode
@@ -907,7 +948,33 @@ class AscanViewer:
         
         stats['labeled_count'] = len(stats['labeled_files'])
         return stats
-    
+
+    def calculate_fwhm_label_stats(self):
+        """Calculate statistics for FWHM labeled data"""
+        stats = {
+            'total_files': len(self.file_list),
+            'labeled_files': set(),
+            'top_labels': {'OK': 0, 'NG': 0},
+            'bottom_labels': {'OK': 0, 'NG': 0}
+        }
+
+        for key, data in self.fwhm_labeling_results['top'].items():
+            stats['labeled_files'].add(key)
+            if len(data) >= 3:
+                label = data[2]
+                if label in stats['top_labels']:
+                    stats['top_labels'][label] += 1
+
+        for key, data in self.fwhm_labeling_results['bottom'].items():
+            stats['labeled_files'].add(key)
+            if len(data) >= 3:
+                label = data[2]
+                if label in stats['bottom_labels']:
+                    stats['bottom_labels'][label] += 1
+
+        stats['labeled_count'] = len(stats['labeled_files'])
+        return stats
+
     def update_label_gui(self):
         """Update GUI radio buttons based on current file's existing labels and current mode"""
         current_key = self.get_current_file_key()
@@ -954,7 +1021,22 @@ class AscanViewer:
             # Update radio button selections
             self.top_radio.set_active(self.two_peaks_top_label - 1)
             self.bottom_radio.set_active(self.two_peaks_bottom_label - 1)
-    
+
+        # Update FWHM labels (independent from mode)
+        if current_key in self.fwhm_labeling_results['top']:
+            top_data = self.fwhm_labeling_results['top'][current_key]
+            if len(top_data) >= 3:
+                self.fwhm_top_label = top_data[2]
+
+        if current_key in self.fwhm_labeling_results['bottom']:
+            bottom_data = self.fwhm_labeling_results['bottom'][current_key]
+            if len(bottom_data) >= 3:
+                self.fwhm_bottom_label = bottom_data[2]
+
+        # Update FWHM radio button selections (0: OK, 1: NG)
+        self.fwhm_top_radio.set_active(0 if self.fwhm_top_label == 'OK' else 1)
+        self.fwhm_bottom_radio.set_active(0 if self.fwhm_bottom_label == 'OK' else 1)
+
     def zoom(self, event):
         try:
             # Time zoom
@@ -1212,14 +1294,28 @@ class AscanViewer:
             label_num = 2
         elif 'Label 3' in label:
             label_num = 3
-        
+
         if self.current_mode == 'peak':
             self.peak_bottom_label = label_num
         elif self.current_mode == 'twt':
             self.twt_bottom_label = label_num
         else:  # two-peaks
             self.two_peaks_bottom_label = label_num
-    
+
+    def set_fwhm_top_label(self, label):
+        """Set FWHM top label ('OK' or 'NG')"""
+        if 'OK' in label:
+            self.fwhm_top_label = 'OK'
+        else:
+            self.fwhm_top_label = 'NG'
+
+    def set_fwhm_bottom_label(self, label):
+        """Set FWHM bottom label ('OK' or 'NG')"""
+        if 'OK' in label:
+            self.fwhm_bottom_label = 'OK'
+        else:
+            self.fwhm_bottom_label = 'NG'
+
     def get_current_file_key(self):
         if self.has_keys and self.file_keys:
             return self.file_keys[self.current_index]
@@ -1286,7 +1382,8 @@ class AscanViewer:
         os.makedirs(self.output_peak_dir, exist_ok=True)
         os.makedirs(self.output_twt_dir, exist_ok=True)
         os.makedirs(self.output_two_peaks_dir, exist_ok=True)
-        
+        os.makedirs(self.output_fwhm_dir, exist_ok=True)
+
         # Save to JSON files with backup and incremental update
         try:
             if self.current_mode == 'peak':
@@ -1384,7 +1481,10 @@ class AscanViewer:
             
             # Save label count summary for current mode
             self.save_label_count_summary()
-            
+
+            # Save FWHM labels (independent from detection mode)
+            self.save_fwhm_labels(current_key, height, width)
+
         except Exception as e:
             print(f"Error saving labels: {e}", file=sys.stderr)
 
@@ -1429,9 +1529,95 @@ class AscanViewer:
                 json.dump(summary_data, f, indent=2)
             
             print(f"{mode_text} label count summary saved to: {summary_path}")
-            
+
         except Exception as e:
             print(f"Error saving label count summary: {e}", file=sys.stderr)
+
+    def save_fwhm_labels(self, current_key, height, width):
+        """Save FWHM labels (independent from detection mode)"""
+        try:
+            # Check if FWHM labels have changed
+            old_fwhm_top = None
+            old_fwhm_bottom = None
+            if current_key in self.fwhm_labeling_results['top']:
+                old_fwhm_top = self.fwhm_labeling_results['top'][current_key][2]
+            if current_key in self.fwhm_labeling_results['bottom']:
+                old_fwhm_bottom = self.fwhm_labeling_results['bottom'][current_key][2]
+
+            # Update FWHM labeling results
+            self.fwhm_labeling_results['top'][current_key] = [height, width, self.fwhm_top_label]
+            self.fwhm_labeling_results['bottom'][current_key] = [height, width, self.fwhm_bottom_label]
+
+            # Save FWHM labels
+            fwhm_top_path = os.path.join(self.output_fwhm_dir, 'fwhm_top_labels.json')
+            fwhm_bottom_path = os.path.join(self.output_fwhm_dir, 'fwhm_bottom_labels.json')
+
+            # Create backups
+            create_backup(fwhm_top_path)
+            create_backup(fwhm_bottom_path)
+
+            # Load existing data and merge
+            existing_fwhm_top = self.load_fwhm_labels('top')
+            existing_fwhm_bottom = self.load_fwhm_labels('bottom')
+
+            # Update only current file's labels
+            existing_fwhm_top[current_key] = [height, width, self.fwhm_top_label]
+            existing_fwhm_bottom[current_key] = [height, width, self.fwhm_bottom_label]
+
+            # Save updated data
+            with open(fwhm_top_path, 'w') as f:
+                json.dump(existing_fwhm_top, f, indent=2)
+            with open(fwhm_bottom_path, 'w') as f:
+                json.dump(existing_fwhm_bottom, f, indent=2)
+
+            # Update statistics
+            self.fwhm_label_stats = self.calculate_fwhm_label_stats()
+
+            # Show save status
+            if old_fwhm_top is not None or old_fwhm_bottom is not None:
+                print(f"FWHM labels updated for {current_key}: Top={old_fwhm_top}→{self.fwhm_top_label}, Bottom={old_fwhm_bottom}→{self.fwhm_bottom_label}")
+            else:
+                print(f"FWHM labels saved for {current_key}: Top={self.fwhm_top_label}, Bottom={self.fwhm_bottom_label}")
+
+            # Show progress
+            print(f"FWHM Progress: {self.fwhm_label_stats['labeled_count']}/{self.fwhm_label_stats['total_files']} files labeled")
+
+            # Save FWHM label count summary
+            self.save_fwhm_label_summary()
+
+        except Exception as e:
+            print(f"Error saving FWHM labels: {e}", file=sys.stderr)
+
+    def save_fwhm_label_summary(self):
+        """Save FWHM label count summary JSON file"""
+        try:
+            stats = self.fwhm_label_stats
+
+            # Create summary data structure
+            summary_data = {
+                "total_files": stats['total_files'],
+                "labeled_files": stats['labeled_count'],
+                "top_labels": {
+                    "OK": stats['top_labels']['OK'],
+                    "NG": stats['top_labels']['NG']
+                },
+                "bottom_labels": {
+                    "OK": stats['bottom_labels']['OK'],
+                    "NG": stats['bottom_labels']['NG']
+                }
+            }
+
+            # Save to JSON file
+            summary_path = os.path.join(self.output_fwhm_dir, 'fwhm_label_summary.json')
+            create_backup(summary_path)
+
+            with open(summary_path, 'w') as f:
+                json.dump(summary_data, f, indent=2)
+
+            print(f"FWHM label summary saved to: {summary_path}")
+
+        except Exception as e:
+            print(f"Error saving FWHM label summary: {e}", file=sys.stderr)
 
     def run_peak_detection(self, event):
         """Manually trigger peak detection and enable persistent display mode"""
@@ -1617,7 +1803,8 @@ def main():
     print("- Show Estimated TWT ボタン: 推定TWT表示")
     print("- Peak Mode / TWT Mode ボタン: ラベリングモード切り替え")
     print("- Top/Bottom ラジオボタン: エコー特性ラベル選択 (現在のモード用)")
-    print("- Save Labels ボタン: 現在のモードのラベル結果をJSON保存")
+    print("- FWHM Top/Bottom ラジオボタン: FWHMラベル選択 (OK/NG、全モード共通)")
+    print("- Save Labels ボタン: 現在のモードのラベルとFWHMラベルをJSON保存")
     
     viewer = AscanViewer(file_data, json_dir, output_base_dir, waveform_type, selected_mode)
     
@@ -1649,9 +1836,18 @@ def main():
         print(f"Two-peaks Bottomラベル: {dict(viewer.two_peaks_label_stats['bottom_labels'])}")
     else:
         print("Two-peaks: ラベル付け済みファイルはありません")
-    
+
+    # Show FWHM statistics
+    print("\n=== FWHM Statistics (All Modes) ===")
+    if viewer.fwhm_label_stats['labeled_count'] > 0:
+        print(f"FWHM ラベル統計: {viewer.fwhm_label_stats['labeled_count']}/{viewer.fwhm_label_stats['total_files']} ファイルがラベル付け済み")
+        print(f"FWHM Topラベル: {dict(viewer.fwhm_label_stats['top_labels'])}")
+        print(f"FWHM Bottomラベル: {dict(viewer.fwhm_label_stats['bottom_labels'])}")
+    else:
+        print("FWHM: ラベル付け済みファイルはありません")
+
     print(f"\n現在の初期モード: {selected_mode.upper()} Mode (ボタンで切り替え可能)")
-    
+
     plt.show()
 
 if __name__ == "__main__":
