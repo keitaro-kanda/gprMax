@@ -19,13 +19,14 @@ spec.loader.exec_module(outputfiles_merge)
 # get_output_data関数を取得
 get_output_data = outputfiles_merge.get_output_data
 
-def detect_peaks(data, dt):
+def detect_peaks(data, dt, FWHM_transmission=None):
     """
     Detects peaks in A-scan data. This is the core logic function.
 
     Args:
         data (np.ndarray): Amplitude data of the A-scan.
         dt (float): Time step of the simulation.
+        FWHM_transmission (float, optional): Expected FWHM of transmission pulse [s]. If provided, calculates FWHM_difference.
 
     Returns:
         list: A list of dictionaries, where each dictionary contains information about a detected peak.
@@ -70,6 +71,18 @@ def detect_peaks(data, dt):
         fwhm = right_half_time - left_half_time
         hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)])
 
+        # Calculate FWHM difference if FWHM_transmission is provided
+        if FWHM_transmission is not None:
+            fwhm_ns = fwhm  # FWHM is already in [ns]
+            FWHM_transmission_ns = FWHM_transmission * 1e9  # Convert [s] to [ns]
+            fwhm_error = np.abs(fwhm_ns - FWHM_transmission_ns) / FWHM_transmission_ns
+            if fwhm_error < 0.1:
+                fwhm_difference = 'N'
+            else:
+                fwhm_difference = 'Larger than 10%'
+        else:
+            fwhm_difference = 'N'  # Default value when FWHM_transmission is not provided
+
         separation_prev = time[peak_idx] - time[peaks[i - 1]] if i > 0 else None
         separation_next = time[peaks[i + 1]] - time[peak_idx] if i < len(peaks) - 1 else None
 
@@ -100,6 +113,8 @@ def detect_peaks(data, dt):
             'width_half': hwhm,
             'left_half_time': left_half_time,
             'right_half_time': right_half_time,
+            'FWHM': fwhm,
+            'FWHM_difference': fwhm_difference,
             'separation': min(separation_prev or np.inf, separation_next or np.inf),
             'distinguishable': distinguishable,
             'max_idx': max_idx,
@@ -109,7 +124,7 @@ def detect_peaks(data, dt):
     return pulse_info
 
 
-def detect_two_peaks(data, dt):
+def detect_two_peaks(data, dt, FWHM_transmission):
     """
     Detects the two largest peaks in A-scan data (first and second largest).
     This improved version uses better peak detection and masking strategies.
@@ -164,7 +179,11 @@ def detect_two_peaks(data, dt):
             right_half_time = time[right_idx - 1] + (half_amplitude - envelope[right_idx - 1]) / right_slope
 
         fwhm = right_half_time - left_half_time
-        hwhm = np.min([np.abs(time[peak_idx] - left_half_time), np.abs(time[peak_idx] - right_half_time)])
+        fwhm_effor = (np.abs(fwhm - FWHM_transmission) / FWHM_transmission)
+        if fwhm_effor < 0.1:
+            fwhm_difference = 'False'
+        else:
+            fwhm_difference = 'True'
 
         separation_prev = time[peak_idx] - time[peaks[i - 1]] if i > 0 else None
         separation_next = time[peaks[i + 1]] - time[peak_idx] if i < len(peaks) - 1 else None
@@ -191,10 +210,8 @@ def detect_two_peaks(data, dt):
             'peak_idx': peak_idx,
             'peak_time': time[peak_idx],
             'peak_amplitude': peak_amplitude,
-            'width': fwhm,
-            'width_half': hwhm,
-            'left_half_time': left_half_time,
-            'right_half_time': right_half_time,
+            'FWHM': fwhm,
+            'FWHM_difference': fwhm_difference,
             'separation': min(separation_prev or np.inf, separation_next or np.inf),
             'distinguishable': distinguishable,
             'primary': None,

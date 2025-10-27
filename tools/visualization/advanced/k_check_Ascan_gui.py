@@ -355,10 +355,13 @@ class AscanViewer:
         self.peak_scatter = None
         self.twt_lines = []
         self.corner_echo_lines = []
+        self.fwhm_lines = []
 
         # Current peaks and TWTs for persistence
         self.current_peaks = None
+        self.current_peaks_info = None  # Store full pulse_info for FWHM display (Peak mode)
         self.current_two_peaks = None
+        self.current_two_peaks_info = None  # Store full pulse_info for FWHM display (Two-peaks mode)
         self.current_twts = None
         self.current_corner_echo = None
         
@@ -374,11 +377,12 @@ class AscanViewer:
         # Envelope display state
         self.show_envelope = False
         self.envelope_line = None
-        
+
         # Display mode persistence
         self.show_peaks = False
         self.show_twts = False
         self.show_corner_echo = False
+        self.show_fwhm = False
         
         # Waveform type
         self.waveform_type = waveform_type
@@ -450,7 +454,12 @@ class AscanViewer:
         ax_envelope = plt.axes([0.25, 0.10, 0.12, 0.08])
         self.envelope_check = CheckButtons(ax_envelope, ['Show Envelope'], [self.show_envelope])
         self.envelope_check.on_clicked(self.toggle_envelope)
-        
+
+        # FWHM display checkbox
+        ax_fwhm = plt.axes([0.40, 0.10, 0.12, 0.08])
+        self.fwhm_check = CheckButtons(ax_fwhm, ['Show FWHM'], [self.show_fwhm])
+        self.fwhm_check.on_clicked(self.toggle_fwhm)
+
         # Apply zoom button
         ax_zoom_btn = plt.axes([0.40, 0.22, 0.08, 0.04])
         self.zoom_button = Button(ax_zoom_btn, 'Apply Zoom')
@@ -522,6 +531,9 @@ class AscanViewer:
         for line in self.corner_echo_lines:
             line.remove()
         self.corner_echo_lines = []
+        for line in self.fwhm_lines:
+            line.remove()
+        self.fwhm_lines = []
         if self.envelope_line:
             self.envelope_line.remove()
             self.envelope_line = None
@@ -604,7 +616,9 @@ class AscanViewer:
             self.current_dt = None
             self.current_config = None
             self.current_peaks = None
+            self.current_peaks_info = None
             self.current_two_peaks = None
+            self.current_two_peaks_info = None
             self.current_twts = None
             self.ax.text(0.5, 0.5, f"Could not load data from\n{filepath}", ha='center')
 
@@ -689,34 +703,34 @@ class AscanViewer:
     def toggle_envelope(self, label):
         """Toggle envelope display on/off"""
         self.show_envelope = not self.show_envelope
-        
+
         # Clear overlays and redraw with all active displays
         self.clear_overlays()
-        
+
         # Re-plot envelope if enabled
         if self.show_envelope and self.current_data is not None:
             envelope = calculate_envelope(self.current_data)
             if envelope is not None:
-                self.envelope_line = self.ax.plot(self.current_time, envelope, label='Envelope', 
-                                                color='gray', linewidth=1.5, 
+                self.envelope_line = self.ax.plot(self.current_time, envelope, label='Envelope',
+                                                color='gray', linewidth=1.5,
                                                 linestyle='--', alpha=0.8)[0]
-        
+
         # Re-plot peaks if enabled
         if self.show_peaks:
             if self.current_mode == 'two-peaks' and self.current_two_peaks is not None:
                 primary_times, primary_amps, secondary_times, secondary_amps = self.current_two_peaks
                 if primary_times:
-                    self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x', 
+                    self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x',
                                                       label='Primary Peaks', zorder=5, s=80)
                 if secondary_times:
-                    secondary_scatter = self.ax.scatter(secondary_times, secondary_amps, c='orange', marker='+', 
+                    secondary_scatter = self.ax.scatter(secondary_times, secondary_amps, c='orange', marker='+',
                                                       label='Secondary Peaks', zorder=5, s=80)
             elif self.current_peaks is not None:
                 peak_times, peak_amps = self.current_peaks
                 if peak_times:
-                    self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x', 
+                    self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x',
                                                       label='Detected Peaks', zorder=5)
-        
+
         # Re-plot TWTs if enabled
         if self.show_twts and self.current_twts is not None:
             tw_travel_time, boundary_names = self.current_twts
@@ -733,12 +747,134 @@ class AscanViewer:
                                  linewidth=2, label=f'Corner Echo: {self.current_corner_echo:.2f} ns')
             self.corner_echo_lines.append(line)
 
+        # Re-plot FWHM if enabled
+        if self.show_fwhm:
+            self.redraw_fwhm()
+
         # Update legend if any displays are active
-        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo:
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo or self.show_fwhm:
             self.ax.legend()
 
         self.fig.canvas.draw()
-    
+
+    def toggle_fwhm(self, label):
+        """Toggle FWHM display on/off"""
+        self.show_fwhm = not self.show_fwhm
+
+        # Clear overlays and redraw with all active displays
+        self.clear_overlays()
+
+        # Re-plot envelope if enabled
+        if self.show_envelope and self.current_data is not None:
+            envelope = calculate_envelope(self.current_data)
+            if envelope is not None:
+                self.envelope_line = self.ax.plot(self.current_time, envelope, label='Envelope',
+                                                color='gray', linewidth=1.5,
+                                                linestyle='--', alpha=0.8)[0]
+
+        # Re-plot peaks if enabled
+        if self.show_peaks:
+            if self.current_mode == 'two-peaks' and self.current_two_peaks is not None:
+                primary_times, primary_amps, secondary_times, secondary_amps = self.current_two_peaks
+                if primary_times:
+                    self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x',
+                                                      label='Primary Peaks', zorder=5, s=80)
+                if secondary_times:
+                    secondary_scatter = self.ax.scatter(secondary_times, secondary_amps, c='orange', marker='+',
+                                                      label='Secondary Peaks', zorder=5, s=80)
+            elif self.current_peaks is not None:
+                peak_times, peak_amps = self.current_peaks
+                if peak_times:
+                    self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x',
+                                                      label='Detected Peaks', zorder=5)
+
+        # Re-plot TWTs if enabled
+        if self.show_twts and self.current_twts is not None:
+            tw_travel_time, boundary_names = self.current_twts
+            if tw_travel_time:
+                colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown']
+                for i, (twt, name) in enumerate(zip(tw_travel_time, boundary_names)):
+                    line = self.ax.axvline(twt, linestyle='--', color=colors[i % len(colors)],
+                                         label=f'{name}: {twt:.2f} ns')
+                    self.twt_lines.append(line)
+
+        # Re-plot corner echo if enabled
+        if self.show_corner_echo and self.current_corner_echo is not None:
+            line = self.ax.axvline(self.current_corner_echo, linestyle='--', color='purple',
+                                 linewidth=2, label=f'Corner Echo: {self.current_corner_echo:.2f} ns')
+            self.corner_echo_lines.append(line)
+
+        # Re-plot FWHM if enabled
+        if self.show_fwhm:
+            self.redraw_fwhm()
+
+        # Update legend if any displays are active
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo or self.show_fwhm:
+            self.ax.legend()
+
+        self.fig.canvas.draw()
+
+    def redraw_fwhm(self):
+        """Redraw FWHM lines from stored pulse info"""
+        # Determine which pulse_info to use based on current mode
+        if self.current_mode == 'two-peaks':
+            pulse_info = self.current_two_peaks_info
+        else:  # peak mode
+            pulse_info = self.current_peaks_info
+
+        if pulse_info is None:
+            print("No pulse info available for FWHM display. Please run peak detection first.")
+            return
+
+        # Clear existing FWHM lines
+        for line in self.fwhm_lines:
+            line.remove()
+        self.fwhm_lines = []
+
+        # Calculate envelope for y-position
+        envelope = calculate_envelope(self.current_data)
+        if envelope is None:
+            return
+
+        time = self.current_time
+
+        # Draw FWHM for each detected pulse
+        green_labeled = False
+        red_labeled = False
+
+        for info in pulse_info:
+            if info['distinguishable']:
+                peak_idx = info['peak_idx']
+                peak_amplitude = info['peak_amplitude']
+                fwhm_difference = info.get('FWHM_difference', 'N')
+
+                # Determine color based on FWHM_difference
+                # 'N' means within 10% tolerance, 'Larger than 10%' means outside tolerance
+                if fwhm_difference == 'N':
+                    color = 'green'  # Within 10% tolerance
+                    label_suffix = ' (OK)'
+                    add_label = not green_labeled
+                    green_labeled = True
+                else:
+                    color = 'red'  # Outside 10% tolerance (fwhm_difference == 'Larger than 10%')
+                    label_suffix = ' (>10%)'
+                    add_label = not red_labeled
+                    red_labeled = True
+
+                # Get FWHM boundaries from pulse info
+                if 'left_half_time' in info and 'right_half_time' in info:
+                    left_time = info['left_half_time']
+                    right_time = info['right_half_time']
+                    y_position = peak_amplitude / 2
+
+                    # Draw horizontal line at half-maximum
+                    line = self.ax.hlines(y_position, left_time, right_time,
+                                         colors=color, linestyles='--', linewidth=2,
+                                         label=f'FWHM{label_suffix}' if add_label else '')
+                    self.fwhm_lines.append(line)
+
+        print(f"Displayed FWHM for {len(self.fwhm_lines)} pulses")
+
     def calculate_label_stats(self, mode='peak'):
         """Calculate statistics for labeled data for specified mode"""
         stats = {
@@ -869,47 +1005,64 @@ class AscanViewer:
             try:
                 if self.current_mode == 'two-peaks':
                     # Use two-peaks detection for two-peaks mode
-                    pulse_info = detect_two_peaks(self.current_data, self.current_dt)
-                    
+                    if self.waveform_type == '1': # Bipolar (Ricker)
+                        FWHM_transmission = 1.566e-9  # [s]
+                    else: # Unipolar (LPR-like)
+                        FWHM_transmission = 1.130e-9  # [s]
+
+                    pulse_info = detect_two_peaks(self.current_data, self.current_dt, FWHM_transmission)
+
+                    # Store pulse_info for FWHM display
+                    self.current_two_peaks_info = pulse_info
+
                     primary_times = []
                     primary_amps = []
                     secondary_times = []
                     secondary_amps = []
-                    
+
                     for info in pulse_info:
                         if info['distinguishable']:
                             # Add primary peak
                             if info['primary']:
                                 primary_times.append(info['primary']['max_time'])
                                 primary_amps.append(info['primary']['max_amplitude'])
-                            
+
                             # Add secondary peak if it exists
                             if info['secondary']:
                                 secondary_times.append(info['secondary']['max_time'])
                                 secondary_amps.append(info['secondary']['max_amplitude'])
-                    
+
                     self.current_two_peaks = (primary_times, primary_amps, secondary_times, secondary_amps)
-                    
+
                     # Plot primary peaks
                     if primary_times:
-                        self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x', 
+                        self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x',
                                                           label='Primary Peaks', zorder=5, s=80)
-                    
+
                     # Plot secondary peaks
                     if secondary_times:
-                        secondary_scatter = self.ax.scatter(secondary_times, secondary_amps, c='orange', marker='+', 
+                        secondary_scatter = self.ax.scatter(secondary_times, secondary_amps, c='orange', marker='+',
                                                           label='Secondary Peaks', zorder=5, s=80)
-                    
+
                     print(f"Auto-detected {len(primary_times)} primary and {len(secondary_times)} secondary peaks.")
                 else:
                     # Use original single peak detection for peak mode
-                    pulse_info = detect_peaks(self.current_data, self.current_dt)
+                    if self.waveform_type == '1': # Bipolar (Ricker)
+                        FWHM_transmission = 1.566e-9  # [s]
+                    else: # Unipolar (LPR-like)
+                        FWHM_transmission = 1.130e-9  # [s]
+
+                    pulse_info = detect_peaks(self.current_data, self.current_dt, FWHM_transmission)
+
+                    # Store pulse_info for FWHM display
+                    self.current_peaks_info = pulse_info
+
                     peak_times = [info['max_time'] for info in pulse_info if info['distinguishable']]
                     peak_amps = [info['max_amplitude'] for info in pulse_info if info['distinguishable']]
                     self.current_peaks = (peak_times, peak_amps)
-                    
+
                     if peak_times:
-                        self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x', 
+                        self.peak_scatter = self.ax.scatter(peak_times, peak_amps, c='r', marker='x',
                                                           label='Detected Peaks', zorder=5)
                         print(f"Auto-detected {len(peak_times)} distinguishable peaks.")
                     else:
@@ -918,7 +1071,9 @@ class AscanViewer:
                 print(f"Error in auto peak detection: {e}", file=sys.stderr)
                 self.show_peaks = False
                 self.current_peaks = None
+                self.current_peaks_info = None
                 self.current_two_peaks = None
+                self.current_two_peaks_info = None
         
         # Auto-calculate TWTs if TWT display mode is enabled
         if self.show_twts:
@@ -999,8 +1154,16 @@ class AscanViewer:
                 self.show_corner_echo = False
                 self.current_corner_echo = None
 
+        # Auto-display FWHM if display mode is enabled
+        if self.show_fwhm:
+            try:
+                self.redraw_fwhm()
+            except Exception as e:
+                print(f"Error in FWHM display: {e}", file=sys.stderr)
+                self.show_fwhm = False
+
         # Update legend if any displays are active
-        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo:
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo or self.show_fwhm:
             self.ax.legend()
     
     def toggle_mode(self, event):
@@ -1287,12 +1450,12 @@ class AscanViewer:
         if self.show_envelope and self.current_data is not None:
             envelope = calculate_envelope(self.current_data)
             if envelope is not None:
-                self.envelope_line = self.ax.plot(self.current_time, envelope, label='Envelope', 
-                                                color='gray', linewidth=1.5, 
+                self.envelope_line = self.ax.plot(self.current_time, envelope, label='Envelope',
+                                                color='gray', linewidth=1.5,
                                                 linestyle='--', alpha=0.8)[0]
-        
+
         # Update legend and redraw
-        if self.show_peaks or self.show_twts or self.show_envelope:
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_fwhm:
             self.ax.legend()
         self.fig.canvas.draw()
 
@@ -1322,7 +1485,7 @@ class AscanViewer:
                                                 linestyle='--', alpha=0.8)[0]
 
         # Update legend and redraw
-        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo:
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo or self.show_fwhm:
             self.ax.legend()
         self.fig.canvas.draw()
 
@@ -1351,7 +1514,7 @@ class AscanViewer:
                                                 linestyle='--', alpha=0.8)[0]
 
         # Update legend and redraw
-        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo:
+        if self.show_peaks or self.show_twts or self.show_envelope or self.show_corner_echo or self.show_fwhm:
             self.ax.legend()
         self.fig.canvas.draw()
 
@@ -1445,6 +1608,9 @@ def main():
     print("- 左右矢印キー: ファイル切り替え")
     print("- Auto Zoom チェックボックス: zoom_settings.json使用の切り替え")
     print("- Show Envelope チェックボックス: A-scanのenvelope表示切り替え")
+    print("- Show FWHM チェックボックス: FWHM表示切り替え (PeakモードとTwo-peaksモードで使用可能)")
+    print("  - 緑色: 予想FWHMとの差が10%未満 (OK)")
+    print("  - 赤色: 予想FWHMとの差が10%以上 (要確認)")
     print("- Apply Zoom ボタン: 時間・振幅範囲指定でズーム")
     print("- Reset Zoom ボタン: ズーム範囲をリセット")
     print("- Detect Peaks ボタン: ピーク検出")
