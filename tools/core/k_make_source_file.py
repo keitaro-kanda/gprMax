@@ -11,6 +11,18 @@ def gaussian_Ez_input(dt, t_max, f, amplitude):
 
     return time, E_array
 
+def gaussian_sin(dt, t_max, f, amplitude, FWHM):
+    time = np.arange(0, t_max, dt)
+    sigma = FWHM / 2.35
+    Ez_array = amplitude * np.exp(-(time**2 / 2 / sigma**2) * np.sin(2 * np.pi * f * time))
+    return time, Ez_array
+
+def gaussian_cos(dt, t_max, f, amplitude, FWHM):
+    time = np.arange(0, t_max, dt)
+    sigma = FWHM / 2.35
+    Ez_array = amplitude * np.exp(-(time**2 / 2 / sigma**2) * np.cos(2 * np.pi * f * time))
+    return time, Ez_array
+
 def plot_source_file(time, Ez_array, output_dir):
     # Calculate FFT
     Ez_fft = np.fft.fft(Ez_array)
@@ -41,11 +53,12 @@ def main():
     output_dir = input("Enter output directory path: ").strip()
 
     dt = 4.71731e-12 # dx=dy=dz=0.002m
-    t_max = 5e-9
+    t_max = 20e-9
     f = 500e6
     amplitude = 1.0
+    FWHM = 1.450e-9
 
-    time, Ez_array = gaussian_Ez_input(dt, t_max, f, amplitude)
+    time, Ez_array = gaussian_cos(dt, t_max, f, amplitude, FWHM)
     plot_source_file(time, Ez_array, output_dir)
 
     # Save to file
