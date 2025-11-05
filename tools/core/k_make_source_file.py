@@ -11,13 +11,13 @@ def gaussian_Ez_input(dt, t_max, f, amplitude):
 
     return time, E_array
 
-def gaussian_sin(dt, t_max, f, amplitude, FWHM):
+def gaussian_sin(dt, t_max, f, FWHM):
     time = np.arange(0, t_max, dt)
     sigma = FWHM / 2.35
     Ez_array = np.exp(-((time - 4e-9)**2 / 2 / sigma**2)) * np.sin(2 * np.pi * f * (time - 4e-9))
     return time, Ez_array
 
-def gaussian_cos(dt, t_max, f, amplitude, FWHM):
+def gaussian_cos(dt, t_max, f, FWHM):
     time = np.arange(0, t_max, dt)
     sigma = FWHM / 2.35
     Ez_array = np.exp(-((time - 5e-9)**2 / 2 / sigma**2)) * np.cos(2 * np.pi * f * (time - 5e-9))
@@ -55,10 +55,9 @@ def main():
     dt = 4.71731e-12 # dx=dy=dz=0.002m
     t_max = 20e-9
     f = 500e6
-    amplitude = 1.0
     FWHM = 1.450e-9
 
-    time, Ez_array = gaussian_cos(dt, t_max, f, amplitude, FWHM)
+    time, Ez_array = gaussian_cos(dt, t_max, f, FWHM)
     plot_source_file(time, Ez_array, output_dir)
 
     # Save to file
