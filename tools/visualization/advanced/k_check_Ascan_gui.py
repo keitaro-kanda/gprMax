@@ -747,7 +747,7 @@ class AscanViewer:
 
         # Re-plot peaks if enabled
         if self.show_peaks:
-            if self.current_mode == 'two-peaks' and self.current_two_peaks is not None:
+            if self.current_mode in ['two-peaks', 'twt'] and self.current_two_peaks is not None:
                 primary_times, primary_amps, secondary_times, secondary_amps = self.current_two_peaks
                 if primary_times:
                     self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x',
@@ -804,7 +804,7 @@ class AscanViewer:
 
         # Re-plot peaks if enabled
         if self.show_peaks:
-            if self.current_mode == 'two-peaks' and self.current_two_peaks is not None:
+            if self.current_mode in ['two-peaks', 'twt'] and self.current_two_peaks is not None:
                 primary_times, primary_amps, secondary_times, secondary_amps = self.current_two_peaks
                 if primary_times:
                     self.peak_scatter = self.ax.scatter(primary_times, primary_amps, c='r', marker='x',
@@ -858,7 +858,7 @@ class AscanViewer:
     def redraw_fwhm(self):
         """Redraw FWHM lines from stored pulse info"""
         # Determine which pulse_info to use based on current mode
-        if self.current_mode == 'two-peaks':
+        if self.current_mode in ['two-peaks', 'twt']:
             pulse_info = self.current_two_peaks_info
         else:  # peak mode
             pulse_info = self.current_peaks_info
@@ -1085,8 +1085,8 @@ class AscanViewer:
         # Auto-calculate peaks if peak display mode is enabled
         if self.show_peaks and self.current_data is not None and self.current_dt is not None:
             try:
-                if self.current_mode == 'two-peaks':
-                    # Use two-peaks detection for two-peaks mode
+                if self.current_mode in ['two-peaks', 'twt']:
+                    # Use two-peaks detection for two-peaks mode and TWT mode
                     if self.waveform_type == '1': # Bipolar (Ricker)
                         FWHM_transmission = 1.566e-9  # [s]
                     else: # Unipolar (LPR-like)
