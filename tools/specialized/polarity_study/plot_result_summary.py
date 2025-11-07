@@ -206,13 +206,16 @@ def plot_twt_mode(twt_grid, max_peak_grid, unique_heights, unique_widths, top_or
     
     # TWTマーカーの準備（1→○、2→×）
     marker_positions_o = []
+    marker_positions_triangle = []
     marker_positions_x = []
     
     for i in range(len(unique_heights)):
         for j in range(len(unique_widths)):
             if twt_grid[i, j] == 1:  # ○マーカー
                 marker_positions_o.append((width_cm[j], height_cm[i]))
-            elif twt_grid[i, j] == 2:  # ×マーカー
+            elif twt_grid[i, j] == 2: # ^マーカー
+                marker_positions_triangle.append((width_cm[j], height_cm[i]))
+            elif twt_grid[i, j] == 3:  # ×マーカー
                 marker_positions_x.append((width_cm[j], height_cm[i]))
     
     # 基本プロット（Max-peakの3色カラーマップ + TWTマーカー）
@@ -223,6 +226,9 @@ def plot_twt_mode(twt_grid, max_peak_grid, unique_heights, unique_widths, top_or
     if marker_positions_o:
         o_x, o_y = zip(*marker_positions_o)
         ax.scatter(o_x, o_y, marker='o', s=80, c='white', linewidth=2)
+    if marker_positions_triangle:
+        triangle_x, triangle_y = zip(*marker_positions_triangle)
+        ax.scatter(triangle_x, triangle_y, marker='^', s=80, c='white', linewidth=3)
     if marker_positions_x:
         x_x, x_y = zip(*marker_positions_x)
         ax.scatter(x_x, x_y, marker='x', s=80, c='white', linewidth=3)
@@ -258,6 +264,9 @@ def plot_twt_mode(twt_grid, max_peak_grid, unique_heights, unique_widths, top_or
     if marker_positions_o:
         o_x, o_y = zip(*marker_positions_o)
         ax.scatter(o_x, o_y, marker='o', s=80, c='white', linewidth=2)
+    if marker_positions_triangle:
+        triangle_x, triangle_y = zip(*marker_positions_triangle)
+        ax.scatter(triangle_x, triangle_y, marker='^', s=80, c='white', linewidth=3)
     if marker_positions_x:
         x_x, x_y = zip(*marker_positions_x)
         ax.scatter(x_x, x_y, marker='x', s=80, c='white', linewidth=3)
