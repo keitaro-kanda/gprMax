@@ -121,7 +121,7 @@ print(f"[INFO] Label counts saved to {output_path}")
 def get_colormap():
     """3色カラーマップを取得する"""
     cmap = colors.ListedColormap(["red", "blue", "green"])
-    norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5, 3.5], ncolors=3)
+    norm = colors.BoundaryNorm(boundaries=[0.5, 1.5, 2.5], ncolors=2)
     return cmap, norm
 
 def plot_max_peak_mode(grid, unique_heights, unique_widths, top_or_bottom, file_path):
@@ -182,8 +182,8 @@ def plot_max_peak_mode(grid, unique_heights, unique_widths, top_or_bottom, file_
     # カラーバー
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax, ticks=[1, 2, 3])
-    cbar.ax.set_yticklabels([f"Type {i}" for i in [1, 2, 3]], fontsize=20)
+    cbar = fig.colorbar(im, cax=cax, ticks=[1, 2])
+    cbar.ax.set_yticklabels([f"Type {i}" for i in [1, 2]], fontsize=20)
     cbar.ax.tick_params(labelsize=16)
     
     # 保存
@@ -245,8 +245,8 @@ def plot_twt_mode(twt_grid, max_peak_grid, unique_heights, unique_widths, top_or
     # カラーバー
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax, ticks=[1, 2, 3])
-    cbar.ax.set_yticklabels([f"Type {i}" for i in [1, 2, 3]], fontsize=20)
+    cbar = fig.colorbar(im, cax=cax, ticks=[1, 2])
+    cbar.ax.set_yticklabels([f"Type {i}" for i in [1, 2]], fontsize=20)
     cbar.ax.tick_params(labelsize=16)
     
     # 保存
@@ -380,8 +380,8 @@ def plot_FWHM_mode(twt_grid, max_peak_grid, unique_heights, unique_widths, top_o
     # カラーバー
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax, ticks=[1, 2, 3])
-    cbar.ax.set_yticklabels([f"Type {i}" for i in [1, 2, 3]], fontsize=20)
+    cbar = fig.colorbar(im, cax=cax, ticks=[1, 2])
+    cbar.ax.set_yticklabels([f"Type {i}" for i in [1, 2]], fontsize=20)
     cbar.ax.tick_params(labelsize=16)
     
     # 保存
