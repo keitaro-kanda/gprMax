@@ -6,7 +6,7 @@ from matplotlib import colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # JSONファイルのパスをinput()で取得
-file_path = input("jsonファイルのパスを入力してください: ")
+file_path = input("jsonファイルのパスを入力してください（use_peak/use_two_peaks: ")
 if not os.path.isfile(file_path):
     raise FileNotFoundError(f"指定されたファイルが存在しません: {file_path}")
 
@@ -89,11 +89,17 @@ def calculate_fresnel_radius(top_or_bottom):
         return r_fresnel_bottom, h_rock
 
 # TWT解析の場合、対応するMax-peak解析のデータを取得
-max_peak_data = None
+# max_peak_data = None
 if analysis_type == 'TWT':
-    max_peak_data_path = file_path.replace('result_use_TWT', 'result_use_peak')
-    with open(max_peak_data_path, 'r', encoding='utf-8') as f:
-        max_peak_data = json.load(f)
+    dir_name = os.path.basename(os.path.dirname(file_path))
+    if dir_name == 'result_use_peak':
+        TWT_data_path = file_path.replace('result_use_peak', 'result_use_TWT')
+    elif dir_name == 'result_use_two_peaks':
+        TWT_data_path = file_path.replace('result_use_two_peaks', 'result_use_TWT')
+    else:
+        raise ValueError(f'File path is not found. Expected directory name "result_use_peak" or "result_use_two_peaks", but got "{dir_name}"')
+    with open(TWT_data_path, 'r', encoding='utf-8') as f:
+        TWT_data = json.load(f)
 if analysis_type == 'FWHM comparison':
     fwhm_data_path = file_path.replace('result_use_peak', 'result_fwhm')
     with open(fwhm_data_path, 'r', encoding='utf-8') as f:
@@ -281,7 +287,7 @@ def plot_twt_mode(twt_grid, max_peak_grid, unique_heights, unique_widths, top_or
 
 
 def plot_FWHM_mode(twt_grid, max_peak_grid, unique_heights, unique_widths, top_or_bottom, file_path):
-    """TWTモードのプロット作成（3色カラーマップ + マーカー重ね合わせ）"""
+    """FWHMモードのプロット作成（3色カラーマップ + マーカー重ね合わせ）"""
     cmap, norm = get_colormap()
     r_fresnel, h_rock = calculate_fresnel_radius(top_or_bottom)
     
@@ -379,9 +385,9 @@ def plot_FWHM_mode(twt_grid, max_peak_grid, unique_heights, unique_widths, top_o
 if analysis_type == 'max-peak':
     plot_max_peak_mode(grid, unique_heights, unique_widths, top_or_bottom, file_path)
 elif analysis_type == 'TWT':
-    # TWTモードの場合、max-peakデータからもグリッドを作成
-    max_peak_grid, _, _ = create_grid_from_data(max_peak_data)
-    plot_twt_mode(grid, max_peak_grid, unique_heights, unique_widths, top_or_bottom, file_path)
+    # TWTモードの場合、TWTデータからグリッドを作成
+    twt_grid, _, _ = create_grid_from_data(TWT_data)
+    plot_twt_mode(twt_grid, grid, unique_heights, unique_widths, top_or_bottom, file_path)
 else:  # FWHM comparison
     # FWHMモードの場合、FWHMデータからもグリッドを作成
     fwhm_grid, _, _ = create_grid_from_data(fwhm_data)
