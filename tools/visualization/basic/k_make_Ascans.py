@@ -32,7 +32,7 @@ except ImportError:
 def plot_Ascan(filename, data, time, use_zoom=False, x_min=None, x_max=None, y_min=None, y_max=None):
     """
     A-scanプロットを作成し、画像ファイルとして保存する。
-    
+
     filename : データファイルのフルパス（出力ファイル名の元に利用）
     data     : A-scanデータ（1チャネル分）
     time     : 対応する時系列（ns単位）
@@ -62,6 +62,83 @@ def plot_Ascan(filename, data, time, use_zoom=False, x_min=None, x_max=None, y_m
     print(f"Saved A-scan plot: {output_filename}")
 
 
+def plot_two_peaks_detection(filename, data, time, pulse_info, use_zoom=False, x_min=None, x_max=None, y_min=None, y_max=None, output_dir=None):
+    """
+    Two peaks detectionの結果をプロットし、画像ファイルとして保存する。
+
+    filename   : データファイルのフルパス（出力ファイル名の元に利用）
+    data       : A-scanデータ（1チャネル分、正規化済み）
+    time       : 対応する時系列（ns単位）
+    pulse_info : detect_two_peaks関数の出力結果
+    use_zoom   : 拡大表示の有無（Trueならx,y軸の上限・下限を適用）
+    x_min,x_max,y_min,y_max: 拡大表示用の軸パラメータ（use_zoom=Trueの場合に必須）
+    output_dir : 出力ディレクトリ（Noneの場合は元ファイルと同じディレクトリ）
+    """
+    from scipy.signal import hilbert
+
+    # Envelopeを計算
+    analytic_signal = hilbert(data)
+    envelope = np.abs(analytic_signal)
+
+    # プロット作成
+    fig, ax = plt.subplots(figsize=(20, 10))
+    ax.plot(time, data, 'k', lw=2, label='A-scan')
+    ax.plot(time, envelope, color='blue', linestyle='-.', lw=1.5, label='Envelope', alpha=0.7)
+    ax.plot(time, -envelope, color='blue', linestyle='-.', lw=1.5, alpha=0.7)
+
+    # Primary peaksとSecondary peaksをプロット
+    primary_plotted = False
+    secondary_plotted = False
+
+    for info in pulse_info:
+        # if info.get('distinguishable', False):
+            # Primary peak
+            if info.get('primary'):
+                primary_data = info['primary']
+                label = 'Primary Peaks' if not primary_plotted else ''
+                ax.scatter([primary_data['max_time']], [primary_data['max_amplitude']],
+                          c='r', marker='o', s=90, zorder=5, label=label)
+                # ax.plot(primary_data['max_time'], primary_data['max_amplitude'], c='r', marker='o', label=label, markersize=10)
+                primary_plotted = True
+
+            # Secondary peak
+            if info.get('secondary'):
+                secondary_data = info['secondary']
+                label = 'Secondary Peaks' if not secondary_plotted else ''
+                ax.scatter([secondary_data['max_time']], [secondary_data['max_amplitude']],
+                          c='orange', marker='o', s=90, zorder=5, label=label)
+                secondary_plotted = True
+
+    # 軸設定
+    if use_zoom:
+        ax.set_xlim([x_min, x_max])
+        ax.set_ylim([y_min, y_max])
+    else:
+        ax.set_xlim([0, np.amax(time)])
+
+    ax.grid(which='both', axis='both')
+    ax.set_xlabel('Time [ns]', fontsize=28)
+    ax.set_ylabel('Normalized Ez', fontsize=28)
+    ax.tick_params(labelsize=24)
+    ax.legend(fontsize=20)
+    plt.tight_layout()
+
+    # 出力ファイル名の設定
+    if output_dir:
+        base_filename = os.path.join(output_dir, 'two_peaks_detection')
+    else:
+        base_filename = os.path.splitext(os.path.abspath(filename))[0] + '_two_peaks_detection'
+
+    if use_zoom:
+        output_filename = base_filename + f'_closeup_x{x_min}_{x_max}_y{y_min}_{y_max}.png'
+    else:
+        output_filename = base_filename + '.png'
+
+    fig.savefig(output_filename, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
+    plt.close(fig)
+    print(f"Saved two peaks detection plot: {output_filename}")
+
+
 def main():
     # 1. data pathをまとめたjsonファイルのパスの入力
     data_json_path = input("Enter the path to the JSON file containing data paths: ").strip()
@@ -81,19 +158,35 @@ def main():
     # 2. 使用する機能の選択
     print("\nSelect function mode:")
     print("1: A-scan plot (default)")
-    print("2: Peak detection")
-    print("3: TWT estimation")
+    print("2: Peak detection (single peak)")
+    print("3: Two peaks detection")
+    print("4: TWT estimation")
     mode_input = input("Enter your choice [default 1]: ").strip()
     if mode_input == "" or mode_input == "1":
         mode = "A-scan"
     elif mode_input == "2":
         mode = "peak"
     elif mode_input == "3":
+        mode = "two-peaks"
+    elif mode_input == "4":
         mode = "TWT"
     else:
         print("Invalid selection. Defaulting to A-scan plot.")
         mode = "A-scan"
     print(f"Selected mode: {mode}")
+
+    # Two peaks detectionモードの場合、波形タイプを取得
+    if mode == "two-peaks":
+        waveform_type = input("\n波形タイプを選択してください (1: Bipolar, 2: Unipolar): ").strip()
+        if waveform_type == '1':
+            FWHM_transmission = 1.566e-9  # [s] Bipolar (Ricker)
+            print("Selected: Bipolar waveform (FWHM = 1.566 ns)")
+        elif waveform_type == '2':
+            FWHM_transmission = 1.130e-9  # [s] Unipolar (LPR-like)
+            print("Selected: Unipolar waveform (FWHM = 1.130 ns)")
+        else:
+            print("Invalid selection. Defaulting to Bipolar.")
+            FWHM_transmission = 1.566e-9
 
     # TWTモードの場合、各データファイルの出力ディレクトリ内にmodel.jsonが存在するかを確認
     if mode == "TWT":
@@ -136,8 +229,9 @@ def main():
             try:
                 x_min = float(input("Enter x-axis lower limit: ").strip())
                 x_max = float(input("Enter x-axis upper limit: ").strip())
-                y_min = float(input("Enter y-axis lower limit: ").strip())
-                y_max = float(input("Enter y-axis upper limit: ").strip())
+                y_range = float(input("Enter y-axis range: ".strip()))
+                y_min = - y_range
+                y_max = y_range
                 use_zoom = True
                 
                 # 新しいズーム設定をキャッシュに保存
@@ -213,6 +307,50 @@ def main():
                     print(f"Saved peak detection info: {peak_info_filename}")
                 except Exception as e:
                     print(f"Error saving peak info for rx {rx+1}: {e}")
+
+            elif mode == "two-peaks":
+                # Two peaks検出の実行（出力ディレクトリ："two_peaks_detection"）
+                output_dir_two_peaks = os.path.join(os.path.dirname(data_path), "two_peaks_detection")
+                if not os.path.exists(output_dir_two_peaks):
+                    os.makedirs(output_dir_two_peaks)
+                # detect_two_peaks関数を呼び出し
+                pulse_info = k_detect_peak.detect_two_peaks(data_norm, dt, FWHM_transmission)
+
+                # プロット作成
+                plot_two_peaks_detection(data_path, data_norm, time, pulse_info,
+                                        use_zoom, x_min, x_max, y_min, y_max,
+                                        output_dir_two_peaks)
+
+                # 結果をJSONで保存
+                two_peaks_info_filename = os.path.join(output_dir_two_peaks, "two_peaks_info.json")
+                try:
+                    # NumPy 型（np.generic）を Python の組み込み型に変換
+                    serializable_pulse = []
+                    for info in pulse_info:
+                        serializable_info = {}
+                        for key, value in info.items():
+                            if isinstance(value, np.generic):
+                                serializable_info[key] = value.item()
+                            elif isinstance(value, dict):
+                                # primary/secondary など辞書型の値を処理
+                                serializable_info[key] = {
+                                    k: (v.item() if isinstance(v, np.generic) else v)
+                                    for k, v in value.items()
+                                } if value else None
+                            else:
+                                serializable_info[key] = value
+                        serializable_pulse.append(serializable_info)
+
+                    with open(two_peaks_info_filename, "w") as fout:
+                        json.dump(serializable_pulse, fout, indent=2, ensure_ascii=False)
+                    print(f"Saved two peaks detection info: {two_peaks_info_filename}")
+
+                    # 検出結果のサマリーを表示
+                    primary_count = sum(1 for info in pulse_info if info.get('primary') is not None)
+                    secondary_count = sum(1 for info in pulse_info if info.get('secondary') is not None)
+                    print(f"  Detected {primary_count} primary peaks and {secondary_count} secondary peaks")
+                except Exception as e:
+                    print(f"Error saving two peaks info for rx {rx+1}: {e}")
 
             elif mode == "TWT":
                 # TWT推定の実行（出力ディレクトリ："TWT_estimation"）

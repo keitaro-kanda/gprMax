@@ -88,9 +88,9 @@ def detect_peaks(data, dt, FWHM_transmission=None):
 
         # Check if the peaks are distinguishable
         distinguishable = True
-        if separation_prev is not None and separation_prev < fwhm: # 
+        if separation_prev is not None and separation_prev < fwhm/2: # 試しに変更
             distinguishable = False
-        if separation_next is not None and separation_next < fwhm:
+        if separation_next is not None and separation_next < fwhm/2:
             distinguishable = False
 
         # Find the maximum amplitude of the E-field within the FWHM range
@@ -144,12 +144,13 @@ def detect_two_peaks(data, dt, FWHM_transmission):
 
     analytic_signal = hilbert(data_norm)
     envelope = np.abs(analytic_signal)
-    evnvelope_moving_average = np.convolve(envelope, np.ones(10)/10, mode='same')
+    evnvelope_moving_average = np.convolve(envelope, np.ones(10)/10, mode='same') # なんで移動平均を使おうとしたんだ？？
 
     # Find envelope peaks (same as original)
     peaks = []
     for i in range(1, len(data_norm) - 1):
-        if evnvelope_moving_average[i - 1] < evnvelope_moving_average[i] > evnvelope_moving_average[i + 1] and evnvelope_moving_average[i] > 0.5e-3:
+        # if evnvelope_moving_average[i - 1] < evnvelope_moving_average[i] > evnvelope_moving_average[i + 1] and evnvelope_moving_average[i] > 0.5e-3:
+        if envelope[i-1] <= envelope[i] and envelope[i+1] <= envelope[i] and envelope[i] > 0.5e-3:
             peaks.append(i)
 
     pulse_info = []
@@ -189,31 +190,57 @@ def detect_two_peaks(data, dt, FWHM_transmission):
         separation_next = time[peaks[i + 1]] - time[peak_idx] if i < len(peaks) - 1 else None
 
         distinguishable = True
-        if separation_prev is not None and separation_prev < fwhm:
+        if separation_prev is not None and separation_prev < fwhm/2:
             distinguishable = False
-        if separation_next is not None and separation_next < fwhm:
+        if separation_next is not None and separation_next < fwhm/2:
             distinguishable = False
 
-        # Improved peak detection: Expand search range to 1.5x FWHM
-        if fwhm > 0 and dt > 0:
-            fwhm_idx = max(1, int(fwhm * 1e-9 / dt))  # FWHM in index units, at least 1
-            search_radius = max(int(1.5 * fwhm_idx), 20)  # At least 20 samples
-        else:
-            search_radius = 50  # Default search radius
+        # # Improved peak detection: Expand search range to 1.5x FWHM
+        # if fwhm > 0 and dt > 0:
+        #     fwhm_idx = max(1, int(fwhm * 1e-9 / dt))  # FWHM in index units, at least 1
+        #     search_radius = max(int(1.5 * fwhm_idx), 20)  # At least 20 samples
+        # else:
+        #     search_radius = 50  # Default search radius
         
-        data_segment_start = max(0, peak_idx - search_radius)
-        data_segment_end = min(len(data_norm), peak_idx + search_radius)
-        data_segment = np.abs(data_norm[data_segment_start:data_segment_end])
+        data_segment_start = int(max(0, peak_idx - fwhm * 1e-9/dt/2))
+        data_segment_end = int(min(len(data_norm), peak_idx + fwhm * 1e-9/dt/2))
+        # print("peak_idx: ", peak_idx)
+        # print("data_segment_start: ", data_segment_start)
+        # print("data_segment_end: ", data_segment_end)
+
+        # Find local minimum in the detected envelope peak \pm FWHM/2
+        local_min_idxs = []
+        for k in (data_segment_start, min(data_segment_end, len(data)-2)):
+            if envelope[k] <= envelope[k+1] and envelope[k-1] <= envelope[k]:
+                local_min_idxs.append(k)
+        local_min_idxs = np.array(local_min_idxs) # この後のpeak_idxより大きい、小さい要素探索でarrayである必要がある。
+        # print(local_min_idxs)
+        # Redefine data segment based on detected local minimum points
+        if len(local_min_idxs) > 0:
+            if len(local_min_idxs[local_min_idxs < peak_idx]) > 0:
+                local_min_idx_start = np.amax(local_min_idxs[local_min_idxs < peak_idx]) # local_min_idxのうち、peak_idx以下かつその中で最大のidx（＝peak_idxに最も近い極小idx）を探索
+                data_segment_start = max(data_segment_start,local_min_idx_start) # peak_idx-FWHM/2と極小idxのうち、大きい方（peak_idxに近い方）を採用
+            if len(local_min_idxs[local_min_idxs > peak_idx]) > 0:
+                local_min_idx_end = np.amin(local_min_idxs[local_min_idxs > peak_idx]) # local_min_idxのうち、peak_idx以上かつその中で最小のidx（＝peak_idxに最も近い極小idx）を探索
+                data_segment_end = min(data_segment_end, local_min_idx_end) #peak_idx-FWHM/2と極大idxのうち、大小さい方（peak_idxに近い方）を採用
+        # if local_min_idx_start is not None:
+            
+        # if local_min_idx_end is not None:
+            
+        # print("data_segment_start: ", data_segment_start)
         
+        data_segment = np.abs(data_norm[data_segment_start:data_segment_end]) # data_segment is an array of values of the envelpe
+
+
         # Initialize peak info structure
         peak_info = {
             'peak_idx': peak_idx,
             'peak_time': time[peak_idx],
             'peak_amplitude': peak_amplitude,
             'FWHM': fwhm,
-            'FWHM_difference': fwhm_difference,
+            'FWHM_difference': fwhm_difference, # 送信波FWHMとの誤差が10%以内かどうか
             'separation': min(separation_prev or np.inf, separation_next or np.inf),
-            'distinguishable': distinguishable,
+            'distinguishable': distinguishable, # 隣のエコーと分離できているか
             'primary': None,
             'secondary': None
         }
@@ -414,20 +441,15 @@ if __name__ == "__main__":
         
         while True:
             try:
-                closeup_y_start = float(input("Y-axis start (default: -3e11): ") or "-3e11")
-                closeup_y_end = float(input("Y-axis end (default: 3e11): ") or "3e11")
+                closeup_y_range = float(input('Y-axis closeup range [ns] (default: 0.03): ' or '0.03'))
+                closeup_y_start = - closeup_y_range
+                closeup_y_end = closeup_y_range
                 if closeup_y_start >= closeup_y_end:
                     print("Error: Y-axis start must be less than end. Please try again.")
                     continue
                 break
             except ValueError:
                 print("Error: Please enter valid numbers.")
-    else:
-        # Default values
-        closeup_x_start = 20
-        closeup_x_end = 40
-        closeup_y_start = -3e11
-        closeup_y_end = 3e11
 
     #* Define path
     output_dir = os.path.join(os.path.dirname(data_path), 'peak_detection')
