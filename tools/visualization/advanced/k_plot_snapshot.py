@@ -188,7 +188,7 @@ def main():
     os.makedirs(frame_dir, exist_ok=True)
     print(f"[INFO] Frame directory: {frame_dir}")
 
-    dt_ns = 0.2
+    dt_ns = 0.5
     def update(i):
         coords, vals = extract_slice(read_vti_image(snap_paths[i]), ez_field)
         grid = np.zeros((ny, nx))
