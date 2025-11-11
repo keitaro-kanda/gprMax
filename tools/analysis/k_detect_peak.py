@@ -293,7 +293,13 @@ def detect_two_peaks(data, dt, FWHM_transmission):
                 }
                 
                 # Secondary peak (second largest) if exists
-                if len(local_peaks) > 1:
+                if len(local_peaks) == 1:
+                    peak_info['secondary'] = {
+                            'max_idx': 'No secondary peak',
+                            'max_time': 'No secondary peak',
+                            'max_amplitude': 'No secondary peak',
+                        }
+                elif len(local_peaks) > 1:
                     secondary_local_idx = local_peaks[sorted_indices[1]]
                     secondary_global_idx = data_segment_start + secondary_local_idx
                     secondary_max_time = time[secondary_global_idx]
@@ -311,9 +317,9 @@ def detect_two_peaks(data, dt, FWHM_transmission):
                         }
                 
                 # For backwards compatibility
-                peak_info['max_idx'] = primary_global_idx
-                peak_info['max_time'] = primary_max_time
-                peak_info['max_amplitude'] = primary_max_amplitude
+                # peak_info['max_idx'] = primary_global_idx
+                # peak_info['max_time'] = primary_max_time
+                # peak_info['max_amplitude'] = primary_max_amplitude
             else:
                 # Fallback to original method if no peaks found
                 primary_max_idx = np.argmax(data_segment)
@@ -327,9 +333,9 @@ def detect_two_peaks(data, dt, FWHM_transmission):
                     'max_amplitude': primary_max_amplitude,
                 }
                 
-                peak_info['max_idx'] = primary_global_idx
-                peak_info['max_time'] = primary_max_time
-                peak_info['max_amplitude'] = primary_max_amplitude
+                # peak_info['max_idx'] = primary_global_idx
+                # peak_info['max_time'] = primary_max_time
+                # peak_info['max_amplitude'] = primary_max_amplitude
 
         pulse_info.append(peak_info)
     
