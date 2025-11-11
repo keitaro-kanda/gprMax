@@ -195,22 +195,14 @@ def detect_two_peaks(data, dt, FWHM_transmission):
         if separation_next is not None and separation_next < fwhm/2:
             distinguishable = False
 
-        # # Improved peak detection: Expand search range to 1.5x FWHM
-        # if fwhm > 0 and dt > 0:
-        #     fwhm_idx = max(1, int(fwhm * 1e-9 / dt))  # FWHM in index units, at least 1
-        #     search_radius = max(int(1.5 * fwhm_idx), 20)  # At least 20 samples
-        # else:
-        #     search_radius = 50  # Default search radius
-        
+
         data_segment_start = int(max(0, peak_idx - fwhm * 1e-9/dt/2))
-        data_segment_end = int(min(len(data_norm), peak_idx + fwhm * 1e-9/dt/2))
-        # print("peak_idx: ", peak_idx)
-        # print("data_segment_start: ", data_segment_start)
-        # print("data_segment_end: ", data_segment_end)
+        data_segment_end = int(min(len(data_norm)-1, peak_idx + fwhm * 1e-9/dt/2))
 
         # Find local minimum in the detected envelope peak \pm FWHM/2
         local_min_idxs = []
         for k in (data_segment_start, min(data_segment_end, len(data)-2)):
+        # for k in (peak_idx - 200, min(peak_idx + 200, len(data)-2)): # \pm200はきめうちのテキトーな値
             if envelope[k] <= envelope[k+1] and envelope[k-1] <= envelope[k]:
                 local_min_idxs.append(k)
         local_min_idxs = np.array(local_min_idxs) # この後のpeak_idxより大きい、小さい要素探索でarrayである必要がある。
@@ -220,9 +212,11 @@ def detect_two_peaks(data, dt, FWHM_transmission):
             if len(local_min_idxs[local_min_idxs < peak_idx]) > 0:
                 local_min_idx_start = np.amax(local_min_idxs[local_min_idxs < peak_idx]) # local_min_idxのうち、peak_idx以下かつその中で最大のidx（＝peak_idxに最も近い極小idx）を探索
                 data_segment_start = max(data_segment_start,local_min_idx_start) # peak_idx-FWHM/2と極小idxのうち、大きい方（peak_idxに近い方）を採用
+                # data_segment_start = local_min_idx_start
             if len(local_min_idxs[local_min_idxs > peak_idx]) > 0:
                 local_min_idx_end = np.amin(local_min_idxs[local_min_idxs > peak_idx]) # local_min_idxのうち、peak_idx以上かつその中で最小のidx（＝peak_idxに最も近い極小idx）を探索
                 data_segment_end = min(data_segment_end, local_min_idx_end) #peak_idx-FWHM/2と極大idxのうち、大小さい方（peak_idxに近い方）を採用
+                # data_segment_end = local_min_idx_end
         # if local_min_idx_start is not None:
             
         # if local_min_idx_end is not None:
@@ -237,6 +231,8 @@ def detect_two_peaks(data, dt, FWHM_transmission):
             'peak_idx': peak_idx,
             'peak_time': time[peak_idx],
             'peak_amplitude': peak_amplitude,
+            'data_segment_start': time[data_segment_start],
+            'data_segment_end': time[data_segment_end],
             'FWHM': fwhm,
             'FWHM_difference': fwhm_difference, # 送信波FWHMとの誤差が10%以内かどうか
             'separation': min(separation_prev or np.inf, separation_next or np.inf),

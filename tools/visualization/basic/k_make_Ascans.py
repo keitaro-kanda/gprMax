@@ -87,27 +87,44 @@ def plot_two_peaks_detection(filename, data, time, pulse_info, use_zoom=False, x
     ax.plot(time, -envelope, color='blue', linestyle='-.', lw=1.5, alpha=0.7)
 
     # Primary peaksとSecondary peaksをプロット
-    primary_plotted = False
-    secondary_plotted = False
+    primary_plotted_True = False
+    secondary_plotted_True = False
+    primary_plotted_False = False
+    secondary_plotted_False = False
 
     for info in pulse_info:
-        # if info.get('distinguishable', False):
+        if info.get('distinguishable') == True:
             # Primary peak
             if info.get('primary'):
                 primary_data = info['primary']
-                label = 'Primary Peaks' if not primary_plotted else ''
+                label = 'Primary Peaks (Distinguishable)' if not primary_plotted_True else ''
                 ax.scatter([primary_data['max_time']], [primary_data['max_amplitude']],
                           c='r', marker='o', s=90, zorder=5, label=label)
-                # ax.plot(primary_data['max_time'], primary_data['max_amplitude'], c='r', marker='o', label=label, markersize=10)
-                primary_plotted = True
-
+                primary_plotted_True = True
             # Secondary peak
             if info.get('secondary'):
                 secondary_data = info['secondary']
-                label = 'Secondary Peaks' if not secondary_plotted else ''
-                ax.scatter([secondary_data['max_time']], [secondary_data['max_amplitude']],
-                          c='orange', marker='o', s=90, zorder=5, label=label)
-                secondary_plotted = True
+                if not secondary_data['max_idx'] == 'No secondary peak':
+                    label = 'Secondary Peaks (Distinguishable)' if not secondary_plotted_True else ''
+                    ax.scatter([secondary_data['max_time']], [secondary_data['max_amplitude']],
+                            c='orange', marker='o', s=90, zorder=5, label=label)
+                    secondary_plotted_True = True
+        elif info.get('distinguishable') == False:
+            # Primary peak
+            if info.get('primary'):
+                primary_data = info['primary']
+                label = 'Primary Peaks (Not Distinguishable)' if not primary_plotted_False else ''
+                ax.scatter([primary_data['max_time']], [primary_data['max_amplitude']],
+                          c='r', marker='^', s=90, zorder=5, label=label)
+                primary_plotted_False = True
+            # Secondary peak
+            if info.get('secondary'):
+                secondary_data = info['secondary']
+                if not secondary_data['max_idx'] == 'No secondary peak':
+                    label = 'Secondary Peaks (Not Distinguishable)' if not secondary_plotted_False else ''
+                    ax.scatter([secondary_data['max_time']], [secondary_data['max_amplitude']],
+                            c='orange', marker='^', s=90, zorder=5, label=label)
+                    secondary_plotted_False = True
 
     # 軸設定
     if use_zoom:
@@ -120,7 +137,26 @@ def plot_two_peaks_detection(filename, data, time, pulse_info, use_zoom=False, x
     ax.set_xlabel('Time [ns]', fontsize=28)
     ax.set_ylabel('Normalized Ez', fontsize=28)
     ax.tick_params(labelsize=24)
-    ax.legend(fontsize=20)
+
+    # legendの順序を固定
+    handles, labels = ax.get_legend_handles_labels()
+    label_order = [
+        'A-scan',
+        'Envelope',
+        'Primary Peaks (Distinguishable)',
+        'Secondary Peaks (Distinguishable)',
+        'Primary Peaks (Not Distinguishable)',
+        'Secondary Peaks (Not Distinguishable)'
+    ]
+    ordered_handles = []
+    ordered_labels = []
+    for label in label_order:
+        if label in labels:
+            idx = labels.index(label)
+            ordered_handles.append(handles[idx])
+            ordered_labels.append(labels[idx])
+
+    ax.legend(ordered_handles, ordered_labels, fontsize=20, ncol=3)
     plt.tight_layout()
 
     # 出力ファイル名の設定
