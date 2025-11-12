@@ -104,7 +104,7 @@ def detect_peaks(data, dt, FWHM_transmission=None):
             if  envelope[k-1] >= envelope[k] and envelope[k] <= envelope[k+1]:
                 local_min_idxs.append(k)
         local_min_idxs = np.array(local_min_idxs) # この後のpeak_idxより大きい、小さい要素探索でarrayである必要がある。
-        print(local_min_idxs*dt/1e-9)
+
         # Redefine data segment based on detected local minimum points
         if len(local_min_idxs) > 0:
             if len(local_min_idxs[local_min_idxs < peak_idx]) > 0:
