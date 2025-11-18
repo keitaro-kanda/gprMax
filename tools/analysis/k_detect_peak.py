@@ -88,12 +88,16 @@ def detect_peaks(data, dt, FWHM_transmission=None):
         separation_prev = time[peak_idx] - time[peaks[i - 1]] if i > 0 else None
         separation_next = time[peaks[i + 1]] - time[peak_idx] if i < len(peaks) - 1 else None
 
-        # Check if the peaks are distinguishable
-        distinguishable = True
-        if separation_prev is not None and separation_prev < fwhm: # 試しに変更
-            distinguishable = False
-        if separation_next is not None and separation_next < fwhm:
-            distinguishable = False
+        distinguishable = False
+        if separation_prev is not None and separation_next is not None:
+            if separation_prev > fwhm and separation_next > fwhm: # 前後ともにFWHM以上離れている場合
+                distinguishable = True
+            elif separation_prev > fwhm and separation_next <= fwhm: # 前のみFWHM以上離れており、後ろは区別不可の場合
+                if peaks[i] > peaks[i-1]: #１つ後のピークよりも強度が高ければi番目のピークを検出する
+                    distinguishable = True
+            elif separation_prev <= fwhm and separation_next > fwhm: # 後ろのみFWHM以上離れており、前は区別不可の場合
+                if peaks[i] > peaks[i+1]: #１つ前のピークよりも強度が高ければi番目のピークを検出する
+                    distinguishable = True
 
         data_segment_start = int(max(0, peak_idx - fwhm * 1e-9/dt/2))
         data_segment_end = int(min(len(data_norm)-1, peak_idx + fwhm * 1e-9/dt/2))
@@ -291,11 +295,16 @@ def detect_two_peaks(data, dt, FWHM_transmission):
         separation_prev = time[peak_idx] - time[peaks[i - 1]] if i > 0 else None
         separation_next = time[peaks[i + 1]] - time[peak_idx] if i < len(peaks) - 1 else None
 
-        distinguishable = True
-        if separation_prev is not None and separation_prev < fwhm/2:
-            distinguishable = False
-        if separation_next is not None and separation_next < fwhm/2:
-            distinguishable = False
+        distinguishable = False
+        if separation_prev is not None and separation_next is not None:
+            if separation_prev > fwhm and separation_next > fwhm: # 前後ともにFWHM以上離れている場合
+                distinguishable = True
+            elif separation_prev > fwhm and separation_next <= fwhm: # 前のみFWHM以上離れており、後ろは区別不可の場合
+                if peaks[i] > peaks[i-1]: #１つ後のピークよりも強度が高ければi番目のピークを検出する
+                    distinguishable = True
+            elif separation_prev <= fwhm and separation_next > fwhm: # 後ろのみFWHM以上離れており、前は区別不可の場合
+                if peaks[i] > peaks[i+1]: #１つ前のピークよりも強度が高ければi番目のピークを検出する
+                    distinguishable = True
 
 
         data_segment_start = int(max(0, peak_idx - fwhm * 1e-9/dt/2))
