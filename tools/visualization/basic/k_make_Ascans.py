@@ -99,7 +99,7 @@ def plot_two_peaks_detection(filename, data, time, pulse_info, use_zoom=False, x
                 primary_data = info['primary']
                 label = 'Primary Peaks (Distinguishable)' if not primary_plotted_True else ''
                 ax.scatter([primary_data['max_time']], [primary_data['max_amplitude']],
-                          c='r', marker='o', s=90, zorder=5, label=label)
+                          c='r', marker='o', s=120, zorder=5, label=label)
                 primary_plotted_True = True
             # Secondary peak
             if info.get('secondary'):
@@ -107,7 +107,7 @@ def plot_two_peaks_detection(filename, data, time, pulse_info, use_zoom=False, x
                 if not secondary_data['max_idx'] == 'No secondary peak':
                     label = 'Secondary Peaks (Distinguishable)' if not secondary_plotted_True else ''
                     ax.scatter([secondary_data['max_time']], [secondary_data['max_amplitude']],
-                            c='orange', marker='o', s=90, zorder=5, label=label)
+                            c='orange', marker='o', s=120, zorder=5, label=label)
                     secondary_plotted_True = True
         elif info.get('distinguishable') == False:
             # Primary peak
@@ -115,7 +115,7 @@ def plot_two_peaks_detection(filename, data, time, pulse_info, use_zoom=False, x
                 primary_data = info['primary']
                 label = 'Primary Peaks (Not Distinguishable)' if not primary_plotted_False else ''
                 ax.scatter([primary_data['max_time']], [primary_data['max_amplitude']],
-                          c='r', marker='^', s=90, zorder=5, label=label)
+                          c='k', marker='D', s=120, zorder=5, label=label)
                 primary_plotted_False = True
             # Secondary peak
             if info.get('secondary'):
@@ -123,7 +123,7 @@ def plot_two_peaks_detection(filename, data, time, pulse_info, use_zoom=False, x
                 if not secondary_data['max_idx'] == 'No secondary peak':
                     label = 'Secondary Peaks (Not Distinguishable)' if not secondary_plotted_False else ''
                     ax.scatter([secondary_data['max_time']], [secondary_data['max_amplitude']],
-                            c='orange', marker='^', s=90, zorder=5, label=label)
+                            c='gray', marker='D', s=120, zorder=5, label=label)
                     secondary_plotted_False = True
 
     # 軸設定

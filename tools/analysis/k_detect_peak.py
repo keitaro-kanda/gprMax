@@ -250,13 +250,13 @@ def detect_two_peaks(data, dt, FWHM_transmission):
 
     analytic_signal = hilbert(data_norm)
     envelope = np.abs(analytic_signal)
-    # evnvelope_moving_average = np.convolve(envelope, np.ones(10)/10, mode='same') # なんで移動平均を使おうとしたんだ？？
+    evnvelope_moving_average = np.convolve(envelope, np.ones(10)/10, mode='same') # 移動平均を用いるのは、移動平均しないと微妙なenvelope変化のせいで極大血が複数箇所検出されることがあるため。
 
     # Find envelope peaks (same as original)
     peaks = []
     for i in range(1, len(data_norm) - 1):
-        # if evnvelope_moving_average[i - 1] < evnvelope_moving_average[i] > evnvelope_moving_average[i + 1] and evnvelope_moving_average[i] > 0.5e-3:
-        if envelope[i-1] < envelope[i] > envelope[i+1] and envelope[i] > 0.5e-3:
+        if evnvelope_moving_average[i - 1] < evnvelope_moving_average[i] > evnvelope_moving_average[i + 1] and evnvelope_moving_average[i] > 0.5e-3:
+        #if envelope[i-1] < envelope[i] > envelope[i+1] and envelope[i] > 0.5e-3:
             peaks.append(i)
 
     pulse_info = []
@@ -313,10 +313,10 @@ def detect_two_peaks(data, dt, FWHM_transmission):
         # Find local minimum in the detected envelope peak \pm FWHM/2
         local_min_idxs = []
         for k in range(data_segment_start + 1, min(data_segment_end, len(data)-1)):
-        # for k in (peak_idx - 200, min(peak_idx + 200, len(data)-2)): # \pm200はきめうちのテキトーな値
-            if envelope[k] <= envelope[k+1] and envelope[k-1] <= envelope[k]:
+            if  envelope[k-1] >= envelope[k] and envelope[k] <= envelope[k+1]:
                 local_min_idxs.append(k)
         local_min_idxs = np.array(local_min_idxs) # この後のpeak_idxより大きい、小さい要素探索でarrayである必要がある。
+
         # Redefine data segment based on detected local minimum points
         if len(local_min_idxs) > 0:
             if len(local_min_idxs[local_min_idxs < peak_idx]) > 0:
@@ -342,6 +342,7 @@ def detect_two_peaks(data, dt, FWHM_transmission):
             'FWHM_difference': fwhm_difference, # 送信波FWHMとの誤差が10%以内かどうか
             'separation': min(separation_prev or np.inf, separation_next or np.inf),
             'distinguishable': distinguishable, # 隣のエコーと分離できているか
+            'number_of_peaks_found': 0,
             'primary': None,
             'secondary': None
         }
@@ -376,6 +377,7 @@ def detect_two_peaks(data, dt, FWHM_transmission):
                 # Fallback if find_peaks fails
                 local_peaks = []
             
+            peak_info['number_of_peaks_found'] = len(local_peaks)
             if len(local_peaks) > 0:
                 # Sort peaks by amplitude
                 peak_amplitudes = data_segment[local_peaks]
@@ -470,7 +472,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
                 primary_data = info['primary']
                 label = 'Primary Peaks (Distinguishable)' if not primary_plotted_True else ''
                 ax.scatter([primary_data['max_time']], [primary_data['max_amplitude']],
-                          c='r', marker='o', s=90, zorder=5, label=label)
+                          c='r', marker='o', s=120, zorder=5, label=label)
                 primary_plotted_True = True
         elif info.get('distinguishable') == False:
             # Primary peak
@@ -478,7 +480,7 @@ def detect_plot_peaks(data, dt, closeup, closeup_x_start, closeup_x_end, closeup
                 primary_data = info['primary']
                 label = 'Primary Peaks (Not Distinguishable)' if not primary_plotted_False else ''
                 ax.scatter([primary_data['max_time']], [primary_data['max_amplitude']],
-                          c='r', marker='^', s=90, zorder=5, label=label)
+                          c='k', marker='D', s=120, zorder=5, label=label)
                 primary_plotted_False = True
 
     plt.xlabel('Time [ns]', fontsize=24)
