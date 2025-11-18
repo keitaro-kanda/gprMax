@@ -93,10 +93,10 @@ def detect_peaks(data, dt, FWHM_transmission=None):
             if separation_prev > fwhm and separation_next > fwhm: # 前後ともにFWHM以上離れている場合
                 distinguishable = True
             elif separation_prev > fwhm and separation_next <= fwhm: # 前のみFWHM以上離れており、後ろは区別不可の場合
-                if peaks[i] > peaks[i-1]: #１つ後のピークよりも強度が高ければi番目のピークを検出する
+                if peaks[i] > peaks[i+1]: #１つ後のピークよりも強度が高ければi番目のピークを検出する
                     distinguishable = True
             elif separation_prev <= fwhm and separation_next > fwhm: # 後ろのみFWHM以上離れており、前は区別不可の場合
-                if peaks[i] > peaks[i+1]: #１つ前のピークよりも強度が高ければi番目のピークを検出する
+                if peaks[i] > peaks[i-1]: #１つ前のピークよりも強度が高ければi番目のピークを検出する
                     distinguishable = True
 
         data_segment_start = int(max(0, peak_idx - fwhm * 1e-9/dt/2))
@@ -132,7 +132,8 @@ def detect_peaks(data, dt, FWHM_transmission=None):
             'data_segment_end': time[data_segment_end],
             'FWHM': fwhm,
             'FWHM_difference': fwhm_difference, # 送信波FWHMとの誤差が10%以内かどうか
-            'separation': min(separation_prev or np.inf, separation_next or np.inf),
+            'separation_prev': separation_prev,
+            'separation_next': separation_next,
             'distinguishable': distinguishable, # 隣のエコーと分離できているか
             'primary': None
                 }
@@ -300,10 +301,10 @@ def detect_two_peaks(data, dt, FWHM_transmission):
             if separation_prev > fwhm and separation_next > fwhm: # 前後ともにFWHM以上離れている場合
                 distinguishable = True
             elif separation_prev > fwhm and separation_next <= fwhm: # 前のみFWHM以上離れており、後ろは区別不可の場合
-                if peaks[i] > peaks[i-1]: #１つ後のピークよりも強度が高ければi番目のピークを検出する
+                if peaks[i] > peaks[i+1]: #１つ後のピークよりも強度が高ければi番目のピークを検出する
                     distinguishable = True
             elif separation_prev <= fwhm and separation_next > fwhm: # 後ろのみFWHM以上離れており、前は区別不可の場合
-                if peaks[i] > peaks[i+1]: #１つ前のピークよりも強度が高ければi番目のピークを検出する
+                if peaks[i] > peaks[i-1]: #１つ前のピークよりも強度が高ければi番目のピークを検出する
                     distinguishable = True
 
 
