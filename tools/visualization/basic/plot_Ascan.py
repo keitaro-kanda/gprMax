@@ -32,7 +32,7 @@ from gprMax.utilities import fft_power
 from scipy import signal
 
 
-def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width=False, pulse_measure_start=None, pulse_measure_end=None):
+def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width=False, pulse_measure_start=None, pulse_measure_end=None, measure_fwhm=False, fwhm_measure_start=None, fwhm_measure_end=None):
     """Plots electric and magnetic fields and currents from all receiver points in the given output file. Each receiver point is plotted in a new figure window.
 
     Args:
@@ -42,6 +42,9 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
         measure_pulse_width (boolean): Measure pulse width switch.
         pulse_measure_start (float): Pulse measurement start time [ns].
         pulse_measure_end (float): Pulse measurement end time [ns].
+        measure_fwhm (boolean): Measure FWHM switch.
+        fwhm_measure_start (float): FWHM measurement start time [ns].
+        fwhm_measure_end (float): FWHM measurement end time [ns].
 
     Returns:
         plt (object): matplotlib plot object.
@@ -137,6 +140,43 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
                     pulse_end_time = time[last_pulse_idx]
                     pulse_width = pulse_end_time - pulse_start_time
 
+            # Measure FWHM if requested
+            fwhm_start_time = None
+            fwhm_end_time = None
+            fwhm_width = None
+            fwhm_max_value = None
+
+            if measure_fwhm and fwhm_measure_start is not None and fwhm_measure_end is not None:
+                # Convert time range from ns to seconds for indexing
+                start_idx = int(fwhm_measure_start * 1e-9 / dt)
+                end_idx = int(fwhm_measure_end * 1e-9 / dt)
+
+                # Ensure indices are within bounds
+                start_idx = max(0, min(start_idx, len(env) - 1))
+                end_idx = max(0, min(end_idx, len(env)))
+
+                # Find maximum value in the envelope within the measurement range
+                env_segment = env[start_idx:end_idx]
+                max_idx_segment = np.argmax(env_segment)
+                max_idx = max_idx_segment + start_idx
+                fwhm_max_value = env[max_idx]
+
+                # Find half maximum
+                half_max = fwhm_max_value / 2.0
+
+                # Find all indices where envelope >= half_max within the measurement range
+                fwhm_indices = np.where(env[start_idx:end_idx] >= half_max)[0]
+
+                if len(fwhm_indices) > 0:
+                    # Get the first and last indices
+                    first_fwhm_idx = fwhm_indices[0] + start_idx
+                    last_fwhm_idx = fwhm_indices[-1] + start_idx
+
+                    # Convert to time in ns
+                    fwhm_start_time = time[first_fwhm_idx]
+                    fwhm_end_time = time[last_fwhm_idx]
+                    fwhm_width = fwhm_end_time - fwhm_start_time
+
             # Plotting if FFT required
             if fft:
                 # FFT
@@ -179,7 +219,17 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
                 # Plot time history of output component
                 fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
                 line1 = ax1.plot(time, outputdata_norm, 'k', lw=2, label=outputtext)
-                #ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
+                ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=1.0)
+
+                # Plot FWHM if measured
+                if measure_fwhm and fwhm_width is not None:
+                    half_max = fwhm_max_value / 2.0
+                    # ax1.axhline(y=half_max, color='orange', linestyle=':', lw=2, label=f'Half Max ({half_max:.3f})')
+                    # ax1.axvline(x=fwhm_start_time, color='orange', linestyle=':', lw=2)
+                    # ax1.axvline(x=fwhm_end_time, color='orange', linestyle=':', lw=2)
+                    ax1.plot([fwhm_start_time, fwhm_end_time], [half_max, half_max], 'o-', color='green',
+                            lw=3, markersize=8, label=f'FWHM = {fwhm_width:.2f} ns')
+
                 #ax1.scatter(time[peak_idx], outputdata[peak_idx], 'kx')
                 #* Plot the peak
                 #ax1.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
@@ -192,7 +242,8 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
                 else:
                     ax1.set_xlim([0, np.amax(time)])
                 ax1.grid(which='both', axis='both', linestyle='-.')
-                #ax1.legend(fontsize = 15)
+                if measure_fwhm and fwhm_width is not None:
+                    ax1.legend(fontsize=15)
                 ax1.minorticks_on()
                 ax1.tick_params(labelsize=24)
 
@@ -225,6 +276,16 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
                 fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
                 ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
                 line = ax.plot(time, outputdata_norm, 'k', lw=2, label=outputtext)
+
+                # Plot FWHM if measured
+                if measure_fwhm and fwhm_width is not None:
+                    half_max = fwhm_max_value / 2.0
+                    # ax.axhline(y=half_max, color='orange', linestyle=':', lw=2, label=f'Half Max ({half_max:.3f})')
+                    # ax.axvline(x=fwhm_start_time, color='orange', linestyle=':', lw=2)
+                    # ax.axvline(x=fwhm_end_time, color='orange', linestyle=':', lw=2)
+                    ax.plot([fwhm_start_time, fwhm_end_time], [half_max, half_max], 'o-', color='green',
+                           lw=3, markersize=8, label=f'FWHM = {fwhm_width:.2f} ns')
+
                 #* Plot the peak
                 #ax.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
                 #* Plot the background
@@ -364,6 +425,17 @@ def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width
                 txt_file.write(f'Pulse End Time: {pulse_end_time:.2f} ns\n')
                 txt_file.write(f'Pulse Width: {pulse_width:.2f} ns\n')
 
+        # Save FWHM measurement to txt file
+        if measure_fwhm and len(outputs) == 1 and fwhm_width is not None:
+            txt_filename = os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fwhm.txt'
+            with open(txt_filename, 'w') as txt_file:
+                txt_file.write(f'Measurement Range: {fwhm_measure_start:.2f} - {fwhm_measure_end:.2f} ns\n')
+                txt_file.write(f'Maximum Envelope Value: {fwhm_max_value:.6f}\n')
+                txt_file.write(f'Half Maximum Value: {fwhm_max_value/2.0:.6f}\n')
+                txt_file.write(f'FWHM Start Time: {fwhm_start_time:.2f} ns\n')
+                txt_file.write(f'FWHM End Time: {fwhm_end_time:.2f} ns\n')
+                txt_file.write(f'FWHM: {fwhm_width:.2f} ns\n')
+
     f.close()
 
     return plt
@@ -420,6 +492,18 @@ if __name__ == "__main__":
         pulse_measure_start = None
         pulse_measure_end = None
 
+    # Get FWHM measurement option
+    fwhm_input = input("Measure FWHM (Full Width at Half Maximum)? (y/n) [default: n]: ").strip().lower()
+    use_fwhm = fwhm_input == 'y'
+
+    if use_fwhm:
+        fwhm_measure_start = float(input("Enter FWHM measurement start time [ns]: ").strip())
+        fwhm_measure_end = float(input("Enter FWHM measurement end time [ns]: ").strip())
+    else:
+        fwhm_measure_start = None
+        fwhm_measure_end = None
+
     plthandle = mpl_plot(outputfile, outputs, fft=use_fft, measure_pulse_width=use_pulse_width,
-                         pulse_measure_start=pulse_measure_start, pulse_measure_end=pulse_measure_end)
+                         pulse_measure_start=pulse_measure_start, pulse_measure_end=pulse_measure_end,
+                         measure_fwhm=use_fwhm, fwhm_measure_start=fwhm_measure_start, fwhm_measure_end=fwhm_measure_end)
     plthandle.show()
