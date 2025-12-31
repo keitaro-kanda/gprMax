@@ -39,3 +39,5 @@ dist/
 tools/test_output/
 
 api.txt
+
+.python-version
