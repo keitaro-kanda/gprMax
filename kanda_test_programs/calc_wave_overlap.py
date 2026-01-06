@@ -50,11 +50,12 @@ def env(data):
 
 
 #* Define the function to plot the wave overlap
-def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time, envelope, peak_info, output_dir):
+def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time, envelope, peak_info, output_dir, original_peak_time):
     fig, ax = plt.subplots(figsize=(10, 8), tight_layout=True)
     ax.plot(time, original_sig, label='Bottom component', linewidth=2)
     ax.plot(time, shifted_sig - 3.0, label='Side component', linewidth=2)
     ax.plot(time, overlapped_sig - 6.0, label='Overlapped', linewidth=2)
+    ax.axvline(x=original_peak_time, color='gray', linestyle='--', label='Original peak time')
 
     #* Plot the envelope and peaks
     ax.plot(time, envelope - 6.0, label='Envelope', color='k', linestyle='-.')
@@ -69,7 +70,7 @@ def plot(original_sig, shifted_sig, overlapped_sig, shift_time, amplitude, time,
         """
 
     ax.set_xlim(0, 20)
-    ax.set_ylim(-8, 1)
+    ax.set_ylim(-8, 2)
     ax.set_title(r'$A = $' + f'{amplitude:.1f} ' + r'$\Delta t = ' + f'{shift_time:.1f}$ ns', fontsize=28)
     ax.set_xlabel('Time [ns]', fontsize=24)
     ax.set_ylabel('Normalized amplitude', fontsize=24)
@@ -95,7 +96,7 @@ def plot_for_animation(ax, original_sig, shifted_sig, overlapped_sig, shift_time
         plt.plot(info['max_time'], info['max_amplitude'], 'ro', label='Peak' if i == 0 else "")
 
     ax.set_xlim(0, 20)
-    ax.set_ylim(-8, 1)
+    ax.set_ylim(-8, 2)
     ax.set_title(f'Amplitude: {amplitude:.1f}', fontsize=24)
     ax.set_xlabel('Time [ns]', fontsize=24)
     ax.set_ylabel('Amplitude', fontsize=24)
@@ -239,6 +240,10 @@ def analyze_pulses(data, dt):
 t = np.arange(len(original_sig)) * dt / 1e-9  # 時間をナノ秒に変換
 sig = original_sig / np.max(np.abs(original_sig))  # 正規化
 
+# Find peak time of the original signal
+envelope_original, peak_info_original = analyze_pulses(sig, dt)
+original_peak_time = peak_info_original[0]['max_time']
+
 
 shift_times = np.arange(0, 5.02, 0.1) # [ns]
 amplitudes = np.arange(-2.0, 2.01, 0.2)
@@ -275,7 +280,7 @@ for amplitude in amplitudes:
         os.makedirs(output_dir_peak_info, exist_ok=True)
         np.savetxt(output_dir_peak_info + f'/{shift_time:.1f}ns_{amplitude:.1f}.txt', peak_info, delimiter=' ', fmt='%s')
 
-        plot(sig, shifted_sig, overlapped_sig, shift_time, amplitude, t, envelope_overlapped, peak_info_overlapped, output_dir)
+        plot(sig, shifted_sig, overlapped_sig, shift_time, amplitude, t, envelope_overlapped, peak_info_overlapped, output_dir, original_peak_time)
 
     #* Make animation
     #fig, ax = plt.subplots(figsize=(10, 8), tight_layout=True)
