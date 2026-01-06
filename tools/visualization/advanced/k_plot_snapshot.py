@@ -72,6 +72,17 @@ def main():
         y_max = float(input("Enter zoom y_max [m]: ").strip())
         print(f"[INFO] Zoom region set to x:[{x_min}, {x_max}], y:[{y_min}, {y_max}]")
 
+    # Change color range
+    change_color_range = input("Change Ez color range? Default: 0.03. (y/n): ").strip().lower()
+    if change_color_range == 'y':
+        vrange = float(input("Enter max absolute value for Ez color range: ").strip())
+        print(f"[INFO] Ez color range set to ±{vrange}")
+    elif change_color_range == 'n':
+        vrange = 0.03
+        print(f"[INFO] Using default Ez color range: ±{vrange}")
+    else:
+        print("[WARNING] Invalid input. Using default color range.")
+
     snap_dirs = [d for d in os.listdir(parent_dir) if d.endswith("_snaps")]
     if len(snap_dirs)==1:
         snap_dir = os.path.join(parent_dir, snap_dirs[0])
@@ -83,9 +94,10 @@ def main():
 
     ez_field = "E-field"
     fps = 10
-    output_dir = os.path.join(parent_dir, "snapshot")
+    output_dir = os.path.join(parent_dir, f"snapshot")
     if do_zoom:
-        output_dir = os.path.join(output_dir, f'snapshot_zoom_{x_min}_{x_max}_{y_min}_{y_max}')
+        output_dir = os.path.join(output_dir, f'zoom{x_min}_{x_max}_{y_min}_{y_max}')
+    output_dir = output_dir + f'_vrange{vrange}'
     output_video_path = os.path.join(output_dir, "snapshot_animation.mp4")
     print(f"[INFO] Video output path: {output_video_path}")
 
@@ -132,7 +144,7 @@ def main():
         raise RuntimeError("No Ez data found in first 20 frames.")
     print(f"[INFO] Final max_abs for normalization: {max_abs:.3e}")
 
-    vmin, vmax = -0.03, 0.03
+    vmin, vmax = -vrange, vrange
     print(f"[INFO] Ez normalization range: [{vmin}, {vmax}]")
 
     # Prepare geometry grid and axes
