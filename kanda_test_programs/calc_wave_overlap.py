@@ -243,6 +243,17 @@ sig = original_sig / np.max(np.abs(original_sig))  # 正規化
 # Find peak time of the original signal
 envelope_original, peak_info_original = analyze_pulses(sig, dt)
 original_peak_time = peak_info_original[0]['max_time']
+# Save original peak info
+peak_info_original_save = []
+peak_info_original_save.append({
+        'Peak time (envelope) [ns]': peak_info_original[0]['peak_time'],
+        'Peak amplitude (envelope)': peak_info_original[0]['peak_amplitude'],
+        'FWHM': peak_info_original[0]['fwhm'],
+        'Distinguishable': peak_info_original[0]['distinguishable'],
+        'Max amplitude': peak_info_original[0]['max_amplitude'],
+        'Max time [ns]': peak_info_original[0]['max_time']
+})
+np.savetxt(output_parent_dir + f'/original_peak_info.txt', peak_info_original, delimiter=' ', fmt='%s')
 
 
 shift_times = np.arange(0, 5.02, 0.1) # [ns]
