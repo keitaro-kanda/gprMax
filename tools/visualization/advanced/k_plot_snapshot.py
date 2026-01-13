@@ -20,6 +20,26 @@ def read_vti_image(filename):
     return reader.GetOutput()
 
 
+def read_vti_image_safe(filename):
+    """
+    Safely reads a VTI file with error handling.
+    Returns (success: bool, image_data or None, error_message).
+    """
+    try:
+        reader = vtkXMLImageDataReader()
+        reader.SetFileName(filename)
+        reader.Update()
+
+        # Check if reader actually read data successfully
+        output = reader.GetOutput()
+        if output is None or output.GetNumberOfPoints() == 0:
+            return False, None, "VTK reader returned empty data"
+
+        return True, output, None
+    except Exception as e:
+        return False, None, str(e)
+
+
 def extract_slice(img, field_name, target_z=0.0, tol=1e-6):
     """
     Extracts (x,y) coords and z-component of field on nearest target_z slice.
@@ -62,6 +82,10 @@ def main():
         raise FileNotFoundError(f"Cannot find file: {geometry_path}")
     parent_dir = os.path.dirname(geometry_path)
     print(f"[INFO] Parent directory: {parent_dir}")
+
+    # Time step
+    dt_ns = float(input("Enter time step between snapshots [ns]: ").strip())
+    print(f"[INFO] Time step: {dt_ns} ns")
 
     # Zoom option
     do_zoom = input("Generate zoomed plot? (y/n): ").strip().lower() == 'y'
@@ -131,15 +155,66 @@ def main():
     )
     print(f"[INFO] Found {len(snap_paths)} snapshot files.")
 
-    # Compute max_abs from first 20 frames
+    # Check file sizes for potential issues
+    print("[INFO] Checking snapshot file sizes...")
+    file_sizes = [os.path.getsize(p) for p in snap_paths]
+    avg_size = np.mean(file_sizes)
+    std_size = np.std(file_sizes)
+    for idx, (path, size) in enumerate(zip(snap_paths, file_sizes), start=1):
+        if size < avg_size - 2 * std_size or size == 0:
+            print(f"  [WARNING] File {idx} ({os.path.basename(path)}) has unusual size: {size} bytes (avg: {avg_size:.0f})")
+    print(f"[INFO] File size check complete. Avg: {avg_size:.0f} bytes, Std: {std_size:.0f} bytes")
+
+    # Compute max_abs from first 20 frames with error handling
     print("[INFO] Computing Ez max_abs from first 20 frames...")
     max_abs = 0.0
+    failed_frames = []
     for idx, path in enumerate(snap_paths[:20], start=1):
-        coords, vals = extract_slice(read_vti_image(path), ez_field)
-        if vals.size:
-            frame_max = abs(vals).max()
-            max_abs = max(max_abs, frame_max)
-        print(f"  [INFO] Frame {idx}: local max={frame_max:.3e}, current global max={max_abs:.3e}")
+        success, img_data, error_msg = read_vti_image_safe(path)
+        if not success:
+            print(f"  [ERROR] Frame {idx} failed to load: {error_msg}")
+            print(f"  [ERROR] File: {path}")
+            print(f"  [ERROR] File size: {os.path.getsize(path)} bytes")
+            failed_frames.append((idx, path, error_msg))
+            continue
+
+        try:
+            coords, vals = extract_slice(img_data, ez_field)
+            if vals.size:
+                frame_max = abs(vals).max()
+                max_abs = max(max_abs, frame_max)
+                print(f"  [INFO] Frame {idx}: local max={frame_max:.3e}, current global max={max_abs:.3e}")
+        except Exception as e:
+            print(f"  [ERROR] Frame {idx} extraction failed: {str(e)}")
+            failed_frames.append((idx, path, str(e)))
+
+    if failed_frames:
+        print(f"\n[ERROR] {len(failed_frames)} frame(s) failed to load during max_abs computation:")
+        for idx, path, msg in failed_frames:
+            print(f"  Frame {idx}: {os.path.basename(path)} - {msg}")
+        print("\n[WARNING] Continuing with corrupted/incomplete data may produce physically incorrect results.")
+        print("Options:")
+        print("  1. Stop here and investigate the issue (recommended)")
+        print("  2. Process only frames up to the first error")
+        print("  3. Skip failed frames and continue (WARNING: time discontinuity)")
+        print("  4. Abort completely")
+        choice = input("Enter choice (1-4): ").strip()
+
+        if choice == '1':
+            print("[INFO] Stopping for investigation. Please check the snapshot files.")
+            return
+        elif choice == '2':
+            first_error_idx = min(f[0] for f in failed_frames)
+            snap_paths = snap_paths[:first_error_idx-1]
+            print(f"[INFO] Processing only first {len(snap_paths)} frames.")
+        elif choice == '3':
+            print("[WARNING] Skipping failed frames. Animation will have time discontinuities!")
+            snap_paths = [p for i, p in enumerate(snap_paths, 1) if not any(f[0] == i for f in failed_frames)]
+            print(f"[INFO] Processing {len(snap_paths)} valid frames.")
+        else:
+            print("[INFO] Aborting.")
+            return
+
     if max_abs == 0.0:
         raise RuntimeError("No Ez data found in first 20 frames.")
     print(f"[INFO] Final max_abs for normalization: {max_abs:.3e}")
@@ -152,8 +227,13 @@ def main():
     geom_grid = np.zeros((ny, nx))
     geom_grid[iy, ix] = geom_vals
     unique_ids = np.unique(geom_vals)
+
+    # Set figsize
+    figsize_vertical = 8.0
+    figsize_horizontal = figsize_vertical * ( (xs.max()-xs.min()) / (ys.max()-ys.min()) )
+
     # Setup figure
-    fig, ax = plt.subplots(figsize=(8,8), dpi=300)
+    fig, ax = plt.subplots(figsize=(figsize_horizontal, figsize_vertical), dpi=120)
     ax.set_aspect('equal', 'box')
     ax.set_xlabel("X [cm]", fontsize=20)
     ax.set_ylabel("Y [cm]", fontsize=20)
@@ -200,15 +280,26 @@ def main():
     os.makedirs(frame_dir, exist_ok=True)
     print(f"[INFO] Frame directory: {frame_dir}")
 
-    dt_ns = 0.5
     def update(i):
-        coords, vals = extract_slice(read_vti_image(snap_paths[i]), ez_field)
+        success, img_data, error_msg = read_vti_image_safe(snap_paths[i])
+        if not success:
+            print(f"[ERROR] Failed to load frame {i+1}: {error_msg}")
+            print(f"[ERROR] File: {snap_paths[i]}")
+            print(f"[ERROR] File size: {os.path.getsize(snap_paths[i])} bytes")
+            raise RuntimeError(f"Failed to load snapshot file {snap_paths[i]}: {error_msg}")
+
+        try:
+            coords, vals = extract_slice(img_data, ez_field)
+        except Exception as e:
+            print(f"[ERROR] Failed to extract slice from frame {i+1}: {str(e)}")
+            raise RuntimeError(f"Failed to extract Ez field from frame {i+1}: {str(e)}")
+
         grid = np.zeros((ny, nx))
         ix_i = np.searchsorted(xs, coords[:,0])
         iy_i = np.searchsorted(ys, coords[:,1])
         grid[iy_i, ix_i] = vals / max_abs
         ez_im.set_data(grid)
-        ax.set_title(f"Time = {(i+1)*dt_ns:.1f} ns", fontsize=20)
+        ax.set_title(f"Time = {(i+1)*dt_ns:.3f} ns", fontsize=20)
         frame_path = os.path.join(frame_dir, f"frame_{i+1:03d}.png")
         fig.savefig(frame_path, dpi=300)
         print(f"[INFO] Saved frame {i+1}/{len(snap_paths)} to {frame_path}")
