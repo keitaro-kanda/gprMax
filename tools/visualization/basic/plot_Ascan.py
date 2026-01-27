@@ -1,509 +1,416 @@
-# Copyright (C) 2015-2023: The University of Edinburgh
-#                 Authors: Craig Warren and Antonis Giannopoulos
-#
-# This file is part of gprMax.
-#
-# gprMax is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# gprMax is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with gprMax.  If not, see <http://www.gnu.org/licenses/>.
-
+#!/usr/bin/env python3
 import os
-import sys
-
-import h5py
-import matplotlib.gridspec as gridspec
-import matplotlib.pyplot as plt
+import glob
+import json
 import numpy as np
-from matplotlib import markers
-from numpy import size
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+import pandas as pd
+from vtkmodules.vtkIOXML import vtkXMLImageDataReader
+from vtkmodules.vtkFiltersCore import vtkCellCenters
+from vtkmodules.util.numpy_support import vtk_to_numpy
 
-from gprMax.exceptions import CmdInputError
-from gprMax.receivers import Rx
-from gprMax.utilities import fft_power
-from scipy import signal
+# 日本語フォント設定（必要に応じて環境に合わせてコメントアウトを外してください）
+# plt.rcParams['font.family'] = 'sans-serif' 
 
+def read_vti(filename):
+    """VTIファイルを読み込み、vtkImageDataオブジェクトを返します"""
+    reader = vtkXMLImageDataReader()
+    reader.SetFileName(filename)
+    reader.Update()
+    return reader.GetOutput()
 
-def mpl_plot(filename, outputs=Rx.defaultoutputs, fft=False, measure_pulse_width=False, pulse_measure_start=None, pulse_measure_end=None, measure_fwhm=False, fwhm_measure_start=None, fwhm_measure_end=None):
-    """Plots electric and magnetic fields and currents from all receiver points in the given output file. Each receiver point is plotted in a new figure window.
+def extract_slice_for_geometry(img, field_name, target_z=0.0, tol=1e-6):
+    """ジオメトリ表示用に特定Z座標のスライスデータを抽出する関数"""
+    def choose_slice_z(z_coords):
+        uniq = np.unique(z_coords)
+        return uniq[np.argmin(np.abs(uniq - target_z))]
 
-    Args:
-        filename (string): Filename (including path) of output file.
-        outputs (list): List of field/current components to plot.
-        fft (boolean): Plot FFT switch.
-        measure_pulse_width (boolean): Measure pulse width switch.
-        pulse_measure_start (float): Pulse measurement start time [ns].
-        pulse_measure_end (float): Pulse measurement end time [ns].
-        measure_fwhm (boolean): Measure FWHM switch.
-        fwhm_measure_start (float): FWHM measurement start time [ns].
-        fwhm_measure_end (float): FWHM measurement end time [ns].
+    point_data = img.GetPointData()
+    array = point_data.GetArray(field_name)
+    mesh = img
+    
+    if array is None:
+        cell_data = img.GetCellData()
+        array = cell_data.GetArray(field_name)
+        if array is None:
+            return None, None
+        
+        center = vtkCellCenters()
+        center.SetInputData(img)
+        center.Update()
+        mesh = center.GetOutput()
 
-    Returns:
-        plt (object): matplotlib plot object.
-    """
+    pts = vtk_to_numpy(mesh.GetPoints().GetData()).reshape(-1, 3)
+    vals = vtk_to_numpy(array)
+    
+    slice_z = choose_slice_z(pts[:, 2])
+    mask = np.isclose(pts[:, 2], slice_z, atol=tol)
+    
+    coords2d = pts[mask][:, :2]
+    vals2d = vals[mask]
+    
+    if vals2d.ndim > 1 and vals2d.shape[1] >= 3:
+        vals2d = vals2d[:, 2] 
+        
+    return coords2d, vals2d
 
-    # Open output file and read some attributes
-    f = h5py.File(filename, 'r')
-    nrx = f.attrs['nrx']
-    dt = f.attrs['dt']
-    iterations = f.attrs['Iterations']
-    time = np.linspace(0, (iterations - 1) * dt, num=iterations) / 1e-9 # [ns]
+def get_closest_point_id(img_data, target_pos):
+    """指定座標に最も近いグリッド点のIDと実座標を返します"""
+    point_id = img_data.FindPoint(target_pos)
+    if point_id < 0:
+        return None, None
+    actual_coords = img_data.GetPoint(point_id)
+    return point_id, actual_coords
 
-    # Check there are any receivers
-    if nrx == 0:
-        raise CmdInputError('No receivers found in {}'.format(filename))
+def prepare_geometry_grid(geom_img, target_z):
+    """ジオメトリプロット用のグリッドデータを準備して返します（再利用のため）"""
+    pd_geom = geom_img.GetPointData()
+    if pd_geom.GetNumberOfArrays() > 0:
+        geom_field = pd_geom.GetArrayName(0)
+    else:
+        cd_geom = geom_img.GetCellData()
+        geom_field = cd_geom.GetArrayName(0) if cd_geom.GetNumberOfArrays() > 0 else None
+    
+    if not geom_field:
+        return None
 
-    # Check for single output component when doing a FFT
-    if fft:
-        if not len(outputs) == 1:
-            raise CmdInputError('A single output must be specified when using the -fft option')
+    g_coords, g_vals = extract_slice_for_geometry(geom_img, geom_field, target_z=target_z)
+    if g_coords is None:
+        return None
 
-    # New plot for each receiver
-    for rx in range(1, nrx + 1):
-        path = '/rxs/rx' + str(rx) + '/'
-        availableoutputs = list(f[path].keys())
+    xs = np.unique(g_coords[:, 0])
+    ys = np.unique(g_coords[:, 1])
+    nx, ny = xs.size, ys.size
+    
+    geom_grid = np.zeros((ny, nx))
+    ix = np.searchsorted(xs, g_coords[:, 0])
+    iy = np.searchsorted(ys, g_coords[:, 1])
+    geom_grid[iy, ix] = g_vals
+    
+    extent = [xs.min(), xs.max(), ys.min(), ys.max()]
+    return geom_grid, extent, g_vals
 
-        # If only a single output is required, create one subplot
-        if len(outputs) == 1:
+def plot_geometry_on_ax(ax, geom_grid, extent, g_vals, actual_coords, title_prefix=""):
+    """指定されたAxesオブジェクトにジオメトリを描画します"""
+    unique_ids = np.unique(g_vals)
+    if len(unique_ids) <= 5:
+        cmap_geom = ListedColormap(['gray', 'lightgray', 'white', 'lightblue', 'red'])
+        cmap_geom = ListedColormap(cmap_geom.colors[:len(unique_ids)])
+    else:
+        cmap_geom = 'viridis'
 
-            # Check for polarity of output and if requested output is in file
-            if outputs[0][-1] == '-':
-                polarity = -1
-                outputtext = '-' + outputs[0][0:-1]
-                output = outputs[0][0:-1]
-            else:
-                polarity = 1
-                outputtext = outputs[0]
-                output = outputs[0]
+    ax.imshow(geom_grid, extent=extent, origin='lower', cmap=cmap_geom, alpha=0.8, aspect='equal')
+    ax.scatter(actual_coords[0], actual_coords[1], c='red', marker='x', s=150, linewidth=2, zorder=10)
+    
+    ax.set_title(f"{title_prefix}Loc (Z={actual_coords[2]:.2f})", fontsize=10)
+    ax.set_xlabel("X [m]")
+    ax.set_ylabel("Y [m]")
+    ax.grid(True, linestyle=':', alpha=0.5)
 
-            if output not in availableoutputs:
-                raise CmdInputError('{} output requested to plot, but the available output for receiver 1 is {}'.format(output, ', '.join(availableoutputs)))
-
-            outputdata = f[path + output][:] * polarity
-            outputdata_norm = outputdata / np.amax(np.abs(outputdata))
-            env = np.abs(signal.hilbert(outputdata_norm))
-
-
-            #* Calculate the background
-            #background = np.mean(np.abs(outputdata[int(20e-9/dt):int(50e-9/dt)]))
-
-            #* Detect the peak in the envelope
-            """
-            threshold = background * 1
-            peak_idx = []
-            peak_value = []
-
-            i = 0
-            while i < len(env):
-                if env[i] > threshold:
-                    start = i
-                    while i < len(env) and env[i] > threshold:
-                        i += 1
-                    end = i
-                    peak_idx.append(np.argmax(np.abs(outputdata[start:end])) + start)
-                i += 1
-            """
-
-            # Measure pulse width if requested
-            pulse_start_time = None
-            pulse_end_time = None
-            pulse_width = None
-
-            if measure_pulse_width and pulse_measure_start is not None and pulse_measure_end is not None:
-                # Convert time range from ns to seconds for indexing
-                start_idx = int(pulse_measure_start * 1e-9 / dt)
-                end_idx = int(pulse_measure_end * 1e-9 / dt)
-
-                # Ensure indices are within bounds
-                start_idx = max(0, min(start_idx, len(outputdata_norm) - 1))
-                end_idx = max(0, min(end_idx, len(outputdata_norm)))
-
-                # Find all indices where |normalized amplitude| >= 0.01 within the measurement range
-                threshold = 0.01
-                pulse_indices = np.where(np.abs(outputdata_norm[start_idx:end_idx]) >= threshold)[0]
-
-                if len(pulse_indices) > 0:
-                    # Get the first and last indices (consolidating all ranges)
-                    first_pulse_idx = pulse_indices[0] + start_idx
-                    last_pulse_idx = pulse_indices[-1] + start_idx
-
-                    # Convert to time in ns
-                    pulse_start_time = time[first_pulse_idx]
-                    pulse_end_time = time[last_pulse_idx]
-                    pulse_width = pulse_end_time - pulse_start_time
-
-            # Measure FWHM if requested
-            fwhm_start_time = None
-            fwhm_end_time = None
-            fwhm_width = None
-            fwhm_max_value = None
-
-            if measure_fwhm and fwhm_measure_start is not None and fwhm_measure_end is not None:
-                # Convert time range from ns to seconds for indexing
-                start_idx = int(fwhm_measure_start * 1e-9 / dt)
-                end_idx = int(fwhm_measure_end * 1e-9 / dt)
-
-                # Ensure indices are within bounds
-                start_idx = max(0, min(start_idx, len(env) - 1))
-                end_idx = max(0, min(end_idx, len(env)))
-
-                # Find maximum value in the envelope within the measurement range
-                env_segment = env[start_idx:end_idx]
-                max_idx_segment = np.argmax(env_segment)
-                max_idx = max_idx_segment + start_idx
-                fwhm_max_value = env[max_idx]
-
-                # Find half maximum
-                half_max = fwhm_max_value / 2.0
-
-                # Find all indices where envelope >= half_max within the measurement range
-                fwhm_indices = np.where(env[start_idx:end_idx] >= half_max)[0]
-
-                if len(fwhm_indices) > 0:
-                    # Get the first and last indices
-                    first_fwhm_idx = fwhm_indices[0] + start_idx
-                    last_fwhm_idx = fwhm_indices[-1] + start_idx
-
-                    # Convert to time in ns
-                    fwhm_start_time = time[first_fwhm_idx]
-                    fwhm_end_time = time[last_fwhm_idx]
-                    fwhm_width = fwhm_end_time - fwhm_start_time
-
-            # Plotting if FFT required
-            if fft:
-                # FFT
-                freqs, power = fft_power(outputdata, dt)
-                freqmaxpower = np.where(np.isclose(power, 0))[0][0]
-
-                # Set plotting range to -60dB from maximum power or 4 times
-                # frequency at maximum power
-                try:
-                    pltrange = np.where(power[freqmaxpower:] < -60)[0][0] + freqmaxpower + 1
-                except:
-                    pltrange = freqmaxpower * 4
-
-                pltrange = np.s_[0:pltrange]
-
-                # Calculate center frequency and bandwidth (-3dB)
-                center_freq = freqs[freqmaxpower]
-                lower_freq_3db = None
-                upper_freq_3db = None
-                bandwidth_3db = None
-
-                # Find -3dB points
-                try:
-                    # Search for lower -3dB point (below center frequency)
-                    lower_indices = np.where(power[:freqmaxpower] <= -3)[0]
-                    if len(lower_indices) > 0:
-                        lower_freq_3db = freqs[lower_indices[-1]]
-
-                    # Search for upper -3dB point (above center frequency)
-                    upper_indices = np.where(power[freqmaxpower:] <= -3)[0]
-                    if len(upper_indices) > 0:
-                        upper_freq_3db = freqs[upper_indices[0] + freqmaxpower]
-
-                    # Calculate bandwidth if both points found
-                    if lower_freq_3db is not None and upper_freq_3db is not None:
-                        bandwidth_3db = upper_freq_3db - lower_freq_3db
-                except:
-                    pass
-
-                # Plot time history of output component
-                fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-                line1 = ax1.plot(time, outputdata_norm, 'k', lw=2, label=outputtext)
-                ax1.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=1.0)
-
-                # Plot FWHM if measured
-                if measure_fwhm and fwhm_width is not None:
-                    half_max = fwhm_max_value / 2.0
-                    # ax1.axhline(y=half_max, color='orange', linestyle=':', lw=2, label=f'Half Max ({half_max:.3f})')
-                    # ax1.axvline(x=fwhm_start_time, color='orange', linestyle=':', lw=2)
-                    # ax1.axvline(x=fwhm_end_time, color='orange', linestyle=':', lw=2)
-                    ax1.plot([fwhm_start_time, fwhm_end_time], [half_max, half_max], 'o-', color='green',
-                            lw=3, markersize=8, label=f'FWHM = {fwhm_width:.2f} ns')
-
-                #ax1.scatter(time[peak_idx], outputdata[peak_idx], 'kx')
-                #* Plot the peak
-                #ax1.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
-                ax1.set_xlabel('Time [ns]', fontsize=28)
-                ax1.set_ylabel('Normalized ' + outputtext, fontsize=28)
-                #* Closeup otpion
-                if use_closeup:
-                    ax1.set_xlim([closeup_x_start, closeup_x_end])
-                    ax1.set_ylim([closeup_y_start, closeup_y_end])
-                else:
-                    ax1.set_xlim([0, np.amax(time)])
-                ax1.grid(which='both', axis='both', linestyle='-.')
-                if measure_fwhm and fwhm_width is not None:
-                    ax1.legend(fontsize=15)
-                ax1.minorticks_on()
-                ax1.tick_params(labelsize=24)
-
-                # Plot frequency spectra
-                line2 = ax2.plot(freqs[pltrange]/1e6, power[pltrange], 'k', lw=2)
-                ax2.set_xlabel('Frequency [MHz]', fontsize=28)
-                ax2.set_ylabel('Power [dB]', fontsize=28)
-                ax2.grid(which='both', axis='both', linestyle='-.')
-                ax2.tick_params(labelsize=24)
-                ax2.set_ylim([-20, 1])
-
-                # Change colours and labels for magnetic field components or currents
-                if 'H' in outputs[0]:
-                    plt.setp(line1, color='g')
-                    plt.setp(line2, color='g')
-                    plt.setp(ax1, ylabel=outputtext + ' field strength [A/m]')
-                    plt.setp(stemlines, 'color', 'g')
-                    plt.setp(markerline, 'markerfacecolor', 'g', 'markeredgecolor', 'g')
-                elif 'I' in outputs[0]:
-                    plt.setp(line1, color='b')
-                    plt.setp(line2, color='b')
-                    plt.setp(ax1, ylabel=outputtext + ' current [A]')
-                    plt.setp(stemlines, 'color', 'b')
-                    plt.setp(markerline, 'markerfacecolor', 'b', 'markeredgecolor', 'b')
-
-                plt.show()
-
-            #* Plotting if no FFT required
-            else:
-                fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]', ylabel=outputtext + ' normalized field strength'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-                ax.plot(time, env, 'b', lw=2, label='Envelope', linestyle='--', alpha=0.5)
-                line = ax.plot(time, outputdata_norm, 'k', lw=2, label=outputtext)
-
-                # Plot FWHM if measured
-                if measure_fwhm and fwhm_width is not None:
-                    half_max = fwhm_max_value / 2.0
-                    # ax.axhline(y=half_max, color='orange', linestyle=':', lw=2, label=f'Half Max ({half_max:.3f})')
-                    # ax.axvline(x=fwhm_start_time, color='orange', linestyle=':', lw=2)
-                    # ax.axvline(x=fwhm_end_time, color='orange', linestyle=':', lw=2)
-                    ax.plot([fwhm_start_time, fwhm_end_time], [half_max, half_max], 'o-', color='green',
-                           lw=3, markersize=8, label=f'FWHM = {fwhm_width:.2f} ns')
-
-                #* Plot the peak
-                #ax.scatter(time[peak_idx], outputdata[peak_idx], color='r', marker='o', s=50, label='Peak')
-                #* Plot the background
-                #ax.hlines(background, 0, np.amax(time), colors='gray', linestyles='--', label='Background')
-                #ax.hlines(-background, 0, np.amax(time), colors='gray', linestyles='--')
-
-                if use_closeup:
-                    ax.set_xlim([closeup_x_start, closeup_x_end])
-                    ax.set_ylim([closeup_y_start, closeup_y_end])
-                else:
-                    ax.set_xlim([0, np.amax(time)])
-                ax.grid(which='both', axis='both', linestyle='-.')
-                ax.minorticks_on()
-                ax.set_xlabel('Time [ns]', fontsize=28)
-                ax.set_ylabel('Normalized ' + outputtext, fontsize=28)
-                ax.tick_params(labelsize=24)
-                plt.tight_layout()
-                ax.legend(fontsize = 24)
-
-                if 'H' in output:
-                    plt.setp(line, color='g')
-                    plt.setp(ax, ylabel=outputtext + ', field strength [A/m]')
-                elif 'I' in output:
-                    plt.setp(line, color='b')
-                    plt.setp(ax, ylabel=outputtext + ', current [A]')
-
-        # If multiple outputs required, create all nine subplots and populate only the specified ones
+def main():
+    print("--- FDTD A-scan Extractor (Grouped & Combined) ---")
+    
+    # --- 1. Geometry & Snapshot Setup ---
+    geometry_path = input("Enter path to geometry.vti: ").strip()
+    geometry_path = os.path.normpath(geometry_path)
+    
+    if not os.path.isfile(geometry_path):
+        raise FileNotFoundError(f"Geometry file not found: {geometry_path}")
+    
+    parent_dir = os.path.dirname(geometry_path)
+    
+    snap_candidates = [d for d in os.listdir(parent_dir) if d.endswith("_snaps") and os.path.isdir(os.path.join(parent_dir, d))]
+    
+    if len(snap_candidates) == 1:
+        snap_dir = os.path.join(parent_dir, snap_candidates[0])
+        print(f"[INFO] Auto-detected snapshot directory: {snap_dir}")
+    else:
+        print(f"[INFO] Found {len(snap_candidates)} snapshot directories.")
+        snap_dir_input = input("Enter snapshot directory name or path: ").strip()
+        if os.path.isabs(snap_dir_input):
+            snap_dir = snap_dir_input
         else:
-            fig, ax = plt.subplots(subplot_kw=dict(xlabel='Time [ns]'), num='rx' + str(rx), figsize=(20, 10), facecolor='w', edgecolor='w')
-            if len(outputs) == 9:
-                gs = gridspec.GridSpec(3, 3, hspace=0.3, wspace=0.3)
+            snap_dir = os.path.join(parent_dir, snap_dir_input)
+
+    if not os.path.isdir(snap_dir):
+        raise FileNotFoundError(f"Snapshot directory not found: {snap_dir}")
+
+    dt_ns = float(input("Enter time step [ns]: ").strip())
+    
+    print("\nSelect component to plot:")
+    print("  0: Ex,  1: Ey,  2: Ez (default)")
+    comp_input = input("Enter choice (0-2): ").strip()
+    plot_component = int(comp_input) if comp_input in ['0', '1', '2'] else 2
+    comp_labels = ['Ex', 'Ey', 'Ez']
+
+    # --- 2. Input Mode Selection ---
+    print("\nSelect Input Mode:")
+    print("  1: Single Point (Manual Input)")
+    print("  2: Batch Processing (from JSON file)")
+    mode = input("Enter mode (1 or 2): ").strip()
+
+    targets = [] # 全ターゲットのフラットなリスト
+    
+    # グループ管理用辞書 { "GroupName": [target_obj, ...], ... }
+    groups = {} 
+
+    if mode == '2':
+        # --- JSON Mode ---
+        json_path = input("Enter path to targets.json: ").strip()
+        json_path = os.path.normpath(json_path)
+        if not os.path.isfile(json_path):
+            raise FileNotFoundError(f"JSON file not found: {json_path}")
+        
+        with open(json_path, 'r', encoding='utf-8') as f:
+            try:
+                data = json.load(f)
+                
+                # 辞書型（グループ化）かリスト型（旧仕様）かで分岐
+                if isinstance(data, dict):
+                    print("[INFO] Detected grouped JSON format.")
+                    for group_name, items in data.items():
+                        if not isinstance(items, list): continue
+                        groups[group_name] = []
+                        for item in items:
+                            if all(k in item for k in ('x', 'y', 'z')):
+                                t = {
+                                    'group': group_name,
+                                    'label': item.get('label', 'NoName'),
+                                    'req_coords': (item['x'], item['y'], item['z'])
+                                }
+                                targets.append(t)
+                                groups[group_name].append(t)
+                
+                elif isinstance(data, list):
+                    print("[INFO] Detected simple list JSON format. Using 'Default' group.")
+                    group_name = "Default"
+                    groups[group_name] = []
+                    for item in data:
+                        if all(k in item for k in ('x', 'y', 'z')):
+                            t = {
+                                'group': group_name,
+                                'label': item.get('label', 'NoName'),
+                                'req_coords': (item['x'], item['y'], item['z'])
+                            }
+                            targets.append(t)
+                            groups[group_name].append(t)
+                else:
+                    raise ValueError("JSON root must be a dict or a list.")
+
+            except json.JSONDecodeError:
+                raise ValueError("Invalid JSON format.")
+        
+        print(f"[INFO] Loaded {len(targets)} targets in {len(groups)} groups.")
+        
+    else:
+        # --- Single Mode ---
+        print("\nEnter target coordinates [m]:")
+        tx = float(input("  x: ").strip())
+        ty = float(input("  y: ").strip())
+        tz = float(input("  z: ").strip())
+        
+        group_name = "Manual_Extract"
+        t = {
+            'group': group_name,
+            'label': 'Point',
+            'req_coords': (tx, ty, tz)
+        }
+        targets.append(t)
+        groups[group_name] = [t]
+
+    if not targets:
+        print("[ERROR] No targets specified. Exiting.")
+        return
+
+    # --- 3. Prepare Targets & Output Dirs ---
+    print(f"\n[INFO] Initializing targets and checking geometry...")
+    geom_img = read_vti(geometry_path)
+    
+    snap_dir_name = os.path.basename(os.path.normpath(snap_dir))
+    output_base_folder = os.path.join(parent_dir, f"{snap_dir_name}_extract_Ascan")
+    
+    valid_targets = []
+    
+    # 有効なターゲットのみを抽出して再構築
+    for t in targets:
+        pid, act_coords = get_closest_point_id(geom_img, t['req_coords'])
+        
+        if pid is None:
+            print(f"  [SKIP] Target '{t['label']}' (Group: {t['group']}) is out of bounds.")
+            # グループリストからも削除が必要だが、後でgroupsを再生成する方が安全
+            continue
+            
+        t['point_id'] = pid
+        t['actual_coords'] = act_coords
+        
+        # フォルダ構造: Output / GroupName / Label_coords /
+        coord_str = f"x{act_coords[0]:.3f}_y{act_coords[1]:.3f}_z{act_coords[2]:.3f}"
+        
+        # グループフォルダ
+        t['group_dir'] = os.path.join(output_base_folder, t['group'])
+        
+        # 個別ターゲットフォルダ
+        t['target_dir'] = os.path.join(t['group_dir'], f"{t['label']}_{coord_str}")
+        os.makedirs(t['target_dir'], exist_ok=True)
+        
+        # データ格納用
+        t['ex'], t['ey'], t['ez'] = [], [], []
+        
+        valid_targets.append(t)
+
+    # グループ辞書の再構築（無効なターゲットを除外）
+    groups = {}
+    for t in valid_targets:
+        if t['group'] not in groups:
+            groups[t['group']] = []
+        groups[t['group']].append(t)
+        
+    targets = valid_targets
+
+    if not targets:
+        raise RuntimeError("No valid targets found inside the simulation domain.")
+
+    # --- 4. Main Extraction Loop ---
+    snap_paths = sorted(
+        glob.glob(os.path.join(snap_dir, "snapshot*.vti")),
+        key=lambda p: int(os.path.splitext(os.path.basename(p))[0].replace("snapshot",""))
+    )
+    if not snap_paths:
+        raise FileNotFoundError("No 'snapshot*.vti' files found.")
+
+    print(f"\n[INFO] Extracting data from {len(snap_paths)} frames...")
+    
+    times = []
+    field_name = "E-field"
+
+    for i, path in enumerate(snap_paths):
+        if i % 10 == 0: print(f"\rProcessing frame {i+1}/{len(snap_paths)}...", end="")
+        
+        reader = vtkXMLImageDataReader()
+        reader.SetFileName(path)
+        reader.Update()
+        img = reader.GetOutput()
+        
+        pd_vtk = img.GetPointData()
+        array = pd_vtk.GetArray(field_name)
+        if array is None:
+            cd_vtk = img.GetCellData()
+            array = cd_vtk.GetArray(field_name)
+        
+        current_time = (i + 1) * dt_ns
+        times.append(current_time)
+        
+        # 全ターゲット一括抽出
+        for t in targets:
+            if array:
+                val = array.GetTuple(t['point_id'])
             else:
-                gs = gridspec.GridSpec(3, 2, hspace=0.3, wspace=0.3)
+                val = (0.0, 0.0, 0.0)
+            t['ex'].append(val[0])
+            t['ey'].append(val[1])
+            t['ez'].append(val[2])
 
-            for output in outputs:
-                # Check for polarity of output and if requested output is in file
-                if output[-1] == 'm':
-                    polarity = -1
-                    outputtext = '-' + output[0:-1]
-                    output = output[0:-1]
-                else:
-                    polarity = 1
-                    outputtext = output
+    print("\n[INFO] Extraction complete.")
 
-                # Check if requested output is in file
-                if output not in availableoutputs:
-                    raise CmdInputError('Output(s) requested to plot: {}, but available output(s) for receiver {} in the file: {}'.format(', '.join(outputs), rx, ', '.join(availableoutputs)))
+    # --- 5. Saving Results & Plotting ---
+    print("[INFO] Generating plots and saving files...")
+    target_label_comp = comp_labels[plot_component]
 
-                outputdata = f[path + output][:] * polarity
-                outputdata_norm = outputdata
-                env = np.abs(signal.hilbert(outputdata_norm))
+    # 個別ターゲットごとの処理
+    for t in targets:
+        # CSV保存
+        df = pd.DataFrame({
+            'Time [ns]': times,
+            'Ex': t['ex'], 'Ey': t['ey'], 'Ez': t['ez']
+        })
+        df.to_csv(os.path.join(t['target_dir'], "ascan_data.csv"), index=False)
+        
+        # 波形データ
+        vals_to_plot = [t['ex'], t['ey'], t['ez']][plot_component]
+        
+        # ジオメトリデータの準備（Combined Plot用）
+        geom_res = prepare_geometry_grid(geom_img, t['actual_coords'][2])
+        
+        # ----------------------------------------------------
+        # 1. ジオメトリ単体プロット (Location Check)
+        # ----------------------------------------------------
+        if geom_res:
+            geom_grid, extent, g_vals = geom_res
+            plt.figure(figsize=(6, 5))
+            ax = plt.gca()
+            plot_geometry_on_ax(ax, geom_grid, extent, g_vals, t['actual_coords'], title_prefix=f"{t['label']} ")
+            plt.tight_layout()
+            plt.savefig(os.path.join(t['target_dir'], "geometry_location_check.png"), dpi=200)
+            plt.close()
 
-                if output == 'Ex':
-                    ax = plt.subplot(gs[0, 0])
-                    ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext)
-                    ax.set_ylabel('Normalized ' + outputtext)
-                # ax.set_ylim([-15, 20])
-                elif output == 'Ey':
-                    ax = plt.subplot(gs[1, 0])
-                    ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext)
-                    ax.set_ylabel('Normalized ' + outputtext)
-                # ax.set_ylim([-15, 20])
+        # ----------------------------------------------------
+        # 2. A-scan単体プロット
+        # ----------------------------------------------------
+        plt.figure(figsize=(8, 4))
+        plt.plot(times, vals_to_plot, color='blue', linewidth=1.2)
+        plt.xlabel("Time [ns]")
+        plt.ylabel("Electric Field [V/m]")
+        plt.title(f"A-scan: {t['label']} ({target_label_comp})")
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        plt.savefig(os.path.join(t['target_dir'], f"ascan_plot_{target_label_comp}.png"), dpi=200)
+        plt.close()
 
-                # =====Ezのプロット=====
-                elif output == 'Ez':
-                    ax = plt.subplot(gs[2, 0])
-                    ax.plot(time, outputdata_norm, 'r', lw=2, label=outputtext)
-                    #ax.set_ylim([-3, 3])
-                    ax.set_xlim([5e-8, 5e-6])
-                    #ax.set_xscale('log')
-                    ax.set_ylabel('Normalized ' + outputtext, size=18)
-                    ax.tick_params(labelsize=18)
+        # ----------------------------------------------------
+        # 3. Combined Plot (左右配置: 左ジオメトリ, 右A-scan)
+        # ----------------------------------------------------
+        if geom_res:
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), gridspec_kw={'width_ratios': [1, 1.5]})
+            
+            # Left: Geometry
+            plot_geometry_on_ax(ax1, geom_grid, extent, g_vals, t['actual_coords'])
+            
+            # Right: A-scan
+            ax2.plot(times, vals_to_plot, color='blue', linewidth=1.5)
+            ax2.set_xlabel("Time [ns]")
+            ax2.set_ylabel("Electric Field [V/m]")
+            ax2.set_title(f"A-scan ({target_label_comp})")
+            ax2.grid(True, linestyle='--', alpha=0.7)
+            
+            plt.suptitle(f"Target Analysis: {t['label']}", fontsize=14)
+            plt.tight_layout()
+            plt.savefig(os.path.join(t['target_dir'], "combined_view.png"), dpi=200)
+            plt.close()
 
+    # ----------------------------------------------------
+    # 4. Group Comparison Plot (グループごとの重ね書き)
+    # ----------------------------------------------------
+    print("[INFO] Generating group comparison plots...")
+    
+    for group_name, group_targets in groups.items():
+        if not group_targets: continue
+        
+        plt.figure(figsize=(12, 6))
+        
+        # カラーマップ生成 (ターゲット数分)
+        colors = plt.cm.jet(np.linspace(0, 1, len(group_targets)))
+        
+        for idx, t in enumerate(group_targets):
+            vals = [t['ex'], t['ey'], t['ez']][plot_component]
+            # ラベルに座標情報を少し付加
+            label_txt = f"{t['label']}"
+            plt.plot(times, vals, label=label_txt, color=colors[idx], linewidth=1.2, alpha=0.8)
+            
+        plt.xlabel("Time [ns]")
+        plt.ylabel("Electric Field [V/m]")
+        plt.title(f"Group Comparison: {group_name} ({target_label_comp})")
+        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+        plt.grid(True, linestyle='--', alpha=0.5)
+        plt.tight_layout()
+        
+        # グループフォルダ直下に保存
+        save_path = os.path.join(group_targets[0]['group_dir'], f"group_comparison_{target_label_comp}.png")
+        plt.savefig(save_path, dpi=300)
+        plt.close()
+        print(f"  Saved comparison: {save_path}")
 
-                elif output == 'Hx':
-                    ax = plt.subplot(gs[0, 1])
-                    ax.plot(time, outputdata_norm, 'g', lw=2, label=outputtext)
-                    ax.set_ylabel('Normalized ' + outputtext)
-                # ax.set_ylim([-0.03, 0.03])
-                elif output == 'Hy':
-                    ax = plt.subplot(gs[1, 1])
-                    ax.plot(time, outputdata_norm, 'g', lw=2, label=outputtext)
-                    ax.set_ylabel('Normalized ' + outputtext)
-                # ax.set_ylim([-0.03, 0.03])
-                elif output == 'Hz':
-                    ax = plt.subplot(gs[2, 1])
-                    ax.plot(time, outputdata_norm, 'g', lw=2, label=outputtext)
-                    ax.set_ylabel('Normalized ' + outputtext)
-                # ax.set_ylim([-0.03, 0.03])
-                elif output == 'Ix':
-                    ax = plt.subplot(gs[0, 2])
-                    ax.plot(time, outputdata_norm, 'b', lw=2, label=outputtext)
-                    ax.set_ylabel('Normalized ' + outputtext)
-                elif output == 'Iy':
-                    ax = plt.subplot(gs[1, 2])
-                    ax.plot(time, outputdata_norm, 'b', lw=2, label=outputtext)
-                    ax.set_ylabel('Normalized ' + outputtext)
-                elif output == 'Iz':
-                    ax = plt.subplot(gs[2, 2])
-                    ax.plot(time, outputdata_norm, 'b', lw=2, label=outputtext)
-                    ax.set_ylabel('Normalized ' + outputtext)
-            for ax in fig.axes:
-                if use_closeup:
-                    ax.set_xlim([closeup_x_start*10**(-9), closeup_x_end*10**(-9)])
-                else:
-                    ax.set_xlim([0, np.amax(time)])
-                ax.grid(which='both', axis='both', linestyle='--')
-                ax.minorticks_on()
-
-        # Save a PDF/PNG of the figure
-        # fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.pdf', dpi=None, format='pdf', bbox_inches='tight', pad_inches=0.1)
-        if use_fft:
-            fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fft.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-
-            # Save FFT parameters to txt file
-            if len(outputs) == 1 and fft:
-                txt_filename = os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fft_params.txt'
-                if bandwidth_3db is not None:
-                    with open(txt_filename, 'w') as txt_file:
-                        txt_file.write(f'Center Frequency: {center_freq/1e6:.2f} MHz\n')
-                        txt_file.write(f'Bandwidth (-3dB): {bandwidth_3db/1e6:.2f} MHz\n')
-                        txt_file.write(f'Lower Frequency (-3dB): {lower_freq_3db/1e6:.2f} MHz\n')
-                        txt_file.write(f'Upper Frequency (-3dB): {upper_freq_3db/1e6:.2f} MHz\n')
-        elif use_closeup:
-            fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_closeup_x' + str(closeup_x_start) \
-                            + '_' + str(closeup_x_end) + 'y' + str(closeup_y_end) +  '.png'
-                            ,dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-        else:
-            fig.savefig(os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '.png', dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-
-        # Save pulse width measurement to txt file
-        if measure_pulse_width and len(outputs) == 1 and pulse_width is not None:
-            txt_filename = os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_pulse_width.txt'
-            with open(txt_filename, 'w') as txt_file:
-                txt_file.write(f'Measurement Range: {pulse_measure_start:.2f} - {pulse_measure_end:.2f} ns\n')
-                txt_file.write(f'Pulse Start Time: {pulse_start_time:.2f} ns\n')
-                txt_file.write(f'Pulse End Time: {pulse_end_time:.2f} ns\n')
-                txt_file.write(f'Pulse Width: {pulse_width:.2f} ns\n')
-
-        # Save FWHM measurement to txt file
-        if measure_fwhm and len(outputs) == 1 and fwhm_width is not None:
-            txt_filename = os.path.splitext(os.path.abspath(filename))[0] + '_rx' + str(rx) + '_fwhm.txt'
-            with open(txt_filename, 'w') as txt_file:
-                txt_file.write(f'Measurement Range: {fwhm_measure_start:.2f} - {fwhm_measure_end:.2f} ns\n')
-                txt_file.write(f'Maximum Envelope Value: {fwhm_max_value:.6f}\n')
-                txt_file.write(f'Half Maximum Value: {fwhm_max_value/2.0:.6f}\n')
-                txt_file.write(f'FWHM Start Time: {fwhm_start_time:.2f} ns\n')
-                txt_file.write(f'FWHM End Time: {fwhm_end_time:.2f} ns\n')
-                txt_file.write(f'FWHM: {fwhm_width:.2f} ns\n')
-
-    f.close()
-
-    return plt
-
+    print("\n[INFO] All tasks finished successfully.")
 
 if __name__ == "__main__":
-
-    print("Plots electric and magnetic fields and currents from all receiver points in the given output file.")
-    print("Each receiver point is plotted in a new figure window.")
-    
-    # Get output file path through interactive input
-    outputfile = input("Enter the path to the output file: ").strip()
-    if not os.path.exists(outputfile):
-        raise CmdInputError('Output file {} does not exist'.format(outputfile))
-    
-    # Get output components
-    print("\nAvailable output components: Ex, Ey, Ez, Hx, Hy, Hz, Ix, Iy, Iz")
-    print("You can also use negative polarity (e.g., Ex-, Ey-, etc.)")
-    print("Default outputs: {}".format(', '.join(Rx.defaultoutputs)))
-    outputs_input = input("Enter output components to plot (space-separated) [default: {}]: ".format(' '.join(Rx.defaultoutputs))).strip()
-    
-    if outputs_input == "":
-        outputs = Rx.defaultoutputs
-    else:
-        outputs = outputs_input.split()
-        # Validate outputs
-        valid_outputs = ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz', 'Ex-', 'Ey-', 'Ez-', 'Hx-', 'Hy-', 'Hz-', 'Ix-', 'Iy-', 'Iz-']
-        for output in outputs:
-            if output not in valid_outputs:
-                raise CmdInputError('Invalid output component: {}. Valid options: {}'.format(output, ', '.join(valid_outputs)))
-    
-    # Get FFT option
-    fft_input = input("Plot FFT? (y/n) [default: n]: ").strip().lower()
-    use_fft = fft_input == 'y'
-    
-    # Get closeup option
-    closeup_input = input("Plot close up of time domain signal? (y/n) [default: n]: ").strip().lower()
-    if closeup_input == 'y':
-        closeup_x_start = float(input("Enter close up x-axis start [ns]: ").strip())
-        closeup_x_end = float(input("Enter close up x-axis end [ns]: ").strip())
-        closeup_y_range = np.abs(float(input("Enter close up y-axis range [ns]: ").strip()))
-        closeup_y_start = - closeup_y_range
-        closeup_y_end = closeup_y_range
-    use_closeup = closeup_input == 'y'
-
-    # Get pulse width measurement option
-    pulse_width_input = input("Measure pulse width? (y/n) [default: n]: ").strip().lower()
-    use_pulse_width = pulse_width_input == 'y'
-
-    if use_pulse_width:
-        pulse_measure_start = float(input("Enter pulse measurement start time [ns]: ").strip())
-        pulse_measure_end = float(input("Enter pulse measurement end time [ns]: ").strip())
-    else:
-        pulse_measure_start = None
-        pulse_measure_end = None
-
-    # Get FWHM measurement option
-    fwhm_input = input("Measure FWHM (Full Width at Half Maximum)? (y/n) [default: n]: ").strip().lower()
-    use_fwhm = fwhm_input == 'y'
-
-    if use_fwhm:
-        fwhm_measure_start = float(input("Enter FWHM measurement start time [ns]: ").strip())
-        fwhm_measure_end = float(input("Enter FWHM measurement end time [ns]: ").strip())
-    else:
-        fwhm_measure_start = None
-        fwhm_measure_end = None
-
-    plthandle = mpl_plot(outputfile, outputs, fft=use_fft, measure_pulse_width=use_pulse_width,
-                         pulse_measure_start=pulse_measure_start, pulse_measure_end=pulse_measure_end,
-                         measure_fwhm=use_fwhm, fwhm_measure_start=fwhm_measure_start, fwhm_measure_end=fwhm_measure_end)
-    plthandle.show()
+    main()
