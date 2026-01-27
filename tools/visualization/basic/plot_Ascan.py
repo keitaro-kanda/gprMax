@@ -109,7 +109,7 @@ def plot_geometry_on_ax(ax, geom_grid, extent, g_vals, actual_coords, title_pref
     ax.grid(True, linestyle=':', alpha=0.5)
 
 def main():
-    print("--- FDTD A-scan Extractor (Grouped & Combined) ---")
+    print("--- FDTD A-scan Extractor (Offset Group Plot) ---")
     
     # --- 1. Geometry & Snapshot Setup ---
     geometry_path = input("Enter path to geometry.vti: ").strip()
@@ -151,8 +151,6 @@ def main():
     mode = input("Enter mode (1 or 2): ").strip()
 
     targets = [] # 全ターゲットのフラットなリスト
-    
-    # グループ管理用辞書 { "GroupName": [target_obj, ...], ... }
     groups = {} 
 
     if mode == '2':
@@ -166,7 +164,6 @@ def main():
             try:
                 data = json.load(f)
                 
-                # 辞書型（グループ化）かリスト型（旧仕様）かで分岐
                 if isinstance(data, dict):
                     print("[INFO] Detected grouped JSON format.")
                     for group_name, items in data.items():
@@ -232,13 +229,11 @@ def main():
     
     valid_targets = []
     
-    # 有効なターゲットのみを抽出して再構築
     for t in targets:
         pid, act_coords = get_closest_point_id(geom_img, t['req_coords'])
         
         if pid is None:
             print(f"  [SKIP] Target '{t['label']}' (Group: {t['group']}) is out of bounds.")
-            # グループリストからも削除が必要だが、後でgroupsを再生成する方が安全
             continue
             
         t['point_id'] = pid
@@ -246,20 +241,13 @@ def main():
         
         # フォルダ構造: Output / GroupName / Label_coords /
         coord_str = f"x{act_coords[0]:.3f}_y{act_coords[1]:.3f}_z{act_coords[2]:.3f}"
-        
-        # グループフォルダ
         t['group_dir'] = os.path.join(output_base_folder, t['group'])
-        
-        # 個別ターゲットフォルダ
         t['target_dir'] = os.path.join(t['group_dir'], f"{t['label']}_{coord_str}")
         os.makedirs(t['target_dir'], exist_ok=True)
         
-        # データ格納用
         t['ex'], t['ey'], t['ez'] = [], [], []
-        
         valid_targets.append(t)
 
-    # グループ辞書の再構築（無効なターゲットを除外）
     groups = {}
     for t in valid_targets:
         if t['group'] not in groups:
@@ -301,7 +289,6 @@ def main():
         current_time = (i + 1) * dt_ns
         times.append(current_time)
         
-        # 全ターゲット一括抽出
         for t in targets:
             if array:
                 val = array.GetTuple(t['point_id'])
@@ -317,24 +304,15 @@ def main():
     print("[INFO] Generating plots and saving files...")
     target_label_comp = comp_labels[plot_component]
 
-    # 個別ターゲットごとの処理
     for t in targets:
-        # CSV保存
-        df = pd.DataFrame({
-            'Time [ns]': times,
-            'Ex': t['ex'], 'Ey': t['ey'], 'Ez': t['ez']
-        })
+        # CSV
+        df = pd.DataFrame({'Time [ns]': times, 'Ex': t['ex'], 'Ey': t['ey'], 'Ez': t['ez']})
         df.to_csv(os.path.join(t['target_dir'], "ascan_data.csv"), index=False)
         
-        # 波形データ
         vals_to_plot = [t['ex'], t['ey'], t['ez']][plot_component]
-        
-        # ジオメトリデータの準備（Combined Plot用）
         geom_res = prepare_geometry_grid(geom_img, t['actual_coords'][2])
         
-        # ----------------------------------------------------
-        # 1. ジオメトリ単体プロット (Location Check)
-        # ----------------------------------------------------
+        # Geometry Check
         if geom_res:
             geom_grid, extent, g_vals = geom_res
             plt.figure(figsize=(6, 5))
@@ -344,9 +322,7 @@ def main():
             plt.savefig(os.path.join(t['target_dir'], "geometry_location_check.png"), dpi=200)
             plt.close()
 
-        # ----------------------------------------------------
-        # 2. A-scan単体プロット
-        # ----------------------------------------------------
+        # A-scan
         plt.figure(figsize=(8, 4))
         plt.plot(times, vals_to_plot, color='blue', linewidth=1.2)
         plt.xlabel("Time [ns]")
@@ -357,54 +333,68 @@ def main():
         plt.savefig(os.path.join(t['target_dir'], f"ascan_plot_{target_label_comp}.png"), dpi=200)
         plt.close()
 
-        # ----------------------------------------------------
-        # 3. Combined Plot (左右配置: 左ジオメトリ, 右A-scan)
-        # ----------------------------------------------------
+        # Combined View
         if geom_res:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), gridspec_kw={'width_ratios': [1, 1.5]})
-            
-            # Left: Geometry
             plot_geometry_on_ax(ax1, geom_grid, extent, g_vals, t['actual_coords'])
-            
-            # Right: A-scan
             ax2.plot(times, vals_to_plot, color='blue', linewidth=1.5)
             ax2.set_xlabel("Time [ns]")
             ax2.set_ylabel("Electric Field [V/m]")
             ax2.set_title(f"A-scan ({target_label_comp})")
             ax2.grid(True, linestyle='--', alpha=0.7)
-            
             plt.suptitle(f"Target Analysis: {t['label']}", fontsize=14)
             plt.tight_layout()
             plt.savefig(os.path.join(t['target_dir'], "combined_view.png"), dpi=200)
             plt.close()
 
     # ----------------------------------------------------
-    # 4. Group Comparison Plot (グループごとの重ね書き)
+    # 4. Group Comparison Plot with Offset (Waterfall)
     # ----------------------------------------------------
-    print("[INFO] Generating group comparison plots...")
+    print("[INFO] Generating group comparison plots (with offset)...")
     
     for group_name, group_targets in groups.items():
         if not group_targets: continue
         
-        plt.figure(figsize=(12, 6))
+        # 1. グループ全体の最大振幅を計算してオフセット基準を決める
+        all_vals_in_group = []
+        for t in group_targets:
+            vals = [t['ex'], t['ey'], t['ez']][plot_component]
+            all_vals_in_group.extend(vals)
+            
+        if not all_vals_in_group:
+            global_max_abs = 1.0
+        else:
+            global_max_abs = np.max(np.abs(all_vals_in_group))
+            if global_max_abs == 0: global_max_abs = 1.0
+            
+        # オフセット幅 = 最大振幅の30%
+        offset_step = global_max_abs * 0.3
         
-        # カラーマップ生成 (ターゲット数分)
+        plt.figure(figsize=(10, 8)) # 縦長にして見やすくする
         colors = plt.cm.jet(np.linspace(0, 1, len(group_targets)))
         
         for idx, t in enumerate(group_targets):
-            vals = [t['ex'], t['ey'], t['ez']][plot_component]
-            # ラベルに座標情報を少し付加
-            label_txt = f"{t['label']}"
-            plt.plot(times, vals, label=label_txt, color=colors[idx], linewidth=1.2, alpha=0.8)
+            vals = np.array([t['ex'], t['ey'], t['ez']][plot_component])
             
+            # オフセット適用: (インデックス * step) 分だけ上にずらす
+            offset_val = idx * offset_step
+            shifted_vals = vals + offset_val
+            
+            label_txt = f"{t['label']}"
+            plt.plot(times, shifted_vals, label=label_txt, color=colors[idx], linewidth=1.2, alpha=0.9)
+            
+            # (オプション) ベースラインを表示する場合
+            # plt.axhline(y=offset_val, color=colors[idx], linestyle=':', linewidth=0.5, alpha=0.5)
+
         plt.xlabel("Time [ns]")
-        plt.ylabel("Electric Field [V/m]")
-        plt.title(f"Group Comparison: {group_name} ({target_label_comp})")
+        plt.ylabel("Electric Field [V/m] (Offset applied)")
+        plt.title(f"Group Waterfall: {group_name} ({target_label_comp})\nOffset step ≈ {offset_step:.2e}")
+        
+        # 凡例の位置調整
         plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
-        plt.grid(True, linestyle='--', alpha=0.5)
+        plt.grid(True, linestyle='--', alpha=0.4)
         plt.tight_layout()
         
-        # グループフォルダ直下に保存
         save_path = os.path.join(group_targets[0]['group_dir'], f"group_comparison_{target_label_comp}.png")
         plt.savefig(save_path, dpi=300)
         plt.close()
