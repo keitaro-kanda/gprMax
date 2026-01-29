@@ -112,7 +112,7 @@ def mpl_plot(filename):
     ax.grid(which='both', axis='both', linestyle='-.')
     ax.minorticks_on()
     ax.tick_params(labelsize=24)
-    ax.legend(fontsize=24)
+    ax.legend(fontsize=24, bbox_to_anchor=(1.02, 1), loc='upper left', ncol=1)
     plt.tight_layout()
 
     # Save PNG file
