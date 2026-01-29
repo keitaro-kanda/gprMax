@@ -84,11 +84,11 @@ def mpl_plot(filename, use_closeup=False, closeup_x_start=None, closeup_x_end=No
 
     # Calculate offset based on closeup mode
     if use_closeup and closeup_y_range is not None:
-        # Closeup mode: offset = closeup_y_range * 0.7
-        offset = closeup_y_range * 0.7
+        # Closeup mode: offset = closeup_y_range * 0.8
+        offset = closeup_y_range * 0.8
     else:
-        # Normal mode: offset = 0.7
-        offset = 0.7
+        # Normal mode: offset = 0.8
+        offset = 0.8
 
     # Create single figure for all receivers
     fig, ax = plt.subplots(figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
