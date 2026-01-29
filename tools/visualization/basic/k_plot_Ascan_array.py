@@ -54,14 +54,9 @@ def mpl_plot(filename):
     if nrx == 1:
         print('Warning: Only 1 receiver found. This tool is designed for multiple receivers.')
 
-    # Create single figure for all receivers
-    fig, ax = plt.subplots(figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
-
-    # Get default color cycle
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colors = prop_cycle.by_key()['color']
-
-    # Plot each receiver
+    # First pass: read all data and find maximum amplitude
+    all_data = []
+    max_amplitude = 0.0
     for rx in range(1, nrx + 1):
         path = '/rxs/rx' + str(rx) + '/'
         availableoutputs = list(f[path].keys())
@@ -71,8 +66,32 @@ def mpl_plot(filename):
             raise CmdInputError('Ez output not available for receiver {}. Available outputs: {}'.format(
                 rx, ', '.join(availableoutputs)))
 
-        # Get Ez data (no normalization)
+        # Get Ez data
         outputdata = f[path + 'Ez'][:]
+        all_data.append(outputdata)
+
+        # Update maximum amplitude
+        current_max = np.max(np.abs(outputdata))
+        if current_max > max_amplitude:
+            max_amplitude = current_max
+
+    # Calculate offset (0.7 times maximum amplitude)
+    offset = max_amplitude * 0.7
+
+    # Create single figure for all receivers
+    fig, ax = plt.subplots(figsize=(20, 10), facecolor='w', edgecolor='w', tight_layout=True)
+
+    # Get default color cycle
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
+
+    # Plot each receiver with offset
+    for rx in range(1, nrx + 1):
+        # Get pre-loaded data
+        outputdata = all_data[rx - 1]
+
+        # Calculate offset for this receiver: rx1=0, rx2=-offset, rx3=-2*offset, ...
+        rx_offset = -(rx - 1) * offset
 
         # Calculate envelope using Hilbert transform
         env = np.abs(signal.hilbert(outputdata))
@@ -80,11 +99,11 @@ def mpl_plot(filename):
         # Get color for this receiver (cycle through colors if more receivers than colors)
         color = colors[(rx - 1) % len(colors)]
 
-        # Plot Ez data
-        ax.plot(time, outputdata, color=color, lw=2, label='rx{}'.format(rx))
+        # Plot Ez data with offset
+        ax.plot(time, outputdata + rx_offset, color=color, lw=2, label='rx{}'.format(rx))
 
-        # Plot envelope with same color but dashed line
-        ax.plot(time, env, color=color, lw=2, linestyle='--', alpha=0.5)
+        # Plot envelope with same color but dashed line, with offset
+        ax.plot(time, env + rx_offset, color=color, lw=2, linestyle='--', alpha=0.5)
 
     # Configure plot
     ax.set_xlabel('Time [ns]', fontsize=28)
