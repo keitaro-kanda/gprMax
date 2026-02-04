@@ -102,11 +102,19 @@ def mpl_plot(filename, use_closeup=False, closeup_x_start=None, closeup_x_end=No
         # Get pre-loaded normalized data
         outputdata = all_data_normalized[rx - 1]
 
+        # Clip data if closeup mode is enabled
+        if use_closeup and closeup_y_range is not None:
+            outputdata = np.clip(outputdata, -closeup_y_range, closeup_y_range)
+
         # Calculate offset for this receiver: rx1=0, rx2=-offset, rx3=-2*offset, ...
         rx_offset = -(rx - 1) * offset
 
-        # Calculate envelope using Hilbert transform
-        env = np.abs(signal.hilbert(outputdata))
+        # Calculate envelope using Hilbert transform (from original data before clipping)
+        env = np.abs(signal.hilbert(all_data_normalized[rx - 1]))
+
+        # Clip envelope if closeup mode is enabled
+        if use_closeup and closeup_y_range is not None:
+            env = np.clip(env, 0, closeup_y_range)
 
         # Get color for this receiver (cycle through colors if more receivers than colors)
         color = colors[(rx - 1) % len(colors)]
