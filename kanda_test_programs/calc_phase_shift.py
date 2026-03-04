@@ -6,6 +6,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import h5py
+from scipy import signal
 
 
 epsilon_1 = 9.0 # 入射・反射側の媒質
@@ -34,4 +36,79 @@ if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 plt.savefig(output_dir + '/phase_shift.png', dpi=120)
 plt.savefig(output_dir + '/phase_shift.pdf', dpi=300)
+plt.show()
+
+
+# FDTDで生成した波形に位相シフトの効果を加える
+signal_data_path = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x5/waveform_test/gaussiandot_500MHz/A-scan/direct.out'
+
+# Open output file and read some attributes
+f = h5py.File(signal_data_path, 'r')
+nrx = f.attrs['nrx']
+dt = f.attrs['dt']
+
+path = '/rxs/rx' + str(1) + '/'
+availableoutputs = list(f[path].keys())
+
+outputdata = f[path + '/Ez']
+outputdata = np.array(outputdata)
+outputdata_norm = outputdata / np.amax(np.abs(outputdata))
+
+# データの切り出し
+threshold = 0.01
+indices = np.where(np.abs(outputdata_norm) >= threshold)[0]
+if len(indices) > 0:
+    start_index = indices[0]
+    end_index = indices[-1] + 1
+    outputdata = outputdata_norm[start_index:end_index]
+else:
+    print("Warning: No data points above the threshold. Using the entire signal.")
+
+# 解析信号の作成
+analytic_signal = signal.hilbert(outputdata)
+
+# 位相シフトを加える
+incident_angles = [30, 45, 60, 75, 90] # 入射角の例
+shifted_signals = []
+for angle in incident_angles:
+    theta_i_rad = np.radians(angle)
+    
+    # 臨界角の判定用（ルートの中身）
+    sin_theta_t_sq = (epsilon_1 / epsilon_2) * np.sin(theta_i_rad)**2
+    
+    if sin_theta_t_sq < 1.0:
+        # 臨界角未満の場合（全反射せず、位相シフトは生じない）
+        # ※インピーダンスの大小による π の反転は考慮せず、そのままの波形とする場合
+        shifted_signals.append(outputdata)
+        continue
+
+    X = np.sqrt(mu / epsilon_1) * np.sqrt(sin_theta_t_sq - 1)
+    R = np.sqrt(mu / epsilon_2) * np.cos(theta_i_rad)
+    
+    # 2. 位相シフト量の計算 (Balanisの psi を2倍にする)
+    psi = np.arctan2(X, R)
+    total_phase_shift = 2 * psi 
+
+    # 3. 解析信号に位相シフトを適用し、実部をとる
+    shifted_wave = np.real(analytic_signal * np.exp(1j * total_phase_shift))
+    shifted_signals.append(shifted_wave)
+
+shifted_signals.insert(0, outputdata) # 元の信号も追加
+plot_names = ['Original'] + [f'Incident Angle: {angle}°' for angle in incident_angles]
+
+# グラフの描画
+fig, ax = plt.subplots(len(incident_angles) + 1, 1, figsize=(10, 12))
+for i, angle in enumerate(incident_angles):
+    ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, np.real(shifted_signals[i]))
+    ax[i].set_title(plot_names[i], fontsize=16)
+    ax[i].tick_params(labelsize=12)
+    ax[i].grid()
+    ax[i].set_xlabel('Time (ns)', fontsize=14)
+    ax[i].set_ylabel('Amplitude', fontsize=14)
+    ax[i].set_ylim(-1.1, 1.1)
+#plt.ylim(-1.1, 1.1)
+
+plt.tight_layout()
+plt.savefig(output_dir + '/shifted_signals.png', dpi=120)
+plt.savefig(output_dir + '/shifted_signals.pdf', dpi=300)
 plt.show()
