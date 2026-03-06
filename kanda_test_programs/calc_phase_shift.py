@@ -74,11 +74,15 @@ if len(indices) > 0:
 else:
     print("Warning: No data points above the threshold. Using the entire signal.")
 
+# 元信号で最大振幅の時刻を取得
+original_max_index = np.argmax(np.abs(outputdata))
+original_max_time = original_max_index * dt * 1e9 # [ns]
+
 # 解析信号の作成
 analytic_signal = signal.hilbert(outputdata)
 
 # 位相シフトを加える
-incident_angles = [30, 45, 60, 75, 90] # 入射角の例
+incident_angles = [40, 45, 60, 75, 90] # 入射角の例
 shifted_signals = []
 for angle in incident_angles:
     theta_i_rad = np.radians(angle)
@@ -97,7 +101,7 @@ for angle in incident_angles:
     
     # 2. 位相シフト量の計算 (Balanisの psi を2倍にする)
     psi = np.arctan2(X, R)
-    total_phase_shift = 2 * psi 
+    total_phase_shift = 2 * psi
 
     # 3. 解析信号に位相シフトを適用し、実部をとる
     shifted_wave = np.real(analytic_signal * np.exp(1j * total_phase_shift))
@@ -107,15 +111,17 @@ shifted_signals.insert(0, outputdata) # 元の信号も追加
 plot_names = ['Original'] + [f'Incident Angle: {angle}°' for angle in incident_angles]
 
 # グラフの描画
-fig, ax = plt.subplots(len(incident_angles) + 1, 1, figsize=(10, 12))
-for i, angle in enumerate(incident_angles):
+fig, ax = plt.subplots(len(incident_angles) + 1, 1, figsize=(6, 12))
+for i in range(len(plot_names)):
     ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, np.real(shifted_signals[i]))
+    ax[i].axvline(original_max_time, color='red', linestyle='--')
+
     ax[i].set_title(plot_names[i], fontsize=16)
     ax[i].tick_params(labelsize=12)
     ax[i].grid()
     ax[i].set_xlabel('Time (ns)', fontsize=14)
     ax[i].set_ylabel('Amplitude', fontsize=14)
-    ax[i].set_ylim(-1.1, 1.1)
+    ax[i].set_ylim(-1.2, 1.2)
 #plt.ylim(-1.1, 1.1)
 
 plt.tight_layout()
