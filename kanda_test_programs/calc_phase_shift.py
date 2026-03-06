@@ -10,12 +10,20 @@ import h5py
 from scipy import signal
 
 
+# パラメータ設定
 epsilon_1 = 9.0 # 入射・反射側の媒質
 epsilon_2 = 3.0 # 透過側の媒質
 mu = 1.0 # 真空の透磁率、両媒質で同じと仮定
 theta_i = np.linspace(0, 90, 1000) # 入射角 [度]
 theta_i_rad = np.radians(theta_i) # 入射角 [ラジアン]
 
+
+# 臨界角の計算
+theta_c_rad = np.arcsin(np.sqrt(epsilon_2 / epsilon_1))
+theta_c_deg = np.degrees(theta_c_rad)
+print(f"Critical Angle: {theta_c_deg:.2f} degrees")
+
+# 位相シフトの計算
 X = np.sqrt(mu / epsilon_1) * np.sqrt(mu * epsilon_1 / mu / epsilon_2 * np.sin(theta_i_rad)**2 - 1)
 R = np.sqrt(mu / epsilon_2) * np.cos(theta_i_rad)
 pahse_shift = np.arctan2(X, R) # 位相シフト [ラジアン]
@@ -24,12 +32,14 @@ pahse_shift = np.arctan2(X, R) # 位相シフト [ラジアン]
 
 # グラフの描画
 plt.figure(figsize=(8, 6))
-plt.plot(theta_i, np.degrees(pahse_shift))
+plt.plot(theta_i, np.degrees(pahse_shift), label='Phase Shift')
+plt.axvline(theta_c_deg, color='red', linestyle='--', label=f'Critical Angle: {theta_c_deg:.2f}°')
 
 plt.xlabel('Incident Angle (degrees)', fontsize=16)
 plt.ylabel('Phase Shift (degrees)', fontsize=16)
 plt.tick_params(labelsize=14)
 plt.grid()
+plt.legend(fontsize=14)
 
 output_dir = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/phase_shift'
 if not os.path.exists(output_dir):
