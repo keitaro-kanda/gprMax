@@ -13,7 +13,7 @@ from scipy import signal
 # パラメータ設定
 epsilon_1 = 9.0 # 入射・反射側の媒質
 epsilon_2 = 3.0 # 透過側の媒質
-mu = 1.0 # 真空の透磁率、両媒質で同じと仮定
+mu = 1.25663706127e-6 # 真空の透磁率、両媒質で同じと仮定
 theta_i = np.linspace(0, 90, 1000) # 入射角 [度]
 theta_i_rad = np.radians(theta_i) # 入射角 [ラジアン]
 
