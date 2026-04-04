@@ -14,8 +14,8 @@ print()
 ### output dir path
 # 比較用ディレクトリと、個別プロット用のディレクトリを作成
 output_dir = os.path.join(os.path.dirname(txt_file_path), 'size_error_plots')
-output_dir_Efield = os.path.join(os.path.dirname(output_dir), 'error_Efield')
-output_dir_Envelope = os.path.join(os.path.dirname(output_dir), 'error_Envelope')
+output_dir_Efield = os.path.join(output_dir, 'error_Efield')
+output_dir_Envelope = os.path.join(output_dir, 'error_Envelope')
 os.makedirs(output_dir, exist_ok=True)
 os.makedirs(output_dir_Efield, exist_ok=True)
 os.makedirs(output_dir_Envelope, exist_ok=True)
