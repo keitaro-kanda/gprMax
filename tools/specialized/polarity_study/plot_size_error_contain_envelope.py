@@ -11,10 +11,13 @@ print()
 
 
 ### output dir path
-output_dir = os.path.dirname(txt_file_path)
-# EfieldとEnvelopeの比較用ディレクトリを1つ作成
-output_dir_comparison = os.path.join(output_dir, 'error_comparison')
-os.makedirs(output_dir_comparison, exist_ok=True)
+output_dir = os.path.join(os.path.dirname(txt_file_path), 'size_error_plots')
+output_dir_Efield = os.path.join(output_dir, 'error_Efield')
+output_dir_Envelope = os.path.join(output_dir, 'error_Envelope')
+
+os.makedirs(output_dir, exist_ok=True)
+os.makedirs(output_dir_Efield, exist_ok=True)
+os.makedirs(output_dir_Envelope, exist_ok=True)
 
 
 ### set constants
@@ -66,9 +69,9 @@ colors = ['b', 'r'] # Efieldを青、Envelopeを赤に設定
 linestyles = ['-', '--']
 size_estimations = [Efield_data, Envelope_data]
 
-# ==========================================
-# --- plot for absolute error (絶対誤差) ---
-# ==========================================
+# ========================================================
+# --- plot for absolute error (絶対誤差) : Comparison ---
+# ========================================================
 fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
 
 # 1. True size VS Estimated size
@@ -98,13 +101,13 @@ ax[1].tick_params(labelsize=16)
 ax[1].grid()
 
 # save
-plt.savefig(os.path.join(output_dir_comparison, 'size_error_abs.png'), dpi=300)
-plt.savefig(os.path.join(output_dir_comparison, 'size_error_abs.pdf'))
+plt.savefig(os.path.join(output_dir, 'size_error_abs.png'), dpi=300)
+plt.savefig(os.path.join(output_dir, 'size_error_abs.pdf'))
 
 
-# ==============================================
-# --- plot for non-absolute error (生の誤差) ---
-# ==============================================
+# ============================================================
+# --- plot for non-absolute error (生の誤差) : Comparison ---
+# ============================================================
 fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
 
 # 1. True size VS Estimated size
@@ -132,7 +135,70 @@ ax[1].tick_params(labelsize=16)
 ax[1].grid()
 
 # save
-plt.savefig(os.path.join(output_dir_comparison, 'size_error.png'), dpi=300)
-plt.savefig(os.path.join(output_dir_comparison, 'size_error.pdf'))
+plt.savefig(os.path.join(output_dir, 'size_error.png'), dpi=300)
+plt.savefig(os.path.join(output_dir, 'size_error.pdf'))
+
+
+# ========================================================
+# --- plots for Individual methods (Efield / Envelope) ---
+# ========================================================
+individual_configs = [
+    ('Efield', Efield_data, 'b', '-', output_dir_Efield),
+    ('Envelope', Envelope_data, 'r', '--', output_dir_Envelope)
+]
+
+for name, data, color, linestyle, out_dir in individual_configs:
+    if data.shape[0] == 0:
+        continue
+
+    # --- Individual absolute error (絶対誤差) ---
+    fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
+
+    # 1. True size VS Estimated size
+    ax[0].plot(data[:, 0], data[:, 1], label=name, marker='o', color=color, linestyle=linestyle)
+    ax[0].plot(x, y, label='y = x', color='k', linestyle='-')
+    ax[0].set_xlabel('True size [cm]', fontsize=20)
+    ax[0].set_ylabel('Estimated size [cm]', fontsize=20)
+    ax[0].legend(fontsize=16)
+    ax[0].tick_params(labelsize=16)
+    ax[0].grid()
+
+    # 2. True size VS Error (abs)
+    ax[1].plot(data[:, 0], np.abs(data[:, 2]), label=name, marker='o', color=color, linestyle=linestyle)
+    ax[1].set_ylim(0, 15)
+    ax[1].set_xlabel('True size [cm]', fontsize=20)
+    ax[1].set_ylabel('Absolute Error [%]', fontsize=20)
+    ax[1].legend(fontsize=16)
+    ax[1].tick_params(labelsize=16)
+    ax[1].grid()
+
+    # save
+    plt.savefig(os.path.join(out_dir, f'size_error_abs.png'), dpi=300)
+    plt.savefig(os.path.join(out_dir, f'size_error_abs.pdf'))
+
+    # --- Individual non-absolute error (生の誤差) ---
+    fig, ax = plt.subplots(1, 2, figsize=(14, 6), tight_layout=True)
+
+    # 1. True size VS Estimated size
+    ax[0].plot(data[:, 0], data[:, 1], label=name, marker='o', color=color, linestyle=linestyle)
+    ax[0].plot(x, y, label='y = x', color='k', linestyle='-')
+    ax[0].set_xlabel('True size [cm]', fontsize=20)
+    ax[0].set_ylabel('Estimated size [cm]', fontsize=20)
+    ax[0].legend(fontsize=16)
+    ax[0].tick_params(labelsize=16)
+    ax[0].grid()
+
+    # 2. True size VS Error (non-abs)
+    ax[1].plot(data[:, 0], data[:, 2], label=name, marker='o', color=color, linestyle=linestyle)
+    ax[1].set_ylim(-14, 14)
+    ax[1].set_xlabel('True size [cm]', fontsize=20)
+    ax[1].set_ylabel('Error [%]', fontsize=20)
+    ax[1].legend(fontsize=16)
+    ax[1].tick_params(labelsize=16)
+    ax[1].grid()
+
+    # save
+    plt.savefig(os.path.join(out_dir, f'size_error.png'), dpi=300)
+    plt.savefig(os.path.join(out_dir, f'size_error.pdf'))
 
 plt.show()
