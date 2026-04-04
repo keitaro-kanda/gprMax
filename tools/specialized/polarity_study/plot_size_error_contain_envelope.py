@@ -186,6 +186,7 @@ for i, data in enumerate(size_estimations):
         ax[0].plot(data[:, 0], data[:, 3], label=names[i], marker='o', color=colors[i], linestyle=linestyles[i])
 
 ax[0].axhline(0, color='k', linestyle='-', linewidth=1)
+ax[0].set_ylim(-0.15, 0.15)
 ax[0].set_xlabel('True size [cm]', fontsize=20)
 ax[0].set_ylabel('Top Delay Difference', fontsize=20)
 ax[0].yaxis.set_major_formatter(ns_formatter)
@@ -200,6 +201,7 @@ for i, data in enumerate(size_estimations):
         ax[1].plot(data[:, 0], data[:, 4], label=names[i], marker='o', color=colors[i], linestyle=linestyles[i])
 
 ax[1].axhline(0, color='k', linestyle='-', linewidth=1)
+ax[0].set_ylim(-0.15, 0.15)
 ax[1].set_xlabel('True size [cm]', fontsize=20)
 ax[1].set_ylabel('Bottom Delay Difference', fontsize=20)
 ax[1].yaxis.set_major_formatter(ns_formatter)
