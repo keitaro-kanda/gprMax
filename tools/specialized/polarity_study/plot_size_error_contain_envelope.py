@@ -217,8 +217,8 @@ plt.savefig(os.path.join(output_dir, 'time_diff.pdf'))
 # --- plots for Individual methods (Efield / Envelope) ---
 # ========================================================
 individual_configs = [
-    ('Efield', Efield_data, 'b', '-', output_dir_Efield),
-    ('Envelope', Envelope_data, 'r', '--', output_dir_Envelope)
+    ('Estimated', Efield_data, 'r', '--', output_dir_Efield),
+    ('Estimated', Envelope_data, 'b', '-.', output_dir_Envelope)
 ]
 
 for name, data, color, linestyle, out_dir in individual_configs:
