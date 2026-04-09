@@ -108,7 +108,7 @@ for angle in incident_angles:
     shifted_signals.append(shifted_wave)
 
 shifted_signals.insert(0, outputdata) # 元の信号も追加
-plot_names = ['Original'] + [f'Incident Angle: {angle}°' for angle in incident_angles]
+plot_names = ['Original'] + [r'Incident Angle $\theta_i$: ' + f'{angle}°' for angle in incident_angles]
 
 # グラフの描画
 fig, ax = plt.subplots(len(incident_angles) + 1, 1, figsize=(6, 12))
