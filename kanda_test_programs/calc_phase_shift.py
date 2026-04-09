@@ -33,10 +33,10 @@ pahse_shift = np.arctan2(X, R) # 位相シフト [ラジアン]
 # グラフの描画
 plt.figure(figsize=(8, 6))
 plt.plot(theta_i, np.degrees(pahse_shift), label='Phase Shift')
-plt.axvline(theta_c_deg, color='red', linestyle='--', label=f'Critical Angle: {theta_c_deg:.2f}°')
+plt.axvline(theta_c_deg, color='red', linestyle='--', label=r'Critical angle $\theta_c$: ' + f'{theta_c_deg:.2f}°')
 
-plt.xlabel('Incident Angle (degrees)', fontsize=16)
-plt.ylabel('Phase Shift (degrees)', fontsize=16)
+plt.xlabel(r'Incident angle $\theta_i$', fontsize=16)
+plt.ylabel(r'Phase shift $2 \psi_{\perp}$', fontsize=16)
 plt.tick_params(labelsize=14)
 plt.grid()
 plt.legend(fontsize=14)
