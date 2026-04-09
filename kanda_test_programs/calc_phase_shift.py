@@ -113,15 +113,20 @@ plot_names = ['Original'] + [f'Incident Angle: {angle}°' for angle in incident_
 # グラフの描画
 fig, ax = plt.subplots(len(incident_angles) + 1, 1, figsize=(6, 12))
 for i in range(len(plot_names)):
-    ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, np.real(shifted_signals[i]))
-    ax[i].axvline(original_max_time, color='red', linestyle='--')
+    if i == 0:
+        ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, shifted_signals[i], color = 'k')
+    else:
+        ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, np.real(shifted_signals[i]), color = 'cyan')
+        ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, np.real(shifted_signals[i]) + np.real(shifted_signals[0]), color = 'magenta')
+        ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, shifted_signals[0], label='Original Signal', color = 'gray', linestyle='--')
+    ax[i].axvline(original_max_time, color='r', linestyle='--')
 
     ax[i].set_title(plot_names[i], fontsize=16)
     ax[i].tick_params(labelsize=12)
     ax[i].grid()
     ax[i].set_xlabel('Time (ns)', fontsize=14)
     ax[i].set_ylabel('Amplitude', fontsize=14)
-    ax[i].set_ylim(-1.2, 1.2)
+    ax[i].set_ylim(-2.1, 2.1)
 #plt.ylim(-1.1, 1.1)
 
 plt.tight_layout()
