@@ -110,16 +110,26 @@ for angle in incident_angles:
 shifted_signals.insert(0, outputdata) # 元の信号も追加
 plot_names = ['Original'] + [r'Incident Angle $\theta_i$: ' + f'{angle}°' for angle in incident_angles]
 
+
+# ===== 変更点：時間軸の作成 =====
+# Original信号の最大振幅インデックスが t=0 となるように時間軸をシフト
+time_axis = (np.arange(len(outputdata)) - original_max_index) * dt * 1e9
+# ==============================
+
 # グラフの描画
 fig, ax = plt.subplots(len(incident_angles) + 1, 1, figsize=(6, 12))
 for i in range(len(plot_names)):
     if i == 0:
-        ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, shifted_signals[i], color = 'k')
+        # 変更点: np.arange(...) を time_axis に変更
+        ax[i].plot(time_axis, shifted_signals[i], color = 'k')
     else:
-        ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, np.real(shifted_signals[i]), color = 'cyan')
-        ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, np.real(shifted_signals[i]) + np.real(shifted_signals[0]), color = 'magenta')
-        ax[i].plot(np.arange(len(outputdata)) * dt * 1e9, shifted_signals[0], label='Original Signal', color = 'gray', linestyle='--')
-    ax[i].axvline(original_max_time, color='r', linestyle='--')
+        # 変更点: np.arange(...) を time_axis に変更
+        ax[i].plot(time_axis, np.real(shifted_signals[i]), color = 'cyan')
+        ax[i].plot(time_axis, np.real(shifted_signals[i]) + np.real(shifted_signals[0]), color = 'magenta')
+        ax[i].plot(time_axis, shifted_signals[0], label='Original Signal', color = 'gray', linestyle='--')
+    
+    # 変更点: original_max_time の代わりに 0.0 に赤線を引く
+    # ax[i].axvline(0.0, color='r', linestyle='--')
 
     ax[i].set_title(plot_names[i], fontsize=16)
     ax[i].tick_params(labelsize=12)
