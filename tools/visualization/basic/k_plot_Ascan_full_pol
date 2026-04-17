@@ -481,29 +481,6 @@ if __name__ == "__main__":
         closeup_y_end = closeup_y_range
     use_closeup = closeup_input == 'y'
 
-    # Get pulse width measurement option
-    pulse_width_input = input("Measure pulse width? (y/n) [default: n]: ").strip().lower()
-    use_pulse_width = pulse_width_input == 'y'
 
-    if use_pulse_width:
-        pulse_measure_start = float(input("Enter pulse measurement start time [ns]: ").strip())
-        pulse_measure_end = float(input("Enter pulse measurement end time [ns]: ").strip())
-    else:
-        pulse_measure_start = None
-        pulse_measure_end = None
-
-    # Get FWHM measurement option
-    fwhm_input = input("Measure FWHM (Full Width at Half Maximum)? (y/n) [default: n]: ").strip().lower()
-    use_fwhm = fwhm_input == 'y'
-
-    if use_fwhm:
-        fwhm_measure_start = float(input("Enter FWHM measurement start time [ns]: ").strip())
-        fwhm_measure_end = float(input("Enter FWHM measurement end time [ns]: ").strip())
-    else:
-        fwhm_measure_start = None
-        fwhm_measure_end = None
-
-    plthandle = mpl_plot(outputfile, outputs, fft=use_fft, measure_pulse_width=use_pulse_width,
-                         pulse_measure_start=pulse_measure_start, pulse_measure_end=pulse_measure_end,
-                         measure_fwhm=use_fwhm, fwhm_measure_start=fwhm_measure_start, fwhm_measure_end=fwhm_measure_end)
+    plthandle = mpl_plot(outputfile, outputs, fft=use_fft)
     plthandle.show()
