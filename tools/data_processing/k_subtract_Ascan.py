@@ -71,7 +71,7 @@ def plot(time, target_data, surface_data, subtracted_data, output_path):
             ax.set_ylim([-ymax, ymax])
 
     fig.savefig(output_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.close()
+    plt.show()
 
 
 def main():
