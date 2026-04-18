@@ -109,16 +109,31 @@ def api(
 
 
 class _Tee:
-    """Write to both stdout and a log file simultaneously."""
+    """Write to stdout and a log file, simulating terminal display (handling \\r) for the log."""
     def __init__(self, stdout, logfile):
         self._stdout = stdout
         self._logfile = logfile
+        self._current_line = ''
+
     def write(self, data):
         self._stdout.write(data)
-        self._logfile.write(data)
+        for char in data:
+            if char == '\r':
+                self._current_line = ''
+            elif char == '\n':
+                self._logfile.write(self._current_line + '\n')
+                self._current_line = ''
+            else:
+                self._current_line += char
+
     def flush(self):
         self._stdout.flush()
         self._logfile.flush()
+
+    def close_log(self):
+        if self._current_line:
+            self._logfile.write(self._current_line + '\n')
+        self._logfile.close()
 
 
 def run_main(args):
@@ -134,8 +149,9 @@ def run_main(args):
     _inputpath = args.inputfile if isinstance(args.inputfile, str) else args.inputfile.name
     _logpath = os.path.splitext(os.path.abspath(_inputpath))[0] + '.log'
     _logfile = open(_logpath, 'w', encoding='utf-8')
-    sys.stdout = _Tee(sys.stdout, _logfile)
-    atexit.register(_logfile.close)
+    _tee = _Tee(sys.stdout, _logfile)
+    sys.stdout = _tee
+    atexit.register(_tee.close_log)
 
     # Print gprMax logo, version, and licencing/copyright information
     logo(__version__ + ' (' + codename + ')')
