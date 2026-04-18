@@ -17,17 +17,27 @@
         {
             "label": "run1",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_waveform/1.25GHz_ricker/pol_x/test.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_1/pattern_1.in"
         },
         {
             "label": "run2",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_waveform/1.25GHz_ricker/pol_y/test.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_2/pattern_2.in"
         },
         {
             "label": "run3",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_waveform/1.25GHz_ricker/pol_z/test.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_3/pattern_3.in"
+        },
+        {
+            "label": "run4",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_4/pattern_4.in"
+        },
+        {
+            "label": "run5",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_9/pattern_9.in"
         },
         {
             "label": "task sequence",
@@ -36,7 +46,9 @@
             "dependsOn": [
                 "run1",
                 "run2",
-                "run3"
+                "run3",
+                "run4",
+                "run5"
             ],
             "problemMatcher": []
         }
