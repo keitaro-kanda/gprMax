@@ -41,3 +41,6 @@ tools/test_output/
 api.txt
 
 .python-version
+
+# k_subtract_Ascan 設定ファイル（表面反射データパスを含むため除外）
+tools/data_processing/k_subtract_Ascan_config.json
