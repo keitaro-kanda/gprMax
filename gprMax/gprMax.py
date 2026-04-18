@@ -108,6 +108,19 @@ def api(
     run_main(args)
 
 
+class _Tee:
+    """Write to both stdout and a log file simultaneously."""
+    def __init__(self, stdout, logfile):
+        self._stdout = stdout
+        self._logfile = logfile
+    def write(self, data):
+        self._stdout.write(data)
+        self._logfile.write(data)
+    def flush(self):
+        self._stdout.flush()
+        self._logfile.flush()
+
+
 def run_main(args):
     """
     Top-level function that controls what mode of simulation (standard/optimsation/benchmark etc...) is run.
@@ -115,6 +128,14 @@ def run_main(args):
     Args:
         args (dict): Namespace with input arguments from command line or api.
     """
+
+    # Set up log file in the same directory as the input file
+    import atexit
+    _inputpath = args.inputfile if isinstance(args.inputfile, str) else args.inputfile.name
+    _logpath = os.path.splitext(os.path.abspath(_inputpath))[0] + '.log'
+    _logfile = open(_logpath, 'w', encoding='utf-8')
+    sys.stdout = _Tee(sys.stdout, _logfile)
+    atexit.register(_logfile.close)
 
     # Print gprMax logo, version, and licencing/copyright information
     logo(__version__ + ' (' + codename + ')')
