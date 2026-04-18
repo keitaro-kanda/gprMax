@@ -67,6 +67,7 @@ def process_python_include_code(inputfile, usernamespace):
             # Compile code for faster execution
             pythoncompiledcode = compile(pythoncode, '<string>', 'exec')
             # Redirect stdout to a text stream
+            _prev_stdout = sys.stdout
             sys.stdout = result = StringIO()
             # Execute code block & make available only usernamespace
             exec(pythoncompiledcode, usernamespace)
@@ -75,7 +76,7 @@ def process_python_include_code(inputfile, usernamespace):
             result.close()
 
             # Reset stdio
-            sys.stdout = sys.__stdout__
+            sys.stdout = _prev_stdout
 
             # Separate commands from any other generated output
             hashcmds = []
