@@ -47,9 +47,14 @@ def align_lengths(target_data, surface_data):
 
 def plot(time, target_data, surface_data, subtracted_data, output_path):
     plot_comps = ['Ex', 'Ey', 'Ez']
-    row_labels = ['元データ', '差し引くデータ', '差し引き後データ']
+    row_labels = ['Original', 'Surface Reflection', 'Subtracted']
     row_data = [target_data, surface_data, subtracted_data]
     row_colors = ['k', 'r', 'b']
+
+    ymax = max(
+        max(np.max(np.abs(d[comp])) for d in row_data for comp in plot_comps),
+        1e-30
+    )
 
     fig, axes = plt.subplots(3, 3, figsize=(18, 12),
                              facecolor='w', edgecolor='w', tight_layout=True)
@@ -63,6 +68,7 @@ def plot(time, target_data, surface_data, subtracted_data, output_path):
             ax.set_ylabel('Amplitude', fontsize=10)
             ax.grid(True)
             ax.set_xlim([0, time[-1]])
+            ax.set_ylim([-ymax, ymax])
 
     fig.savefig(output_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
     plt.close()
