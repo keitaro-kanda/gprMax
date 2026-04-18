@@ -17,46 +17,26 @@
         {
             "label": "run1",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.20/h0.20.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_waveform/1.25GHz_ricker/pol_x/test.in"
         },
         {
             "label": "run2",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.25/h0.25.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_waveform/1.25GHz_ricker/pol_y/test.in"
         },
         {
             "label": "run3",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.30/h0.30.in"
-        },
-        {
-            "label": "run4",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.35/h0.35.in"
-        },
-        {
-            "label": "run5",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.40/h0.40.in"
-        },
-        {
-            "label": "run6",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.45/h0.45.in"
-        },
-        {
-            "label": "run7",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/3D_domain_5x5x2/rock_test/circular_offset0.3/height_0.50/h0.50.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_waveform/1.25GHz_ricker/pol_z/test.in"
         },
         {
             "label": "task sequence",
             "type": "shell",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "run5",
-                "run6",
-                "run7"
+                "run1",
+                "run2",
+                "run3"
             ],
             "problemMatcher": []
         }
