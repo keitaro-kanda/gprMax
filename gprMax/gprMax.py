@@ -128,7 +128,8 @@ class _Tee:
 
     def flush(self):
         self._stdout.flush()
-        self._logfile.flush()
+        if not self._logfile.closed:
+            self._logfile.flush()
 
     def close_log(self):
         if self._current_line:
