@@ -1,2 +1,0 @@
-# layer number, internal velocity [/c], epsilon_r
-1,0.500980583595145,3.984356696205904
