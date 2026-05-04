@@ -712,3 +712,24 @@ def geometry_objects_read(x, y, z, file1, file2):
     c = Coordinate(x, y, z)
     command('geometry_objects_read', str(c), file1, file2)
     return c
+
+# Added by Kanda
+
+def geometry_objects_write(xs, ys, zs, xf, yf, zf, basefilename):
+    """Prints the gprMax #geometry_objects_write command.
+
+    Args:
+        xs, ys, zs (float): Lower left corner coordinates of the parallelepiped.
+        xf, yf, zf (float): Upper right corner coordinates of the parallelepiped.
+        basefilename (str): Base filename (without extension) for output files.
+            Two files will be created: basefilename.h5 and basefilename_materials.txt.
+
+    Returns:
+        s, f (tuple): 2 namedtuple Coordinate for the start and finish coordinates
+    """
+
+    s = Coordinate(xs, ys, zs)
+    f = Coordinate(xf, yf, zf)
+    command('geometry_objects_write', s, f, basefilename)
+
+    return s, f
