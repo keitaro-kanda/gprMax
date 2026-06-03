@@ -171,38 +171,57 @@ def mpl_plot(filename, outputdata, dt, rxnumber, rxcomponent, closeup=False):
 
 #* Main part of the script
 if __name__ == "__main__":
-    #* Parse command line arguments
-    parser = argparse.ArgumentParser(
-        prog = 'plot_Bscan.py',
-        description = 'Plots a B-scan image.',
-        epilog = 'End of help message',
-        usage = 'python tools/plot_Bscan.py [jsonfile] [rx_component] [-closeup] [--select-rx] [-envelope]'
-        )
-    #parser.add_argument('outputfile', help='name of output file including path')
-    parser.add_argument('jsonfile', help='name of json file including path')
-    parser.add_argument('rx_component', help='name of output component to be plotted',
-                        choices=['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz'])
-    # closeupのオプションを作る
-    parser.add_argument('-closeup', action='store_true', help='closeup of the plot', default=False)
-    parser.add_argument('--select-rx', action='store_true', help='select rx number', default=False)
-    parser.add_argument('-envelope', action='store_true', help='Apply envelope to the data', default=False)
-    args = parser.parse_args()
+
+    print("Plots a B-scan image.")
+
+    jsonfile = input("Enter the path to the JSON config file: ").strip()
+    if not os.path.exists(jsonfile):
+        raise CmdInputError('JSON file {} does not exist'.format(jsonfile))
+
+    valid_components = ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'Ix', 'Iy', 'Iz']
+    print("Available rx components: {}".format(', '.join(valid_components)))
+    rx_component = input("Enter the rx component to plot: ").strip()
+    while rx_component not in valid_components:
+        print("Invalid component. Available: {}".format(', '.join(valid_components)))
+        rx_component = input("Enter the rx component to plot: ").strip()
+
+    closeup_input = input("Closeup of the plot? (y/n) [default: n]: ").strip().lower()
+    use_closeup = closeup_input == 'y'
+
+    select_rx_input = input("Select rx number (rx1 only)? (y/n) [default: n]: ").strip().lower()
+    use_select_rx = select_rx_input == 'y'
+
+    envelope_input = input("Apply envelope to the data? (y/n) [default: n]: ").strip().lower()
+    use_envelope = envelope_input == 'y'
+
+    args = argparse.Namespace(
+        jsonfile=jsonfile,
+        rx_component=rx_component,
+        closeup=use_closeup,
+        select_rx=use_select_rx,
+        envelope=use_envelope
+    )
 
     #* Load json file
-    with open (args.jsonfile) as f:
+    with open(args.jsonfile) as f:
         params = json.load(f)
     outfile_path = params['data']
 
     #* Open output file and read number of outputs (receivers)
-    #f = h5py.File(args.outputfile, 'r') # outファイルの読み込み？
     f = h5py.File(outfile_path, 'r')
-    nrx = f.attrs['nrx'] # Attribute(属性)の読み取り？、nrx:レシーバーの総数
+    if 'nrx' in f.attrs:
+        nrx = f.attrs['nrx']
+    elif 'rxs' in f:
+        nrx = len(f['rxs'].keys())
+    else:
+        f.close()
+        raise CmdInputError('Invalid output file: {} - nrx attribute not found and no rxs group exists. The file may be empty or not a valid gprMax output file.'.format(outfile_path))
     print('nrx: ', nrx)
     f.close()
 
     # Check there are any receivers
     if nrx == 0:
-        raise CmdInputError('No receivers found in {}'.format(args.outputfile))
+        raise CmdInputError('No receivers found in {}'.format(outfile_path))
 
     # データの取得とプロットの作成を実行？
     if args.select_rx:

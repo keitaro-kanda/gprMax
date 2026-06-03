@@ -16,9 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with gprMax.  If not, see <http://www.gnu.org/licenses/>.
 
-import argparse
-import glob
 import os
+import re
 
 import h5py
 import numpy as np
@@ -64,26 +63,47 @@ def get_output_data(filename, rxnumber, rxcomponent):
     return outputdata, dt
 
 
-def merge_files(basefilename, removefiles=False):
+def merge_files(directory, removefiles=False):
     """Merges traces (A-scans) from multiple output files into one new file,
         then optionally removes the series of output files.
 
     Args:
-        basefilename (string): Base name of output file series including path.
-        outputs (boolean): Flag to remove individual output files after merge.
+        directory (string): Path to directory containing multiple numbered .out files.
+        removefiles (boolean): Flag to remove individual output files after merge.
     """
 
-    outputfile = basefilename + '_merged.out'
-    files = glob.glob(basefilename + '[0-9]*.out')
-    outputfiles = [filename for filename in files if '_merged' not in filename]
-    modelruns = len(outputfiles)
+    directory = directory.rstrip(os.sep)
+
+    # Find all numbered .out files in the directory (exclude _merged)
+    all_filenames = [f for f in os.listdir(directory)
+                     if f.endswith('.out') and '_merged' not in f]
+
+    if not all_filenames:
+        raise CmdInputError('No .out files found in {}'.format(directory))
+
+    # Sort by trailing number
+    def extract_number(filename):
+        match = re.search(r'(\d+)\.out$', filename)
+        return int(match.group(1)) if match else 0
+
+    all_filenames.sort(key=extract_number)
+    modelruns = len(all_filenames)
+
+    # Determine base name by stripping trailing digits from first filename
+    base = re.sub(r'\d+\.out$', '', all_filenames[0])
+
+    # Output file goes in the parent directory of the input directory
+    parent_dir = os.path.dirname(directory)
+    outputfile = os.path.join(parent_dir, base + '_merged.out')
+
+    print('Output file: {}'.format(outputfile))
 
     # Combined output file
     fout = h5py.File(outputfile, 'w')
 
     # Add positional data for rxs
     for model in tqdm(range(modelruns)):
-        fin = h5py.File(basefilename + str(model + 1) + '.out', 'r')
+        fin = h5py.File(os.path.join(directory, all_filenames[model]), 'r')
         nrx = fin.attrs['nrx']
 
         # Write properties for merged file on first iteration
@@ -113,20 +133,18 @@ def merge_files(basefilename, removefiles=False):
     fout.close()
 
     if removefiles:
-        for model in range(modelruns):
-            file = basefilename + str(model + 1) + '.out'
-            os.remove(file)
+        for filename in all_filenames:
+            os.remove(os.path.join(directory, filename))
 
 if __name__ == "__main__":
 
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        prog='outputfiles_merge.py',
-        description='Merges traces (A-scans) from multiple output files into one new file, then optionally removes the series of output files.',
-        epilog='End of help message',
-        usage='python tools/outputfiles_merge.py [basefilename]')
-    parser.add_argument('basefilename', help='base name of output file series including path')
-    parser.add_argument('--remove-files', action='store_true', default=False, help='flag to remove individual output files after merge')
-    args = parser.parse_args()
+    print("Merges traces (A-scans) from multiple output files into one new file, then optionally removes the series of output files.")
 
-    merge_files(args.basefilename, removefiles=args.remove_files)
+    directory = input("Enter the path to the directory containing the .out files: ").strip()
+    if not os.path.isdir(directory):
+        raise CmdInputError('Directory {} does not exist'.format(directory))
+
+    remove_input = input("Remove individual output files after merge? (y/n) [default: n]: ").strip().lower()
+    removefiles = remove_input == 'y'
+
+    merge_files(directory, removefiles=removefiles)
