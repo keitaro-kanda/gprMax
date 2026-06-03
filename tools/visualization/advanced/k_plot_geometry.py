@@ -41,7 +41,7 @@ def plot_geometry_from_json(json_file, use_closeup=False, x_start=None, x_end=No
     fig = plt.figure(figsize=(10, 10 * figsize_ratio), tight_layout=True)
     ax = fig.add_subplot(111)
     extent = [0, x_num * spatial_grid, z_num * spatial_grid, 0]
-    im = ax.imshow(epsilon_map, extent=extent, cmap='jet') # jet or binary
+    im = ax.imshow(epsilon_map, extent=extent, cmap='jet', vmin=1, vmax=6) # jet or binary
 
     if use_closeup:
         ax.set_xlim(x_start, x_end)
