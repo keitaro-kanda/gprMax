@@ -17,31 +17,20 @@
         {
             "label": "run1",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_6/pattern_6.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/demo_rock_scattering/contain_rock_N100_diam10cm/B-scan/Bscan.in -n 30"
         },
         {
             "label": "run2",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_7/pattern_7.in"
-        },
-        {
-            "label": "run3",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_8/pattern_8.in"
-        },
-        {
-            "label": "run4",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/gprMax_3D/1x1x1/test_validity_of_gprMax/pattern_10/pattern_10.in"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/demo_rock_scattering/contain_rock_N100_diam10cm/B-scan/Bscan.in -n 30"
         },
         {
             "label": "task sequence",
             "type": "shell",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "run2",
-                "run3",
-                "run4"
+                "run1",
+                "run2"
             ],
             "problemMatcher": []
         }
