@@ -35,7 +35,7 @@ print(f"Calculated average background trace with shape {outputdata_ave.shape}")
 
 
 # 強度をdBに変換
-outputdata_ave_db = 20 * np.log10(np.abs(outputdata_ave) + 1e-12) # avoid log(0)
+outputdata_ave_db = 20 * np.log10(np.abs(outputdata_ave) / np.amax(np.abs(outputdata_ave)) + 1e-12) # avoid log(0)
 
 # plot background only
 plt.figure(figsize=(4, 8), facecolor='w', edgecolor='w')
