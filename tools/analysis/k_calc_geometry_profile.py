@@ -95,13 +95,15 @@ def plot_map_profile(map_data, profile_data, map_type, colors, names, output_nam
         idx = 1
     elif map_type == 'losstangent':
         idx = 2
+    
+    map_aspect = map_data.shape[0] / map_data.shape[1]
 
     fig, ax = plt.subplots(
         nrows=1, # 縦
         ncols=2, # 横
         width_ratios=[3, 1],
         height_ratios=[1],
-        figsize=(12, 8)
+        figsize=(12, 9*map_aspect)
     )
 
     if idx == 0:
@@ -112,20 +114,20 @@ def plot_map_profile(map_data, profile_data, map_type, colors, names, output_nam
         im = ax[0].imshow(map_data,
                 extent=[0, map_data.shape[1]*spatial_grid, map_data.shape[0]*spatial_grid, 0],
                 interpolation='nearest', aspect='auto', cmap=colors[idx])
-    ax[0].set_xlabel('X [m]', size=14)
-    ax[0].set_ylabel('Y [m]', size=14)
-    ax[0].tick_params(labelsize=12)
+    ax[0].set_xlabel('X [m]', size=18)
+    ax[0].set_ylabel('Y [m]', size=18)
+    ax[0].tick_params(labelsize=14)
     ax[0].grid()
     # coloarbar
     delvider = axgrid1.make_axes_locatable(ax[0])
     cax = delvider.append_axes('right', size='5%', pad=0.1)
     cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label(names[idx], size=14)
-    cbar.ax.tick_params(labelsize=12)
+    cbar.set_label(names[idx], size=18)
+    cbar.ax.tick_params(labelsize=14)
 
     ax[1].plot(profile_data, np.arange(profile_data.shape[0]) * spatial_grid) # time in ns
-    ax[1].set_xlabel(names[idx], size=14)
-    ax[1].set_ylabel('Depth (m)', size=14)
+    ax[1].set_xlabel(names[idx], size=18)
+    ax[1].set_ylabel('Depth (m)', size=18)
     ax[1].set_ylim(profile_data.shape[0] * spatial_grid, 0) # time in ns
     ax[1].tick_params(labelsize=12)
     ax[1].grid()
@@ -154,10 +156,10 @@ def plot_profile(profile_data, map_type, names, output_names):
     
     plt.figure(figsize=(4, 8), facecolor='w', edgecolor='w')
     plt.plot(profile_data, np.arange(profile_data.shape[0]) * spatial_grid) # time in ns
-    plt.xlabel(names[idx], size=14)
-    plt.ylabel('Depth (m)', size=14)
+    plt.xlabel(names[idx], size=18)
+    plt.ylabel('Depth (m)', size=18)
     plt.ylim(permittivity_profile.shape[0] * spatial_grid, 0) # time in ns
-    plt.tick_params(labelsize=12)
+    plt.tick_params(labelsize=14)
     plt.grid()
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, output_names[idx] + '_profile.png'), dpi=300)
