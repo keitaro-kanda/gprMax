@@ -37,9 +37,15 @@ print(f"Calculated average background trace with shape {outputdata_ave.shape}")
 # 強度をdBに変換
 outputdata_ave_db = 20 * np.log10(np.abs(outputdata_ave) / np.amax(np.abs(outputdata_ave)) + 1e-12) # avoid log(0)
 
+# 移動平均の計算
+window_size = len(outputdata_ave_db)//20
+outputdata_ave_db_moving = np.convolve(outputdata_ave_db, np.ones(window_size)/window_size, 'same') # 入力サイズと同じサイズの配列を返す
+
+
 # plot background only
 plt.figure(figsize=(4, 8), facecolor='w', edgecolor='w')
-plt.plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9) # time in ns
+plt.plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='k', linestyle='-') # time in ns
+plt.plot(outputdata_ave_db_moving, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='r', linestyle='--', alpha=0.7) # time in ns
 plt.xlabel('Amplitude (dB)', size=14)
 plt.ylabel('Time (ns)', size=14)
 plt.ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
@@ -76,7 +82,8 @@ cbar = fig.colorbar(im, cax=cax)
 cbar.set_label('Amplitude', size=14)
 cbar.ax.tick_params(labelsize=12)
 
-ax[1].plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9) # time in ns
+ax[1].plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='k', linestyle='-') # time in ns
+ax[1].plot(outputdata_ave_db_moving, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='r', linestyle='--', alpha=0.7) # time in ns
 ax[1].set_xlabel('Amplitude (dB)', size=14)
 ax[1].set_ylabel('Time (ns)', size=14)
 ax[1].set_ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
