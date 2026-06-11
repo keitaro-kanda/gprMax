@@ -16,15 +16,20 @@ MODES = ['slices', 'clip', 'opaque']
 #   'clip'   : 手前の角を切り取って内部断面を露出
 #   'opaque' : 箱を完全不透明（表面の分布がくっきり）
 
-CMAP = 'turbo'           # 'viridis' も推奨
-CLIM = (1.0, 6.0)        # 誘電率の表示範囲（将来 eps=6 を導入予定のため固定）
+CMAP = 'turbo'            # 'viridis' も推奨
+CLIM = (1.0, 6.0)         # 誘電率の表示範囲（将来 eps=6 を導入予定のため固定）
+
+# --- 描画範囲の制御 ---
+INCLUDE_PML = False       # True で PML 領域も描画（横幅がシミュレーションボックスと一致する）
+INCLUDE_AIR = False       # True で空気層(eps=1)も描画（通常は不要）
+SHOW_DOMAIN_OUTLINE = True  # 全シミュレーション領域（PML・空気込み）の外枠を重ねて表示
 
 # 生成後に macOS の ._ ファイル(AppleDouble)を出力先から削除する（Macのみ有効）
 CLEAN_APPLEDOUBLE = True
 # ============================================================
 
 
-def build_plotter(mode, geo_grid):
+def build_plotter(mode, geo_grid, domain_outline=None):
     """指定したモードで Plotter を構築して返す。"""
     plotter = pv.Plotter(off_screen=True, window_size=[1600, 1400])
     plotter.set_background('white')
@@ -69,10 +74,13 @@ def build_plotter(mode, geo_grid):
         plotter.add_mesh(slices, opacity=1.0, **common_kwargs)
         plotter.add_mesh(geo_grid.outline(), color='gray', line_width=1)
 
+    # --- 全シミュレーション領域（PML・空気込み）の外枠 ---
+    if domain_outline is not None:
+        plotter.add_mesh(domain_outline, color='gray', line_width=1,
+                         opacity=0.5, style='wireframe')
+
     # --- 軸メモリ＆グリッド線を全方向に表示 ---
-    #   grid='all'     : 全ての面にグリッド線
-    #   location='all' : 座標メモリ(目盛)を全方向の面に表示
-    #   （ごちゃつく場合は location を 'outer' にすると外周だけに整理されます）
+    #   location を 'outer' にすると外周だけに整理されて読みやすくなります
     plotter.show_bounds(
         mesh=geo_grid,
         grid='all',
@@ -126,13 +134,11 @@ def clean_appledouble(out_dir):
     """macOS が生成する ._ ファイルを出力先から掃除する。"""
     if platform.system() != 'Darwin':
         return
-    # dot_clean があれば最優先（._ をマージ/削除する純正コマンド）
     if shutil.which('dot_clean'):
         try:
             subprocess.run(['dot_clean', '-m', out_dir], check=False)
         except Exception:
             pass
-    # 残った ._ ファイルを念のため直接削除
     removed = 0
     for f in glob.glob(os.path.join(out_dir, '._*')):
         try:
@@ -185,20 +191,39 @@ def plot_and_save_vtk(vtk_file):
 
     grid.cell_data['Epsilon'] = eps_array
 
-    # 4. 描画データの抽出 (空気・PMLを除外)
-    print("3Dメッシュを構築中 (内部構造抽出)...")
+    # 4. 描画範囲の決定（PML / 空気 の扱いはフラグで制御）
+    print("3Dメッシュを構築中...")
     pml_array = grid.cell_data.get('Sources_PML', np.zeros_like(mat_array))
 
-    valid_mask = (eps_array > 1.01) & (pml_array != 1)
-    geo_grid = grid.extract_cells(valid_mask)
+    mask = np.ones_like(eps_array, dtype=bool)
+    if not INCLUDE_AIR:
+        mask &= (eps_array > 1.01)      # 空気(eps=1)を除外
+    if not INCLUDE_PML:
+        mask &= (pml_array != 1)        # PML(=1)を除外
 
+    geo_grid = grid.extract_cells(mask)
     if geo_grid.n_cells == 0:
         print("エラー: 描画対象のセルが見つかりません。")
         return
 
-    # 抽出した「実体モデル」の角が厳密に(0, 0, 0)になるよう平行移動
-    xmin, xmax, ymin, ymax, zmin, zmax = geo_grid.bounds
-    geo_grid.translate((-xmin, -ymin, -zmin), inplace=True)
+    # --- 寸法の診断出力 ---
+    fxmin, fxmax, fymin, fymax, fzmin, fzmax = grid.bounds
+    gxmin, gxmax, gymin, gymax, gzmin, gzmax = geo_grid.bounds
+    print("--- 寸法の確認 ---")
+    print(f"  全シミュレーション領域: "
+          f"{fxmax - fxmin:.3f} x {fymax - fymin:.3f} x {fzmax - fzmin:.3f} m")
+    print(f"  描画領域(PML/空気の扱い反映後): "
+          f"{gxmax - gxmin:.3f} x {gymax - gymin:.3f} x {gzmax - gzmin:.3f} m")
+    print(f"  INCLUDE_PML={INCLUDE_PML}, INCLUDE_AIR={INCLUDE_AIR}")
+
+    # 実体モデルの角を原点(0,0,0)に平行移動。全領域外枠にも同じシフトを適用
+    shift = (-gxmin, -gymin, -gzmin)
+    geo_grid.translate(shift, inplace=True)
+
+    domain_outline = None
+    if SHOW_DOMAIN_OUTLINE:
+        domain_outline = grid.outline()
+        domain_outline.translate(shift, inplace=True)
 
     eps_vals = geo_grid.cell_data['Epsilon']
     print(f"カラースケール clim = {list(CLIM)}  "
@@ -212,7 +237,7 @@ def plot_and_save_vtk(vtk_file):
     # 6. 各モードを自動で保存
     for mode in MODES:
         print(f"[モード: {mode}] を描画中...")
-        plotter = build_plotter(mode, geo_grid)
+        plotter = build_plotter(mode, geo_grid, domain_outline)
         save_all_views(plotter, out_dir, base_name, mode)
         plotter.close()
 
