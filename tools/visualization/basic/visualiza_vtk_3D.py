@@ -137,7 +137,7 @@ def plot_and_save_vtk(vtk_file):
                 sub_grid,
                 scalars='Epsilon',
                 cmap='jet',
-                clim=[1.0, 9.0],
+                clim=[1.0, 6.0],
                 opacity=0.3,
                 show_edges=False,
                 show_scalar_bar=not added_scalar_bar,
