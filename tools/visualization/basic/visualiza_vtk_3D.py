@@ -1,8 +1,148 @@
 #!/usr/bin/env python3
 import os
 import glob
+import platform
+import shutil
+import subprocess
 import pyvista as pv
 import numpy as np
+
+
+# ============================================================
+# ★ 見え方の設定
+# ============================================================
+MODES = ['slices', 'clip', 'opaque']
+#   'slices' : 直交3断面を不透明表示（地下構造の定番・おすすめ）
+#   'clip'   : 手前の角を切り取って内部断面を露出
+#   'opaque' : 箱を完全不透明（表面の分布がくっきり）
+
+CMAP = 'turbo'           # 'viridis' も推奨
+CLIM = (1.0, 6.0)        # 誘電率の表示範囲（将来 eps=6 を導入予定のため固定）
+
+# 生成後に macOS の ._ ファイル(AppleDouble)を出力先から削除する（Macのみ有効）
+CLEAN_APPLEDOUBLE = True
+# ============================================================
+
+
+def build_plotter(mode, geo_grid):
+    """指定したモードで Plotter を構築して返す。"""
+    plotter = pv.Plotter(off_screen=True, window_size=[1600, 1400])
+    plotter.set_background('white')
+
+    scalar_bar_args = {
+        'title': 'Relative Permittivity',
+        'color': 'black',
+        'vertical': True,
+        'position_x': 0.90,
+        'position_y': 0.05,
+        'height': 0.8,
+        'width': 0.05,
+        'n_labels': 6,
+    }
+
+    common_kwargs = dict(
+        scalars='Epsilon',
+        cmap=CMAP,
+        clim=list(CLIM),
+        show_edges=False,
+        scalar_bar_args=scalar_bar_args,
+    )
+
+    # --- 表示モードごとの描画（不透明） ---
+    if mode == 'opaque':
+        plotter.add_mesh(geo_grid, opacity=1.0, **common_kwargs)
+
+    elif mode == 'clip':
+        gxmin, gxmax, gymin, gymax, gzmin, gzmax = geo_grid.bounds
+        xm = (gxmin + gxmax) / 2.0
+        ym = (gymin + gymax) / 2.0
+        zm = (gzmin + gzmax) / 2.0
+        # +x,+y,+z 側の角(1/8)を取り除いて内部断面を露出
+        clipped = geo_grid.clip_box(
+            bounds=[xm, gxmax, ym, gymax, zm, gzmax], invert=True
+        )
+        plotter.add_mesh(clipped, opacity=1.0, **common_kwargs)
+        plotter.add_mesh(geo_grid.outline(), color='gray', line_width=1)
+
+    else:  # 'slices'
+        slices = geo_grid.slice_orthogonal()
+        plotter.add_mesh(slices, opacity=1.0, **common_kwargs)
+        plotter.add_mesh(geo_grid.outline(), color='gray', line_width=1)
+
+    # --- 軸メモリ＆グリッド線を全方向に表示 ---
+    #   grid='all'     : 全ての面にグリッド線
+    #   location='all' : 座標メモリ(目盛)を全方向の面に表示
+    #   （ごちゃつく場合は location を 'outer' にすると外周だけに整理されます）
+    plotter.show_bounds(
+        mesh=geo_grid,
+        grid='all',
+        location='all',
+        ticks='both',
+        padding=0.0,
+        xtitle='X', ytitle='Y', ztitle='Z',
+        color='black',
+        font_size=12,
+        show_xlabels=True,
+        show_ylabels=True,
+        show_zlabels=True,
+    )
+
+    return plotter
+
+
+def save_all_views(plotter, out_dir, base_name, mode):
+    """全視点の画像を保存する。ファイル名にモード名を含める。"""
+    views = {
+        'oblique_1': (25, 45),
+        'oblique_2': (25, 135),
+        'oblique_3': (25, 225),
+        'oblique_4': (25, 315),
+    }
+
+    plotter.view_xy()
+    plotter.screenshot(os.path.join(out_dir, f"{base_name}_{mode}_top.png"))
+    print(f"  保存完了: {mode}_top")
+
+    plotter.view_xz()
+    plotter.screenshot(os.path.join(out_dir, f"{base_name}_{mode}_side_y.png"))
+    print(f"  保存完了: {mode}_side_y")
+
+    plotter.view_yz()
+    plotter.screenshot(os.path.join(out_dir, f"{base_name}_{mode}_side_x.png"))
+    print(f"  保存完了: {mode}_side_x")
+
+    for view_name, (elev, azim) in views.items():
+        elev_rad, azim_rad = np.radians(elev), np.radians(azim)
+        cam_x = np.cos(elev_rad) * np.cos(azim_rad)
+        cam_y = np.cos(elev_rad) * np.sin(azim_rad)
+        cam_z = np.sin(elev_rad)
+        plotter.view_vector((cam_x, cam_y, cam_z), viewup=(0, 0, 1))
+        out_path = os.path.join(out_dir, f"{base_name}_{mode}_{view_name}.png")
+        plotter.screenshot(out_path)
+        print(f"  保存完了: {mode}_{view_name}")
+
+
+def clean_appledouble(out_dir):
+    """macOS が生成する ._ ファイルを出力先から掃除する。"""
+    if platform.system() != 'Darwin':
+        return
+    # dot_clean があれば最優先（._ をマージ/削除する純正コマンド）
+    if shutil.which('dot_clean'):
+        try:
+            subprocess.run(['dot_clean', '-m', out_dir], check=False)
+        except Exception:
+            pass
+    # 残った ._ ファイルを念のため直接削除
+    removed = 0
+    for f in glob.glob(os.path.join(out_dir, '._*')):
+        try:
+            os.remove(f)
+            removed += 1
+        except OSError:
+            pass
+    if removed:
+        print(f"._ ファイルを {removed} 件削除しました。")
+
 
 def plot_and_save_vtk(vtk_file):
     vtk_dir = os.path.dirname(os.path.abspath(vtk_file))
@@ -13,7 +153,7 @@ def plot_and_save_vtk(vtk_file):
     if not mat_files:
         print(f"エラー: {vtk_dir} 内に '_materials.txt' を含むファイルが見つかりません。")
         return
-    
+
     material_path = mat_files[0]
     print(f"マテリアルファイルを参照: {material_path}")
 
@@ -42,192 +182,55 @@ def plot_and_save_vtk(vtk_file):
     eps_array = np.zeros_like(mat_array, dtype=float)
     for mat_id, eps in enumerate(epsilons):
         eps_array[mat_array == mat_id] = eps
-    
+
     grid.cell_data['Epsilon'] = eps_array
 
     # 4. 描画データの抽出 (空気・PMLを除外)
     print("3Dメッシュを構築中 (内部構造抽出)...")
     pml_array = grid.cell_data.get('Sources_PML', np.zeros_like(mat_array))
-    rx_array = grid.cell_data.get('Receivers', np.zeros_like(mat_array))
 
     valid_mask = (eps_array > 1.01) & (pml_array != 1)
-    source_mask = (pml_array == 2)
-    rx_mask = (rx_array == 1)
-
-    # まず抽出だけを行う
     geo_grid = grid.extract_cells(valid_mask)
-    source_cells = grid.extract_cells(source_mask)
-    rx_cells = grid.extract_cells(rx_mask)
+
+    if geo_grid.n_cells == 0:
+        print("エラー: 描画対象のセルが見つかりません。")
+        return
 
     # 抽出した「実体モデル」の角が厳密に(0, 0, 0)になるよう平行移動
-    if geo_grid.n_cells > 0:
-        xmin, xmax, ymin, ymax, zmin, zmax = geo_grid.bounds
-        shift_x, shift_y, shift_z = -xmin, -ymin, -zmin
-        
-        # モデルと送受信機の座標を一斉にシフト
-        geo_grid.translate((shift_x, shift_y, shift_z), inplace=True)
-        if source_cells.n_cells > 0:
-            source_cells.translate((shift_x, shift_y, shift_z), inplace=True)
-        if rx_cells.n_cells > 0:
-            rx_cells.translate((shift_x, shift_y, shift_z), inplace=True)
+    xmin, xmax, ymin, ymax, zmin, zmax = geo_grid.bounds
+    geo_grid.translate((-xmin, -ymin, -zmin), inplace=True)
 
-    # 5. 送受信機の座標抽出
-    print("送受信機をマッピング中...")
-    source_pts = source_cells.cell_centers().points if source_cells.n_cells > 0 else []
-    rx_pts = rx_cells.cell_centers().points if rx_cells.n_cells > 0 else []
+    eps_vals = geo_grid.cell_data['Epsilon']
+    print(f"カラースケール clim = {list(CLIM)}  "
+          f"(実データ範囲: {eps_vals.min():.2f} 〜 {eps_vals.max():.2f})")
 
-    spacing = grid.spacing[0] if hasattr(grid, 'spacing') else 0.01
-    sphere_radius = spacing * 3.0
-
-    # 6. プロットのセットアップ
-    plotter = pv.Plotter(off_screen=True, window_size=[1600, 1400])
-    plotter.set_background('white')
-    plotter.enable_depth_peeling() 
-
-    # ★修正ポイント: VTKの自動タイトルを無効化し、use_2d=True でメモリの埋もれを防止
-    if geo_grid.n_cells > 0:
-        plotter.show_bounds(
-            mesh=geo_grid,
-            grid=True,
-            location='origin',
-            padding=0.0,
-            xtitle='', # 自動生成のタイトルは一旦空にする
-            ytitle='',
-            ztitle='',
-            color='black',
-            font_size=16,
-            show_xlabels=True,
-            show_ylabels=True,
-            show_zlabels=True,
-            use_2d=True # メモリラベルを2Dオーバーレイとして描画し、モデルに隠れるのを防ぐ
-        )
-
-        # ★修正ポイント: 各軸の先端にX, Y, Zのラベルを手動で強制配置（常に最前面に表示）
-        xmin, xmax, ymin, ymax, zmin, zmax = geo_grid.bounds
-        offset_x = xmax * 0.05
-        offset_y = ymax * 0.05
-        offset_z = zmax * 0.05
-        
-        label_coords = np.array([
-            [xmax + offset_x, 0, 0],
-            [0, ymax + offset_y, 0],
-            [0, 0, zmax + offset_z]
-        ])
-        
-        plotter.add_point_labels(
-            label_coords,
-            ['X', 'Y', 'Z'],
-            text_color='black',
-            font_size=24,
-            shape=None,          # 背景の枠線を消す
-            show_points=False,   # ラベル位置のドットを消す
-            always_visible=True  # モデルに隠れず常に表示する
-        )
-
-    # 抽出済み・移動済みの geo_grid から誘電率ごとにメッシュを描画
-    unique_eps = np.unique(geo_grid.cell_data['Epsilon'])
-    added_scalar_bar = False
-
-    for eps_val in unique_eps:
-        mask = geo_grid.cell_data['Epsilon'] == eps_val
-        sub_grid = geo_grid.extract_cells(mask)
-        
-        if sub_grid.n_cells > 0:
-            plotter.add_mesh(
-                sub_grid,
-                scalars='Epsilon',
-                cmap='jet',
-                clim=[1.0, 6.0],
-                opacity=0.3,
-                show_edges=False,
-                show_scalar_bar=not added_scalar_bar,
-                scalar_bar_args={
-                    'title': 'Relative Permittivity', 
-                    'color': 'black',
-                    'vertical': True,
-                    'position_x': 0.90,
-                    'position_y': 0.05,
-                    'height': 0.8,
-                    'width': 0.05
-                } if not added_scalar_bar else None
-            )
-            added_scalar_bar = True
-
-    # 送信機の描画 (赤色)
-    for pt in source_pts:
-        plotter.add_mesh(pv.Sphere(radius=sphere_radius, center=pt), color='red')
-
-    # 受信機の描画 (青色)
-    for pt in rx_pts:
-        plotter.add_mesh(pv.Sphere(radius=sphere_radius, center=pt), color='blue')
-
-    # Tx, Rxのラベルサイズ・形状設定
-    legend_entries = [
-        ['Tx', 'red'],
-        ['Rx', 'blue']
-    ]
-    plotter.add_legend(
-        legend_entries, 
-        loc='lower right', 
-        bcolor='white', 
-        border=True, 
-        face='circle',
-        size=(0.06, 0.06)
-    )
-
-    # 7. 複数視点からの画像出力設定
+    # 5. 出力先
     out_dir = os.path.join(vtk_dir, 'gemetory')
     os.makedirs(out_dir, exist_ok=True)
-
-    views = {
-        'oblique_1': (25, 45),
-        'oblique_2': (25, 135),
-        'oblique_3': (25, 225),
-        'oblique_4': (25, 315),
-    }
-
     print(f"画像を {out_dir} に保存しています...")
 
-    # 真上
-    plotter.view_xy()
-    plotter.screenshot(os.path.join(out_dir, f"{base_name}_top.png"))
-    print("保存完了: top")
+    # 6. 各モードを自動で保存
+    for mode in MODES:
+        print(f"[モード: {mode}] を描画中...")
+        plotter = build_plotter(mode, geo_grid)
+        save_all_views(plotter, out_dir, base_name, mode)
+        plotter.close()
 
-    # 真横
-    plotter.view_xz()
-    plotter.screenshot(os.path.join(out_dir, f"{base_name}_side_y.png"))
-    print("保存完了: side_y")
+    # 7. ._ ファイルの掃除
+    if CLEAN_APPLEDOUBLE:
+        clean_appledouble(out_dir)
 
-    plotter.view_yz()
-    plotter.screenshot(os.path.join(out_dir, f"{base_name}_side_x.png"))
-    print("保存完了: side_x")
-
-    # 斜め
-    for view_name, (elev, azim) in views.items():
-        elev_rad, azim_rad = np.radians(elev), np.radians(azim)
-        cam_x = np.cos(elev_rad) * np.cos(azim_rad)
-        cam_y = np.cos(elev_rad) * np.sin(azim_rad)
-        cam_z = np.sin(elev_rad)
-        
-        plotter.view_vector((cam_x, cam_y, cam_z), viewup=(0, 0, 1))
-        
-        out_path = os.path.join(out_dir, f"{base_name}_{view_name}.png")
-        plotter.screenshot(out_path)
-        print(f"保存完了: {view_name}")
-
-    plotter.close()
     print("すべての処理が完了しました。")
 
 
 def main():
     vtk_file = input("VTKファイルのパスを入力してください: ").strip()
-    
     vtk_file = vtk_file.replace("'", "").replace('"', '')
 
     if not os.path.exists(vtk_file):
         print("エラー: 指定されたファイルが見つかりません。")
         return
-        
+
     plot_and_save_vtk(vtk_file)
 
 
