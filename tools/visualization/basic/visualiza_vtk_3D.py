@@ -16,7 +16,7 @@ MODES = ['slices', 'clip', 'opaque']
 #   'clip'   : 手前の角を切り取って内部断面を露出
 #   'opaque' : 箱を完全不透明（表面の分布がくっきり）
 
-CMAP = 'turbo'            # 'viridis' も推奨
+CMAP = 'jet'            # 'viridis' も推奨
 CLIM = (1.0, 6.0)         # 誘電率の表示範囲（将来 eps=6 を導入予定のため固定）
 
 # --- 描画範囲の制御 ---
