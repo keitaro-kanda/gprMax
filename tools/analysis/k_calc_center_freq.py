@@ -40,29 +40,25 @@ print(f'B-scan shape (samples, traces): {outputdata.shape}')
 # =============================================================================
 # STFT parameters
 # =============================================================================
-# nperseg controls frequency resolution: df = fs / nperseg
-# With fs ~ 85 GHz and GPR centre at 1.25 GHz, nperseg must be large
-# enough to resolve the GPR band (0.3 – 3.0 GHz).
-#   nperseg=512: df ~ 0.17 GHz -> ~17 bins in band  (recommended)
-#   nperseg=256: df ~ 0.33 GHz ->  ~9 bins in band  (faster, less accurate)
-# Trade-off: larger nperseg = finer freq resolution, coarser time resolution.
+# df = fs / nperseg.  With fs ~ 85 GHz and fc = 1.25 GHz:
+#   nperseg=512 -> df ~ 0.17 GHz, ~17 bins in 0.3-3.0 GHz  (recommended)
+#   nperseg=256 -> df ~ 0.33 GHz,  ~9 bins in 0.3-3.0 GHz  (faster)
 nperseg  = 512
 noverlap = nperseg * 3 // 4
 window   = 'hann'
 
-# Physically meaningful frequency band for 1.25 GHz gaussiandot waveform
-freq_min = 0.25    # [GHz]  exclude DC / near-DC noise
-freq_max = 6.0    # [GHz]  exclude frequencies beyond ~2.5 * fc
+# Physically meaningful band for 1.25 GHz gaussiandot waveform
+freq_min = 0.25    # [GHz]  lower cut (exclude DC noise)
+freq_max = 6.0    # [GHz]  upper cut (beyond ~2.5 * fc is noise)
 
-# Power mask: pixels whose in-band power is more than this many dB below
-# the per-trace peak are set to NaN (no valid signal).
-power_threshold_db = -120.0   # [dB]  raise to mask more; lower to show deeper
+# Power mask: pixels more than this many dB below the per-trace peak -> NaN
+power_threshold_db = -125.0   # [dB]
 
-# Smoothing kernel (time bins, trace bins)
+# Gaussian smoothing kernel (time-axis bins, trace-axis bins)
 sigma = (3, 3)
 
 # =============================================================================
-# Compute spectral-centroid map
+# STFT and frequency/time axes
 # =============================================================================
 f_axis, t_axis, _ = signal.stft(outputdata[:, 0], fs=fs, window=window,
                                  nperseg=nperseg, noverlap=noverlap)
@@ -75,48 +71,73 @@ print(f'STFT: nperseg={nperseg}, df={fs/nperseg:.3f} GHz')
 print(f'Frequency band: {valid_freq[0]:.3f} – {valid_freq[-1]:.3f} GHz '
       f'({freq_mask.sum()} bins)')
 
+# =============================================================================
+# Compute centroid map and peak-frequency map from STFT
+# =============================================================================
 eps = 1e-30
-centroid_map = np.zeros((n_time, n_traces))
-power_map    = np.zeros((n_time, n_traces))
+
+centroid_map = np.zeros((n_time, n_traces))   # power-weighted mean frequency
+peak_freq_map = np.zeros((n_time, n_traces))  # frequency of maximum amplitude
+power_map    = np.zeros((n_time, n_traces))   # total in-band power (for mask)
 
 for itrace in range(n_traces):
     _, _, Zxx = signal.stft(outputdata[:, itrace], fs=fs, window=window,
                             nperseg=nperseg, noverlap=noverlap)
-    power = np.abs(Zxx[freq_mask, :]) ** 2
-    total = power.sum(axis=0)
+    power = np.abs(Zxx[freq_mask, :]) ** 2          # (n_freq_valid, n_time)
+    total = power.sum(axis=0)                        # (n_time,)
+
+    # Spectral centroid (power-weighted mean frequency)
     centroid_map[:, itrace] = (valid_freq[:, None] * power).sum(axis=0) / (total + eps)
-    power_map[:, itrace]    = total
+
+    # Peak frequency (argmax along frequency axis)
+    peak_idx = np.argmax(power, axis=0)              # (n_time,)
+    peak_freq_map[:, itrace] = valid_freq[peak_idx]
+
+    power_map[:, itrace] = total
 
 # =============================================================================
-# Power mask: mark low-SNR pixels as NaN
+# Power mask: low-SNR pixels -> NaN
 # =============================================================================
-trace_peak = power_map.max(axis=0, keepdims=True)   # (1, n_traces)
+trace_peak = power_map.max(axis=0, keepdims=True)
 with np.errstate(divide='ignore', invalid='ignore'):
     power_rel_db = 10.0 * np.log10(
         np.where(trace_peak > 0, power_map / (trace_peak + eps), eps))
 
-valid_mask = power_rel_db >= power_threshold_db     # True = valid signal
+valid_mask = power_rel_db >= power_threshold_db   # True = valid
 
-centroid_masked = np.where(valid_mask, centroid_map, np.nan)
+centroid_masked  = np.where(valid_mask, centroid_map,  np.nan)
+peak_freq_masked = np.where(valid_mask, peak_freq_map, np.nan)
 
 # =============================================================================
-# Smoothing (NaN-aware: fill with 0 before filter, divide by weight after)
+# NaN-aware Gaussian smoothing helper
 # =============================================================================
-data_filled   = np.where(valid_mask, centroid_map, 0.0)
-weight_filled = valid_mask.astype(float)
+def smooth_masked(data, mask, sigma):
+    """Gaussian smooth of masked data; masked pixels are excluded from average."""
+    filled = np.where(mask, data, 0.0)
+    sm_data   = gaussian_filter(filled,              sigma=sigma)
+    sm_weight = gaussian_filter(mask.astype(float),  sigma=sigma)
+    out = np.full_like(sm_data, np.nan)
+    np.divide(sm_data, sm_weight, out=out, where=(sm_weight > 1e-6))
+    return out
 
-# (a) Simple Gaussian smooth
-sm_data   = gaussian_filter(data_filled,   sigma=sigma)
-sm_weight = gaussian_filter(weight_filled, sigma=sigma)
-# Safe division: use np.divide with 'out' and 'where' to avoid any FPE
-centroid_smooth = np.full_like(sm_data, np.nan)
-np.divide(sm_data, sm_weight, out=centroid_smooth, where=(sm_weight > 1e-6))
+centroid_smooth  = smooth_masked(centroid_map,  valid_mask, sigma)
+peak_freq_smooth = smooth_masked(peak_freq_map, valid_mask, sigma)
 
-# (b) Power-weighted smooth
-pw_data   = gaussian_filter(np.where(valid_mask, centroid_map * power_map, 0.0), sigma=sigma)
-pw_weight = gaussian_filter(np.where(valid_mask, power_map,                0.0), sigma=sigma)
-centroid_wsmooth = np.full_like(pw_data, np.nan)
-np.divide(pw_data, pw_weight, out=centroid_wsmooth, where=(pw_weight > 0.0))
+# =============================================================================
+# Frequency-shift-rate maps  [GHz/ns]
+# gradient along the time axis (axis=0); t_axis is in [ns]
+# =============================================================================
+dt_stft = t_axis[1] - t_axis[0]   # [ns] STFT time step
+
+def shift_rate(freq_map):
+    """d(frequency)/d(time) along axis-0, in GHz/ns. NaN-safe."""
+    # np.gradient handles NaN by propagating; acceptable for visualisation.
+    return np.gradient(freq_map, dt_stft, axis=0)
+
+shiftrate_centroid_raw    = shift_rate(centroid_masked)
+shiftrate_centroid_smooth = shift_rate(centroid_smooth)
+shiftrate_peak_raw        = shift_rate(peak_freq_masked)
+shiftrate_peak_smooth     = shift_rate(peak_freq_smooth)
 
 # =============================================================================
 # Output directory
@@ -128,45 +149,113 @@ os.makedirs(output_dir, exist_ok=True)
 
 extent = [0, n_traces * GPR_step, t_axis[-1], t_axis[0]]
 
-valid_vals = centroid_masked[np.isfinite(centroid_masked)]
-if valid_vals.size > 0:
-    vmin, vmax = np.percentile(valid_vals, [5, 95])
+# Colour scale for frequency maps: percentile clip over all valid pixels
+all_freq_valid = np.concatenate([
+    centroid_masked[np.isfinite(centroid_masked)],
+    peak_freq_masked[np.isfinite(peak_freq_masked)],
+])
+if all_freq_valid.size > 0:
+    vmin_f, vmax_f = np.percentile(all_freq_valid, [5, 95])
 else:
-    vmin, vmax = freq_min, freq_max
-print(f'Colour scale: {vmin:.3f} – {vmax:.3f} GHz')
+    vmin_f, vmax_f = freq_min, freq_max
+print(f'Frequency colour scale: {vmin_f:.3f} – {vmax_f:.3f} GHz')
+
+# Colour scale for shift-rate maps: symmetric around 0, percentile clip
+all_sr_valid = np.concatenate([
+    shiftrate_centroid_raw[np.isfinite(shiftrate_centroid_raw)],
+    shiftrate_peak_raw[np.isfinite(shiftrate_peak_raw)],
+])
+if all_sr_valid.size > 0:
+    sr_abs = np.percentile(np.abs(all_sr_valid), 95)
+else:
+    sr_abs = 1.0
+vmin_sr, vmax_sr = -sr_abs, sr_abs
+print(f'Shift-rate colour scale: {vmin_sr:.4f} – {vmax_sr:.4f} GHz/ns')
 
 # =============================================================================
-# Plot helper
+# Plot helpers
 # =============================================================================
-def plot_centroid(data, title, fname):
+def plot_freq_map(data, title, fname):
+    """Plot a frequency map [GHz]."""
     fig, ax = plt.subplots(figsize=(10, 6))
     im = ax.imshow(data, extent=extent, aspect='auto',
-                   cmap='jet', vmin=vmin, vmax=vmax)
+                   cmap='jet', vmin=vmin_f, vmax=vmax_f)
     ax.set_xlabel('Distance [m]')
     ax.set_ylabel('Delay time [ns]')
     ax.set_title(title)
     divider = axgrid1.make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
     cbar = plt.colorbar(im, cax=cax)
-    cbar.set_label('Spectral centroid [GHz]')
+    cbar.set_label('Frequency [GHz]')
     plt.tight_layout()
-    save_path = os.path.join(output_dir, fname)
-    fig.savefig(save_path, dpi=300, bbox_inches='tight')
-    print('Saved:', save_path)
+    path = os.path.join(output_dir, fname)
+    fig.savefig(path, dpi=300, bbox_inches='tight')
+    print('Saved:', path)
+    plt.close(fig)
+
+
+def plot_shiftrate_map(data, title, fname):
+    """Plot a frequency shift-rate map [GHz/ns]."""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    im = ax.imshow(data, extent=extent, aspect='auto',
+                   cmap='RdBu_r', vmin=vmin_sr, vmax=vmax_sr)
+    ax.set_xlabel('Distance [m]')
+    ax.set_ylabel('Delay time [ns]')
+    ax.set_title(title)
+    divider = axgrid1.make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.1)
+    cbar = plt.colorbar(im, cax=cax)
+    cbar.set_label('Frequency shift rate [GHz/ns]')
+    plt.tight_layout()
+    path = os.path.join(output_dir, fname)
+    fig.savefig(path, dpi=300, bbox_inches='tight')
+    print('Saved:', path)
+    plt.close(fig)
 
 # =============================================================================
-# Produce three maps
+# Produce 8 maps
 # =============================================================================
-plot_centroid(centroid_masked,
-              f'Spectral-centroid map  (raw, power mask {power_threshold_db} dB)',
-              'spectral_centroid_map.png')
+# --- Group 1: Spectral centroid (power-weighted mean frequency) ---
+plot_freq_map(
+    centroid_masked,
+    f'Centroid frequency – raw  (mask: {power_threshold_db} dB)',
+    'centroid_raw.png')
 
-plot_centroid(centroid_smooth,
-              'Spectral-centroid map  (Gaussian smoothed)',
-              'spectral_centroid_map_smooth.png')
+plot_freq_map(
+    centroid_smooth,
+    'Centroid frequency – Gaussian smoothed',
+    'centroid_smooth.png')
 
-plot_centroid(centroid_wsmooth,
-              'Spectral-centroid map  (power-weighted smoothed)',
-              'spectral_centroid_map_wsmooth.png')
+plot_shiftrate_map(
+    shiftrate_centroid_raw,
+    'Centroid frequency shift rate – raw  [GHz/ns]',
+    'centroid_shiftrate_raw.png')
 
+plot_shiftrate_map(
+    shiftrate_centroid_smooth,
+    'Centroid frequency shift rate – Gaussian smoothed  [GHz/ns]',
+    'centroid_shiftrate_smooth.png')
+
+# --- Group 2: Peak frequency (argmax amplitude) ---
+plot_freq_map(
+    peak_freq_masked,
+    f'Peak frequency – raw  (mask: {power_threshold_db} dB)',
+    'peak_freq_raw.png')
+
+plot_freq_map(
+    peak_freq_smooth,
+    'Peak frequency – Gaussian smoothed',
+    'peak_freq_smooth.png')
+
+plot_shiftrate_map(
+    shiftrate_peak_raw,
+    'Peak frequency shift rate – raw  [GHz/ns]',
+    'peak_freq_shiftrate_raw.png')
+
+plot_shiftrate_map(
+    shiftrate_peak_smooth,
+    'Peak frequency shift rate – Gaussian smoothed  [GHz/ns]',
+    'peak_freq_shiftrate_smooth.png')
+
+print(f'\nAll 8 figures saved to: {output_dir}')
 plt.show()
