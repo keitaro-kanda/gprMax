@@ -106,9 +106,16 @@ with h5py.File(h5_file, 'r') as h5f:
     print(f"HDF5 data shape: {h5f['data'].shape}")
     geometry_data = h5f['data'][:, :, 0]
 
-geometry_data = np.rot90(geometry_data)
+# h5 data[:,:,0] has shape (nx, ny): axis-0 = x, axis-1 = y (y=0 at box top).
+# We need shape (ny, nx): axis-0 = y (row 0 = box top = vacuum top),
+#                          axis-1 = x.
+# rot90(k=-1) = clockwise 90 deg achieves this without flipping the y axis:
+#   output[row, col] = input[col, row]  →  row=0 maps to y=0 (vacuum top)  ✓
+# rot90(k=+1, default) would give output[row,col] = input[col, ny-1-row],
+#   making row=0 map to y=ny-1 (box bottom) — the bug that caused y-inversion.
+geometry_data = np.rot90(geometry_data, k=-1)
 z_num, x_num = geometry_data.shape
-print(f"Geometry map shape (rows=depth, cols=x): {geometry_data.shape}")
+print(f"Geometry map shape (rows=y/depth, cols=x): {geometry_data.shape}")
 
 
 # =============================================================================
