@@ -48,7 +48,10 @@ geo = params['geometry_settings']
 spatial_grid  = geo['grid_size']    # [m]
 domain_x      = geo['domain_x']     # [m]
 domain_z      = geo['domain_z']     # [m]  (total height in Y direction)
-ground_depth  = geo['ground_depth'] # [m]  distance from box top to surface
+y_surf        = geo['ground_depth'] # [m]  (JSONには下からの高さが格納されている)
+
+# モデル上端からの距離（深さ）に変換 (4.0 - 3.0 = 1.0m)
+ground_depth  = domain_z - y_surf
 
 # Depth-axis limits (surface-referenced)
 depth_top    = -ground_depth              # negative (vacuum region)
@@ -106,16 +109,9 @@ with h5py.File(h5_file, 'r') as h5f:
     print(f"HDF5 data shape: {h5f['data'].shape}")
     geometry_data = h5f['data'][:, :, 0]
 
-# h5 data[:,:,0] has shape (nx, ny): axis-0 = x, axis-1 = y (y=0 at box top).
-# We need shape (ny, nx): axis-0 = y (row 0 = box top = vacuum top),
-#                          axis-1 = x.
-# rot90(k=-1) = clockwise 90 deg achieves this without flipping the y axis:
-#   output[row, col] = input[col, row]  →  row=0 maps to y=0 (vacuum top)  ✓
-# rot90(k=+1, default) would give output[row,col] = input[col, ny-1-row],
-#   making row=0 map to y=ny-1 (box bottom) — the bug that caused y-inversion.
-geometry_data = np.rot90(geometry_data, k=-1)
+geometry_data = np.rot90(geometry_data, k=1)
 z_num, x_num = geometry_data.shape
-print(f"Geometry map shape (rows=y/depth, cols=x): {geometry_data.shape}")
+print(f"Geometry map shape (rows=depth, cols=x): {geometry_data.shape}")
 
 
 # =============================================================================
@@ -201,13 +197,13 @@ def plot_map_profile(map_data, profile_data, idx):
         imshow_kwargs.update(vmin=1, vmax=6)
 
     im = ax[0].imshow(map_data, **imshow_kwargs)
-    _add_surface_line(ax[0])
+    # _add_surface_line(ax[0])
 
     ax[0].set_title(names[idx] + disp_tag + f'  @ {freq:.3e} Hz', size=14)
-    ax[0].set_xlabel('X [m]', size=14)
-    ax[0].set_ylabel('Depth [m]', size=14)
+    ax[0].set_xlabel('X [m]', size=18)
+    ax[0].set_ylabel('Depth [m]', size=18)
     ax[0].set_ylim(depth_bottom, depth_top)   # deep at bottom (positive), vacuum at top (negative)
-    ax[0].tick_params(labelsize=12)
+    ax[0].tick_params(labelsize=14)
     ax[0].grid(alpha=0.3)
 
     divider = axgrid1.make_axes_locatable(ax[0])
@@ -218,11 +214,11 @@ def plot_map_profile(map_data, profile_data, idx):
 
     # ---- Right: depth profile ----
     ax[1].plot(profile_data, depth_axis)
-    ax[1].axhline(0.0, color='gray', linewidth=1.0, linestyle='--')  # surface
-    ax[1].set_xlabel(names[idx], size=12)
-    ax[1].set_ylabel('Depth [m]', size=12)
+    # ax[1].axhline(0.0, color='gray', linewidth=1.0, linestyle='--')  # surface
+    ax[1].set_xlabel(names[idx], size=18)
+    ax[1].set_ylabel('Depth [m]', size=18)
     ax[1].set_ylim(depth_bottom, depth_top)
-    ax[1].tick_params(labelsize=10)
+    ax[1].tick_params(labelsize=14)
     ax[1].grid(alpha=0.3)
 
     plt.tight_layout()
@@ -237,13 +233,13 @@ def plot_profile(profile_data, idx):
     """Plot depth profile only, then save."""
     fig, ax = plt.subplots(figsize=(4, 8))
     ax.plot(profile_data, depth_axis)
-    ax.axhline(0.0, color='gray', linewidth=1.0, linestyle='--', label='Surface')
-    ax.set_xlabel(names[idx], size=14)
-    ax.set_ylabel('Depth [m]', size=14)
+    # ax.axhline(0.0, color='gray', linewidth=1.0, linestyle='--', label='Surface')
+    ax.set_xlabel(names[idx], size=18)
+    ax.set_ylabel('Depth [m]', size=18)
     ax.set_ylim(depth_bottom, depth_top)
-    ax.tick_params(labelsize=12)
+    ax.tick_params(labelsize=14)
     ax.grid(alpha=0.3)
-    ax.legend(fontsize=10)
+    ax.legend(fontsize=14)
     plt.tight_layout()
     base = output_names[idx]
     plt.savefig(os.path.join(output_dir, base + '_profile.png'), dpi=300, bbox_inches='tight')
