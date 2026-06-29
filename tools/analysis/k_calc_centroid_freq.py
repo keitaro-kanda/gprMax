@@ -251,15 +251,31 @@ os.makedirs(output_dir, exist_ok=True)
 extent = [0, n_traces * GPR_step, t_axis[-1], t_axis[0]]
 
 # =============================================================================
-# 1D profiles: trace-averaged (nanmean over all traces)
+# 1D profiles: trace-averaged (median and 25-75% percentiles)
 # =============================================================================
-# 全てNaNの行に対するnp.nanmeanのRuntimeWarningを抑制
+# 全てNaNの行に対するnp.nanpercentileのRuntimeWarningを抑制
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", category=RuntimeWarning)
-    profile_centroid_raw     = np.nanmean(centroid_masked,          axis=1)
-    profile_centroid_smooth  = np.nanmean(centroid_smooth,          axis=1)
-    profile_sr_cen_raw       = np.nanmean(shiftrate_centroid_raw,    axis=1)
-    profile_sr_cen_smooth    = np.nanmean(shiftrate_centroid_smooth, axis=1)
+    
+    # Centroid frequency (raw)
+    prof_cen_raw_med = np.nanmedian(centroid_masked, axis=1)
+    prof_cen_raw_p25 = np.nanpercentile(centroid_masked, 25, axis=1)
+    prof_cen_raw_p75 = np.nanpercentile(centroid_masked, 75, axis=1)
+    
+    # Centroid frequency (smooth)
+    prof_cen_sm_med = np.nanmedian(centroid_smooth, axis=1)
+    prof_cen_sm_p25 = np.nanpercentile(centroid_smooth, 25, axis=1)
+    prof_cen_sm_p75 = np.nanpercentile(centroid_smooth, 75, axis=1)
+    
+    # Shift rate (raw)
+    prof_sr_raw_med = np.nanmedian(shiftrate_centroid_raw, axis=1)
+    prof_sr_raw_p25 = np.nanpercentile(shiftrate_centroid_raw, 25, axis=1)
+    prof_sr_raw_p75 = np.nanpercentile(shiftrate_centroid_raw, 75, axis=1)
+    
+    # Shift rate (smooth)
+    prof_sr_sm_med = np.nanmedian(shiftrate_centroid_smooth, axis=1)
+    prof_sr_sm_p25 = np.nanpercentile(shiftrate_centroid_smooth, 25, axis=1)
+    prof_sr_sm_p75 = np.nanpercentile(shiftrate_centroid_smooth, 75, axis=1)
 
 # Colour scale for frequency maps
 all_freq_valid = np.concatenate([
@@ -285,7 +301,7 @@ print(f'Shift-rate colour scale: {vmin_sr:.4f} – {vmax_sr:.4f} GHz/ns')
 # =============================================================================
 # Plot helpers
 # =============================================================================
-def plot_freq_map(data, title, fname, profile_1d, analytical_profile=None):
+def plot_freq_map(data, title, fname, prof_med, prof_p25, prof_p75, analytical_profile=None):
     fig, axes = plt.subplots(
         nrows=1, ncols=2,
         width_ratios=[3, 1],
@@ -307,11 +323,13 @@ def plot_freq_map(data, title, fname, profile_1d, analytical_profile=None):
     cbar.ax.tick_params(labelsize=12)
 
     ax2 = axes[1]
-    ax2.plot(profile_1d, t_axis, color='k', linestyle='-', label='Simulation')
+    ax2.fill_betweenx(t_axis, prof_p25, prof_p75, color='gray', alpha=0.4, label='IQR (25-75%)')
+    ax2.plot(prof_med, t_axis, color='k', linestyle='-', label='Median')
+    
     if analytical_profile is not None:
         ax2.plot(analytical_profile, t_axis, color='r', linestyle='--', label='Analytical')
-        ax2.legend(fontsize=12)
-    
+        
+    ax2.legend(loc='upper right', fontsize=10)
     ax2.set_xlabel('Frequency [GHz]', size=14)
     ax2.set_ylabel('Delay time [ns]', size=14)
     ax2.set_ylim(t_axis[-1], t_axis[0])
@@ -325,7 +343,7 @@ def plot_freq_map(data, title, fname, profile_1d, analytical_profile=None):
     plt.close(fig)
 
 
-def plot_shiftrate_map(data, title, fname, profile_1d, analytical_profile=None):
+def plot_shiftrate_map(data, title, fname, prof_med, prof_p25, prof_p75, analytical_profile=None):
     fig, axes = plt.subplots(
         nrows=1, ncols=2,
         width_ratios=[3, 1],
@@ -347,11 +365,13 @@ def plot_shiftrate_map(data, title, fname, profile_1d, analytical_profile=None):
     cbar.ax.tick_params(labelsize=12)
 
     ax2 = axes[1]
-    ax2.plot(profile_1d, t_axis, color='k', linestyle='-', label='Simulation')
+    ax2.fill_betweenx(t_axis, prof_p25, prof_p75, color='gray', alpha=0.4, label='IQR (25-75%)')
+    ax2.plot(prof_med, t_axis, color='k', linestyle='-', label='Median')
+    
     if analytical_profile is not None:
         ax2.plot(analytical_profile, t_axis, color='r', linestyle='--', label='Analytical')
-        ax2.legend(fontsize=12)
 
+    ax2.legend(loc='upper right', fontsize=10)
     ax2.set_xlabel('Shift rate [GHz/ns]', size=14)
     ax2.set_ylabel('Delay time [ns]', size=14)
     ax2.set_ylim(t_axis[-1], t_axis[0])
@@ -363,6 +383,37 @@ def plot_shiftrate_map(data, title, fname, profile_1d, analytical_profile=None):
     fig.savefig(path, dpi=300, bbox_inches='tight')
     print('Saved:', path)
     plt.close(fig)
+
+# =============================================================================
+# Produce maps
+# =============================================================================
+plot_freq_map(
+    centroid_masked,
+    f'Centroid frequency – raw  (mask: {power_threshold_db} dB)',
+    'centroid_raw.png',
+    prof_cen_raw_med, prof_cen_raw_p25, prof_cen_raw_p75,
+    analytical_f_peak_profile)
+
+plot_freq_map(
+    centroid_smooth,
+    'Centroid frequency – Gaussian smoothed',
+    'centroid_smooth.png',
+    prof_cen_sm_med, prof_cen_sm_p25, prof_cen_sm_p75,
+    analytical_f_peak_profile)
+
+plot_shiftrate_map(
+    shiftrate_centroid_raw,
+    'Centroid frequency shift rate – raw  [GHz/ns]',
+    'centroid_shiftrate_raw.png',
+    prof_sr_raw_med, prof_sr_raw_p25, prof_sr_raw_p75,
+    analytical_shiftrate_profile)
+
+plot_shiftrate_map(
+    shiftrate_centroid_smooth,
+    'Centroid frequency shift rate – Gaussian smoothed  [GHz/ns]',
+    'centroid_shiftrate_smooth.png',
+    prof_sr_sm_med, prof_sr_sm_p25, prof_sr_sm_p75,
+    analytical_shiftrate_profile)
 
 # =============================================================================
 # Analytical Spectrum Comparison Plot (Normalized dB scale & Mask Threshold)
