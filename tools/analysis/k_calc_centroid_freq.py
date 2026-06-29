@@ -301,7 +301,7 @@ print(f'Shift-rate colour scale: {vmin_sr:.4f} – {vmax_sr:.4f} GHz/ns')
 # =============================================================================
 # Plot helpers
 # =============================================================================
-def plot_freq_map(data, title, fname, prof_med, prof_p25, prof_p75, analytical_profile=None):
+def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=None):
     fig, axes = plt.subplots(
         nrows=1, ncols=2,
         width_ratios=[3, 1],
@@ -311,16 +311,15 @@ def plot_freq_map(data, title, fname, prof_med, prof_p25, prof_p75, analytical_p
     ax = axes[0]
     im = ax.imshow(data, extent=extent, aspect='auto',
                    cmap='jet', vmin=vmin_f, vmax=vmax_f)
-    ax.set_xlabel('Distance [m]', size=14)
-    ax.set_ylabel('Delay time [ns]', size=14)
-    ax.set_title(title)
-    ax.tick_params(labelsize=12)
+    ax.set_xlabel('Distance [m]', size=18)
+    ax.set_ylabel('Delay time [ns]', size=18)
+    ax.tick_params(labelsize=14)
     ax.grid()
     divider = axgrid1.make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
     cbar = plt.colorbar(im, cax=cax)
-    cbar.set_label('Frequency [GHz]', size=14)
-    cbar.ax.tick_params(labelsize=12)
+    cbar.set_label('Frequency [GHz]', size=18)
+    cbar.ax.tick_params(labelsize=14)
 
     ax2 = axes[1]
     ax2.fill_betweenx(t_axis, prof_p25, prof_p75, color='gray', alpha=0.4, label='IQR (25-75%)')
@@ -329,11 +328,11 @@ def plot_freq_map(data, title, fname, prof_med, prof_p25, prof_p75, analytical_p
     if analytical_profile is not None:
         ax2.plot(analytical_profile, t_axis, color='r', linestyle='--', label='Analytical')
         
-    ax2.legend(loc='upper right', fontsize=10)
-    ax2.set_xlabel('Frequency [GHz]', size=14)
-    ax2.set_ylabel('Delay time [ns]', size=14)
+    ax2.legend(fontsize=14)
+    ax2.set_xlabel('Frequency [GHz]', size=18)
+    ax2.set_ylabel('Delay time [ns]', size=18)
     ax2.set_ylim(t_axis[-1], t_axis[0])
-    ax2.tick_params(labelsize=12)
+    ax2.tick_params(labelsize=14)
     ax2.grid()
 
     plt.tight_layout()
@@ -343,7 +342,7 @@ def plot_freq_map(data, title, fname, prof_med, prof_p25, prof_p75, analytical_p
     plt.close(fig)
 
 
-def plot_shiftrate_map(data, title, fname, prof_med, prof_p25, prof_p75, analytical_profile=None):
+def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=None):
     fig, axes = plt.subplots(
         nrows=1, ncols=2,
         width_ratios=[3, 1],
@@ -353,16 +352,15 @@ def plot_shiftrate_map(data, title, fname, prof_med, prof_p25, prof_p75, analyti
     ax = axes[0]
     im = ax.imshow(data, extent=extent, aspect='auto',
                    cmap='RdBu_r', vmin=vmin_sr, vmax=vmax_sr)
-    ax.set_xlabel('Distance [m]', size=14)
-    ax.set_ylabel('Delay time [ns]', size=14)
-    ax.set_title(title)
-    ax.tick_params(labelsize=12)
+    ax.set_xlabel('Distance [m]', size=18)
+    ax.set_ylabel('Delay time [ns]', size=18)
+    ax.tick_params(labelsize=14)
     ax.grid()
     divider = axgrid1.make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
     cbar = plt.colorbar(im, cax=cax)
-    cbar.set_label('Frequency shift rate [GHz/ns]', size=14)
-    cbar.ax.tick_params(labelsize=12)
+    cbar.set_label('Frequency shift rate [GHz/ns]', size=18)
+    cbar.ax.tick_params(labelsize=14)
 
     ax2 = axes[1]
     ax2.fill_betweenx(t_axis, prof_p25, prof_p75, color='gray', alpha=0.4, label='IQR (25-75%)')
@@ -371,11 +369,11 @@ def plot_shiftrate_map(data, title, fname, prof_med, prof_p25, prof_p75, analyti
     if analytical_profile is not None:
         ax2.plot(analytical_profile, t_axis, color='r', linestyle='--', label='Analytical')
 
-    ax2.legend(loc='upper right', fontsize=10)
-    ax2.set_xlabel('Shift rate [GHz/ns]', size=14)
-    ax2.set_ylabel('Delay time [ns]', size=14)
+    ax2.legend(fontsize=14)
+    ax2.set_xlabel('Shift rate [GHz/ns]', size=18)
+    ax2.set_ylabel('Delay time [ns]', size=18)
     ax2.set_ylim(t_axis[-1], t_axis[0])
-    ax2.tick_params(labelsize=12)
+    ax2.tick_params(labelsize=14)
     ax2.grid()
 
     plt.tight_layout()
@@ -389,28 +387,24 @@ def plot_shiftrate_map(data, title, fname, prof_med, prof_p25, prof_p75, analyti
 # =============================================================================
 plot_freq_map(
     centroid_masked,
-    f'Centroid frequency – raw  (mask: {power_threshold_db} dB)',
     'centroid_raw.png',
     prof_cen_raw_med, prof_cen_raw_p25, prof_cen_raw_p75,
     analytical_f_peak_profile)
 
 plot_freq_map(
     centroid_smooth,
-    'Centroid frequency – Gaussian smoothed',
     'centroid_smooth.png',
     prof_cen_sm_med, prof_cen_sm_p25, prof_cen_sm_p75,
     analytical_f_peak_profile)
 
 plot_shiftrate_map(
     shiftrate_centroid_raw,
-    'Centroid frequency shift rate – raw  [GHz/ns]',
     'centroid_shiftrate_raw.png',
     prof_sr_raw_med, prof_sr_raw_p25, prof_sr_raw_p75,
     analytical_shiftrate_profile)
 
 plot_shiftrate_map(
     shiftrate_centroid_smooth,
-    'Centroid frequency shift rate – Gaussian smoothed  [GHz/ns]',
     'centroid_shiftrate_smooth.png',
     prof_sr_sm_med, prof_sr_sm_p25, prof_sr_sm_p75,
     analytical_shiftrate_profile)
@@ -453,19 +447,18 @@ if analytical_f_peak_profile is not None:
     ax_spec.axhline(power_threshold_db, color='red', linestyle=':', linewidth=2, 
                     label=f'Mask Threshold ({power_threshold_db} dB)')
         
-    ax_spec.set_xlabel('Frequency [GHz]', size=14)
-    ax_spec.set_ylabel('Normalized Power [dB]', size=14)
-    ax_spec.set_title('Analytical Spectrum and Center Frequency Shift (Normalized dB)', size=14)
+    ax_spec.set_xlabel('Frequency [GHz]', size=18)
+    ax_spec.set_ylabel('Normalized Power [dB]', size=18)
     ax_spec.set_xlim(freq_min, freq_max)
     
     # Y軸の表示範囲を調整（閾値の少し下から0 dBの少し上まで）
     ax_spec.set_ylim(bottom=power_threshold_db - 15, top=5) 
 
-    ax_spec.tick_params(labelsize=12)
+    ax_spec.tick_params(labelsize=14)
     ax_spec.grid(True)
     
     # 凡例を外側に配置してグラフと被らないようにする
-    ax_spec.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10)
+    ax_spec.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=14)
     
     plt.tight_layout()
     spec_plot_path = os.path.join(output_dir, 'analytical_spectra_comparison_normalized_db.png')
