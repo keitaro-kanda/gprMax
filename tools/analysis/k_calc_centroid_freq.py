@@ -166,6 +166,10 @@ shiftrate_centroid_smooth = shift_rate(centroid_smooth)
 # Analytical Frequency Shift Calculation
 # =============================================================================
 try:
+    # Parameters for calculatin initial delay of GPR-surface propagation
+    source_delay = 0.837e-9 # gaussiandot 1.25 GHzのPrimary Peak遅れ時間
+    antenna_height = 0.35 # [m], LUPEX GPRのアンテナ高さ
+
     if os.path.exists(ascan_outfile_path):
         ascan_data, dt_ascan = get_output_data(ascan_outfile_path, 1, 'Ez')
         
@@ -195,7 +199,13 @@ try:
             e += debye_params['de2'] / (1 + 1j * w * debye_params['tau2'])
             return e
         
-        eps_r_w = eps_r(omega)
+        #eps_r_w = eps_r(omega)
+
+        def eps_r(d):
+            rho = 1.92 * (d + 12.2) / (d + 18) # Heiken1991, p493
+            e = 1.919**rho # Heiken1991, p536
+        
+        eps_r_d = 
         # 減衰率: np.imag(np.sqrt(eps_r_w))は負になるため、- (w/c) * Im[...] は正になる
         alpha = - (omega / const.c) * np.imag(np.sqrt(eps_r_w))
         
@@ -217,9 +227,10 @@ try:
             f_peak_d.append(f_peak)
             
             # 遅れ時間換算
+            initial_delay = source_delay + antenna_height * 2 / 3e8 # [s]
             eps_peak = eps_r(2 * np.pi * f_peak)
             v_peak = const.c / np.real(np.sqrt(eps_peak))
-            t_delay = 2 * d / v_peak
+            t_delay = 2 * d / v_peak + initial_delay # [s]
             t_delay_d.append(t_delay * 1e9) # [ns]
         
         f_peak_d = np.array(f_peak_d) / 1e9 # [GHz]
