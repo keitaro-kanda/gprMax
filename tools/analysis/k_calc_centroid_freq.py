@@ -310,7 +310,7 @@ def plot_freq_map(data, title, fname, profile_1d, analytical_profile=None):
     ax2.plot(profile_1d, t_axis, color='k', linestyle='-', label='Simulation')
     if analytical_profile is not None:
         ax2.plot(analytical_profile, t_axis, color='r', linestyle='--', label='Analytical')
-        ax2.legend(loc='upper right')
+        ax2.legend(fontsize=12)
     
     ax2.set_xlabel('Frequency [GHz]', size=14)
     ax2.set_ylabel('Delay time [ns]', size=14)
@@ -350,7 +350,7 @@ def plot_shiftrate_map(data, title, fname, profile_1d, analytical_profile=None):
     ax2.plot(profile_1d, t_axis, color='k', linestyle='-', label='Simulation')
     if analytical_profile is not None:
         ax2.plot(analytical_profile, t_axis, color='r', linestyle='--', label='Analytical')
-        ax2.legend(loc='upper right')
+        ax2.legend(fontsize=12)
 
     ax2.set_xlabel('Shift rate [GHz/ns]', size=14)
     ax2.set_ylabel('Delay time [ns]', size=14)
@@ -365,36 +365,63 @@ def plot_shiftrate_map(data, title, fname, profile_1d, analytical_profile=None):
     plt.close(fig)
 
 # =============================================================================
-# Produce maps
+# Analytical Spectrum Comparison Plot (Normalized dB scale & Mask Threshold)
 # =============================================================================
-plot_freq_map(
-    centroid_masked,
-    f'Centroid frequency – raw  (mask: {power_threshold_db} dB)',
-    'centroid_raw.png',
-    profile_centroid_raw,
-    analytical_f_peak_profile)
+if analytical_f_peak_profile is not None:
+    target_depths = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    
+    fig_spec, ax_spec = plt.subplots(figsize=(10, 6))
+    colors = plt.cm.viridis(np.linspace(0, 0.9, len(target_depths)))
+    
+    # 入射波(d=0)のパワーを計算し、その最大値を0 dBの基準とする
+    power_0 = np.abs(S0_calc)**2
+    max_power_0 = np.max(power_0)
+    
+    for i, d in enumerate(target_depths):
+        # Calculate spectrum at depth d
+        S_d_w = S0_calc * np.exp(-2 * alpha * d)
+        power = np.abs(S_d_w)**2
+        
+        # Calculate center frequency (MUST be calculated in linear scale)
+        f_peak = np.trapz(f_calc * power, f_calc) / np.trapz(power, f_calc)
+        f_peak_ghz = f_peak / 1e9
+        
+        # 入射波の最大パワーで規格化し、dBへ変換
+        power_norm = power / max_power_0
+        power_db = 10.0 * np.log10(power_norm + 1e-30)
+        f_calc_ghz = f_calc / 1e9
+        
+        # Plot spectrum in dB
+        label_str = f'Depth {d:.1f} m (fc = {f_peak_ghz:.2f} GHz)'
+        ax_spec.plot(f_calc_ghz, power_db, color=colors[i], label=label_str)
+        
+        # Plot center frequency as a vertical dashed line
+        ax_spec.axvline(f_peak_ghz, color=colors[i], linestyle='--', alpha=0.7)
+        
+    # パワーマスクの基準値（スクリプト上部で定義した power_threshold_db）を赤の点線でプロット
+    ax_spec.axhline(power_threshold_db, color='red', linestyle=':', linewidth=2, 
+                    label=f'Mask Threshold ({power_threshold_db} dB)')
+        
+    ax_spec.set_xlabel('Frequency [GHz]', size=14)
+    ax_spec.set_ylabel('Normalized Power [dB]', size=14)
+    ax_spec.set_title('Analytical Spectrum and Center Frequency Shift (Normalized dB)', size=14)
+    ax_spec.set_xlim(freq_min, freq_max)
+    
+    # Y軸の表示範囲を調整（閾値の少し下から0 dBの少し上まで）
+    ax_spec.set_ylim(bottom=power_threshold_db - 15, top=5) 
 
-plot_freq_map(
-    centroid_smooth,
-    'Centroid frequency – Gaussian smoothed',
-    'centroid_smooth.png',
-    profile_centroid_smooth,
-    analytical_f_peak_profile)
-
-plot_shiftrate_map(
-    shiftrate_centroid_raw,
-    'Centroid frequency shift rate – raw  [GHz/ns]',
-    'centroid_shiftrate_raw.png',
-    profile_sr_cen_raw,
-    analytical_shiftrate_profile)
-
-plot_shiftrate_map(
-    shiftrate_centroid_smooth,
-    'Centroid frequency shift rate – Gaussian smoothed  [GHz/ns]',
-    'centroid_shiftrate_smooth.png',
-    profile_sr_cen_smooth,
-    analytical_shiftrate_profile)
+    ax_spec.tick_params(labelsize=12)
+    ax_spec.grid(True)
+    
+    # 凡例を外側に配置してグラフと被らないようにする
+    ax_spec.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10)
+    
+    plt.tight_layout()
+    spec_plot_path = os.path.join(output_dir, 'analytical_spectra_comparison_normalized_db.png')
+    fig_spec.savefig(spec_plot_path, dpi=300, bbox_inches='tight')
+    print(f'Saved: {spec_plot_path}')
 
 
-print(f'\nAll 8 figures saved to: {output_dir}')
+print(f'\nAll figures saved to: {output_dir}')
+
 plt.show()
