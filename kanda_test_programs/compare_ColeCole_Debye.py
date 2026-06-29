@@ -21,6 +21,9 @@ import numpy as np
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import io
+import datetime
+import os
 
 # ---------------------------------------------------------------------------
 # 0. Parameters
@@ -45,7 +48,7 @@ freqs = np.geomspace(F_MIN, F_MAX, N_F)
 EPS0  = 8.854187817e-12  # F/m
 
 # GPR band
-GPR_LO, GPR_HI = 5e8, 1.25e9
+GPR_LO, GPR_HI = 5e8, 2.0e9
 FC_GPR = 1.25e9          # centre frequency of gprMax waveform
 
 # ---------------------------------------------------------------------------
@@ -152,7 +155,7 @@ for n in [1, 2, 3]:
     }
 
 # ---------------------------------------------------------------------------
-# 3. Print results
+# 3. Print and save results
 # ---------------------------------------------------------------------------
 
 SEP = "=" * 70
@@ -168,8 +171,8 @@ for n in [1, 2, 3]:
     print(f"\n--- {n}-pole Debye fit " + "-" * 45)
     for i, (de, tau) in enumerate(f['poles']):
         ok = "OK" if tau >= TAU_MIN else "FAIL (< tau_min)"
-        print(f"  pole {i+1}:  Delta_eps = {de:.5f},  tau = {tau*1e12:.2f} ps  [{ok}]")
-    print(f"  sum(Delta_eps) = {sum(de for de,_ in f['poles']):.5f}"
+        print(f"  pole {i+1}:  Delta_eps = {de:.3f},  tau = {tau*1e12:.3f} ps  [{ok}]")
+    print(f"  sum(Delta_eps) = {sum(de for de,_ in f['poles']):.2f}"
           f"  (Cole-Cole Delta_eps = {DELTA_EPS})")
     print(f"  RMS error (full band):  eps' {f['rms_re']:.2f}%,  eps'' {f['rms_im']:.2f}%")
     print(f"  RMS error (GPR band):   eps' {f['rms_re_gpr']:.2f}%,  eps'' {f['rms_im_gpr']:.2f}%")
@@ -183,10 +186,63 @@ print("Recommendation: 2-pole Debye gives the best accuracy/complexity trade-off
 print(SEP)
 
 # ---------------------------------------------------------------------------
-# 4. Plot
+# 4. Save results to text file (same format as the print output above)
+# ---------------------------------------------------------------------------
+# Build the result string by redirecting the same print calls to a StringIO buffer,
+# then write it to disk.  This guarantees the file is byte-for-byte identical to
+# the console output — no risk of formatting drift between the two.
+
+_buf = io.StringIO()
+
+def _p(*args, **kwargs):
+    """Print to both stdout and the string buffer."""
+    print(*args, **kwargs)                        # console (existing behaviour)
+    print(*args, **kwargs, file=_buf)             # buffer  (for the file)
+
+_p(SEP)
+_p("Cole-Cole parameters  (Boivin+2022 Table 4, 20 w% ilmenite)")
+_p(f"  eps_inf={EPS_INF},  Delta_eps={DELTA_EPS},  "
+   f"tau={TAU_CC*1e12:.1f} ps,  alpha={ALPHA_CC}")
+_p(f"  gprMax tau_min = {TAU_MIN*1e12:.1f} ps  (dx={DX} m)")
+_p(SEP)
+
+for n in [1, 2, 3]:
+    f = fits[n]
+    _p(f"\n--- {n}-pole Debye fit " + "-" * 45)
+    for i, (de, tau) in enumerate(f['poles']):
+        ok = "OK" if tau >= TAU_MIN else "FAIL (< tau_min)"
+        _p(f"  pole {i+1}:  Delta_eps = {de:.3f},  tau = {tau*1e12:.3f} ps  [{ok}]")
+    _p(f"  sum(Delta_eps) = {sum(de for de, _ in f['poles']):.2f}"
+       f"  (Cole-Cole Delta_eps = {DELTA_EPS})")
+    _p(f"  RMS error (full band):  eps' {f['rms_re']:.2f}%,  eps'' {f['rms_im']:.2f}%")
+    _p(f"  RMS error (GPR band):   eps' {f['rms_re_gpr']:.2f}%,  eps'' {f['rms_im_gpr']:.2f}%")
+
+    pole_str = "".join(f" {de:.6f} {tau:.6e}" for de, tau in f['poles'])
+    _p(f"\n  gprMax syntax (replace 'my_mat' with material name):")
+    _p(f"    #add_dispersion_debye: {n}{pole_str} my_mat")
+
+_p("\n" + SEP)
+_p("Recommendation: 2-pole Debye gives the best accuracy/complexity trade-off.")
+_p(SEP)
+
+# Timestamp line appended only to the file (not echoed to console)
+_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+_buf.write(f"\n[Generated: {_ts}]\n")
+
+# Write to disk — same directory as this script, with a fixed name
+output_dir = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/compare_ColeCole_debye'
+outpu_file_name = "debye_fit_results.txt"
+out_path = os.path.join(output_dir, outpu_file_name)
+with open(out_path, "w", encoding="utf-8") as f:
+    f.write(_buf.getvalue())
+
+print(f"\nResults saved to: {out_path}")
+
+# ---------------------------------------------------------------------------
+# 5. Plot
 # ---------------------------------------------------------------------------
 
-COLORS = {1: '#378ADD', 2: '#1D9E75', 3: '#D85A30'}
+COLORS = {1: 'r', 2: 'g', 3: 'b'}
 STYLES = {1: '-',       2: '--',      3: ':'}
 LABELS = {1: '1-pole Debye', 2: '2-pole Debye', 3: '3-pole Debye'}
 
@@ -202,7 +258,7 @@ ax_re, ax_im, ax_td, ax_err = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
 
 
 def shade_gpr(ax):
-    ax.axvspan(GPR_LO / 1e9, GPR_HI / 1e9, alpha=0.12, color='gray', label='GPR band')
+    ax.axvspan(GPR_LO / 1e9, GPR_HI / 1e9, alpha=0.12, color='gray', label='LUPEX GPR band')
     ax.axvline(FC_GPR / 1e9, color='gray', lw=0.8, ls='-.', alpha=0.6)
 
 
@@ -222,7 +278,7 @@ for n in [1, 2, 3]:
     ax_re.plot(freqs / 1e9, fits[n]['re'],
                color=COLORS[n], ls=STYLES[n], lw=1.8, label=LABELS[n])
 shade_gpr(ax_re)
-ax_re.set_ylabel("eps'", fontsize=11)
+ax_re.set_ylabel(r"$\varepsilon_r'$", fontsize=11)
 ax_re.set_title("Real permittivity", fontsize=11)
 ax_re.legend(fontsize=9, loc='upper right')
 ax_re.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.3f'))
@@ -233,7 +289,7 @@ for n in [1, 2, 3]:
     ax_im.plot(freqs / 1e9, fits[n]['im'],
                color=COLORS[n], ls=STYLES[n], lw=1.8, label=LABELS[n])
 shade_gpr(ax_im)
-ax_im.set_ylabel("eps''", fontsize=11)
+ax_im.set_ylabel(r"$\varepsilon_r''$", fontsize=11)
 ax_im.set_title("Imaginary permittivity", fontsize=11)
 ax_im.legend(fontsize=9, loc='upper left')
 ax_im.set_yscale('log')
@@ -244,24 +300,24 @@ for n in [1, 2, 3]:
     ax_td.plot(freqs / 1e9, fits[n]['tand'],
                color=COLORS[n], ls=STYLES[n], lw=1.8, label=LABELS[n])
 shade_gpr(ax_td)
-ax_td.set_ylabel("tan(delta)", fontsize=11)
+ax_td.set_ylabel(r"$\tan \delta$", fontsize=11)
 ax_td.set_title("Loss tangent", fontsize=11)
 ax_td.legend(fontsize=9, loc='upper left')
 
-# Relative error in eps'
+# Relative error in real permittivity
 for n in [1, 2, 3]:
     rel_err = np.abs((fits[n]['re'] - cc_re) / cc_re) * 100
     ax_err.plot(freqs / 1e9, rel_err,
                 color=COLORS[n], ls=STYLES[n], lw=1.8, label=LABELS[n])
 shade_gpr(ax_err)
 ax_err.axhline(1.0, color='gray', lw=0.8, ls='--', alpha=0.7)
-ax_err.set_ylabel("|Delta_eps' / eps'_CC| (%)", fontsize=11)
-ax_err.set_title("Relative error in eps'", fontsize=11)
-ax_err.legend(fontsize=9)
+ax_err.set_ylabel(r"$|(\varepsilon_{r, Deb}' - \varepsilon_{r, CC}') / \varepsilon_{r, CC}'|$ (%)", fontsize=11)
+ax_err.set_title("Relative error in real perittivity", fontsize=11)
+ax_err.legend(fontsize=9, loc='center left')
 
 # Annotate GPR-band RMS values
 for i, n in enumerate([1, 2, 3]):
-    ax_err.text(0.02, 0.62 - i * 0.12,
+    ax_err.text(0.5, 0.62 - i * 0.1,
                 f"{LABELS[n]}: GPR RMS = {fits[n]['rms_re_gpr']:.2f}%",
                 transform=ax_err.transAxes, fontsize=8, color=COLORS[n])
 
