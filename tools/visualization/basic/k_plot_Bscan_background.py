@@ -13,6 +13,7 @@ from tools.core.outputfiles_merge import get_output_data
 file_name = input("Enter the path to the .out file: ").strip()
 rx_steps = input("Enter receiver step size (m) [default: 0.2]: ").strip()
 rx_start = input("Enter initial position of resiver (m) [default: 0.1]: ").strip()
+closeup = input("Do you want to closeup the plots? (y/n): ").strip()
 if rx_steps == '':
     rx_step = 0.2
 else:
@@ -22,6 +23,16 @@ if rx_start == '':
     rx_start = 0.1
 else:
     rx_start = float(rx_start)
+
+if closeup == 'n':
+    closeup_option = False
+elif closeup == 'y':
+    closeup_option = True
+    time_start = float(input("Enter closeup start time (ns): ").strip())
+    time_end = float(input("Enter closeup end time (ns): ").strip())
+else:
+    print("Please enter 'y' or 'n'.")
+    sys.exit(1)
 
 output_basename = 'background'
 output_dir = os.path.join(os.path.dirname(file_name), output_basename)
@@ -57,12 +68,19 @@ plt.plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color
 plt.plot(outputdata_ave_db_moving, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='r', linestyle='--', alpha=0.7) # time in ns
 plt.xlabel('Amplitude (dB)', size=14)
 plt.ylabel('Time (ns)', size=14)
-plt.ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
+if closeup_option == False:
+    plt.ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
+elif closeup_option == True:
+    plt.ylim(time_end, time_start)
 plt.tick_params(labelsize=12)
 plt.grid()
 plt.tight_layout()
-plt.savefig(os.path.join(output_dir, 'background_trace.png'), dpi=300)
-plt.savefig(os.path.join(output_dir, 'background_trace.pdf'), format='pdf', dpi=300)
+if closeup_option == False:
+    plt.savefig(os.path.join(output_dir, 'background_trace.png'), dpi=300)
+    plt.savefig(os.path.join(output_dir, 'background_trace.pdf'), format='pdf', dpi=300)
+else:
+    plt.savefig(os.path.join(output_dir, f'background_trace_{time_start}_{time_end}.png'), dpi=300)
+    plt.savefig(os.path.join(output_dir, f'background_trace_{time_start}_{time_end}.pdf'), format='pdf', dpi=300)
 plt.show()
 
 
@@ -82,6 +100,8 @@ im = ax[0].imshow(outputdata,
             vmin=-np.amax(np.abs(outputdata[:, 1:]))/1e3, vmax=np.amax(np.abs(outputdata[:, 1:]))/1e3)
 ax[0].set_xlabel('Distance (m)', size=14)
 ax[0].set_ylabel('Time (ns)', size=14)
+if closeup_option == True:
+    ax[0].set_ylim(time_end, time_start)
 ax[0].tick_params(labelsize=12)
 ax[0].grid()
 # coloarbar
@@ -95,11 +115,18 @@ ax[1].plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9, col
 ax[1].plot(outputdata_ave_db_moving, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='r', linestyle='--', alpha=0.7) # time in ns
 ax[1].set_xlabel('Amplitude (dB)', size=14)
 ax[1].set_ylabel('Time (ns)', size=14)
-ax[1].set_ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
+if closeup_option == False:
+    ax[1].set_ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
+elif closeup_option == True:
+    ax[1].set_ylim(time_end, time_start)
 ax[1].tick_params(labelsize=12)
 ax[1].grid()
 
 plt.tight_layout()
-plt.savefig(os.path.join(output_dir, 'background_comparison.png'), dpi=300)
-plt.savefig(os.path.join(output_dir, 'background_comparison.pdf'), format='pdf', dpi=300)
+if closeup_option == False:
+    plt.savefig(os.path.join(output_dir, 'background_comparison.png'), dpi=300)
+    plt.savefig(os.path.join(output_dir, 'background_comparison.pdf'), format='pdf', dpi=300)
+else:
+    plt.savefig(os.path.join(output_dir, f'background_comparison_{time_start}_{time_end}.png'), dpi=300)
+    plt.savefig(os.path.join(output_dir, f'background_comparison_{time_start}_{time_end}.pdf'), format='pdf', dpi=300)
 plt.show()
