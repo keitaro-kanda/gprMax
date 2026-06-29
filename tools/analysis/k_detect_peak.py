@@ -306,6 +306,8 @@ def detect_two_peaks(data, dt, FWHM_transmission):
             elif separation_prev <= fwhm and separation_next > fwhm: # 後ろのみFWHM以上離れており、前は区別不可の場合
                 if peaks[i] > peaks[i-1]: #１つ前のピークよりも強度が高ければi番目のピークを検出する
                     distinguishable = True
+        elif separation_prev is None and separation_next >= fwhm:
+            distinguishable = True
 
 
         data_segment_start = int(max(0, peak_idx - fwhm * 1e-9/dt/2))
@@ -591,6 +593,11 @@ if __name__ == "__main__":
                 break
             except ValueError:
                 print("Error: Please enter valid numbers.")
+    else:
+        closeup_x_start = 0
+        closeup_x_end = 0
+        closeup_y_start = 0
+        closeup_y_end = 0
 
     #* Define path
     output_dir = os.path.join(os.path.dirname(data_path), 'peak_detection')
@@ -614,22 +621,19 @@ if __name__ == "__main__":
         # 結果の表示
         print("\n=== Peak Detection Results ===")
         for info in pulse_info:
-            print(f"Peak at {info['peak_time']:.4f} ns: Width={info['width']:.4f} ns, Distinguishable={info['distinguishable']}")
+            print(f"Peak at {info['peak_time']:.4f} ns: Width={info['FWHM']:.4f} ns, Distinguishable={info['distinguishable']}")
 
         #* Save the pulse information
         filename = os.path.join(output_dir, 'peak_info.txt')
         try:
-            # with open(peak_info_filename, "w") as fout:
-            #     json.dump(pulse_info, fout, indent=2)
-            # NumPy 型（np.generic）を Python の組み込み型に変換
-            serializable_pulse = []
-            for info in pulse_info:
-                serializable_pulse.append({
-                    key: (value.item() if isinstance(value, np.generic) else value)
-                    for key, value in info.items()
-                })
+            class NumpyEncoder(json.JSONEncoder):
+                def default(self, obj):
+                    if isinstance(obj, np.generic):
+                        return obj.item()
+                    return super().default(obj)
+
             with open(filename, "w") as fout:
-                json.dump(serializable_pulse, fout, indent=2, ensure_ascii=False)
+                json.dump(pulse_info, fout, indent=2, ensure_ascii=False, cls=NumpyEncoder)
             print(f"Saved peak detection info: {filename}")
         except Exception as e:
             print(f"Error saving peak info for rx {rx+1}: {e}")
