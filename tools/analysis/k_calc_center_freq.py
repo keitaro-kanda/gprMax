@@ -1,4 +1,7 @@
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 import json
 import h5py
 import matplotlib.pyplot as plt
@@ -149,13 +152,25 @@ os.makedirs(output_dir, exist_ok=True)
 
 extent = [0, n_traces * GPR_step, t_axis[-1], t_axis[0]]
 
+# =============================================================================
+# 1D profiles: trace-averaged (nanmean over all traces)
+# =============================================================================
+profile_centroid_raw     = np.nanmean(centroid_masked,          axis=1)
+profile_centroid_smooth  = np.nanmean(centroid_smooth,          axis=1)
+profile_peak_raw         = np.nanmean(peak_freq_masked,         axis=1)
+profile_peak_smooth      = np.nanmean(peak_freq_smooth,         axis=1)
+profile_sr_cen_raw       = np.nanmean(shiftrate_centroid_raw,    axis=1)
+profile_sr_cen_smooth    = np.nanmean(shiftrate_centroid_smooth, axis=1)
+profile_sr_peak_raw      = np.nanmean(shiftrate_peak_raw,        axis=1)
+profile_sr_peak_smooth   = np.nanmean(shiftrate_peak_smooth,     axis=1)
+
 # Colour scale for frequency maps: percentile clip over all valid pixels
 all_freq_valid = np.concatenate([
     centroid_masked[np.isfinite(centroid_masked)],
     peak_freq_masked[np.isfinite(peak_freq_masked)],
 ])
 if all_freq_valid.size > 0:
-    vmin_f, vmax_f = np.percentile(all_freq_valid, [5, 95])
+    vmin_f, vmax_f = 0.5, 2.0 # [GHz]
 else:
     vmin_f, vmax_f = freq_min, freq_max
 print(f'Frequency colour scale: {vmin_f:.3f} – {vmax_f:.3f} GHz')
@@ -175,18 +190,36 @@ print(f'Shift-rate colour scale: {vmin_sr:.4f} – {vmax_sr:.4f} GHz/ns')
 # =============================================================================
 # Plot helpers
 # =============================================================================
-def plot_freq_map(data, title, fname):
-    """Plot a frequency map [GHz]."""
-    fig, ax = plt.subplots(figsize=(10, 6))
+def plot_freq_map(data, title, fname, profile_1d):
+    """Plot a frequency map [GHz] with trace-averaged 1D profile on the right."""
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2,
+        width_ratios=[3, 1],
+        height_ratios=[1],
+        figsize=(14, 6),
+    )
+    ax = axes[0]
     im = ax.imshow(data, extent=extent, aspect='auto',
                    cmap='jet', vmin=vmin_f, vmax=vmax_f)
-    ax.set_xlabel('Distance [m]')
-    ax.set_ylabel('Delay time [ns]')
+    ax.set_xlabel('Distance [m]', size=14)
+    ax.set_ylabel('Delay time [ns]', size=14)
     ax.set_title(title)
+    ax.tick_params(labelsize=12)
+    ax.grid()
     divider = axgrid1.make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
     cbar = plt.colorbar(im, cax=cax)
-    cbar.set_label('Frequency [GHz]')
+    cbar.set_label('Frequency [GHz]', size=14)
+    cbar.ax.tick_params(labelsize=12)
+
+    ax2 = axes[1]
+    ax2.plot(profile_1d, t_axis, color='k', linestyle='-')
+    ax2.set_xlabel('Frequency [GHz]', size=14)
+    ax2.set_ylabel('Delay time [ns]', size=14)
+    ax2.set_ylim(t_axis[-1], t_axis[0])
+    ax2.tick_params(labelsize=12)
+    ax2.grid()
+
     plt.tight_layout()
     path = os.path.join(output_dir, fname)
     fig.savefig(path, dpi=300, bbox_inches='tight')
@@ -194,18 +227,36 @@ def plot_freq_map(data, title, fname):
     plt.close(fig)
 
 
-def plot_shiftrate_map(data, title, fname):
-    """Plot a frequency shift-rate map [GHz/ns]."""
-    fig, ax = plt.subplots(figsize=(10, 6))
+def plot_shiftrate_map(data, title, fname, profile_1d):
+    """Plot a frequency shift-rate map [GHz/ns] with 1D profile on the right."""
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2,
+        width_ratios=[3, 1],
+        height_ratios=[1],
+        figsize=(14, 6),
+    )
+    ax = axes[0]
     im = ax.imshow(data, extent=extent, aspect='auto',
                    cmap='RdBu_r', vmin=vmin_sr, vmax=vmax_sr)
-    ax.set_xlabel('Distance [m]')
-    ax.set_ylabel('Delay time [ns]')
+    ax.set_xlabel('Distance [m]', size=14)
+    ax.set_ylabel('Delay time [ns]', size=14)
     ax.set_title(title)
+    ax.tick_params(labelsize=12)
+    ax.grid()
     divider = axgrid1.make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
     cbar = plt.colorbar(im, cax=cax)
-    cbar.set_label('Frequency shift rate [GHz/ns]')
+    cbar.set_label('Frequency shift rate [GHz/ns]', size=14)
+    cbar.ax.tick_params(labelsize=12)
+
+    ax2 = axes[1]
+    ax2.plot(profile_1d, t_axis, color='k', linestyle='-')
+    ax2.set_xlabel('Shift rate [GHz/ns]', size=14)
+    ax2.set_ylabel('Delay time [ns]', size=14)
+    ax2.set_ylim(t_axis[-1], t_axis[0])
+    ax2.tick_params(labelsize=12)
+    ax2.grid()
+
     plt.tight_layout()
     path = os.path.join(output_dir, fname)
     fig.savefig(path, dpi=300, bbox_inches='tight')
@@ -219,43 +270,51 @@ def plot_shiftrate_map(data, title, fname):
 plot_freq_map(
     centroid_masked,
     f'Centroid frequency – raw  (mask: {power_threshold_db} dB)',
-    'centroid_raw.png')
+    'centroid_raw.png',
+    profile_centroid_raw)
 
 plot_freq_map(
     centroid_smooth,
     'Centroid frequency – Gaussian smoothed',
-    'centroid_smooth.png')
+    'centroid_smooth.png',
+    profile_centroid_smooth)
 
 plot_shiftrate_map(
     shiftrate_centroid_raw,
     'Centroid frequency shift rate – raw  [GHz/ns]',
-    'centroid_shiftrate_raw.png')
+    'centroid_shiftrate_raw.png',
+    profile_sr_cen_raw)
 
 plot_shiftrate_map(
     shiftrate_centroid_smooth,
     'Centroid frequency shift rate – Gaussian smoothed  [GHz/ns]',
-    'centroid_shiftrate_smooth.png')
+    'centroid_shiftrate_smooth.png',
+    profile_sr_cen_smooth)
 
 # --- Group 2: Peak frequency (argmax amplitude) ---
 plot_freq_map(
     peak_freq_masked,
     f'Peak frequency – raw  (mask: {power_threshold_db} dB)',
-    'peak_freq_raw.png')
+    'peak_freq_raw.png',
+    profile_peak_raw)
 
 plot_freq_map(
     peak_freq_smooth,
     'Peak frequency – Gaussian smoothed',
-    'peak_freq_smooth.png')
+    'peak_freq_smooth.png',
+    profile_peak_smooth)
 
 plot_shiftrate_map(
     shiftrate_peak_raw,
     'Peak frequency shift rate – raw  [GHz/ns]',
-    'peak_freq_shiftrate_raw.png')
+    'peak_freq_shiftrate_raw.png',
+    profile_sr_peak_raw)
 
 plot_shiftrate_map(
     shiftrate_peak_smooth,
     'Peak frequency shift rate – Gaussian smoothed  [GHz/ns]',
-    'peak_freq_shiftrate_smooth.png')
+    'peak_freq_shiftrate_smooth.png',
+    profile_sr_peak_smooth)
 
 print(f'\nAll 8 figures saved to: {output_dir}')
 plt.show()
