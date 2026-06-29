@@ -12,10 +12,16 @@ from tools.core.outputfiles_merge import get_output_data
 # Input
 file_name = input("Enter the path to the .out file: ").strip()
 rx_steps = input("Enter receiver step size (m) [default: 0.2]: ").strip()
+rx_start = input("Enter initial position of resiver (m) [default: 0.1]: ").strip()
 if rx_steps == '':
     rx_step = 0.2
 else:
     rx_step = float(rx_steps)
+
+if rx_start == '':
+    rx_start = 0.1
+else:
+    rx_start = float(rx_start)
 
 output_basename = 'background'
 output_dir = os.path.join(os.path.dirname(file_name), output_basename)
@@ -71,10 +77,10 @@ fig, ax = plt.subplots(
 )
 
 im = ax[0].imshow(outputdata,
-             extent=[0, outputdata.shape[1] * rx_step, outputdata.shape[0] * dt * 1e9, 0],
+             extent=[rx_start, rx_start + outputdata.shape[1] * rx_step, outputdata.shape[0] * dt * 1e9, 0],
             interpolation='nearest', aspect='auto', cmap='seismic',
             vmin=-np.amax(np.abs(outputdata[:, 1:]))/1e3, vmax=np.amax(np.abs(outputdata[:, 1:]))/1e3)
-ax[0].set_xlabel('Trace number', size=14)
+ax[0].set_xlabel('Distance (m)', size=14)
 ax[0].set_ylabel('Time (ns)', size=14)
 ax[0].tick_params(labelsize=12)
 ax[0].grid()
