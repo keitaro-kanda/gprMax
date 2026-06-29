@@ -136,7 +136,7 @@ shiftrate_centroid_smooth = shift_rate(centroid_smooth)
 # =============================================================================
 # Output directory
 # =============================================================================
-output_base_name = 'center_frequency_analysis'
+output_base_name = 'centroid_frequency_analysis'
 output_dir = os.path.join(os.path.dirname(os.path.abspath(json_file_path)),
                           output_base_name)
 os.makedirs(output_dir, exist_ok=True)
