@@ -1,7 +1,10 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import mpl_toolkits.axes_grid1 as axgrid1
 
 from tools.core.outputfiles_merge import get_output_data
