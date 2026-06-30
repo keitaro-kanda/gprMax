@@ -25,8 +25,7 @@ if not os.path.exists(json_file_path):
 
 # [EDIT HERE] 入射波スペクトル計算用のA-scan出力ファイルパス
 ascan_outfile_path = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/waveform_test/gaussiandot_1.25GHz/result/Ascan.out" 
-# [EDIT HERE] 無限大周波数における比誘電率（ベースの誘電率）
-eps_inf = 3.792 # Boivin+2022, Table 4, 20 wt% Ilmenite
+
 
 # =============================================================================
 # Load data
@@ -163,17 +162,12 @@ shiftrate_centroid_raw    = shift_rate(centroid_masked)
 shiftrate_centroid_smooth = shift_rate(centroid_smooth)
 
 # =============================================================================
-# Analytical Frequency Shift Calculation
+# Analytical Frequency Shift Calculation (Depth + Debye Dispersion)
 # =============================================================================
 try:
-    # Parameters for calculatin initial delay of GPR-surface propagation
-    source_delay = 0.837e-9 # gaussiandot 1.25 GHzのPrimary Peak遅れ時間
-    antenna_height = 0.35 # [m], LUPEX GPRのアンテナ高さ
-
     if os.path.exists(ascan_outfile_path):
         ascan_data, dt_ascan = get_output_data(ascan_outfile_path, 1, 'Ez')
         
-        # 配列の次元数に応じた処理（A-scanの単一ファイルの場合は1次元になることがあるため）
         if ascan_data.ndim == 1:
             e_incident = ascan_data
         else:
@@ -184,54 +178,94 @@ try:
         freq_ascan = np.fft.rfftfreq(N, d=dt_ascan)
         S0_omega = np.fft.rfft(e_incident)
         
-        # 物理的に意味のある帯域（STFTと同じ）で計算
+        # 物理的に意味のある帯域
         f_min_hz = freq_min * 1e9
         f_max_hz = freq_max * 1e9
         band_mask = (freq_ascan >= f_min_hz) & (freq_ascan <= f_max_hz)
         
         f_calc = freq_ascan[band_mask]
         S0_calc = S0_omega[band_mask]
-        omega = 2 * np.pi * f_calc
+        omega = 2 * np.pi * f_calc  # 周波数依存計算用の配列
         
-        def eps_r(w):
-            e = eps_inf
-            e += debye_params['de1'] / (1 + 1j * w * debye_params['tau1'])
-            e += debye_params['de2'] / (1 + 1j * w * debye_params['tau2'])
-            return e
+        # --- gprMaxモデルに基づく物理定数・リファレンス値 ---
+        f_center = 1.25e9
+        omega0 = 2.0 * np.pi * f_center
+        eps0 = 8.8541878128e-12
         
-        #eps_r_w = eps_r(omega)
-
-        def eps_r(d):
-            rho = 1.92 * (d + 12.2) / (d + 18) # Heiken1991, p493
-            e = 1.919**rho # Heiken1991, p536
+        ice_top, ice_bot = 0.50, 0.70
+        f_ice_vol = 0.1
+        eps_ice_comp = 3.17 - 1j * (3.17 * 6e-5)
         
-        eps_r_d = 
-        # 減衰率: np.imag(np.sqrt(eps_r_w))は負になるため、- (w/c) * Im[...] は正になる
-        alpha = - (omega / const.c) * np.imag(np.sqrt(eps_r_w))
+        EPS_STATIC_CC = 4.212
+        DEBYE_DE1  = 0.261
+        DEBYE_TAU1 = 4.6212e-11
+        DEBYE_DE2  = 0.088
+        DEBYE_TAU2 = 2.82195e-10
+        # ---------------------------------------------------
         
-        # STFTの最大時間から、計算すべき最大深さを見積もる
-        v_bg = const.c / np.sqrt(eps_inf)
-        max_depth = (t_axis[-1] * 1e-9) * v_bg / 2
-        d_array = np.linspace(0, max_depth, 300)
+        # 解析する最大深さと刻み幅の設定（表面の最速速度=真空で安全側に見積もり）
+        max_depth = (t_axis[-1] * 1e-9) * const.c / 2 
+        d_array = np.linspace(0, max_depth, 400)
+        d_step = d_array[1] - d_array[0]
         
         f_peak_d = []
         t_delay_d = []
         
-        for d in d_array:
-            # 減衰スペクトル S(d, w) = S0(w) * exp(-2 * alpha * d)
-            S_d_w = S0_calc * np.exp(-2 * alpha * d)
+        cumulative_attenuation = np.zeros_like(omega)
+        cumulative_time = np.zeros_like(omega) # 速度も周波数依存のため配列化
+        
+        for i, d in enumerate(d_array):
+            # 1. 深さ依存のベースライン（中心周波数での代表値）
+            rho = 1.92 * (d + 12.2) / (d + 18.0)
+            eps_reg_real = 1.919 ** rho
+            tan_d_reg = 10 ** (0.312 * rho - 2.36)
+            eps_reg_comp = eps_reg_real - 1j * (eps_reg_real * tan_d_reg)
+            
+            # 2. MG混合則による氷層の追加
+            f_vol = f_ice_vol if (ice_top <= d <= ice_bot) else 0.0
+            eps_e = eps_reg_comp
+            eps_i = eps_ice_comp
+            eps_eff_comp = (eps_e 
+                            + 3.0 * f_vol * eps_e * (eps_i - eps_e) 
+                            / (eps_i + 2.0 * eps_e - f_vol * (eps_i - eps_e)))
+            
+            eps_r_eff = np.real(eps_eff_comp)
+            sigma_eff = -np.imag(eps_eff_comp) * omega0 * eps0
+            
+            # 3. Debyeパラメータのスケーリング
+            cell_scale = eps_r_eff / EPS_STATIC_CC
+            de1_eff = DEBYE_DE1 * cell_scale
+            de2_eff = DEBYE_DE2 * cell_scale
+            eps_inf_eff = max(eps_r_eff - de1_eff - de2_eff, 1.0)
+            
+            # 4. 全帯域（omega配列）に対する複素誘電率の計算
+            # ε(w) = ε_inf + Δε1/(1+jwτ1) + Δε2/(1+jwτ2) - j*σ/(w*ε0)
+            eps_complex_w = (eps_inf_eff 
+                             + de1_eff / (1 + 1j * omega * DEBYE_TAU1) 
+                             + de2_eff / (1 + 1j * omega * DEBYE_TAU2) 
+                             - 1j * sigma_eff / (omega * eps0))
+            
+            # 5. 各周波数における局所的な減衰率 alpha と速度 v
+            alpha_d = - (omega / const.c) * np.imag(np.sqrt(eps_complex_w))
+            v_d = const.c / np.real(np.sqrt(eps_complex_w))
+            
+            # 6. 積分（累積和）
+            if i > 0:
+                cumulative_attenuation += alpha_d * d_step
+                cumulative_time += 2 * d_step / v_d
+                
+            # 7. 減衰スペクトル S(d, w) = S0(w) * exp(-2 * 積分[alpha dz])
+            S_d_w = S0_calc * np.exp(-2 * cumulative_attenuation)
             power = np.abs(S_d_w)**2
             
-            # 中心周波数
+            # 8. 中心周波数
             f_peak = np.trapz(f_calc * power, f_calc) / np.trapz(power, f_calc)
             f_peak_d.append(f_peak)
             
-            # 遅れ時間換算
-            initial_delay = source_delay + antenna_height * 2 / 3e8 # [s]
-            eps_peak = eps_r(2 * np.pi * f_peak)
-            v_peak = const.c / np.real(np.sqrt(eps_peak))
-            t_delay = 2 * d / v_peak + initial_delay # [s]
-            t_delay_d.append(t_delay * 1e9) # [ns]
+            # 9. 遅れ時間換算（中心周波数に対応するインデックスの遅れ時間を代表とする）
+            # 補間を用いて f_peak に対応する cumulative_time を取得
+            t_delay_peak = np.interp(f_peak, f_calc, cumulative_time)
+            t_delay_d.append(t_delay_peak * 1e9) # [ns]
         
         f_peak_d = np.array(f_peak_d) / 1e9 # [GHz]
         t_delay_d = np.array(t_delay_d)
@@ -241,6 +275,7 @@ try:
         # 解析的なシフトレートの算出
         analytical_shiftrate_profile = np.gradient(analytical_f_peak_profile, dt_stft)
         print("Analytical frequency shift successfully calculated.")
+        
     else:
         print(f"Warning: A-scan file not found at {ascan_outfile_path}. Analytical calculation skipped.")
         analytical_f_peak_profile = None
@@ -435,7 +470,7 @@ if analytical_f_peak_profile is not None:
     
     for i, d in enumerate(target_depths):
         # Calculate spectrum at depth d
-        S_d_w = S0_calc * np.exp(-2 * alpha * d)
+        S_d_w = S0_calc * np.exp(-2 * alpha_d * d)
         power = np.abs(S_d_w)**2
         
         # Calculate center frequency (MUST be calculated in linear scale)
