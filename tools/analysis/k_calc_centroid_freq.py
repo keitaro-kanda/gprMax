@@ -84,7 +84,7 @@ print("Debye Parameters used:", debye_params)
 # =============================================================================
 # STFT parameters
 # =============================================================================
-nperseg  = 512
+nperseg  = 256
 noverlap = nperseg * 3 // 4
 window   = 'hann'
 
