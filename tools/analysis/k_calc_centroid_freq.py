@@ -371,6 +371,11 @@ print(f'Shift-rate colour scale: {vmin_sr:.4f} – {vmax_sr:.4f} GHz/ns')
 # Plot helpers
 # =============================================================================
 def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=None):
+    # --- 時間遅延（Time Offset）の計算 ---
+    antenna_height = 0.35    # [m] 送信機高さ
+    system_lag_ns  = 0.837   # [ns] システムラグ
+    initial_delay = antenna_height * 2 / 0.3 + system_lag_ns # [ns]
+
     fig, axes = plt.subplots(
         nrows=1, ncols=2,
         width_ratios=[3, 1],
@@ -380,6 +385,7 @@ def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=
     ax = axes[0]
     im = ax.imshow(data, extent=extent, aspect='auto',
                    cmap='jet', vmin=vmin_f, vmax=vmax_f)
+    ax.axhline(initial_delay, color='gray', linestyle='--', lw=2)
     ax.set_xlabel('Distance [m]', size=18)
     ax.set_ylabel('Delay time [ns]', size=18)
     ax.tick_params(labelsize=14)
@@ -396,7 +402,9 @@ def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=
     
     if analytical_profile is not None:
         ax2.plot(analytical_profile, t_axis, color='r', linestyle='--', label='Analytical')
-        
+    
+    ax2.axhline(initial_delay, color='gray', linestyle='--', lw=2, label='Suarface')
+
     ax2.legend(fontsize=14)
     ax2.set_xlabel('Frequency [GHz]', size=18)
     ax2.set_ylabel('Delay time [ns]', size=18)
@@ -412,6 +420,11 @@ def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=
 
 
 def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=None):
+    # --- 時間遅延（Time Offset）の計算 ---
+    antenna_height = 0.35    # [m] 送信機高さ
+    system_lag_ns  = 0.837   # [ns] システムラグ
+    initial_delay = antenna_height * 2 / 0.3 + system_lag_ns # [ns]
+
     fig, axes = plt.subplots(
         nrows=1, ncols=2,
         width_ratios=[3, 1],
@@ -421,6 +434,7 @@ def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, analytical_pro
     ax = axes[0]
     im = ax.imshow(data, extent=extent, aspect='auto',
                    cmap='RdBu_r', vmin=vmin_sr, vmax=vmax_sr)
+    ax.axhline(initial_delay, color='gray', linestyle='--', lw=2)
     ax.set_xlabel('Distance [m]', size=18)
     ax.set_ylabel('Delay time [ns]', size=18)
     ax.tick_params(labelsize=14)
@@ -437,6 +451,8 @@ def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, analytical_pro
     
     if analytical_profile is not None:
         ax2.plot(analytical_profile, t_axis, color='r', linestyle='--', label='Analytical')
+
+    ax2.axhline(initial_delay, color='gray', linestyle='--', lw=2, label='Surface')
 
     ax2.legend(fontsize=14)
     ax2.set_xlabel('Shift rate [GHz/ns]', size=18)
