@@ -24,7 +24,7 @@ if not os.path.exists(json_file_path):
     raise CmdInputError('JSON file {} does not exist'.format(json_file_path))
 
 # [EDIT HERE] 入射波スペクトル計算用のA-scan出力ファイルパス
-ascan_outfile_path = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/waveform_test/gaussiandot_1.25GHz/result/Ascan.out" 
+ascan_outfile_path = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/waveform_test/gaussiandot_1.25GHz_underground/result/Ascan.out" 
 
 
 # =============================================================================
@@ -162,7 +162,7 @@ shiftrate_centroid_raw    = shift_rate(centroid_masked)
 shiftrate_centroid_smooth = shift_rate(centroid_smooth)
 
 # =============================================================================
-# Analytical Frequency Shift Calculation (Depth + Debye Dispersion)
+# Analytical Frequency Shift Calculation (Depth + Debye + Time Offset for Buried Rx)
 # =============================================================================
 try:
     if os.path.exists(ascan_outfile_path):
@@ -201,18 +201,42 @@ try:
         DEBYE_TAU1 = 4.6212e-11
         DEBYE_DE2  = 0.088
         DEBYE_TAU2 = 2.82195e-10
+        
+        # --- 時間遅延（Time Offset）の計算 ---
+        antenna_height = 0.35    # [m] 送信機高さ
+        system_lag_ns  = 0.837   # [ns] システムラグ
+        rx_depth       = 0.10    # [m] 受信機の埋設深さ
+        
+        # 1. 空中の往復伝搬時間 [ns]
+        t_air_ns = (2.0 * antenna_height / const.c) * 1e9 
+        
+        # 2. 地表面(d=0)から受信機(d=0.1)までの往復伝搬時間 [ns] を計算
+        # （深さ依存の誘電率を用いて細かく積分）
+        d_sub = np.linspace(0, rx_depth, 50)
+        rho_sub = 1.92 * (d_sub + 12.2) / (d_sub + 18.0)
+        eps_sub = 1.919 ** rho_sub
+        v_sub = const.c / np.sqrt(eps_sub)
+        dt_sub = d_sub[1] - d_sub[0]
+        t_ground_start_ns = np.sum(2.0 * dt_sub / v_sub) * 1e9
+        
+        # 3. 赤点線の開始時刻 = システムラグ + 空中往復 + 地中10cm往復
+        t_offset_ns = system_lag_ns + t_air_ns + t_ground_start_ns
+        
+        print(f"Time offset (depth {rx_depth}m reflection): {t_offset_ns:.3f} ns "
+              f"(Lag: {system_lag_ns} + Air: {t_air_ns:.3f} + Ground({rx_depth}m): {t_ground_start_ns:.3f} ns)")
         # ---------------------------------------------------
         
-        # 解析する最大深さと刻み幅の設定（表面の最速速度=真空で安全側に見積もり）
+        # 解析する最大深さと刻み幅の設定
         max_depth = (t_axis[-1] * 1e-9) * const.c / 2 
-        d_array = np.linspace(0, max_depth, 400)
+        # 計算開始深さを受信機の深さに設定
+        d_array = np.linspace(rx_depth, max_depth, 400)
         d_step = d_array[1] - d_array[0]
         
         f_peak_d = []
         t_delay_d = []
         
         cumulative_attenuation = np.zeros_like(omega)
-        cumulative_time = np.zeros_like(omega) # 速度も周波数依存のため配列化
+        cumulative_time = np.zeros_like(omega)
         
         for i, d in enumerate(d_array):
             # 1. 深さ依存のベースライン（中心周波数での代表値）
@@ -238,8 +262,7 @@ try:
             de2_eff = DEBYE_DE2 * cell_scale
             eps_inf_eff = max(eps_r_eff - de1_eff - de2_eff, 1.0)
             
-            # 4. 全帯域（omega配列）に対する複素誘電率の計算
-            # ε(w) = ε_inf + Δε1/(1+jwτ1) + Δε2/(1+jwτ2) - j*σ/(w*ε0)
+            # 4. 全帯域に対する複素誘電率の計算
             eps_complex_w = (eps_inf_eff 
                              + de1_eff / (1 + 1j * omega * DEBYE_TAU1) 
                              + de2_eff / (1 + 1j * omega * DEBYE_TAU2) 
@@ -249,32 +272,32 @@ try:
             alpha_d = - (omega / const.c) * np.imag(np.sqrt(eps_complex_w))
             v_d = const.c / np.real(np.sqrt(eps_complex_w))
             
-            # 6. 積分（累積和）
+            # 6. 積分（累積和）: i=0 (d=0.1) の時はゼロのまま
             if i > 0:
                 cumulative_attenuation += alpha_d * d_step
                 cumulative_time += 2 * d_step / v_d
                 
-            # 7. 減衰スペクトル S(d, w) = S0(w) * exp(-2 * 積分[alpha dz])
+            # 7. 減衰スペクトルの計算
             S_d_w = S0_calc * np.exp(-2 * cumulative_attenuation)
             power = np.abs(S_d_w)**2
             
-            # 8. 中心周波数
+            # 8. 中心周波数の計算
             f_peak = np.trapz(f_calc * power, f_calc) / np.trapz(power, f_calc)
             f_peak_d.append(f_peak)
             
-            # 9. 遅れ時間換算（中心周波数に対応するインデックスの遅れ時間を代表とする）
-            # 補間を用いて f_peak に対応する cumulative_time を取得
-            t_delay_peak = np.interp(f_peak, f_calc, cumulative_time)
-            t_delay_d.append(t_delay_peak * 1e9) # [ns]
+            # 9. 遅れ時間換算（地中伝搬時間 + オフセット時間）
+            t_delay_ground = np.interp(f_peak, f_calc, cumulative_time)
+            t_total_ns = t_offset_ns + (t_delay_ground * 1e9)
+            t_delay_d.append(t_total_ns)
         
         f_peak_d = np.array(f_peak_d) / 1e9 # [GHz]
         t_delay_d = np.array(t_delay_d)
         
         # t_axisに合わせて補間
         analytical_f_peak_profile = np.interp(t_axis, t_delay_d, f_peak_d, left=np.nan, right=np.nan)
-        # 解析的なシフトレートの算出
+        # 解析的なシフトレートの算出 (単純前進差分への変更がまだの場合はここも合わせて修正推奨です)
         analytical_shiftrate_profile = np.gradient(analytical_f_peak_profile, dt_stft)
-        print("Analytical frequency shift successfully calculated.")
+        print("Analytical frequency shift successfully calculated with buried Rx offset.")
         
     else:
         print(f"Warning: A-scan file not found at {ascan_outfile_path}. Analytical calculation skipped.")
@@ -459,18 +482,65 @@ plot_shiftrate_map(
 # Analytical Spectrum Comparison Plot (Normalized dB scale & Mask Threshold)
 # =============================================================================
 if analytical_f_peak_profile is not None:
-    target_depths = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    # 基準となる受信機の深さ（rx_depth = 0.1 m）を開始点とし、0.0mは除外します
+    target_depths = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
     
     fig_spec, ax_spec = plt.subplots(figsize=(10, 6))
     colors = plt.cm.viridis(np.linspace(0, 0.9, len(target_depths)))
     
-    # 入射波(d=0)のパワーを計算し、その最大値を0 dBの基準とする
+    # 入射波(d=0.1)のパワーを計算し、その最大値を0 dBの基準とする
     power_0 = np.abs(S0_calc)**2
     max_power_0 = np.max(power_0)
     
     for i, d in enumerate(target_depths):
-        # Calculate spectrum at depth d
-        S_d_w = S0_calc * np.exp(-2 * alpha_d * d)
+        # 基準深さ(rx_depth)から目的の深さ(d)までの減衰を積分で計算
+        if d <= rx_depth:
+            cum_alpha = np.zeros_like(omega)
+        else:
+            # 積分用の細かい刻み（rx_depth 〜 d まで）
+            d_sub = np.linspace(rx_depth, d, 200)
+            dz = d_sub[1] - d_sub[0]
+            cum_alpha = np.zeros_like(omega)
+            
+            for z in d_sub:
+                # 1. 深さ依存のベースライン
+                rho = 1.92 * (z + 12.2) / (z + 18.0)
+                eps_reg_real = 1.919 ** rho
+                tan_d_reg = 10 ** (0.312 * rho - 2.36)
+                eps_reg_comp = eps_reg_real - 1j * (eps_reg_real * tan_d_reg)
+                
+                # 2. 氷層のMG混合
+                f_vol = f_ice_vol if (ice_top <= z <= ice_bot) else 0.0
+                eps_e = eps_reg_comp
+                eps_i = eps_ice_comp
+                eps_eff_comp = (eps_e 
+                                + 3.0 * f_vol * eps_e * (eps_i - eps_e) 
+                                / (eps_i + 2.0 * eps_e - f_vol * (eps_i - eps_e)))
+                
+                eps_r_eff = np.real(eps_eff_comp)
+                sigma_eff = -np.imag(eps_eff_comp) * omega0 * eps0
+                
+                # 3. Debyeパラメータスケーリング
+                cell_scale = eps_r_eff / EPS_STATIC_CC
+                de1_eff = DEBYE_DE1 * cell_scale
+                de2_eff = DEBYE_DE2 * cell_scale
+                eps_inf_eff = max(eps_r_eff - de1_eff - de2_eff, 1.0)
+                
+                # 4. 複素誘電率
+                eps_complex_w = (eps_inf_eff 
+                                 + de1_eff / (1 + 1j * omega * DEBYE_TAU1) 
+                                 + de2_eff / (1 + 1j * omega * DEBYE_TAU2) 
+                                 - 1j * sigma_eff / (omega * eps0))
+                
+                # 5. 局所的な減衰率
+                alpha_z = - (omega / const.c) * np.imag(np.sqrt(eps_complex_w))
+                
+                # 6. 積分の累積 (最初の点は dz=0 と見なせるため z > rx_depth で加算)
+                if z > rx_depth:
+                    cum_alpha += alpha_z * dz
+        
+        # 積分された全減衰量を用いてスペクトルを計算
+        S_d_w = S0_calc * np.exp(-2 * cum_alpha)
         power = np.abs(S_d_w)**2
         
         # Calculate center frequency (MUST be calculated in linear scale)
