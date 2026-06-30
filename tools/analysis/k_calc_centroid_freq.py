@@ -380,7 +380,7 @@ def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=
         nrows=1, ncols=2,
         width_ratios=[3, 1],
         height_ratios=[1],
-        figsize=(14, 6),
+        figsize=(12, 8),
     )
     ax = axes[0]
     im = ax.imshow(data, extent=extent, aspect='auto',
@@ -429,7 +429,7 @@ def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, analytical_pro
         nrows=1, ncols=2,
         width_ratios=[3, 1],
         height_ratios=[1],
-        figsize=(14, 6),
+        figsize=(12, 8),
     )
     ax = axes[0]
     im = ax.imshow(data, extent=extent, aspect='auto',
