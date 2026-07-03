@@ -239,7 +239,7 @@ def plot_profile(profile_data, idx):
     ax.set_ylim(depth_bottom, depth_top)
     ax.tick_params(labelsize=14)
     ax.grid(alpha=0.3)
-    ax.legend(fontsize=14)
+    #ax.legend(fontsize=14)
     plt.tight_layout()
     base = output_names[idx]
     plt.savefig(os.path.join(output_dir, base + '_profile.png'), dpi=300, bbox_inches='tight')
