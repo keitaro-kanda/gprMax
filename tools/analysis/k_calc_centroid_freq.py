@@ -440,6 +440,7 @@ def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=
     ax2.set_ylabel('Delay time [ns]', size=18)
     ax2.set_ylim(t_axis[-1], t_axis[0])
     ax2.tick_params(labelsize=14)
+    ax2.minorticks_on()
     ax2.grid()
 
     plt.tight_layout()
@@ -489,6 +490,7 @@ def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, analytical_pro
     ax2.set_ylabel('Delay time [ns]', size=18)
     ax2.set_ylim(t_axis[-1], t_axis[0])
     ax2.tick_params(labelsize=14)
+    ax2.minorticks_on()
     ax2.grid()
 
     plt.tight_layout()
