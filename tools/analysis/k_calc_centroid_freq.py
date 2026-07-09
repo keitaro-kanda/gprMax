@@ -97,7 +97,12 @@ window   = 'hann'
 freq_min = 0.25    # [GHz]
 freq_max = 6.0    # [GHz]
 
+# =============================================================================
+# Post-processing & Smoothing parameters
+# =============================================================================
 power_threshold_db = -125.0   # [dB]
+
+# Gaussian smoothing parameters
 sigma = (3, 3) # Gaussian smoothing sigma for (time, trace) axes
 
 # =============================================================================
