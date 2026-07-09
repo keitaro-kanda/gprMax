@@ -17,12 +17,12 @@
         {
             "label": "run1",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/demo_rock_scattering/contain_rock_N100_diam10cm/B-scan/Bscan.in -n 30"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/demo_lossy_medium/add_dispersion_MultiDebye_3/Bscan/Bscan.in -n 56"
         },
         {
             "label": "run2",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/demo_rock_scattering/contain_rock_N100_diam10cm/B-scan/Bscan.in -n 30"
+            "command": "${command:python.interpreterPath} -m gprMax /Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/demo_lossy_medium/add_dispersion_MultiDebye_4/Bscan/Bscan.in -n 56"
         },
         {
             "label": "task sequence",
