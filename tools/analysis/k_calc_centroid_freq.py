@@ -213,7 +213,7 @@ try:
         # 2. 地表面(d=0)から受信機(d=0.1)までの往復伝搬時間 [ns] を計算
         # （深さ依存の誘電率を用いて細かく積分）
         d_sub = np.linspace(0, rx_depth, 50)
-        rho_sub = 1.92 * (d_sub + 12.2) / (d_sub + 18.0)
+        rho_sub = 1.92 * (d_sub*100 + 12.2) / (d_sub*100 + 18.0)
         eps_sub = 1.919 ** rho_sub
         v_sub = const.c / np.sqrt(eps_sub)
         dt_sub = d_sub[1] - d_sub[0]
@@ -240,7 +240,7 @@ try:
         
         for i, d in enumerate(d_array):
             # 1. 深さ依存のベースライン（中心周波数での代表値）
-            rho = 1.92 * (d + 12.2) / (d + 18.0)
+            rho = 1.92 * (d*100 + 12.2) / (d*100 + 18.0)
             eps_reg_real = 1.919 ** rho
             tan_d_reg = 10 ** (0.312 * rho - 2.36)
             eps_reg_comp = eps_reg_real - 1j * (eps_reg_real * tan_d_reg)
