@@ -405,7 +405,7 @@ def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=
     
     ax2.axhline(initial_delay, color='gray', linestyle='--', lw=2, label='Suarface')
 
-    ax2.legend(fontsize=14)
+    ax2.legend(fontsize=14, loc='lower center')
     ax2.set_xlabel('Frequency [GHz]', size=18)
     ax2.set_ylabel('Delay time [ns]', size=18)
     ax2.set_ylim(t_axis[-1], t_axis[0])
@@ -454,7 +454,7 @@ def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, analytical_pro
 
     ax2.axhline(initial_delay, color='gray', linestyle='--', lw=2, label='Surface')
 
-    ax2.legend(fontsize=14)
+    ax2.legend(fontsize=14, loc='lower center')
     ax2.set_xlabel('Shift rate [GHz/ns]', size=18)
     ax2.set_ylabel('Delay time [ns]', size=18)
     ax2.set_ylim(t_axis[-1], t_axis[0])
