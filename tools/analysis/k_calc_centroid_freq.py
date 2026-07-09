@@ -600,4 +600,4 @@ if analytical_f_peak_profile is not None:
 
 print(f'\nAll figures saved to: {output_dir}')
 
-plt.show()
+plt.close()
