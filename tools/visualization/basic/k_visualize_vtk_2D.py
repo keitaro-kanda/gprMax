@@ -219,6 +219,7 @@ def plot_map_profile(map_data, profile_data, idx):
     ax[1].set_ylabel('Depth [m]', size=18)
     ax[1].set_ylim(depth_bottom, depth_top)
     ax[1].tick_params(labelsize=14)
+    ax[1].minorticks_on()
     ax[1].grid(alpha=0.3)
 
     plt.tight_layout()
@@ -238,6 +239,7 @@ def plot_profile(profile_data, idx):
     ax.set_ylabel('Depth [m]', size=18)
     ax.set_ylim(depth_bottom, depth_top)
     ax.tick_params(labelsize=14)
+    ax.minorticks_on()
     ax.grid(alpha=0.3)
     #ax.legend(fontsize=14)
     plt.tight_layout()
