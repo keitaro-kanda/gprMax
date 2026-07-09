@@ -98,7 +98,7 @@ freq_min = 0.25    # [GHz]
 freq_max = 6.0    # [GHz]
 
 power_threshold_db = -125.0   # [dB]
-sigma = (3, 3)
+sigma = (3, 3) # Gaussian smoothing sigma for (time, trace) axes
 
 # =============================================================================
 # STFT and frequency/time axes
