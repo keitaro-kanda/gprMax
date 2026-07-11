@@ -2,29 +2,30 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
+import json
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import mpl_toolkits.axes_grid1 as axgrid1
 
+from gprMax.exceptions import CmdInputError
 from tools.core.outputfiles_merge import get_output_data
 
 # Input
-file_name = input("Enter the path to the .out file: ").strip()
-rx_steps = input("Enter receiver step size (m) [default: 0.2]: ").strip()
-rx_start = input("Enter initial position of resiver (m) [default: 0.1]: ").strip()
-closeup = input("Do you want to closeup the plots? (y/n): ").strip()
-if rx_steps == '':
-    rx_step = 0.2
-else:
-    rx_step = float(rx_steps)
+json_file_path = input('Input Bscan.json file path: ').strip()
+if not os.path.exists(json_file_path):
+    raise CmdInputError('JSON file {} does not exist'.format(json_file_path))
 
-if rx_start == '':
-    rx_start = 0.1
-else:
-    rx_start = float(rx_start)
+with open(json_file_path) as f:
+    params = json.load(f)
+file_name = params['data']
+rx_step = params['antenna_settings']['src_step']
+rx_start = params['antenna_settings']['rx_start']
+print(f'src_step [m]: {rx_step}')
+print(f'rx_start [m]: {rx_start}')
 
-if closeup == 'n':
+closeup = input("Do you want to closeup the plots? (y/n) [default: n]: ").strip()
+if closeup == '' or closeup == 'n':
     closeup_option = False
 elif closeup == 'y':
     closeup_option = True
