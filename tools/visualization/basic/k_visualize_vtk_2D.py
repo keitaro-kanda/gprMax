@@ -194,7 +194,9 @@ def plot_map_profile(map_data, profile_data, idx):
         cmap=colors[idx],
     )
     if idx == 0:
-        imshow_kwargs.update(vmin=1, vmax=6)
+        imshow_kwargs.update(vmin=1, vmax=3.5)
+    elif idx == 2:
+        imshow_kwargs.update(vmin=0, vmax=0.014)
 
     im = ax[0].imshow(map_data, **imshow_kwargs)
     # _add_surface_line(ax[0])
@@ -217,6 +219,10 @@ def plot_map_profile(map_data, profile_data, idx):
     # ax[1].axhline(0.0, color='gray', linewidth=1.0, linestyle='--')  # surface
     ax[1].set_xlabel(names[idx], size=18)
     ax[1].set_ylabel('Depth [m]', size=18)
+    if idx == 0:
+        ax[1].set_xlim(0.95, 3.5)
+    elif idx == 2:
+        ax[1].set_xlim(0.0005, 0.014)
     ax[1].set_ylim(depth_bottom, depth_top)
     ax[1].tick_params(labelsize=14)
     ax[1].minorticks_on()
@@ -236,6 +242,10 @@ def plot_profile(profile_data, idx):
     ax.plot(profile_data, depth_axis)
     # ax.axhline(0.0, color='gray', linewidth=1.0, linestyle='--', label='Surface')
     ax.set_xlabel(names[idx], size=18)
+    if idx == 0:
+        ax.set_xlim(0.95, 3.5)
+    elif idx == 2:
+        ax.set_xlim(0.0005, 0.014)
     ax.set_ylabel('Depth [m]', size=18)
     ax.set_ylim(depth_bottom, depth_top)
     ax.tick_params(labelsize=14)
