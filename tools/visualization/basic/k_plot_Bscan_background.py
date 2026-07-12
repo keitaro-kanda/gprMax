@@ -67,13 +67,14 @@ outputdata_ave_db_moving = np.convolve(outputdata_ave_db, np.ones(window_size)/w
 plt.figure(figsize=(4, 8), facecolor='w', edgecolor='w')
 plt.plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='k', linestyle='-') # time in ns
 plt.plot(outputdata_ave_db_moving, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='r', linestyle='--', alpha=0.7) # time in ns
-plt.xlabel('Amplitude (dB)', size=14)
-plt.ylabel('Time (ns)', size=14)
+plt.xlabel('Amplitude (dB)', size=18)
+plt.ylabel('Time (ns)', size=18)
 if closeup_option == False:
     plt.ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
 elif closeup_option == True:
     plt.ylim(time_end, time_start)
-plt.tick_params(labelsize=12)
+plt.tick_params(labelsize=14)
+plt.minorticks_on()
 plt.grid()
 plt.tight_layout()
 if closeup_option == False:
@@ -99,28 +100,31 @@ im = ax[0].imshow(outputdata,
              extent=[rx_start, rx_start + outputdata.shape[1] * rx_step, outputdata.shape[0] * dt * 1e9, 0],
             interpolation='nearest', aspect='auto', cmap='seismic',
             vmin=-np.amax(np.abs(outputdata[:, 1:]))/1e3, vmax=np.amax(np.abs(outputdata[:, 1:]))/1e3)
-ax[0].set_xlabel('Distance (m)', size=14)
-ax[0].set_ylabel('Time (ns)', size=14)
+ax[0].set_xlabel('Distance (m)', size=18)
+ax[0].set_ylabel('Time (ns)', size=18)
 if closeup_option == True:
     ax[0].set_ylim(time_end, time_start)
-ax[0].tick_params(labelsize=12)
+ax[0].tick_params(labelsize=14)
+ax[0].minorticks_on()
+
 ax[0].grid()
 # coloarbar
 delvider = axgrid1.make_axes_locatable(ax[0])
 cax = delvider.append_axes('right', size='5%', pad=0.1)
 cbar = fig.colorbar(im, cax=cax)
-cbar.set_label('Amplitude', size=14)
-cbar.ax.tick_params(labelsize=12)
+cbar.set_label('Amplitude', size=18)
+cbar.ax.tick_params(labelsize=14)
 
 ax[1].plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='k', linestyle='-') # time in ns
 ax[1].plot(outputdata_ave_db_moving, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='r', linestyle='--', alpha=0.7) # time in ns
-ax[1].set_xlabel('Amplitude (dB)', size=14)
-ax[1].set_ylabel('Time (ns)', size=14)
+ax[1].set_xlabel('Amplitude (dB)', size=18)
+ax[1].set_ylabel('Time (ns)', size=18)
 if closeup_option == False:
     ax[1].set_ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
 elif closeup_option == True:
     ax[1].set_ylim(time_end, time_start)
-ax[1].tick_params(labelsize=12)
+ax[1].tick_params(labelsize=14)
+ax[1].minorticks_on()
 ax[1].grid()
 
 plt.tight_layout()
