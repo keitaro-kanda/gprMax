@@ -184,59 +184,51 @@ def get_eps_static(z_m):
     tan_d = 10 ** (0.038 * 20.0 + 0.312 * rho - 3.260)
     return eps_static, tan_d
 
-def get_eps_mix(z_m, omega, d_params, anchor_freq=1.25e9):
-    """
-    指定深さ z_m [m] と角周波数配列 omega に対する混合複素誘電率を返す。
-    2極Debye (Method A) + 水氷層の MG混合則。
+def get_eps_regolith(z_m, omega, d_params, anchor_freq=1.25e9):
+    """指定深さ z_m [m] と角周波数配列 omega に対するレゴリス母材の複素誘電率を返す。
+
+    2極Debye (Method A: 損失アンカー方式) のみで構成し、水氷層は考慮しない
+    (レゴリスのみの地下構造に対する解析的見積もり用)。
     """
     eps_static, tan_d = get_eps_static(z_m)
-    
-    # Method A: 損失アンカー方式
+
     tau1 = d_params['tau1']
     tau2 = d_params['tau2']
     de_ratio = d_params['de_ratio']
+
+    # --- Method A: アンカー周波数で Heiken 損失に一致するよう総 Δε を決定 ---
     w_a = 2.0 * np.pi * anchor_freq
-    
     # 単位Δεあたりの損失形状 (アンカー周波数)
-    unit_im_wa = (de_ratio * (w_a * tau1) / (1.0 + (w_a * tau1)**2) + 
+    unit_im_wa = (de_ratio * (w_a * tau1) / (1.0 + (w_a * tau1)**2) +
                   (1.0 - de_ratio) * (w_a * tau2) / (1.0 + (w_a * tau2)**2))
-    
     # アンカー目標となる Heiken損失虚部
     eps_im_target = eps_static * tan_d
-    
-    # 必要な総 Δε と物理的クリップ
+    # 必要な総 Δε
     de_tot = eps_im_target / unit_im_wa
+
+    # 物理的クリップ (eps_inf >= 1) と自己整合
     eps_inf = max(eps_static - de_tot, 1.0)
-    de_tot = eps_static - eps_inf  # 自己整合
-    
+    de_tot = eps_static - eps_inf
     de1 = de_tot * de_ratio
     de2 = de_tot * (1.0 - de_ratio)
-    
-    # 母材の複素誘電率 (σ=0のため sigma_eff 項は除外)
-    eps_host = (eps_inf 
-                + de1 / (1.0 + 1j * omega * tau1) 
-                + de2 / (1.0 + 1j * omega * tau2))
-    
-    # 水氷混合 (MG混合則)
-    ice_top, ice_bot = 0.50, 0.70
-    f_ice_vol = 0.10
-    eps_ice = 3.17 * (1.0 - 1j * 6e-5)
-    
-    f_vol = f_ice_vol if (ice_top <= z_m <= ice_bot) else 0.0
-    
-    if f_vol > 0.0:
-        # 周波数配列全体に対して直接 MG 混合
-        eps_mix = (eps_host + 
-                   3.0 * f_vol * eps_host * (eps_ice - eps_host) / 
-                   (eps_ice + 2.0 * eps_host - f_vol * (eps_ice - eps_host)))
-    else:
-        eps_mix = eps_host
-        
-    return eps_mix
+
+    # レゴリス母材の複素誘電率 (σ=0のため sigma_eff 項は除外)
+    eps_regolith = (eps_inf
+                    + de1 / (1.0 + 1j * omega * tau1)
+                    + de2 / (1.0 + 1j * omega * tau2))
+
+    return eps_regolith
+
+
+def surface_delay_ns(antenna_height, system_lag_ns):
+    """地表面反射の到達時刻 (プロット上の基準線 'Surface') を計算 [ns]。
+    空中往復 (2*height / 0.3 [m/ns]) とシステムラグの和。"""
+    return antenna_height * 2 / 0.3 + system_lag_ns
 
 
 # =============================================================================
 # Analytical Frequency Shift Calculation (Depth + Debye + Time Offset for Buried Rx)
+#   ※ 水氷層は考慮せず、レゴリスのみの地下構造に対する見積もりを計算する
 # =============================================================================
 try:
     if os.path.exists(ascan_outfile_path):
@@ -300,8 +292,8 @@ try:
         cumulative_time = np.zeros_like(omega)
         
         for i, d in enumerate(d_array):
-            # 新モデル仕様（Method A + MG混合）でωごとの複素誘電率を直接取得
-            eps_complex_w = get_eps_mix(d, omega, debye_params, anchor_freq=f_center)
+            # レゴリスのみ (Method A) でωごとの複素誘電率を直接取得
+            eps_complex_w = get_eps_regolith(d, omega, debye_params, anchor_freq=f_center)
             
             # 各周波数における局所的な減衰率 alpha と速度 v
             alpha_d = - (omega / const.c) * np.imag(np.sqrt(eps_complex_w))
@@ -332,7 +324,7 @@ try:
         analytical_f_peak_profile = np.interp(t_axis, t_delay_d, f_peak_d, left=np.nan, right=np.nan)
         # 解析的なシフトレートの算出
         analytical_shiftrate_profile = np.gradient(analytical_f_peak_profile, dt_stft)
-        print("Analytical frequency shift successfully calculated with buried Rx offset.")
+        print("Analytical frequency shift successfully calculated with buried Rx offset (regolith only).")
         
     else:
         print(f"Warning: A-scan file not found at {ascan_outfile_path}. Analytical calculation skipped.")
@@ -409,7 +401,7 @@ def plot_freq_map(data, fname, prof_med, prof_p25, prof_p75, analytical_profile=
     # --- 時間遅延（Time Offset）の計算 ---
     antenna_height = 0.35    # [m] 送信機高さ
     system_lag_ns  = 0.837   # [ns] システムラグ
-    initial_delay = antenna_height * 2 / 0.3 + system_lag_ns # [ns]
+    initial_delay = surface_delay_ns(antenna_height, system_lag_ns) # [ns]
 
     fig, axes = plt.subplots(
         nrows=1, ncols=2,
@@ -460,7 +452,7 @@ def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, analytical_pro
     # --- 時間遅延（Time Offset）の計算 ---
     antenna_height = 0.35    # [m] 送信機高さ
     system_lag_ns  = 0.837   # [ns] システムラグ
-    initial_delay = antenna_height * 2 / 0.3 + system_lag_ns # [ns]
+    initial_delay = surface_delay_ns(antenna_height, system_lag_ns) # [ns]
 
     fig, axes = plt.subplots(
         nrows=1, ncols=2,
@@ -535,6 +527,7 @@ plot_shiftrate_map(
 
 # =============================================================================
 # Analytical Spectrum Comparison Plot (Normalized dB scale & Mask Threshold)
+#   ※ 中心周波数・シフトレートと同様に、レゴリスのみの見積もり
 # =============================================================================
 if analytical_f_peak_profile is not None:
     # 基準となる受信機の深さ（rx_depth = 0.1 m）を開始点とし、0.0mは除外します
@@ -557,15 +550,15 @@ if analytical_f_peak_profile is not None:
             dz = d_sub[1] - d_sub[0]
             cum_alpha = np.zeros_like(omega)
             
-            for z in d_sub:
-                # 共通の誘電率モデル関数で一括計算
-                eps_complex_w = get_eps_mix(z, omega, debye_params, anchor_freq=f_center)
+            for d_m in d_sub:
+                # レゴリスのみ (Method A) の誘電率モデルで一括計算
+                eps_complex_w = get_eps_regolith(d_m, omega, debye_params, anchor_freq=f_center)
                 
                 # 局所的な減衰率
                 alpha_z = - (omega / const.c) * np.imag(np.sqrt(eps_complex_w))
                 
-                # 積分の累積 (最初の点は dz=0 と見なせるため z > rx_depth で加算)
-                if z > rx_depth:
+                # 積分の累積 (最初の点は dz=0 と見なせるため d_m > rx_depth で加算)
+                if d_m > rx_depth:
                     cum_alpha += alpha_z * dz
         
         # 積分された全減衰量を用いてスペクトルを計算
@@ -624,8 +617,8 @@ plt.close()
 #              = 10**(0.76 + 0.5881 - 3.260) = 10**(-1.9119) ≈ 0.012249
 #
 # 実装コードで導出される値:
-# calc_eps_mix = get_eps_mix(3.0, 2 * np.pi * 1.25e9, debye_params, anchor_freq=1.25e9)
-# calc_tan_d = -np.imag(calc_eps_mix) / np.real(calc_eps_mix)
+# calc_eps = get_eps_regolith(3.0, 2 * np.pi * 1.25e9, debye_params, anchor_freq=1.25e9)
+# calc_tan_d = -np.imag(calc_eps) / np.real(calc_eps)
 #
 # Method Aの仕様上、自己整合による eps_inf のクリップ低下分だけ実部が減少し、
 # tan_d は目標値よりも約1%以内の範囲でわずかに高くなります。
