@@ -41,7 +41,6 @@ from tools.core.outputfiles_merge import get_output_data
 # ============================================================
 output_base_dir = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/mixing_dispersion_profile'
 os.makedirs(output_base_dir, exist_ok=True)
-
 output_dir_profile = os.path.join(output_base_dir, 'profile')
 os.makedirs(output_dir_profile, exist_ok=True)
 output_dir_centroid = os.path.join(output_base_dir, 'centroid')
@@ -58,8 +57,9 @@ FeOTiO2 = 20.0                   # [wt%]
 # 比較する周波数 (=線の色)
 freqs = np.array([0.5e9, 1.25e9, 2.0e9])     # [Hz]
 freq_labels = ['0.5 GHz', '1.25 GHz', '2.0 GHz']
-freq_styles = ['--', '-', '-.']
-ANCHOR_FREQ = 1.25e9
+freq_styles = ['-', '--', '-.']
+#ANCHOR_FREQ = 1.25e9
+ANCHOR_FREQ = 450E6 # Heiken1991 Fig 9.54の、450 MHz計測経験式を使う
 
 # 水氷含有量 (=線の種類)  [vol%]
 ice_contents = [0, 1, 5, 10, 20]
@@ -90,7 +90,8 @@ SPECTRUM_TARGET_DEPTHS = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]  # スペクトル�
 # 1. Heiken 基準量 (深さ依存, 周波数非依存)
 # ============================================================
 eps_re_Heiken = 1.919 ** rho
-tan_d_heiken  = 10 ** (0.038 * FeOTiO2 + 0.312 * rho - 3.260)
+#tan_d_heiken  = 10 ** (0.038 * FeOTiO2 + 0.312 * rho - 3.260)
+tan_d_heiken = 10 ** (0.033 * FeOTiO2 + 0.231 * rho - 3.061) # Heiken1991 Fig 9.54の、450 MHz計測経験式を使う
 eps_im_heiken = eps_re_Heiken * tan_d_heiken
 
 # ============================================================
