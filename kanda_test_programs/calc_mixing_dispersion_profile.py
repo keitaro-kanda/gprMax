@@ -206,6 +206,7 @@ def make_summary_2x2():
     axes[1, 0].set_xlabel(r"Conductivity $\sigma_{\rm eff}$ [S/m]", fontsize=18)
     draw_lines(axes[1, 1], TAND, ref=tan_d_heiken)
     axes[1, 1].set_xlabel(r"$\tan\delta$", fontsize=18)
+    axes[1, 1].locator_params(axis='x', nbins=5)
     add_legend(fig)
     plt.tight_layout()
     base = os.path.join(output_dir_profile, 'summary_2x2')
@@ -222,6 +223,8 @@ def make_profile_and_delta(data, quantity_label, fname, ref=None):
     fig, axes = plt.subplots(1, 2, figsize=(10, 6))
     draw_lines(axes[0], data, ref=ref)
     axes[0].set_xlabel(quantity_label, fontsize=18)
+    if fname == 'losstangent':
+        axes[0].locator_params(axis='x', nbins=5)
     
     for ii in range(n_ice):
         if ice_contents[ii] == 0:
