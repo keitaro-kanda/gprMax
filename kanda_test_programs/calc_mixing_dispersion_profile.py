@@ -17,8 +17,9 @@ Heiken基準の深さプロファイル + 2極Debye分散(Method A) + 水氷混�
   (2)-(5) 各物理量ごとに 左:深さプロファイル / 右:0vol%との相対差[%] の2列図
   (6) 密度プロファイル、水氷wt%プロファイル
   (7) 解析的周波数シフトレートプロファイル
-  (8) 解析的中心周波数プロファイル ★新規追加
-  (9) サマリ txt
+  (8) 解析的中心周波数プロファイル
+  (9) 各水氷含有量ごとの解析的スペクトル比較図 (規格化 dB) ★新規追加
+  (10) サマリ txt
 ==================================================================
 """
 import os
@@ -71,6 +72,18 @@ EPS_ICE_IM = 3.17 * 6e-5         # = eps' * tan_d_ice
 eps_ice_complex = EPS_ICE_RE - 1j * EPS_ICE_IM   # 周波数依存は無視(GPR帯で極小)
 RHO_ICE = 0.934                  # 氷の密度 [g/cm^3] (月面温度 ~100K を想定;
                                   # Feistel & Wagner, 2006)。0℃での値0.917とは異なる点に注意
+
+# ------------------------------------------------------------
+# 解析的波形計算(中心周波数/シフトレート/スペクトル)の共通設定 ★新規追加
+#   ・入射波(Ascan.out)の格納パスと解析帯域
+#   ・受信機深さ(rx_depth)と、スペクトル比較図の対象深さ・マスク基準
+# ------------------------------------------------------------
+ASCAN_OUTFILE_PATH = ("/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/"
+                      "waveform_test/gaussiandot_1.25GHz_underground/result/Ascan.out")
+FREQ_BAND_MIN = 0.5e9            # 解析帯域下限 [Hz]
+FREQ_BAND_MAX = 2.0e9            # 解析帯域上限 [Hz]
+RX_DEPTH      = 0.10             # 受信機(計算開始)深さ [m]
+SPECTRUM_TARGET_DEPTHS = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]  # スペクトル比較の対象深さ [m]
 
 # ============================================================
 # 1. Heiken 基準量 (深さ依存, 周波数非依存)
@@ -275,18 +288,43 @@ def make_ice_wtpct_profile():
     return base + '.png'
 
 # ============================================================
-# 6-E. 追加機能: 解析的プロファイル計算 (中心周波数とシフトレート)
+# 6-E. 追加機能: 解析的プロファイル計算 (中心周波数・シフトレート・スペクトル)
 # ============================================================
-def calc_analytical_centroid_and_shiftrate(ice_volpct):
-    """水氷含有量に対する解析的な中心周波数とシフトレートの深さプロファイルを計算"""
-    ascan_outfile_path = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/waveform_test/gaussiandot_1.25GHz_underground/result/Ascan.out"
-    freq_min, freq_max = 0.5, 2.0
-    f_center = 1.25e9
-    
-    # 外部データが無い場合のフォールバックを組み込む
+
+# --- 6-E-0. 共通ヘルパ (中心周波数/シフトレート/スペクトルで共有) ---
+def get_eps_mix_spectrum(depth, omega, ice_volpct):
+    """深さ depth [m], 角周波数配列 omega [rad/s] に対する
+    Method A(レゴリス母材) + Maxwell-Garnett(氷混合) の複素誘電率スペクトルを返す。
+    符号規約は eps = eps' - j*eps'' (eps'' >= 0)。1.25GHz(ANCHOR_FREQ)でアンカー。"""
+    rho_d = 1.92 * (depth * 100 + 12.2) / (depth * 100 + 18.0)
+    eps_re_H = 1.919 ** rho_d
+    tan_d_H = 10 ** (0.038 * FeOTiO2 + 0.312 * rho_d - 3.260)
+    eps_im_H = eps_re_H * tan_d_H
+
+    unit_imag_anchor = debye_total_imag(2 * np.pi * ANCHOR_FREQ, 1.0)
+    scale_A_val = eps_im_H / unit_imag_anchor
+
+    reg_re = eps_re_H - debye_total_real_drop(omega, scale_A_val)
+    reg_im = debye_total_imag(omega, scale_A_val)
+    eps_reg = reg_re - 1j * reg_im
+
+    if ice_volpct == 0:
+        return eps_reg
+    return maxwell_garnett(eps_reg, eps_ice_complex, ice_volpct)
+
+
+_incident_spectrum_cache = None
+def load_incident_spectrum():
+    """入射波(Ascan.out)を読み込み、解析帯域 [FREQ_BAND_MIN, FREQ_BAND_MAX] に限定した
+    (f_calc [Hz], S0_calc [複素スペクトル], omega [rad/s]) を返す。
+    Ascan.out が無い場合は合成ガウシアンパルスにフォールバックする。結果はキャッシュする。"""
+    global _incident_spectrum_cache
+    if _incident_spectrum_cache is not None:
+        return _incident_spectrum_cache
+
     try:
-        if os.path.exists(ascan_outfile_path):
-            ascan_data, dt_ascan = get_output_data(ascan_outfile_path, 1, 'Ez')
+        if os.path.exists(ASCAN_OUTFILE_PATH):
+            ascan_data, dt_ascan = get_output_data(ASCAN_OUTFILE_PATH, 1, 'Ez')
             if ascan_data.ndim == 1:
                 e_incident = ascan_data
             else:
@@ -296,31 +334,39 @@ def calc_analytical_centroid_and_shiftrate(ice_volpct):
             S0_omega = np.fft.rfft(e_incident)
         else:
             raise FileNotFoundError
-    
+
     except Exception as e:
         print(f"Warning: Could not load Ascan.out data. Using synthetic Gaussian pulse. Error: {e}")
         dt_ascan = 1e-10  # 0.1 ns
         t_ascan = np.arange(-5e-9, 5e-9, dt_ascan)
-        e_incident = np.exp(-((t_ascan - 0) ** 2) / (2 * (1/(2*np.pi*f_center))**2))
+        e_incident = np.exp(-((t_ascan - 0) ** 2) / (2 * (1 / (2 * np.pi * ANCHOR_FREQ)) ** 2))
         N = len(e_incident)
         freq_ascan = np.fft.rfftfreq(N, d=dt_ascan)
         S0_omega = np.fft.rfft(e_incident)
-        
-    f_min_hz = freq_min * 1e9
-    f_max_hz = freq_max * 1e9
-    band_mask = (freq_ascan >= f_min_hz) & (freq_ascan <= f_max_hz)
-    
+
+    band_mask = (freq_ascan >= FREQ_BAND_MIN) & (freq_ascan <= FREQ_BAND_MAX)
     f_calc = freq_ascan[band_mask]
     S0_calc = S0_omega[band_mask]
     omega = 2 * np.pi * f_calc
-    
+
+    _incident_spectrum_cache = (f_calc, S0_calc, omega)
+    return _incident_spectrum_cache
+
+
+def calc_analytical_centroid_and_shiftrate(ice_volpct):
+    """水氷含有量に対する解析的な中心周波数とシフトレートの深さプロファイルを計算"""
+    f_center = ANCHOR_FREQ  # 参照用(合成パルス幅は load_incident_spectrum 内で使用)
+
+    # 入射波スペクトル(帯域限定済み)を取得
+    f_calc, S0_calc, omega = load_incident_spectrum()
+
     # --- 時間遅延（Time Offset）の計算 ---
     antenna_height = 0.35    # [m]
     system_lag_ns  = 0.837   # [ns]
-    rx_depth       = 0.10    # [m]
-    
-    t_air_ns = (2.0 * antenna_height / const.c) * 1e9 
-    
+    rx_depth       = RX_DEPTH  # [m]
+
+    t_air_ns = (2.0 * antenna_height / const.c) * 1e9
+
     # 地表から受信機までのオフセット伝搬時間 (Heikenモデルの密度式を利用)
     d_sub_offset = np.linspace(0, rx_depth, 50)
     rho_offset = 1.92 * (d_sub_offset*100 + 12.2) / (d_sub_offset*100 + 18.0)
@@ -328,61 +374,45 @@ def calc_analytical_centroid_and_shiftrate(ice_volpct):
     v_sub = const.c / np.sqrt(eps_sub_offset)
     dt_sub = d_sub_offset[1] - d_sub_offset[0]
     t_ground_start_ns = np.sum(2.0 * dt_sub / v_sub) * 1e9
-    
+
     t_offset_ns = system_lag_ns + t_air_ns + t_ground_start_ns
-    
+
     # 計算開始深さを受信機の深さに設定
     d_array = z[z >= rx_depth]
     if len(d_array) == 0:
         d_array = np.linspace(rx_depth, z[-1], 200)
     d_step = d_array[1] - d_array[0] if len(d_array) > 1 else 0.02
-    
+
     f_peak_d = []
     t_delay_d = []
     cumulative_attenuation = np.zeros_like(omega)
     cumulative_time = np.zeros_like(omega)
-    
+
     for i, d in enumerate(d_array):
         # 各深さの複素誘電率スペクトル (Method A + MG混合) を計算
-        rho_d = 1.92 * (d*100 + 12.2) / (d*100 + 18.0)
-        eps_re_H = 1.919 ** rho_d
-        tan_d_H = 10 ** (0.038 * FeOTiO2 + 0.312 * rho_d - 3.260)
-        eps_im_H = eps_re_H * tan_d_H
-        
-        w_anchor = 2 * np.pi * ANCHOR_FREQ
-        unit_imag_anchor = debye_total_imag(w_anchor, 1.0)
-        scale_A_val = eps_im_H / unit_imag_anchor
-        
-        reg_re = eps_re_H - debye_total_real_drop(omega, scale_A_val)
-        reg_im = debye_total_imag(omega, scale_A_val)
-        eps_reg = reg_re - 1j * reg_im
-        
-        if ice_volpct == 0:
-            eps_complex_w = eps_reg
-        else:
-            eps_complex_w = maxwell_garnett(eps_reg, eps_ice_complex, ice_volpct)
-            
+        eps_complex_w = get_eps_mix_spectrum(d, omega, ice_volpct)
+
         sqrt_eps = np.sqrt(eps_complex_w)
         alpha_d = - (omega / const.c) * np.imag(sqrt_eps)
         v_d = const.c / np.real(sqrt_eps)
-        
+
         if i > 0:
             cumulative_attenuation += alpha_d * d_step
             cumulative_time += 2 * d_step / v_d
-            
+
         S_d_w = S0_calc * np.exp(-2 * cumulative_attenuation)
         power = np.abs(S_d_w)**2
-        
+
         f_peak = np.trapz(f_calc * power, f_calc) / np.trapz(power, f_calc)
         f_peak_d.append(f_peak)
-        
+
         t_delay_ground = np.interp(f_peak, f_calc, cumulative_time)
         t_total_ns = t_offset_ns + (t_delay_ground * 1e9)
         t_delay_d.append(t_total_ns)
-        
+
     f_peak_d_ghz = np.array(f_peak_d) / 1e9 # [GHz]
     t_delay_d = np.array(t_delay_d) # [ns]
-    
+
     # 時間軸 dt_stft 上でのグラディエント算出（元のコードの仕様を踏襲）
     dt_stft = 0.1 # [ns]
     t_axis = np.arange(np.nanmin(t_delay_d), np.nanmax(t_delay_d) + dt_stft, dt_stft)
@@ -393,11 +423,11 @@ def calc_analytical_centroid_and_shiftrate(ice_volpct):
         shiftrate_d = np.interp(t_delay_d, t_axis, analytical_shiftrate_profile, left=np.nan, right=np.nan)
     else:
         shiftrate_d = np.gradient(f_peak_d_ghz, t_delay_d)
-        
+
     # 全体の深さ軸 z に展開 (rx_depthより浅い部分は NaN になる)
     shiftrate_z = np.interp(z, d_array, shiftrate_d, left=np.nan, right=np.nan)
     f_peak_z = np.interp(z, d_array, f_peak_d_ghz, left=np.nan, right=np.nan)
-    
+
     return shiftrate_z, f_peak_z
 
 
@@ -427,7 +457,7 @@ def make_shiftrate_profile():
     return base + '.png'
 
 def make_centroid_profile():
-    """解析的中心周波数プロファイルをプロット ★新規追加"""
+    """解析的中心周波数プロファイルをプロット"""
     fig, ax = plt.subplots(figsize=(5, 6))
     
     for ii, c in enumerate(ice_contents):
@@ -451,6 +481,77 @@ def make_centroid_profile():
     plt.close(fig)
     return base + '.png'
 
+# ------------------------------------------------------------
+# 6-F. 解析的スペクトル比較図 (規格化 dB スケール + マスク基準) ★新規追加
+#      指定した水氷含有量について、複数の対象深さでの規格化パワースペクトルを
+#      重ねてプロットする。入射波(rx_depth)のピークパワーを 0 dB 基準とし、
+#      各深さの中心周波数を破線で示す。
+# ------------------------------------------------------------
+def make_spectrum_comparison(ice_volpct):
+    # 入射波スペクトル(帯域限定済み)を取得
+    f_calc, S0_calc, omega = load_incident_spectrum()
+    f_calc_ghz = f_calc / 1e9
+
+    # 入射波(基準深さ)のパワー最大値を 0 dB の基準とする
+    power_0 = np.abs(S0_calc) ** 2
+    max_power_0 = np.max(power_0)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    colors = plt.cm.viridis(np.linspace(0, 0.9, len(SPECTRUM_TARGET_DEPTHS)))
+
+    for i, d in enumerate(SPECTRUM_TARGET_DEPTHS):
+        # 基準深さ(rx_depth)から目的の深さ(d)までの減衰を積分で計算
+        if d <= RX_DEPTH:
+            cum_alpha = np.zeros_like(omega)
+        else:
+            # 積分用の細かい刻み（rx_depth 〜 d まで）
+            d_sub = np.linspace(RX_DEPTH, d, 200)
+            dz = d_sub[1] - d_sub[0]
+            cum_alpha = np.zeros_like(omega)
+            for k, d_int in enumerate(d_sub):
+                # 共通の誘電率モデル関数で一括計算
+                eps_complex_w = get_eps_mix_spectrum(d_int, omega, ice_volpct)
+                # 局所的な減衰率
+                alpha_int = - (omega / const.c) * np.imag(np.sqrt(eps_complex_w))
+                # 積分の累積 (最初の点は dz=0 と見なせるため k>0 で加算)
+                if k > 0:
+                    cum_alpha += alpha_int * dz
+
+        # 積分された全減衰量を用いてスペクトルを計算
+        S_d_w = S0_calc * np.exp(-2 * cum_alpha)
+        power = np.abs(S_d_w) ** 2
+
+        # 中心周波数（線形スケールで計算する必要がある）
+        f_peak = np.trapz(f_calc * power, f_calc) / np.trapz(power, f_calc)
+        f_peak_ghz = f_peak / 1e9
+
+        # 入射波の最大パワーで規格化し、dB へ変換
+        power_norm = power / max_power_0
+        power_db = 10.0 * np.log10(power_norm + 1e-30)
+
+        # スペクトル(dB)を描画
+        ax.plot(f_calc_ghz, power_db, color=colors[i],
+                label=f'Depth {d:.1f} m ($f_c$ = {f_peak_ghz:.2f} GHz)')
+        # 中心周波数を破線で描画
+        ax.axvline(f_peak_ghz, color=colors[i], linestyle='--', alpha=0.7)
+
+    ax.set_xlabel('Frequency [GHz]', fontsize=18)
+    ax.set_ylabel('Normalized Power [dB]', fontsize=18)
+    #ax.set_xlim(FREQ_BAND_MIN / 1e9, FREQ_BAND_MAX / 1e9)
+    # Y軸の表示範囲を調整（閾値の少し下から 0 dB の少し上まで）
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.minorticks_on()
+    ax.grid(True, alpha=0.4)
+    # 凡例を外側に配置してグラフと被らないようにする
+    ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5), fontsize=14)
+
+    plt.tight_layout()
+    base = os.path.join(output_dir_centroid, f'spectrum_comparison_{ice_volpct}vol')
+    fig.savefig(base + '.png', bbox_inches='tight', dpi=200)
+    fig.savefig(base + '.pdf', bbox_inches='tight')
+    plt.close(fig)
+    return base + '.png'
+
 # プロット実行
 png_sum = make_summary_2x2()
 png_re  = make_profile_and_delta(EPS_RE, r"$\varepsilon^{\prime}$", 'permittivity_Re', ref=eps_re_Heiken)
@@ -460,7 +561,8 @@ png_tan = make_profile_and_delta(TAND, r"$\tan\delta$", 'losstangent', ref=tan_d
 png_rho = make_density_profile()
 png_wtpct = make_ice_wtpct_profile()
 png_shift = make_shiftrate_profile()
-png_centroid = make_centroid_profile()  # ★新規追加プロットの実行
+png_centroid = make_centroid_profile()
+png_spectra = [make_spectrum_comparison(c) for c in ice_contents]  # ★新規追加: 各氷含有量のスペクトル比較
 
 # ============================================================
 # 7. サマリ txt
@@ -540,7 +642,7 @@ def write_summary():
         lines.append(row)
 
     text = "\n".join(lines) + "\n"
-    fname = os.path.join(output_base_dir, 'summary.txt')
+    fname = os.path.join(output_dir_profile, 'summary.txt')
     with open(fname, 'w') as fh:
         fh.write(text)
     # コンソールには代表部分のみ
@@ -550,7 +652,8 @@ def write_summary():
 txt = write_summary()
 
 print("\nsaved figures:")
-# 出力リストに png_centroid を追加
-for p in [png_sum, png_re, png_im, png_sig, png_tan, png_rho, png_wtpct, png_shift, png_centroid]:
+# 出力リストに png_centroid とスペクトル比較図を追加
+for p in [png_sum, png_re, png_im, png_sig, png_tan, png_rho, png_wtpct,
+          png_shift, png_centroid] + png_spectra:
     print("  ", p)
 print("saved summary:", txt)
