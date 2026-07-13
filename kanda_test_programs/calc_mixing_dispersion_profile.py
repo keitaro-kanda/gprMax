@@ -89,7 +89,8 @@ SPECTRUM_TARGET_DEPTHS = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]  # スペクトル�
 # ============================================================
 # 1. Heiken 基準量 (深さ依存, 周波数非依存)
 # ============================================================
-eps_re_Heiken = 1.919 ** rho
+#eps_re_Heiken = 1.919 ** rho
+eps_re_Heiken = 1.843 ** rho
 #tan_d_heiken  = 10 ** (0.038 * FeOTiO2 + 0.312 * rho - 3.260)
 tan_d_heiken = 10 ** (0.033 * FeOTiO2 + 0.231 * rho - 3.061) # Heiken1991 Fig 9.54の、450 MHz計測経験式を使う
 eps_im_heiken = eps_re_Heiken * tan_d_heiken
