@@ -80,10 +80,11 @@ RHO_ICE = 0.934                  # 氷の密度 [g/cm^3] (月面温度 ~100K を
 # ------------------------------------------------------------
 ASCAN_OUTFILE_PATH = ("/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/"
                       "waveform_test/gaussiandot_1.25GHz_underground/result/Ascan.out")
-FREQ_BAND_MIN = 0.5e9            # 解析帯域下限 [Hz]
-FREQ_BAND_MAX = 2.0e9            # 解析帯域上限 [Hz]
+FREQ_BAND_MIN = 0.25e9            # 解析帯域下限 [Hz]、帯域下限値の1/2
+FREQ_BAND_MAX = 6.0e9            # 解析帯域上限 [Hz]、帯域上限値の2倍
 RX_DEPTH      = 0.10             # 受信機(計算開始)深さ [m]
 SPECTRUM_TARGET_DEPTHS = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]  # スペクトル比較の対象深さ [m]
+#POWER_THRESHOLD_DB     = -30.0   # スペクトル比較図のパワーマスク基準 [dB]
 
 # ============================================================
 # 1. Heiken 基準量 (深さ依存, 周波数非依存)
@@ -313,44 +314,46 @@ def get_eps_mix_spectrum(depth, omega, ice_volpct):
     return maxwell_garnett(eps_reg, eps_ice_complex, ice_volpct)
 
 
-_incident_spectrum_cache = None
-def load_incident_spectrum():
-    """入射波(Ascan.out)を読み込み、解析帯域 [FREQ_BAND_MIN, FREQ_BAND_MAX] に限定した
+_incident_spectrum_cache = None   # 入射波の「全帯域」スペクトルをキャッシュ (帯域制限は呼び出し毎に適用)
+def load_incident_spectrum(freq_min=FREQ_BAND_MIN, freq_max=FREQ_BAND_MAX):
+    """入射波(Ascan.out)を読み込み、指定帯域 [freq_min, freq_max] に限定した
     (f_calc [Hz], S0_calc [複素スペクトル], omega [rad/s]) を返す。
-    Ascan.out が無い場合は合成ガウシアンパルスにフォールバックする。結果はキャッシュする。"""
+    Ascan.out が無い場合は合成ガウシアンパルスにフォールバックする。
+    FFT結果(全帯域)をキャッシュし、帯域マスクのみを呼び出し毎に適用するため、
+    帯域を変えても再FFTは不要。デフォルトは解析帯域 FREQ_BAND_MIN/MAX (0.5-2.0 GHz)。"""
     global _incident_spectrum_cache
-    if _incident_spectrum_cache is not None:
-        return _incident_spectrum_cache
-
-    try:
-        if os.path.exists(ASCAN_OUTFILE_PATH):
-            ascan_data, dt_ascan = get_output_data(ASCAN_OUTFILE_PATH, 1, 'Ez')
-            if ascan_data.ndim == 1:
-                e_incident = ascan_data
+    if _incident_spectrum_cache is None:
+        try:
+            if os.path.exists(ASCAN_OUTFILE_PATH):
+                ascan_data, dt_ascan = get_output_data(ASCAN_OUTFILE_PATH, 1, 'Ez')
+                if ascan_data.ndim == 1:
+                    e_incident = ascan_data
+                else:
+                    e_incident = ascan_data[:, 0]
+                N = len(e_incident)
+                freq_ascan = np.fft.rfftfreq(N, d=dt_ascan)
+                S0_omega = np.fft.rfft(e_incident)
             else:
-                e_incident = ascan_data[:, 0]
+                raise FileNotFoundError
+
+        except Exception as e:
+            print(f"Warning: Could not load Ascan.out data. Using synthetic Gaussian pulse. Error: {e}")
+            dt_ascan = 1e-10  # 0.1 ns
+            t_ascan = np.arange(-5e-9, 5e-9, dt_ascan)
+            e_incident = np.exp(-((t_ascan - 0) ** 2) / (2 * (1 / (2 * np.pi * ANCHOR_FREQ)) ** 2))
             N = len(e_incident)
             freq_ascan = np.fft.rfftfreq(N, d=dt_ascan)
             S0_omega = np.fft.rfft(e_incident)
-        else:
-            raise FileNotFoundError
 
-    except Exception as e:
-        print(f"Warning: Could not load Ascan.out data. Using synthetic Gaussian pulse. Error: {e}")
-        dt_ascan = 1e-10  # 0.1 ns
-        t_ascan = np.arange(-5e-9, 5e-9, dt_ascan)
-        e_incident = np.exp(-((t_ascan - 0) ** 2) / (2 * (1 / (2 * np.pi * ANCHOR_FREQ)) ** 2))
-        N = len(e_incident)
-        freq_ascan = np.fft.rfftfreq(N, d=dt_ascan)
-        S0_omega = np.fft.rfft(e_incident)
+        # 全帯域(rfft の全成分)をキャッシュ。帯域制限はここでは行わない。
+        _incident_spectrum_cache = (freq_ascan, S0_omega)
 
-    band_mask = (freq_ascan >= FREQ_BAND_MIN) & (freq_ascan <= FREQ_BAND_MAX)
+    freq_ascan, S0_omega = _incident_spectrum_cache
+    band_mask = (freq_ascan >= freq_min) & (freq_ascan <= freq_max)
     f_calc = freq_ascan[band_mask]
     S0_calc = S0_omega[band_mask]
     omega = 2 * np.pi * f_calc
-
-    _incident_spectrum_cache = (f_calc, S0_calc, omega)
-    return _incident_spectrum_cache
+    return f_calc, S0_calc, omega
 
 
 def calc_analytical_centroid_and_shiftrate(ice_volpct):
@@ -485,12 +488,18 @@ def make_centroid_profile():
 # 6-F. 解析的スペクトル比較図 (規格化 dB スケール + マスク基準) ★新規追加
 #      指定した水氷含有量について、複数の対象深さでの規格化パワースペクトルを
 #      重ねてプロットする。入射波(rx_depth)のピークパワーを 0 dB 基準とし、
-#      各深さの中心周波数を破線で示す。
+#      各深さの中心周波数を破線で、パワーマスク基準を赤の点線で示す。
 # ------------------------------------------------------------
 def make_spectrum_comparison(ice_volpct):
-    # 入射波スペクトル(帯域限定済み)を取得
-    f_calc, S0_calc, omega = load_incident_spectrum()
+    # 表示・計算帯域は解析帯域より広い SPECTRUM_FREQ_MIN/MAX を用いる
+    # (この関数だけ広帯域で評価し、中心周波数/シフトレートの解析には影響しない)
+    f_calc, S0_calc, omega = load_incident_spectrum(FREQ_BAND_MIN, FREQ_BAND_MAX)
     f_calc_ghz = f_calc / 1e9
+
+    # 中心周波数は解析帯域 [FREQ_BAND_MIN, FREQ_BAND_MAX] 内で評価し、
+    # centroid_frequency_profile と定義を揃える(帯域外の低パワー裾で重心が
+    # ぶれるのを防ぐ)。広帯域で重心を取りたい場合はこのマスクを外す。
+    centroid_mask = (f_calc >= FREQ_BAND_MIN) & (f_calc <= FREQ_BAND_MAX)
 
     # 入射波(基準深さ)のパワー最大値を 0 dB の基準とする
     power_0 = np.abs(S0_calc) ** 2
@@ -521,8 +530,9 @@ def make_spectrum_comparison(ice_volpct):
         S_d_w = S0_calc * np.exp(-2 * cum_alpha)
         power = np.abs(S_d_w) ** 2
 
-        # 中心周波数（線形スケールで計算する必要がある）
-        f_peak = np.trapz(f_calc * power, f_calc) / np.trapz(power, f_calc)
+        # 中心周波数（線形スケールで、解析帯域内のみで計算）
+        f_peak = (np.trapz(f_calc[centroid_mask] * power[centroid_mask], f_calc[centroid_mask])
+                  / np.trapz(power[centroid_mask], f_calc[centroid_mask]))
         f_peak_ghz = f_peak / 1e9
 
         # 入射波の最大パワーで規格化し、dB へ変換
@@ -535,10 +545,15 @@ def make_spectrum_comparison(ice_volpct):
         # 中心周波数を破線で描画
         ax.axvline(f_peak_ghz, color=colors[i], linestyle='--', alpha=0.7)
 
+    # パワーマスク基準を赤の点線で描画
+    # ax.axhline(POWER_THRESHOLD_DB, color='red', linestyle=':', lw=2,
+    #            label=f'Mask threshold ({POWER_THRESHOLD_DB:.0f} dB)')
+
     ax.set_xlabel('Frequency [GHz]', fontsize=18)
     ax.set_ylabel('Normalized Power [dB]', fontsize=18)
-    #ax.set_xlim(FREQ_BAND_MIN / 1e9, FREQ_BAND_MAX / 1e9)
+    ax.set_xlim(FREQ_BAND_MIN / 1e9, FREQ_BAND_MAX / 1e9)
     # Y軸の表示範囲を調整（閾値の少し下から 0 dB の少し上まで）
+    # ax.set_ylim(bottom=POWER_THRESHOLD_DB - 15, top=5)
     ax.tick_params(axis='both', which='major', labelsize=14)
     ax.minorticks_on()
     ax.grid(True, alpha=0.4)
@@ -642,7 +657,7 @@ def write_summary():
         lines.append(row)
 
     text = "\n".join(lines) + "\n"
-    fname = os.path.join(output_dir_profile, 'summary.txt')
+    fname = os.path.join(output_base_dir, 'summary.txt')
     with open(fname, 'w') as fh:
         fh.write(text)
     # コンソールには代表部分のみ
