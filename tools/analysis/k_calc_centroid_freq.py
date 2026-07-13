@@ -64,7 +64,11 @@ if in_dir and os.path.exists(in_dir):
                 content = fin.read()
                 m_tau1 = re.search(r'DEBYE_TAU1\s*=\s*([0-9\.eE\+\-]+)', content)
                 m_tau2 = re.search(r'DEBYE_TAU2\s*=\s*([0-9\.eE\+\-]+)', content)
-                m_ratio = re.search(r'DE_RATIO\s*=\s*([0-9\.eE\+\-]+)', content)
+                m_ratio = re.search(r'DE_RATIO\s*=\s*(.+)', content)
+                if m_ratio:
+                    # コメント部分などを除外して計算
+                    expr = m_ratio.group(1).split('#')[0].strip()
+                    debye_params['de_ratio'] = eval(expr)
                 m_disp = re.search(r'#add_dispersion_debye:\s*\d+\s+([0-9\.eE\+\-]+)\s+[0-9\.eE\+\-]+\s+([0-9\.eE\+\-]+)', content)
                 
                 if m_tau1: debye_params['tau1'] = float(m_tau1.group(1))
