@@ -176,15 +176,15 @@ shiftrate_centroid_smooth = shift_rate(centroid_smooth)
 # Dielectric Model Definitions (Method A)
 # =============================================================================
 def get_eps_static(z_m):
-    """深さ z [m] から静的実部とロスタンジェントを計算"""
+    """深さ z [m] から静的実部とロスタンジェントを計算
+    (Heiken1991 Fig 9.54 の 450 MHz 計測経験式; イルメナイト20wt%考慮)"""
     z_cm = z_m * 100.0
     rho = 1.92 * (z_cm + 12.2) / (z_cm + 18.0)
-    eps_static = 1.919 ** rho
-    # イルメナイト20wt%考慮の新規モデル
-    tan_d = 10 ** (0.038 * 20.0 + 0.312 * rho - 3.260)
+    eps_static = 1.843 ** rho
+    tan_d = 10 ** (0.033 * 20.0 + 0.231 * rho - 3.061)
     return eps_static, tan_d
 
-def get_eps_regolith(z_m, omega, d_params, anchor_freq=1.25e9):
+def get_eps_regolith(z_m, omega, d_params, anchor_freq=450e6):
     """指定深さ z_m [m] と角周波数配列 omega に対するレゴリス母材の複素誘電率を返す。
 
     2極Debye (Method A: 損失アンカー方式) のみで構成し、水氷層は考慮しない
@@ -253,8 +253,8 @@ try:
         S0_calc = S0_omega[band_mask]
         omega = 2 * np.pi * f_calc  # 周波数依存計算用の配列
         
-        # --- gprMaxモデルに基づく物理定数・リファレンス値 ---
-        f_center = 1.25e9
+        # --- Method A の損失アンカー周波数 (Heiken1991 の 450 MHz 経験式に合わせる) ---
+        f_center = 450e6
         
         # --- 時間遅延（Time Offset）の計算 ---
         antenna_height = 0.35    # [m] 送信機高さ
@@ -609,19 +609,19 @@ print(f'\nAll figures saved to: {output_dir}')
 plt.close()
 
 # =============================================================================
-# 検算：深さ3.0 mでの Method A の tan δ 一致確認
+# 検算：深さ3.0 mでの Method A の tan δ 一致確認 (450 MHz 経験式)
 # =============================================================================
 # z = 3.0 m の場合、z_cm = 300, rho = 1.92 * 312.2 / 318.0 ≈ 1.88498
-# ターゲットとなる損失:
-# tan_d_target = 10**(0.038*20 + 0.312*rho - 3.260) 
-#              = 10**(0.76 + 0.5881 - 3.260) = 10**(-1.9119) ≈ 0.012249
+# ターゲットとなる損失 (Heiken1991 の 450 MHz 経験式):
+# tan_d_target = 10**(0.033*20 + 0.231*rho - 3.061)
+#              = 10**(0.66 + 0.4354 - 3.061) = 10**(-1.9656) ≈ 0.010828
+# 静的実部 eps' = 1.843**rho ≈ 3.166
 #
 # 実装コードで導出される値:
-# calc_eps = get_eps_regolith(3.0, 2 * np.pi * 1.25e9, debye_params, anchor_freq=1.25e9)
+# calc_eps = get_eps_regolith(3.0, 2 * np.pi * 450e6, debye_params, anchor_freq=450e6)
 # calc_tan_d = -np.imag(calc_eps) / np.real(calc_eps)
 #
 # Method Aの仕様上、自己整合による eps_inf のクリップ低下分だけ実部が減少し、
-# tan_d は目標値よりも約1%以内の範囲でわずかに高くなります。
-# (例: 目標 tan_d ≈ 0.012249 に対し、計算結果 tan_d ≈ 0.012288 -> 誤差約0.3%)
-# 虚部 (eps_im) 自体はアンカー周波数 (1.25GHz) においてピタリと一致します。
+# tan_d は目標値よりもわずかに高くなります。
+# 虚部 (eps_im) 自体はアンカー周波数 (450 MHz) においてピタリと一致します。
 # 以上の挙動により、シミュレーション側(.in)の分散性計算ロジックとの整合性が担保されます。
