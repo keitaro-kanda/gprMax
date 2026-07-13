@@ -2,23 +2,28 @@
 Heiken基準の深さプロファイル + 2極Debye分散(Method A) + 水氷混合 + 解析的シフトレート
 ==================================================================
 設計方針:
-  - レゴリス母材: Method A (1.25GHz anchor)
-        eps'_static = 1.919^rho                         (Heiken1991 p536)
-        tan_delta_H = 10^(0.038*FeOTiO2 + 0.312*rho - 3.260)  (p545)
+  - レゴリス母材: Method A (ANCHOR_FREQ でアンカー)
+        eps'_static = HEIKEN_EPS_BASE^rho                (Heiken1991)
+        tan_delta_H = 10^(A*FeOTiO2 + B*rho - C)         (Heiken1991)
         損失は2極Debye極が担う。各深さで Debye Delta_eps を
-        「1.25GHz で eps'' が Heiken 値に一致」するようスケール。
+        「ANCHOR_FREQ で eps'' が Heiken 値に一致」するようスケール。
         sigma_ohmic = 0 (Boivin sigma_DC は誤差内でゼロのため不採用)。
   - 水氷混合: 各周波数で構成したレゴリス複素誘電率と、氷の複素誘電率を
         Maxwell-Garnett 則で混合(周波数ごとに評価 = 物理的に正しい順序)。
         氷パラメータ・混合式は非分散プロファイルコードから流用(Evans1965)。
   - 周波数=線の色, 水氷含有量=線の種類 で区別。
+
+  ★重要: レゴリス誘電モデル(密度式 + Heiken経験式 + アンカー周波数)は
+     このファイル冒頭の「単一の情報源」ブロックだけで定義する。
+     プロファイル図・解析的見積もり(中心周波数/シフトレート/スペクトル)は
+     すべてその共通関数を経由するため、式を変えるときはそこ1箇所を直せばよい。
 出力:
   (1) Method A の 2x2 まとめ図 (eps', eps'', sigma_eff, tan delta)
   (2)-(5) 各物理量ごとに 左:深さプロファイル / 右:0vol%との相対差[%] の2列図
   (6) 密度プロファイル、水氷wt%プロファイル
   (7) 解析的周波数シフトレートプロファイル
   (8) 解析的中心周波数プロファイル
-  (9) 各水氷含有量ごとの解析的スペクトル比較図 (規格化 dB) ★新規追加
+  (9) 各水氷含有量ごとの解析的スペクトル比較図 (規格化 dB)
   (10) サマリ txt
 ==================================================================
 """
@@ -48,9 +53,8 @@ os.makedirs(output_dir_centroid, exist_ok=True)
 
 eps0 = 8.8541878128e-12          # 真空の誘電率 [F/m]
 
-# 深さ [m] と密度 (Heiken1991, p545)
+# 深さ [m]
 z   = np.arange(0, 3.01, 0.02)   # [m]
-rho = 1.92 * (z*100 + 12.2) / (z*100 + 18.0) # 密度式の深さは[cm]
 
 FeOTiO2 = 20.0                   # [wt%]
 
@@ -60,6 +64,14 @@ freq_labels = ['0.5 GHz', '1.25 GHz', '2.0 GHz']
 freq_styles = ['-', '--', '-.']
 #ANCHOR_FREQ = 1.25e9
 ANCHOR_FREQ = 450E6 # Heiken1991 Fig 9.54の、450 MHz計測経験式を使う
+
+# --- Heiken1991 Fig 9.54 の 450 MHz 計測経験式の係数 ---
+#     (eps' と tan_d のモデル係数。これらとアンカーを変えれば全計算に反映される)
+HEIKEN_EPS_BASE = 1.843          # eps' = HEIKEN_EPS_BASE ** rho
+HEIKEN_TAND_A   = 0.033          # tan_d 経験式の (FeO+TiO2) 係数
+HEIKEN_TAND_B   = 0.231          # tan_d 経験式の rho 係数
+HEIKEN_TAND_C   = 3.061          # tan_d 経験式の定数項
+# (参考: 旧 1.25 GHz 式は BASE=1.919, A=0.038, B=0.312, C=3.260, ANCHOR=1.25e9)
 
 # 水氷含有量 (=線の種類)  [vol%]
 ice_contents = [0, 1, 5, 10, 20]
@@ -74,9 +86,9 @@ RHO_ICE = 0.934                  # 氷の密度 [g/cm^3] (月面温度 ~100K を
                                   # Feistel & Wagner, 2006)。0℃での値0.917とは異なる点に注意
 
 # ------------------------------------------------------------
-# 解析的波形計算(中心周波数/シフトレート/スペクトル)の共通設定 ★新規追加
+# 解析的波形計算(中心周波数/シフトレート/スペクトル)の共通設定
 #   ・入射波(Ascan.out)の格納パスと解析帯域
-#   ・受信機深さ(rx_depth)と、スペクトル比較図の対象深さ・マスク基準
+#   ・受信機深さ(rx_depth)と、スペクトル比較図の対象深さ
 # ------------------------------------------------------------
 ASCAN_OUTFILE_PATH = ("/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/"
                       "waveform_test/gaussiandot_1.25GHz_underground/result/Ascan.out")
@@ -87,12 +99,32 @@ SPECTRUM_TARGET_DEPTHS = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]  # スペクトル�
 #POWER_THRESHOLD_DB     = -30.0   # スペクトル比較図のパワーマスク基準 [dB]
 
 # ============================================================
+# レゴリス誘電モデルの「単一の情報源」(密度式・Heiken経験式)
+#   ここだけを変更すれば、プロファイル図・解析的見積もりの
+#   すべての計算に一貫して反映される(式の重複コピーを排除)。
+# ============================================================
+def density_profile(depth_m):
+    """Heiken1991 の密度式。depth [m] -> rho [g/cm^3] (内部で[cm]換算)。
+    スカラー・配列どちらでも動作する。"""
+    z_cm = depth_m * 100.0
+    return 1.92 * (z_cm + 12.2) / (z_cm + 18.0)
+
+def heiken_eps_real(rho):
+    """Heiken1991 経験式の静的実部 eps'。"""
+    return HEIKEN_EPS_BASE ** rho
+
+def heiken_tan_delta(rho):
+    """Heiken1991 経験式の tan δ (FeO+TiO2 = FeOTiO2 wt%)。"""
+    return 10 ** (HEIKEN_TAND_A * FeOTiO2 + HEIKEN_TAND_B * rho - HEIKEN_TAND_C)
+
+# 深さ方向の密度プロファイル (以降の全計算はこの rho を参照)
+rho = density_profile(z)                     # [g/cm^3]
+
+# ============================================================
 # 1. Heiken 基準量 (深さ依存, 周波数非依存)
 # ============================================================
-#eps_re_Heiken = 1.919 ** rho
-eps_re_Heiken = 1.843 ** rho
-#tan_d_heiken  = 10 ** (0.038 * FeOTiO2 + 0.312 * rho - 3.260)
-tan_d_heiken = 10 ** (0.033 * FeOTiO2 + 0.231 * rho - 3.061) # Heiken1991 Fig 9.54の、450 MHz計測経験式を使う
+eps_re_Heiken = heiken_eps_real(rho)
+tan_d_heiken  = heiken_tan_delta(rho)
 eps_im_heiken = eps_re_Heiken * tan_d_heiken
 
 # ============================================================
@@ -120,7 +152,7 @@ def debye_total_real_drop(omega, scale):
     return drop1 + drop2
 
 # ============================================================
-# 3. Method A: 各深さの scale を 1.25GHz アンカーで決定
+# 3. Method A: 各深さの scale を ANCHOR_FREQ アンカーで決定
 # ============================================================
 w_anchor = 2 * np.pi * ANCHOR_FREQ
 unit_imag_anchor = debye_total_imag(w_anchor, scale=1.0)
@@ -301,10 +333,11 @@ def make_ice_wtpct_profile():
 def get_eps_mix_spectrum(depth, omega, ice_volpct):
     """深さ depth [m], 角周波数配列 omega [rad/s] に対する
     Method A(レゴリス母材) + Maxwell-Garnett(氷混合) の複素誘電率スペクトルを返す。
-    符号規約は eps = eps' - j*eps'' (eps'' >= 0)。1.25GHz(ANCHOR_FREQ)でアンカー。"""
-    rho_d = 1.92 * (depth * 100 + 12.2) / (depth * 100 + 18.0)
-    eps_re_H = 1.919 ** rho_d
-    tan_d_H = 10 ** (0.038 * FeOTiO2 + 0.312 * rho_d - 3.260)
+    符号規約は eps = eps' - j*eps'' (eps'' >= 0)。ANCHOR_FREQ でアンカー。
+    誘電モデルは冒頭の density_profile / heiken_* を経由する(単一の情報源)。"""
+    rho_d = density_profile(depth)
+    eps_re_H = heiken_eps_real(rho_d)
+    tan_d_H = heiken_tan_delta(rho_d)
     eps_im_H = eps_re_H * tan_d_H
 
     unit_imag_anchor = debye_total_imag(2 * np.pi * ANCHOR_FREQ, 1.0)
@@ -319,13 +352,27 @@ def get_eps_mix_spectrum(depth, omega, ice_volpct):
     return maxwell_garnett(eps_reg, eps_ice_complex, ice_volpct)
 
 
+def local_alpha_velocity(depth, omega, ice_volpct):
+    """深さ depth [m] における場の振幅減衰係数 alpha [Np/m] と位相速度 v [m/s] を返す。
+    減衰・速度の式をここに一元化し、中心周波数/シフトレート/スペクトルで共有する。"""
+    sqrt_eps = np.sqrt(get_eps_mix_spectrum(depth, omega, ice_volpct))
+    alpha = - (omega / const.c) * np.imag(sqrt_eps)
+    v = const.c / np.real(sqrt_eps)
+    return alpha, v
+
+
+def spectral_centroid(power, f_calc):
+    """パワースペクトルの重心周波数 [Hz]。中心周波数の定義を全図で統一する。"""
+    return np.trapz(f_calc * power, f_calc) / np.trapz(power, f_calc)
+
+
 _incident_spectrum_cache = None   # 入射波の「全帯域」スペクトルをキャッシュ (帯域制限は呼び出し毎に適用)
 def load_incident_spectrum(freq_min=FREQ_BAND_MIN, freq_max=FREQ_BAND_MAX):
     """入射波(Ascan.out)を読み込み、指定帯域 [freq_min, freq_max] に限定した
     (f_calc [Hz], S0_calc [複素スペクトル], omega [rad/s]) を返す。
     Ascan.out が無い場合は合成ガウシアンパルスにフォールバックする。
     FFT結果(全帯域)をキャッシュし、帯域マスクのみを呼び出し毎に適用するため、
-    帯域を変えても再FFTは不要。デフォルトは解析帯域 FREQ_BAND_MIN/MAX (0.5-2.0 GHz)。"""
+    帯域を変えても再FFTは不要。デフォルトは解析帯域 FREQ_BAND_MIN/MAX。"""
     global _incident_spectrum_cache
     if _incident_spectrum_cache is None:
         try:
@@ -363,9 +410,7 @@ def load_incident_spectrum(freq_min=FREQ_BAND_MIN, freq_max=FREQ_BAND_MAX):
 
 def calc_analytical_centroid_and_shiftrate(ice_volpct):
     """水氷含有量に対する解析的な中心周波数とシフトレートの深さプロファイルを計算"""
-    f_center = ANCHOR_FREQ  # 参照用(合成パルス幅は load_incident_spectrum 内で使用)
-
-    # 入射波スペクトル(帯域限定済み)を取得
+    # 入射波スペクトル(解析帯域 FREQ_BAND_MIN/MAX に限定済み)を取得
     f_calc, S0_calc, omega = load_incident_spectrum()
 
     # --- 時間遅延（Time Offset）の計算 ---
@@ -375,10 +420,9 @@ def calc_analytical_centroid_and_shiftrate(ice_volpct):
 
     t_air_ns = (2.0 * antenna_height / const.c) * 1e9
 
-    # 地表から受信機までのオフセット伝搬時間 (Heikenモデルの密度式を利用)
+    # 地表から受信機までのオフセット伝搬時間 (共通の密度式・Heiken式を利用)
     d_sub_offset = np.linspace(0, rx_depth, 50)
-    rho_offset = 1.92 * (d_sub_offset*100 + 12.2) / (d_sub_offset*100 + 18.0)
-    eps_sub_offset = 1.919 ** rho_offset
+    eps_sub_offset = heiken_eps_real(density_profile(d_sub_offset))
     v_sub = const.c / np.sqrt(eps_sub_offset)
     dt_sub = d_sub_offset[1] - d_sub_offset[0]
     t_ground_start_ns = np.sum(2.0 * dt_sub / v_sub) * 1e9
@@ -397,21 +441,18 @@ def calc_analytical_centroid_and_shiftrate(ice_volpct):
     cumulative_time = np.zeros_like(omega)
 
     for i, d in enumerate(d_array):
-        # 各深さの複素誘電率スペクトル (Method A + MG混合) を計算
-        eps_complex_w = get_eps_mix_spectrum(d, omega, ice_volpct)
-
-        sqrt_eps = np.sqrt(eps_complex_w)
-        alpha_d = - (omega / const.c) * np.imag(sqrt_eps)
-        v_d = const.c / np.real(sqrt_eps)
+        # 各深さの減衰係数 alpha と位相速度 v (共通ヘルパ)
+        alpha_d, v_d = local_alpha_velocity(d, omega, ice_volpct)
 
         if i > 0:
             cumulative_attenuation += alpha_d * d_step
             cumulative_time += 2 * d_step / v_d
 
+        # 深さ d の反射体から往復して戻るエコースペクトル (往復減衰 exp(-2*∫alpha dz))
         S_d_w = S0_calc * np.exp(-2 * cumulative_attenuation)
         power = np.abs(S_d_w)**2
 
-        f_peak = np.trapz(f_calc * power, f_calc) / np.trapz(power, f_calc)
+        f_peak = spectral_centroid(power, f_calc)
         f_peak_d.append(f_peak)
 
         t_delay_ground = np.interp(f_peak, f_calc, cumulative_time)
@@ -490,21 +531,17 @@ def make_centroid_profile():
     return base + '.png'
 
 # ------------------------------------------------------------
-# 6-F. 解析的スペクトル比較図 (規格化 dB スケール + マスク基準) ★新規追加
+# 6-F. 解析的スペクトル比較図 (規格化 dB スケール)
 #      指定した水氷含有量について、複数の対象深さでの規格化パワースペクトルを
 #      重ねてプロットする。入射波(rx_depth)のピークパワーを 0 dB 基準とし、
-#      各深さの中心周波数を破線で、パワーマスク基準を赤の点線で示す。
+#      各深さの中心周波数を破線で示す。
+#      ※ 中心周波数は calc_analytical_centroid_and_shiftrate と同一の
+#        spectral_centroid / 同一帯域(FREQ_BAND)で計算するため、両図は整合する。
 # ------------------------------------------------------------
 def make_spectrum_comparison(ice_volpct):
-    # 表示・計算帯域は解析帯域より広い SPECTRUM_FREQ_MIN/MAX を用いる
-    # (この関数だけ広帯域で評価し、中心周波数/シフトレートの解析には影響しない)
+    # 解析帯域 [FREQ_BAND_MIN, FREQ_BAND_MAX] に限定した入射波スペクトルを取得
     f_calc, S0_calc, omega = load_incident_spectrum(FREQ_BAND_MIN, FREQ_BAND_MAX)
     f_calc_ghz = f_calc / 1e9
-
-    # 中心周波数は解析帯域 [FREQ_BAND_MIN, FREQ_BAND_MAX] 内で評価し、
-    # centroid_frequency_profile と定義を揃える(帯域外の低パワー裾で重心が
-    # ぶれるのを防ぐ)。広帯域で重心を取りたい場合はこのマスクを外す。
-    centroid_mask = (f_calc >= FREQ_BAND_MIN) & (f_calc <= FREQ_BAND_MAX)
 
     # 入射波(基準深さ)のパワー最大値を 0 dB の基準とする
     power_0 = np.abs(S0_calc) ** 2
@@ -514,7 +551,7 @@ def make_spectrum_comparison(ice_volpct):
     colors = plt.cm.viridis(np.linspace(0, 0.9, len(SPECTRUM_TARGET_DEPTHS)))
 
     for i, d in enumerate(SPECTRUM_TARGET_DEPTHS):
-        # 基準深さ(rx_depth)から目的の深さ(d)までの減衰を積分で計算
+        # 基準深さ(rx_depth)から目的の深さ(d)までの往復減衰を積分で計算
         if d <= RX_DEPTH:
             cum_alpha = np.zeros_like(omega)
         else:
@@ -523,22 +560,18 @@ def make_spectrum_comparison(ice_volpct):
             dz = d_sub[1] - d_sub[0]
             cum_alpha = np.zeros_like(omega)
             for k, d_int in enumerate(d_sub):
-                # 共通の誘電率モデル関数で一括計算
-                eps_complex_w = get_eps_mix_spectrum(d_int, omega, ice_volpct)
-                # 局所的な減衰率
-                alpha_int = - (omega / const.c) * np.imag(np.sqrt(eps_complex_w))
+                # 共通ヘルパで局所的な減衰率を取得
+                alpha_int, _ = local_alpha_velocity(d_int, omega, ice_volpct)
                 # 積分の累積 (最初の点は dz=0 と見なせるため k>0 で加算)
                 if k > 0:
                     cum_alpha += alpha_int * dz
 
-        # 積分された全減衰量を用いてスペクトルを計算
+        # 積分された全減衰量を用いてエコースペクトルを計算 (往復 exp(-2*cum_alpha))
         S_d_w = S0_calc * np.exp(-2 * cum_alpha)
         power = np.abs(S_d_w) ** 2
 
-        # 中心周波数（線形スケールで、解析帯域内のみで計算）
-        f_peak = (np.trapz(f_calc[centroid_mask] * power[centroid_mask], f_calc[centroid_mask])
-                  / np.trapz(power[centroid_mask], f_calc[centroid_mask]))
-        f_peak_ghz = f_peak / 1e9
+        # 中心周波数（線形スケール。f_calc は既に解析帯域に限定済み）
+        f_peak_ghz = spectral_centroid(power, f_calc) / 1e9
 
         # 入射波の最大パワーで規格化し、dB へ変換
         power_norm = power / max_power_0
@@ -582,7 +615,7 @@ png_rho = make_density_profile()
 png_wtpct = make_ice_wtpct_profile()
 png_shift = make_shiftrate_profile()
 png_centroid = make_centroid_profile()
-png_spectra = [make_spectrum_comparison(c) for c in ice_contents]  # ★新規追加: 各氷含有量のスペクトル比較
+png_spectra = [make_spectrum_comparison(c) for c in ice_contents]  # 各氷含有量のスペクトル比較
 
 # ============================================================
 # 7. サマリ txt
@@ -592,6 +625,9 @@ def write_summary():
     lines.append("===== Method A + water-ice mixing =====")
     lines.append(f"FeOTiO2 = {FeOTiO2:.1f} wt%,  sigma_ohmic = 0 "
                  f"(loss carried by Debye poles)")
+    lines.append(f"Heiken model: eps'=({HEIKEN_EPS_BASE})^rho, "
+                 f"tan_d=10^({HEIKEN_TAND_A}*FeOTiO2 + {HEIKEN_TAND_B}*rho - {HEIKEN_TAND_C}), "
+                 f"anchor={ANCHOR_FREQ/1e6:.0f} MHz")
     lines.append(f"2-pole Debye: DE1={DEBYE_DE1}, TAU1={DEBYE_TAU1:.4e}, "
                  f"DE2={DEBYE_DE2}, TAU2={DEBYE_TAU2:.4e}")
     lines.append(f"Ice (Evans1965): eps' = {EPS_ICE_RE}, "
