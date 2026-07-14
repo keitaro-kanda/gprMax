@@ -161,6 +161,9 @@ def smooth_masked(data, mask, sigma):
     sm_weight = gaussian_filter(mask.astype(float),  sigma=sigma)
     out = np.full_like(sm_data, np.nan)
     np.divide(sm_data, sm_weight, out=out, where=(sm_weight > 1e-6))
+    # スムージングで値が周囲へにじみ出るのを防ぐため、
+    # 元々有効だったピクセル以外は NaN に戻す
+    out[~mask] = np.nan
     return out
 
 centroid_smooth  = smooth_masked(centroid_map,  valid_mask, sigma)
