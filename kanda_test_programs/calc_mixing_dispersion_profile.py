@@ -24,7 +24,13 @@ Heiken基準の深さプロファイル + 2極Debye分散(Method A) + 水氷混�
   (7) 解析的周波数シフトレートプロファイル
   (8) 解析的中心周波数プロファイル
   (9) 各水氷含有量ごとの解析的スペクトル比較図 (規格化 dB)
-  (10) サマリ txt
+ (10) ★追加: STFTパラメータ要求解析 (output_dir_centroid/STFT_parameter)
+        (10-a) 中心周波数: 左=0vol%との差[GHz](絶対値) / 右=必要nperseg
+        (10-b) シフトレート: 左=0vol%との差[GHz/ns](絶対値) / 右=必要nperseg
+        (10-c) 横軸nperseg vs 周波数分解能 (Δf, Δḟ)
+        (10-d) 横軸nperseg vs 深さ分解能 (Δz, Δż; eps_r = 2.4..3.2)
+        (10-e) 要求サマリ txt
+ (11) サマリ txt
 ==================================================================
 """
 import os
@@ -52,6 +58,9 @@ output_dir_centroid = os.path.join(output_base_dir, 'centroid')
 os.makedirs(output_dir_centroid, exist_ok=True)
 output_dir_waveform = os.path.join(output_dir_centroid, 'waveform')
 os.makedirs(output_dir_waveform, exist_ok=True)
+# ★追加: STFTパラメータ検討用の出力先
+output_dir_stft = os.path.join(output_dir_centroid, 'STFT_parameter')
+os.makedirs(output_dir_stft, exist_ok=True)
 
 eps0 = 8.8541878128e-12          # 真空の誘電率 [F/m]
 
@@ -99,6 +108,22 @@ FREQ_BAND_MAX = 6.0e9            # 解析帯域上限 [Hz]、帯域上限値の2
 RX_DEPTH      = 0.10             # 受信機(計算開始)深さ [m]
 SPECTRUM_TARGET_DEPTHS = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]  # スペクトル比較の対象深さ [m]
 #POWER_THRESHOLD_DB     = -30.0   # スペクトル比較図のパワーマスク基準 [dB]
+
+# ------------------------------------------------------------
+# ★追加: STFT パラメータ検討の設定 (シミュレーション設定に準拠して固定)
+#   dt はシミュレーションの時間刻み(グリッドサイズ 0.005 m の場合 1.18e-11 s)。
+#   f_s = 1/dt はサンプリング周波数で、nperseg 以外は固定値として扱う。
+# ------------------------------------------------------------
+STFT_DT_S     = 1.18e-11                    # シミュレーションの時間分解能 [s] (固定)
+STFT_FS_HZ    = 1.0 / STFT_DT_S             # サンプリング周波数 [Hz] (固定; ≈84.75 GHz)
+STFT_DT_NS    = STFT_DT_S * 1e9             # [ns]
+STFT_FS_GHZ   = STFT_FS_HZ / 1e9            # [GHz]
+STFT_NOVERLAP_RATIO = 0.75                  # noverlap = 3/4 * nperseg (解析コードの設定)
+DETECT_MARGIN = 2.0                         # 差の 1/DETECT_MARGIN を分解できることを要求
+                                            # (1.0: 差そのもの, 2.0: 差の半分まで分解)
+EPSR_LIST_FOR_DZ = [2.4, 2.6, 2.8, 3.0, 3.2]   # 深さ分解能曲線用の比誘電率
+EPSR_COLORS      = ['r', 'g', 'b', 'c', 'm']  # 深さ分解能曲線の色
+NPERSEG_RANGE    = np.arange(16, 4097)      # 分解能曲線の横軸
 
 # ============================================================
 # レゴリス誘電モデルの「単一の情報源」(密度式・Heiken経験式)
@@ -259,7 +284,7 @@ def make_profile_and_delta(data, quantity_label, fname, ref=None):
     axes[0].set_xlabel(quantity_label, fontsize=18)
     if fname == 'losstangent':
         axes[0].locator_params(axis='x', nbins=5)
-    
+
     for ii in range(n_ice):
         if ice_contents[ii] == 0:
             continue
@@ -482,24 +507,35 @@ def calc_analytical_centroid_and_shiftrate(ice_volpct):
     return shiftrate_z, f_peak_z
 
 
+# --- 6-E-1. 中心周波数/シフトレートのキャッシュ付きラッパ ---
+#     (差分計算・要求 nperseg 計算・プロファイル図で同じ結果を使い回す)
+_centroid_cache = {}
+def get_centroid_shiftrate(ice_volpct):
+    """calc_analytical_centroid_and_shiftrate のキャッシュ版。
+    戻り値: (shiftrate_z [GHz/ns], f_peak_z [GHz])  ※ 深さ軸 z 上"""
+    if ice_volpct not in _centroid_cache:
+        _centroid_cache[ice_volpct] = calc_analytical_centroid_and_shiftrate(ice_volpct)
+    return _centroid_cache[ice_volpct]
+
+
 def make_shiftrate_profile():
     """解析的シフトレートプロファイルをプロット"""
     fig, ax = plt.subplots(figsize=(5, 6))
-    
+
     for ii, c in enumerate(ice_contents):
-        shiftrate, _ = calc_analytical_centroid_and_shiftrate(c)
+        shiftrate, _ = get_centroid_shiftrate(c)
         ax.plot(shiftrate, z, color=ice_colors[ii], linestyle='-', lw=2,
                 label=ice_labels[ii])
-        
+
     ax.set_xlabel('Shift Rate [GHz/ns]', fontsize=18)
     ax.set_ylabel('Depth (m)', fontsize=18)
     ax.tick_params(axis='both', which='major', labelsize=14)
     ax.minorticks_on()
     ax.grid(True, alpha=0.4)
     ax.invert_yaxis()
-    
+
     ax.legend(loc='lower left', fontsize=14)
-    
+
     plt.tight_layout()
     base = os.path.join(output_dir_centroid, 'shiftrate_profile')
     fig.savefig(base + '.png', bbox_inches='tight', dpi=200)
@@ -510,21 +546,21 @@ def make_shiftrate_profile():
 def make_centroid_profile():
     """解析的中心周波数プロファイルをプロット"""
     fig, ax = plt.subplots(figsize=(5, 6))
-    
+
     for ii, c in enumerate(ice_contents):
-        _, f_peak = calc_analytical_centroid_and_shiftrate(c)
+        _, f_peak = get_centroid_shiftrate(c)
         ax.plot(f_peak, z, color=ice_colors[ii], linestyle='-', lw=2,
                 label=ice_labels[ii])
-        
+
     ax.set_xlabel('Centroid Frequency [GHz]', fontsize=18)
     ax.set_ylabel('Depth (m)', fontsize=18)
     ax.tick_params(axis='both', which='major', labelsize=14)
     ax.minorticks_on()
     ax.grid(True, alpha=0.4)
     ax.invert_yaxis()
-    
+
     ax.legend(loc='upper left', fontsize=14)
-    
+
     plt.tight_layout()
     base = os.path.join(output_dir_centroid, 'centroid_frequency_profile')
     fig.savefig(base + '.png', bbox_inches='tight', dpi=200)
@@ -607,6 +643,262 @@ def make_spectrum_comparison(ice_volpct):
     plt.close(fig)
     return base + '.png'
 
+# ============================================================
+# ★ 6-G. STFT パラメータ要求の解析 (追加機能)
+#    「単一の情報源」方針に従い、STFT の分解能式はここで一元定義する。
+#
+#    前提 (STFT_parameter ノート準拠):
+#       dt, f_s = 1/dt は シミュレーション設定に準拠した固定値
+#       周波数分解能   : Δf     = f_s / nperseg                       [GHz]
+#       空間分解能     : Δz     = nperseg * dt * v / 2                 [m]
+#       シフトレート   : Δḟ    = 2√2 (f_s / nperseg)^2                [GHz/ns]
+#                        (noverlap = 3/4, np.gradient の中心差分, 最悪ケース)
+#       シフトレートの空間分解能: Δż = 1.5 * nperseg * dt * v / 2      [m]
+#    ※ v は誘電率プロファイルから求めた「その場」の位相速度を使う。
+# ============================================================
+
+# --- 6-G-0. STFT 分解能の基本式 (nperseg -> 分解能) ---
+def stft_delta_f_ghz(nperseg):
+    """周波数分解能 Δf [GHz] = f_s / nperseg"""
+    return STFT_FS_GHZ / np.asarray(nperseg, dtype=float)
+
+def stft_delta_fdot_ghz_per_ns(nperseg):
+    """シフトレート分解能 Δḟ [GHz/ns] = 2√2 (f_s/nperseg)^2 (最悪ケース)"""
+    return 2.0 * np.sqrt(2.0) * (STFT_FS_GHZ / np.asarray(nperseg, dtype=float)) ** 2
+
+def stft_delta_z(nperseg, v):
+    """空間分解能 Δz [m] = nperseg * dt * v / 2   (v [m/s])"""
+    return np.asarray(nperseg, dtype=float) * STFT_DT_S * np.asarray(v, dtype=float) / 2.0
+
+def stft_delta_zdot(nperseg, v):
+    """シフトレートの空間分解能 Δż [m] = 1.5 * nperseg * dt * v / 2"""
+    return 1.5 * stft_delta_z(nperseg, v)
+
+# --- 6-G-1. 分解能 -> 必要 nperseg (上の式の逆解き) ---
+def nperseg_required_for_df(df_ghz):
+    """Δf <= df_ghz を満たす最小 nperseg = f_s / df"""
+    df = np.asarray(df_ghz, dtype=float)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.where(df > 0, STFT_FS_GHZ / df, np.nan)
+
+def nperseg_required_for_dfdot(dfdot_ghz_per_ns):
+    """Δḟ <= dfdot を満たす最小 nperseg = f_s * sqrt(2√2 / dfdot)"""
+    dfd = np.asarray(dfdot_ghz_per_ns, dtype=float)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.where(dfd > 0,
+                        STFT_FS_GHZ * np.sqrt(2.0 * np.sqrt(2.0) / dfd), np.nan)
+
+# --- 6-G-2. その場の位相速度プロファイル ---
+def local_velocity_profile(ice_volpct, f_peak_z):
+    """各深さ z における「その場」の位相速度 v [m/s]。
+    誘電率は Method A + Maxwell-Garnett のプロファイルを用い、
+    評価周波数はその深さでの中心周波数 f_peak_z [GHz] とする
+    (分散媒質なので、中心周波数での値を使うのが整合的)。"""
+    v_z = np.full_like(z, np.nan, dtype=float)
+    for j, d in enumerate(z):
+        fc = f_peak_z[j]
+        if not np.isfinite(fc) or fc <= 0:
+            continue
+        omega_j = np.array([2.0 * np.pi * fc * 1e9])
+        _, v_j = local_alpha_velocity(d, omega_j, ice_volpct)
+        v_z[j] = v_j[0]
+    return v_z
+
+# --- 6-G-3. 0 vol% との差 と 必要 nperseg の計算 ---
+def calc_stft_requirements(ice_volpct):
+    """水氷含有量 ice_volpct について、
+       ・0 vol% との中心周波数の差   d_fc   [GHz]      (絶対値)
+       ・0 vol% とのシフトレートの差 d_fdot [GHz/ns]   (絶対値)
+       ・それぞれを分解するのに必要な nperseg
+       ・その nperseg でのその場の空間分解能 Δz, Δż  [m]
+       ・その場の位相速度 v [m/s]
+    を深さ軸 z 上で返す (dict)。
+    DETECT_MARGIN=2 とすれば「差の半分を分解する」要求になる。"""
+    sr0, fc0 = get_centroid_shiftrate(0)
+    sr, fc = get_centroid_shiftrate(ice_volpct)
+
+    d_fc = np.abs(fc - fc0)          # [GHz]
+    d_fdot = np.abs(sr - sr0)        # [GHz/ns]
+
+    # 要求分解能 = 差 / DETECT_MARGIN
+    req_df = d_fc / DETECT_MARGIN
+    req_dfdot = d_fdot / DETECT_MARGIN
+
+    n_req_fc = nperseg_required_for_df(req_df)
+    n_req_fdot = nperseg_required_for_dfdot(req_dfdot)
+
+    v_z = local_velocity_profile(ice_volpct, fc)
+
+    dz_fc = stft_delta_z(n_req_fc, v_z)
+    dz_fdot = stft_delta_zdot(n_req_fdot, v_z)
+
+    return dict(d_fc=d_fc, d_fdot=d_fdot,
+                n_req_fc=n_req_fc, n_req_fdot=n_req_fdot,
+                dz_fc=dz_fc, dz_fdot=dz_fdot, v=v_z,
+                fc=fc, sr=sr)
+
+_stft_req_cache = {}
+def get_stft_requirements(ice_volpct):
+    if ice_volpct not in _stft_req_cache:
+        _stft_req_cache[ice_volpct] = calc_stft_requirements(ice_volpct)
+    return _stft_req_cache[ice_volpct]
+
+# --- 6-G-4. [左:0vol%との差 / 右:必要nperseg] の2列図 ---
+def make_stft_requirement_profile(kind):
+    """kind = 'centroid' or 'shiftrate'
+    左パネル: 0 vol% との差(絶対値)の深さプロファイル
+    右パネル: その差を分解するために必要な nperseg の深さプロファイル
+    色 = 水氷含有量 (0 vol% は差がゼロなので描画しない)"""
+    if kind == 'centroid':
+        key_d, key_n = 'd_fc', 'n_req_fc'
+        xlabel_left = r'$|f_{c,0\%} - f_{c}|$ [GHz]'
+        title = 'Centroid frequency'
+        fname = 'stft_requirement_centroid'
+    elif kind == 'shiftrate':
+        key_d, key_n = 'd_fdot', 'n_req_fdot'
+        xlabel_left = r'$|\dot{f}_{0\%} - \dot{f}|$ [GHz/ns]'
+        title = 'Shift rate'
+        fname = 'stft_requirement_shiftrate'
+    else:
+        raise CmdInputError(f'unknown kind: {kind}')
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 6))
+
+    for ii, c in enumerate(ice_contents):
+        if c == 0:
+            continue                      # 差が 0 (基準) なので除外
+        res = get_stft_requirements(c)
+        axes[0].plot(res[key_d], z, color=ice_colors[ii], lw=2, label=ice_labels[ii])
+        axes[1].plot(res[key_n], z, color=ice_colors[ii], lw=2, label=ice_labels[ii])
+
+    axes[0].set_xlabel(xlabel_left, fontsize=18)
+    axes[0].set_xscale('log')
+    axes[1].set_xlabel('Required nperseg', fontsize=18)
+    axes[1].set_xscale('log')
+
+    for ax in axes:
+        ax.set_ylabel('Depth (m)', fontsize=18)
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.minorticks_on()
+        ax.grid(True, which='both', alpha=0.4)
+        ax.invert_yaxis()
+        ax.legend(loc='best', fontsize=13)
+
+    fig.suptitle(f'{title}: difference from 0 vol% ice and required nperseg\n'
+                 f'($f_s$ = {STFT_FS_GHZ:.2f} GHz, dt = {STFT_DT_S:.3e} s, '
+                 f'margin = {DETECT_MARGIN:g})', fontsize=15)
+    plt.tight_layout()
+    base = os.path.join(output_dir_stft, fname)
+    fig.savefig(base + '.png', bbox_inches='tight', dpi=200)
+    fig.savefig(base + '.pdf', bbox_inches='tight')
+    plt.close(fig)
+    return base + '.png'
+
+# --- 6-G-5. 横軸 nperseg vs 周波数分解能 ---
+def make_nperseg_vs_frequency_resolution():
+    """横軸 nperseg, 縦軸 周波数分解能。
+    Δf [GHz] (中心周波数用) と Δḟ [GHz/ns] (シフトレート用) を
+    左右の縦軸に分けて表示する。"""
+    n = NPERSEG_RANGE
+    fig, ax = plt.subplots(figsize=(7, 6))
+
+    l1, = ax.plot(n, stft_delta_f_ghz(n), color='k', lw=2,
+                  label=r'$\Delta f = f_s/\mathrm{nperseg}$ [GHz]')
+    ax.set_xlabel('nperseg', fontsize=18)
+    ax.set_ylabel(r'$\Delta f$ [GHz]', fontsize=18)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.grid(True, which='both', alpha=0.4)
+
+    ax2 = ax.twinx()
+    l2, = ax2.plot(n, stft_delta_fdot_ghz_per_ns(n), color='m', lw=2, ls='--',
+                   label=r'$\Delta\dot{f} = 2\sqrt{2}(f_s/\mathrm{nperseg})^2$ [GHz/ns]')
+    ax2.set_ylabel(r'$\Delta\dot{f}$ [GHz/ns]', fontsize=18, color='m')
+    ax2.set_yscale('log')
+    ax2.tick_params(axis='y', which='major', labelsize=14, colors='m')
+
+    ax.legend(handles=[l1, l2], loc='upper right', fontsize=13)
+    ax.set_title(f'$f_s$ = {STFT_FS_GHZ:.2f} GHz (dt = {STFT_DT_S:.3e} s)', fontsize=15)
+
+    plt.tight_layout()
+    base = os.path.join(output_dir_stft, 'nperseg_vs_frequency_resolution')
+    fig.savefig(base + '.png', bbox_inches='tight', dpi=200)
+    fig.savefig(base + '.pdf', bbox_inches='tight')
+    plt.close(fig)
+    return base + '.png'
+
+# --- 6-G-6. 横軸 nperseg vs 深さ分解能 (eps_r をパラメータ) ---
+def make_nperseg_vs_depth_resolution():
+    """横軸 nperseg, 縦軸 深さ分解能。
+    比誘電率 EPSR_LIST_FOR_DZ ごとに色を変えて描画。
+    実線: Δz  = nperseg*dt*v/2      (中心周波数の空間分解能)
+    破線: Δż = 1.5*nperseg*dt*v/2  (シフトレートの空間分解能)"""
+    n = NPERSEG_RANGE
+    fig, ax = plt.subplots(figsize=(7, 6))
+
+    for k, epsr in enumerate(EPSR_LIST_FOR_DZ):
+        v = const.c / np.sqrt(epsr)          # [m/s]
+        col = EPSR_COLORS[k % len(EPSR_COLORS)]
+        ax.plot(n, stft_delta_z(n, v), color=col, lw=2,
+                label=rf'$\varepsilon_r$ = {epsr:.1f} ($v$ = {v/1e9*1e0:.3f} m/ns)'.replace('m/ns', 'm/ns'))
+        ax.plot(n, stft_delta_zdot(n, v), color=col, lw=1.6, ls='--')
+
+    ax.set_xlabel('nperseg', fontsize=18)
+    ax.set_ylabel(r'Depth resolution [m]', fontsize=18)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.grid(True, which='both', alpha=0.4)
+
+    style_handles = [Line2D([0], [0], color='gray', lw=2, ls='-',
+                            label=r'$\Delta z$ (centroid)'),
+                     Line2D([0], [0], color='gray', lw=1.6, ls='--',
+                            label=r'$\Delta \dot{z}$ (shift rate, $\times 1.5$)')]
+    h, l = ax.get_legend_handles_labels()
+    ax.legend(handles=h + style_handles, loc='upper left', fontsize=12)
+    ax.set_title(f'dt = {STFT_DT_S:.3e} s (fixed)', fontsize=15)
+
+    plt.tight_layout()
+    base = os.path.join(output_dir_stft, 'nperseg_vs_depth_resolution')
+    fig.savefig(base + '.png', bbox_inches='tight', dpi=200)
+    fig.savefig(base + '.pdf', bbox_inches='tight')
+    plt.close(fig)
+    return base + '.png'
+
+# --- 6-G-7. STFT 要求のサマリ txt ---
+def write_stft_summary():
+    lines = []
+    lines.append("===== STFT parameter requirement (difference from 0 vol% ice) =====")
+    lines.append(f"dt = {STFT_DT_S:.4e} s (fixed),  f_s = 1/dt = {STFT_FS_GHZ:.4f} GHz (fixed)")
+    lines.append(f"noverlap ratio = {STFT_NOVERLAP_RATIO}, detection margin = {DETECT_MARGIN:g}")
+    lines.append("Delta_f      = f_s / nperseg                 [GHz]")
+    lines.append("Delta_fdot   = 2*sqrt(2) * (f_s/nperseg)^2   [GHz/ns]  (worst case)")
+    lines.append("Delta_z      = nperseg * dt * v / 2          [m]  (v: local phase velocity)")
+    lines.append("Delta_zdot   = 1.5 * nperseg * dt * v / 2    [m]")
+    lines.append("")
+
+    for zt in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]:
+        j = int(np.argmin(np.abs(z - zt)))
+        lines.append(f"--- depth = {z[j]:.2f} m ---")
+        for c in ice_contents:
+            if c == 0:
+                continue
+            r = get_stft_requirements(c)
+            lines.append(
+                f"  ice={c:>2d}vol%: |d_fc|={r['d_fc'][j]:8.5f} GHz -> nperseg>={r['n_req_fc'][j]:9.1f}"
+                f" (dz={r['dz_fc'][j]:6.3f} m, v={r['v'][j]/1e9:.4f} m/ns)")
+            lines.append(
+                f"              |d_fdot|={r['d_fdot'][j]:9.6f} GHz/ns -> nperseg>={r['n_req_fdot'][j]:9.1f}"
+                f" (dzdot={r['dz_fdot'][j]:6.3f} m)")
+        lines.append("")
+
+    text = "\n".join(lines) + "\n"
+    fname = os.path.join(output_dir_stft, 'stft_requirement_summary.txt')
+    with open(fname, 'w') as fh:
+        fh.write(text)
+    return fname
+
 # プロット実行
 png_sum = make_summary_2x2()
 png_re  = make_profile_and_delta(EPS_RE, r"$\varepsilon^{\prime}$", 'permittivity_Re', ref=eps_re_Heiken)
@@ -618,6 +910,12 @@ png_wtpct = make_ice_wtpct_profile()
 png_shift = make_shiftrate_profile()
 png_centroid = make_centroid_profile()
 png_spectra = [make_spectrum_comparison(c) for c in ice_contents]  # 各氷含有量のスペクトル比較
+# ★追加: STFT パラメータ検討
+png_req_fc   = make_stft_requirement_profile('centroid')
+png_req_fdot = make_stft_requirement_profile('shiftrate')
+png_nps_freq = make_nperseg_vs_frequency_resolution()
+png_nps_dz   = make_nperseg_vs_depth_resolution()
+txt_stft     = write_stft_summary()
 
 # ============================================================
 # 7. サマリ txt
@@ -710,8 +1008,10 @@ def write_summary():
 txt = write_summary()
 
 print("\nsaved figures:")
-# 出力リストに png_centroid とスペクトル比較図を追加
+# 出力リストに png_centroid とスペクトル比較図、STFT パラメータ図を追加
 for p in [png_sum, png_re, png_im, png_sig, png_tan, png_rho, png_wtpct,
-          png_shift, png_centroid] + png_spectra:
+          png_shift, png_centroid] + png_spectra + [
+          png_req_fc, png_req_fdot, png_nps_freq, png_nps_dz]:
     print("  ", p)
 print("saved summary:", txt)
+print("saved STFT summary:", txt_stft)
