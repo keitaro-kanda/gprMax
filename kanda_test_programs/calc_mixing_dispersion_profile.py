@@ -50,6 +50,8 @@ output_dir_profile = os.path.join(output_base_dir, 'profile')
 os.makedirs(output_dir_profile, exist_ok=True)
 output_dir_centroid = os.path.join(output_base_dir, 'centroid')
 os.makedirs(output_dir_centroid, exist_ok=True)
+output_dir_waveform = os.path.join(output_dir_centroid, 'waveform')
+os.makedirs(output_dir_waveform, exist_ok=True)
 
 eps0 = 8.8541878128e-12          # 真空の誘電率 [F/m]
 
@@ -599,7 +601,7 @@ def make_spectrum_comparison(ice_volpct):
     ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5), fontsize=14)
 
     plt.tight_layout()
-    base = os.path.join(output_dir_centroid, f'spectrum_comparison_{ice_volpct}vol')
+    base = os.path.join(output_dir_waveform, f'spectrum_comparison_{ice_volpct}vol')
     fig.savefig(base + '.png', bbox_inches='tight', dpi=200)
     fig.savefig(base + '.pdf', bbox_inches='tight')
     plt.close(fig)
