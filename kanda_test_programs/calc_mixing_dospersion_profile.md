@@ -213,6 +213,7 @@ output_base_dir/
            ├── sweep_sigma_scale / sweep_beff_scale / sweep_tavg / sweep_ntraces
            ├── requirement_overlay        # シグナル vs δIF（交差深さ＝検出限界）
            ├── required_tavg_and_dz       # 要求 T_avg と対応 Δz
+           ├── fixed_tavg_dz_profile      # 固定 T_avg (requirement_overlay と同じ3値) の Δz(d) プロファイル
            ├── empirical_vs_theory        # 理論 δIF と経験 δf の比較
            ├── empirical_bias_check       # IF_w バイアス（コヒーレントクラッタ定量）
            └── empirical_df_{label}.csv   # 経験値のキャッシュ
@@ -227,6 +228,7 @@ output_base_dir/
 - **sweep_***：色＝氷含有量、線種＝スイープ値。k_σ は δIF に比例、k_B・T_avg・n_traces は 1/√ で効くことが確認できる。
 - **requirement_overlay**：色付き実線（シグナル）が灰色線（δIF）を上回る深さから検出可能。おおよそ 20 vol% は 0.5 m 以深、10 vol% は 0.9 m 以深、5 vol% は T_avg = 10 ns で 1 m 以深、1 vol% は全深度で不可（n_traces = 56 時）。
 - **required_tavg_and_dz**：同じ結論の逆表現。10 vol% で要求 Δz ≈ 0.5–1 m と、STFT のビン幅論法（数 m〜10 m）より約 1 桁緩い。
+- **fixed_tavg_dz_profile**：`requirement_overlay` と同じ $T_{avg}$ = 1, 3, 10 ns を選んだ場合の**空間コスト** $\Delta z = T_{avg}\cdot v(d)/2$ を深さごとに示す（`required_tavg_and_dz` と同一の局所位相速度 `get_local_velocity_profile` を使用）。色＝氷含有量（0, 1, 5, 10, 20 vol% すべて）、線種＝$T_{avg}$。$v(d)$ は深部ほどわずかに低下する（誘電率増加）ため各曲線は深部でわずかに左（小さい Δz 側）へ傾き、氷含有量が高いほど $v$ がわずかに速いため曲線は右寄りになる。灰色の点線は水氷層のノミナル厚 0.5 m の参照線。`requirement_overlay` が「その T_avg で検出できるか」を示すのに対し、本図は「その T_avg を選んだときに深さ方向でどれだけボケるか」を直接可視化する。
 - **empirical_vs_theory**：rand_amp > 0 の raw/single 曲線が理論 δIF($n=1$) に一致していれば、スペックル統計モデルがスケール係数 ≈ 1 で妥当という検証になる（実測で確認済み）。
 - **empirical_bias_check**：右パネルのバイアスが raw と mean-sub でほぼ同じなら、バイアスの主因はコヒーレント成分（wake）**ではない**ことを意味する（実測で確認済み。残差の有力候補は後方散乱断面積の周波数依存性 σ_s(f)）。rand_amp = 0 曲線は wake 単体が描く「見かけの周波数降下」を示すネガティブコントロール。浅部（地表反射が窓に入る領域）は解釈対象外。
 

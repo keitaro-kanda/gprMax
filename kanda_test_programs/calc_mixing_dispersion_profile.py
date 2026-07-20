@@ -919,6 +919,30 @@ def make_required_tavg_and_dz(use_peak=False):
     plt.tight_layout()
     return save_fig(fig, os.path.join(output_dir_resolution, 'required_tavg_and_dz'))
 
+# ★追加: 固定 T_avg (= RES_TAVG_LIST) の深さ方向平均化幅 Δz(d) = T_avg*v(d)/2。
+# v(d) は required_tavg_and_dz と同じ get_local_velocity_profile を流用する。
+def make_fixed_tavg_dz_profile():
+    fig, ax = plt.subplots(figsize=(7.5, 6))
+    for ii, c in enumerate(ice_contents):
+        v_profile = get_local_velocity_profile(c)
+        for si, T in enumerate(RES_TAVG_LIST):
+            dz = (T * 1e-9) * v_profile / 2.0
+            ax.plot(dz, z, color=ice_colors[ii], ls=_res_style(si), lw=2)
+
+    ax.axvline(0.5, color='gray', linestyle=':', lw=1.5, alpha=0.8)
+    ax.text(0.5, 0.12, ' nominal layer\n thickness 0.5 m',
+            fontsize=11, color='gray', va='top')
+
+    style_depth_axis(ax, r'$\Delta z = T_{avg} \cdot v(d)\,/\,2$ [m]', logx=True)
+    style_handles = [Line2D([0], [0], color='0.25', ls=_res_style(si), lw=2,
+                            label=r'$T_{avg}$ = ' + f'{T:g} ns')
+                     for si, T in enumerate(RES_TAVG_LIST)]
+    add_split_legend(fig, style_handles)
+    ax.set_title('Averaging window in depth for fixed ' + r'$T_{avg}$'
+                 + '\n(matches requirement_overlay settings)', fontsize=13)
+    plt.tight_layout()
+    return save_fig(fig, os.path.join(output_dir_resolution, 'fixed_tavg_dz_profile'))
+
 # ------------------------------------------------------------
 # ドナーからの移植関数群
 # ------------------------------------------------------------
@@ -1438,6 +1462,7 @@ def run_resolution_analysis():
     out.append(make_resolution_sweep('n_traces', RES_NTRACES_LIST, fixed, 'sweep_ntraces'))
     out.append(make_requirement_overlay())
     out.append(make_required_tavg_and_dz())
+    out.append(make_fixed_tavg_dz_profile())   # ★追加: 固定 T_avg の Δz(d) プロファイル
     out.append(make_empirical_vs_theory())
     out.append(make_empirical_bias_check())
     return out
