@@ -443,8 +443,6 @@ def plot_shiftrate_map(data, fname, prof_med, prof_p25, prof_p75, t_axis_h, exte
 # Step 1: Trace-wise Analytic Signal & IF (T_avg independent)
 # =============================================================================
 data_proc = outputdata - outputdata.mean(axis=1, keepdims=True) if MEAN_TRACE_REMOVAL else outputdata
-IF_full = np.zeros_like(outputdata)
-A2_full = np.zeros_like(outputdata)
 
 # 修正パッチ実装
 Z, A2_full, IF_full = compute_analytic_if(data_proc, dt_ns, freq_min, freq_max,
@@ -545,13 +543,11 @@ for T_avg in T_AVG_LIST_NS:
         P_win[k, :] = np.sum(A2_full[st:st+L, :], axis=0)
         A2IF_win[k, :] = np.sum(A2_full[st:st+L, :] * IF_full[st:st+L, :], axis=0)
     
-    # 修正パッチ実装
+    # 修正パッチ実装（旧実装のP_win/A2IF_winループと再代入行は削除）
     IF_w, P_win = ifw_pulse_pair(Z, starts, L, dt_ns)
     valid_mask = noise_floor_mask(P_win, L, A2_full, noise_gate_ns=5.0,
                                 dt_ns=dt_ns, snr_db=10.0)
     IF_w_masked = np.where(valid_mask, IF_w, np.nan)
-    IF_w = A2IF_win / (P_win + eps)
-    # 修正パッチ実装
     
     # パワーマスク
     # P_peak = np.max(P_win, axis=0, keepdims=True)
