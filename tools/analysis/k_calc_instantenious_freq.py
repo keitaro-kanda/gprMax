@@ -13,6 +13,7 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal
+from scipy.signal import butter, filtfilt, sosfiltfilt
 from scipy import constants as const
 import mpl_toolkits.axes_grid1 as axgrid1
 from gprMax.exceptions import CmdInputError
@@ -48,8 +49,8 @@ T_AVG_LIST_NS = [1.0, 3.0, 10.0]   # 平均化窓長 [ns]（それぞれ別個�
 HOP_RATIO     = 0.5                # ホップ = 窓長 × この係数
 MEAN_TRACE_REMOVAL = False         # True: 平均トレース除去（コヒーレント背景の分離検証用）
 
-freq_min = 0.25    # [GHz]
-freq_max = 6.0     # [GHz]
+freq_min = 0.5    # [GHz]
+freq_max = 2.0     # [GHz]
 power_threshold_db = -125.0   # [dB]
 eps = 1e-30
 
@@ -351,8 +352,17 @@ data_proc = outputdata - outputdata.mean(axis=1, keepdims=True) if MEAN_TRACE_RE
 IF_full = np.zeros_like(outputdata)
 A2_full = np.zeros_like(outputdata)
 
+lo, hi = freq_min/(fs/2), freq_max/(fs/2)   # freq, fs は GHz
+b, a = butter(4, [lo, hi], btype='band')
 for itrace in range(n_traces):
-    z = signal.hilbert(data_proc[:, itrace])
+    sos = butter(4, [freq_min/(fs/2), freq_max/(fs/2)], btype='band', output='sos')
+    tr = sosfiltfilt(sos, data_proc[:, itrace])
+    # tr = filtfilt(b, a, data_proc[:, 20])
+    print("filtered std / raw std =", tr.std() / data_proc[:,20].std())
+    # フィルタ後のスペクトルを見る
+    F = np.abs(np.fft.rfft(tr)); f = np.fft.rfftfreq(len(tr), dt_ns)
+    print("spectral centroid of filtered =", np.sum(f*F**2)/np.sum(F**2), "GHz")
+    z = signal.hilbert(tr)
     A2_full[:, itrace] = np.abs(z) ** 2
     phase = np.unwrap(np.angle(z))
     IF_full[:, itrace] = np.gradient(phase, dt_ns) / (2.0 * np.pi)
