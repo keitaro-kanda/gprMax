@@ -47,7 +47,8 @@ Hilbert変換を用いた包絡線二乗重み付き瞬時周波数 (IF_w) お�
 # =============================================================================
 T_AVG_LIST_NS = [1.0, 3.0, 10.0]   # 平均化窓長 [ns]（それぞれ別個に解析・出力）
 HOP_RATIO     = 0.5                # ホップ = 窓長 × この係数
-MEAN_TRACE_REMOVAL = False         # True: 平均トレース除去（コヒーレント背景の分離検証用）
+MEAN_TRACE_REMOVAL = True         # True: 平均トレース除去（コヒーレント背景の分離検証用）
+USE_BRICKWALL = True   # False にすると従来の butter+hilbert (比較実験用)
 
 freq_min = 0.5    # [GHz]
 freq_max = 2.0     # [GHz]
@@ -167,6 +168,99 @@ def get_eps_regolith(z_m, omega, d_params, anchor_freq=450e6):
 def surface_delay_ns(antenna_height, system_lag_ns):
     """地表面反射の到達時刻 (プロット上の基準線 'Surface') を計算 [ns]。"""
     return antenna_height * 2 / 0.3 + system_lag_ns
+
+# =============================================================================
+# k_calc_instantenious_freq.py 修正パッチ
+# 目的: STFT重心とパイプラインを等価化し、IF_w の系統ズレの原因を切り分ける
+#
+# [変更点]
+#  (1) Butterworth+hilbert を「ブリックウォール解析信号」に置換
+#      → STFTと同一のハードマスク [freq_min, freq_max] で帯域を定義。
+#        これにより IF_w ≡ 帯域制限スペクトル重心 の恒等式が構成的に成立し、
+#        フィルタスカートを通る帯域外残留 (wake等) の混入経路を遮断する。
+#  (2) 窓内平均をパルスペア推定 angle(Σ z[n+1] z*[n]) に置換
+#      → 現行の Σ A²·IF / Σ A² と同じ A² 重みだが、「角度の平均」ではなく
+#        「複素平均の角度」なので包絡線ヌル点の ±π 位相スリップに頑健。
+#  (3) パワーマスクを「トレースごとのノイズ床基準」に変更
+#      → 現行の -125 dB (ピーク基準) は実質マスク無しで、信号消失後の
+#        IF≈0 窓が中央値を 0 に引きずる原因。
+#  (4) 帯域外エネルギーの診断出力を追加 (原因の定量確認用)
+#
+# [使い方] Step 1 のトレースループ (sos = butter(...) 〜 IF_full 代入まで) を
+#          以下の compute_analytic_if() 呼び出しに置き換え、
+#          T_avg ループ内の IF_w 計算とマスクを (2)(3) に差し替える。
+# =============================================================================
+ 
+def compute_analytic_if(data_proc, dt_ns, freq_min, freq_max, use_brickwall=True):
+    """全トレースの解析信号 z とサンプルごとの IF を返す。
+ 
+    use_brickwall=True: 周波数領域で [freq_min, freq_max] 外を完全にゼロ化した
+    片側スペクトルから解析信号を構成 (STFTのハードマスクと等価な帯域定義)。
+    """
+    n_samples, n_traces = data_proc.shape
+    fs = 1.0 / dt_ns
+    Z = np.zeros((n_samples, n_traces), dtype=complex)
+ 
+    if use_brickwall:
+        fr = np.fft.rfftfreq(n_samples, dt_ns)
+        band = (fr >= freq_min) & (fr <= freq_max)
+        for i in range(n_traces):
+            X = np.fft.rfft(data_proc[:, i])
+            Xfull = np.zeros(n_samples, dtype=complex)
+            Xfull[:len(X)] = np.where(band, 2.0 * X, 0.0)
+            Z[:, i] = np.fft.ifft(Xfull)
+    else:
+        sos = signal.butter(4, [freq_min/(fs/2), freq_max/(fs/2)],
+                            btype='band', output='sos')
+        for i in range(n_traces):
+            tr = signal.sosfiltfilt(sos, data_proc[:, i])
+            Z[:, i] = signal.hilbert(tr)
+ 
+    A2 = np.abs(Z) ** 2
+    dph = np.angle(Z[1:, :] * np.conj(Z[:-1, :]))       # -π〜π, unwrap不要
+    IF = np.vstack([np.zeros((1, Z.shape[1])), dph / (2*np.pi*dt_ns)])
+    return Z, A2, IF
+ 
+ 
+def ifw_pulse_pair(Z, starts, L, dt_ns):
+    """窓ごとのパルスペア推定 IF_w = angle(Σ z[n+1] z*[n]) / (2π dt)。
+    Σ A²·IF / Σ A² と同じ A² 重みの一次モーメントだが、複素領域で平均して
+    から角度を取るため、ヌル点の位相スリップ外れ値の影響を受けない。"""
+    n_windows = len(starts)
+    n_traces = Z.shape[1]
+    IF_w = np.zeros((n_windows, n_traces))
+    P_win = np.zeros((n_windows, n_traces))
+    for k, st in enumerate(starts):
+        R1 = np.sum(Z[st+1:st+L, :] * np.conj(Z[st:st+L-1, :]), axis=0)
+        IF_w[k, :] = np.angle(R1) / (2*np.pi*dt_ns)
+        P_win[k, :] = np.sum(np.abs(Z[st:st+L, :])**2, axis=0)
+    return IF_w, P_win
+ 
+ 
+def noise_floor_mask(P_win, L, A2, noise_gate_ns, dt_ns, snr_db=10.0):
+    """記録末尾 noise_gate_ns 区間をノイズ床とみなし、窓パワーが
+    ノイズ床 + snr_db を超える窓のみ有効とするマスク。"""
+    n_gate = int(round(noise_gate_ns / dt_ns))
+    noise_A2 = np.mean(A2[-n_gate:, :], axis=0)          # トレースごと [1/sample]
+    P_noise = noise_A2[None, :] * L                       # 窓長ぶんのノイズパワー
+    with np.errstate(divide='ignore'):
+        snr = 10.0 * np.log10(P_win / (P_noise + eps))
+    return snr >= snr_db
+ 
+ 
+def band_leak_diagnostics(A2, IF, freq_min, freq_max, t, label=''):
+    """帯域外 IF サンプルが A² 重みでどれだけ寄与しているかを時間帯別に出力。
+    ブリックウォールでもここが大きければ真のマルチコンポーネント効果、
+    butter 版でのみ大きければフィルタスカート残留 (wake等) が原因。"""
+    print(f'--- band leak diagnostics {label} ---')
+    for t0, t1 in [(5, 15), (15, 25), (25, 35), (35, 45)]:
+        sel = (t >= t0) & (t < t1)
+        a2 = A2[sel, :]; f_ = IF[sel, :]
+        out = (f_ < freq_min) | (f_ > freq_max)
+        w_out = (a2 * out).sum() / (a2.sum() + eps)
+        bias = (a2 * np.where(out, f_, 0.0)).sum() / (a2.sum() + eps)
+        print(f'  {t0:2d}-{t1:2d} ns: 帯域外A²重み {w_out*100:6.2f}% , '
+              f'IF_wへのバイアス寄与 {bias:+.3f} GHz')
 
 # =============================================================================
 # Analytical Frequency Shift Calculation (Depth + Debye + Time Offset for Buried Rx)
@@ -352,29 +446,37 @@ data_proc = outputdata - outputdata.mean(axis=1, keepdims=True) if MEAN_TRACE_RE
 IF_full = np.zeros_like(outputdata)
 A2_full = np.zeros_like(outputdata)
 
-lo, hi = freq_min/(fs/2), freq_max/(fs/2)   # freq, fs は GHz
-b, a = butter(4, [lo, hi], btype='band')
-for itrace in range(n_traces):
-    sos = butter(4, [freq_min/(fs/2), freq_max/(fs/2)], btype='band', output='sos')
-    tr = sosfiltfilt(sos, data_proc[:, itrace])
-    # tr = filtfilt(b, a, data_proc[:, 20])
-    print("filtered std / raw std =", tr.std() / data_proc[:,20].std())
-    # フィルタ後のスペクトルを見る
-    F = np.abs(np.fft.rfft(tr)); f = np.fft.rfftfreq(len(tr), dt_ns)
-    print("spectral centroid of filtered =", np.sum(f*F**2)/np.sum(F**2), "GHz")
+# 修正パッチ実装
+Z, A2_full, IF_full = compute_analytic_if(data_proc, dt_ns, freq_min, freq_max,
+                                          use_brickwall=USE_BRICKWALL)
+t_full = np.arange(A2_full.shape[0]) * dt_ns
+band_leak_diagnostics(A2_full, IF_full, freq_min, freq_max, t_full,
+                      label='brickwall' if USE_BRICKWALL else 'butter')
+# 修正パッチ実装
 
-    z = signal.hilbert(tr)
-    A2_full[:, itrace] = np.abs(z)**2
-    phase_raw = np.angle(z)  # アンラップしない生位相
-    # 各サンプルのIFを、隣接位相差から直接計算(アンラップ不要)
-    dphase = np.angle(z[1:] * np.conj(z[:-1]))  # -π〜πに収まる位相増分
-    IF_full[:, itrace] = np.concatenate([[0], dphase / (2*np.pi*dt_ns)])
-    # z = signal.hilbert(tr)
-    # A2_full[:, itrace] = np.abs(z) ** 2
-    # phase = np.unwrap(np.angle(z))
-    # IF_full[:, itrace] = np.gradient(phase, dt_ns) / (2.0 * np.pi)
+# lo, hi = freq_min/(fs/2), freq_max/(fs/2)   # freq, fs は GHz
+# b, a = butter(4, [lo, hi], btype='band')
+# for itrace in range(n_traces):
+#     sos = butter(4, [freq_min/(fs/2), freq_max/(fs/2)], btype='band', output='sos')
+#     tr = sosfiltfilt(sos, data_proc[:, itrace])
+#     # tr = filtfilt(b, a, data_proc[:, 20])
+#     print("filtered std / raw std =", tr.std() / data_proc[:,20].std())
+#     # フィルタ後のスペクトルを見る
+#     F = np.abs(np.fft.rfft(tr)); f = np.fft.rfftfreq(len(tr), dt_ns)
+#     print("spectral centroid of filtered =", np.sum(f*F**2)/np.sum(F**2), "GHz")
 
-IF_full = np.clip(IF_full, -fs/2, fs/2)
+#     z = signal.hilbert(tr)
+#     A2_full[:, itrace] = np.abs(z)**2
+#     phase_raw = np.angle(z)  # アンラップしない生位相
+#     # 各サンプルのIFを、隣接位相差から直接計算(アンラップ不要)
+#     dphase = np.angle(z[1:] * np.conj(z[:-1]))  # -π〜πに収まる位相増分
+#     IF_full[:, itrace] = np.concatenate([[0], dphase / (2*np.pi*dt_ns)])
+#     # z = signal.hilbert(tr)
+#     # A2_full[:, itrace] = np.abs(z) ** 2
+#     # phase = np.unwrap(np.angle(z))
+#     # IF_full[:, itrace] = np.gradient(phase, dt_ns) / (2.0 * np.pi)
+
+# IF_full = np.clip(IF_full, -fs/2, fs/2)
 
 # =============================================================================
 # Validation Preparation
@@ -442,15 +544,21 @@ for T_avg in T_AVG_LIST_NS:
     for k, st in enumerate(starts):
         P_win[k, :] = np.sum(A2_full[st:st+L, :], axis=0)
         A2IF_win[k, :] = np.sum(A2_full[st:st+L, :] * IF_full[st:st+L, :], axis=0)
-        
+    
+    # 修正パッチ実装
+    IF_w, P_win = ifw_pulse_pair(Z, starts, L, dt_ns)
+    valid_mask = noise_floor_mask(P_win, L, A2_full, noise_gate_ns=5.0,
+                                dt_ns=dt_ns, snr_db=10.0)
+    IF_w_masked = np.where(valid_mask, IF_w, np.nan)
     IF_w = A2IF_win / (P_win + eps)
+    # 修正パッチ実装
     
     # パワーマスク
-    P_peak = np.max(P_win, axis=0, keepdims=True)
-    with np.errstate(divide='ignore', invalid='ignore'):
-        P_rel_db = 10.0 * np.log10(np.where(P_peak > 0, P_win / (P_peak + eps), eps))
-    valid_mask = P_rel_db >= power_threshold_db
-    IF_w_masked = np.where(valid_mask, IF_w, np.nan)
+    # P_peak = np.max(P_win, axis=0, keepdims=True)
+    # with np.errstate(divide='ignore', invalid='ignore'):
+    #     P_rel_db = 10.0 * np.log10(np.where(P_peak > 0, P_win / (P_peak + eps), eps))
+    # valid_mask = P_rel_db >= power_threshold_db
+    # IF_w_masked = np.where(valid_mask, IF_w, np.nan)
     
     # シフトレート
     shiftrate = np.gradient(IF_w_masked, dt_hop, axis=0)
