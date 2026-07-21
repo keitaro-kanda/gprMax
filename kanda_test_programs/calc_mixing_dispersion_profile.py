@@ -101,7 +101,7 @@ RES_STYLES        = ['-', '--', '-.', ':']  # スイープ値に割り当てる�
 # 経験δf抽出用のB-scanレジストリ (rand_ampごとに辞書を1行追加するだけで拡張できる)
 EMPIRICAL_BSCAN_REGISTRY = [
     {'label': 'rand0.01', 'rand_amp': 0.01,
-    'bscan_json': '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/Random/Bscan/Bscan.json',
+    'bscan_json': '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/rand_amp_001/Bscan/Bscan.json',
     'enabled': True},
     {'label': 'rand0.00', 'rand_amp': 0.00,
     'bscan_json': '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/Not_Random/Bscan/Bscan.json',
