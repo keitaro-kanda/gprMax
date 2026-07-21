@@ -30,12 +30,13 @@ from tools.core.outputfiles_merge import get_output_data
 # =============================================================================
 win_len_samples = 256          # 解析窓長 [サンプル]（fs≈84.75 GHzで約3 ns）
 hop_samples     = win_len_samples // 4   # 窓の送り幅
-freq_min        = 0.25         # [GHz] 回帰帯域の下限
-freq_max        = 6.0          # [GHz] 回帰帯域の上限
+freq_min        = 0.5          # [GHz] 回帰帯域の下限  # [FIX-B]
+freq_max        = 2.5          # [GHz] 回帰帯域の上限  # [FIX-B]
 snr_margin_db   = 10.0         # ノイズ床からのマージン（帯域選択用）
-n_min_bins      = 10           # 回帰に必要な最小ビン数
-ref_margin_ns   = 1.0          # 基準窓中心 = 地表反射時刻 + このマージン
+n_min_bins      = 5            # 回帰に必要な最小ビン数  # [FIX-B]
+ref_margin_ns   = 5.0          # 基準窓中心 = 地表反射時刻 + このマージン  # [FIX-C]
 sigma_clip      = 3.0          # 回帰残差のシグマクリップ閾値（1回のみ）
+MEAN_TRACE_REMOVAL = True   # [FIX-A] True: 平均トレース除去（コヒーレントwake除去）
 
 # =============================================================================
 # User input & Analytical settings
@@ -64,6 +65,7 @@ outputdata, dt = get_output_data(outfile_path, 1, 'Ez')
 dt_ns = dt * 1e9        # [ns]
 fs    = 1.0 / dt_ns    # [GHz]
 n_samples, n_traces = outputdata.shape
+data_proc = outputdata - outputdata.mean(axis=1, keepdims=True) if MEAN_TRACE_REMOVAL else outputdata  # [FIX-A]
 
 print(f'dt = {dt*1e12:.4f} ps,  fs = {fs:.2f} GHz,  fs/2 = {fs/2:.2f} GHz')
 print(f'B-scan shape (samples, traces): {outputdata.shape}')
@@ -216,7 +218,7 @@ for i in range(n_windows):
     start = i * hop_samples
     end = start + win_len_samples
     t_win_ns[i] = t_axis[start + win_len_samples // 2]
-    windowed_data = outputdata[start:end, :] * hann_win
+    windowed_data = data_proc[start:end, :] * hann_win  # [FIX-A]
     spectra = np.abs(np.fft.rfft(windowed_data, axis=0))
     S_med[i, :] = np.median(spectra, axis=1)
 
@@ -250,6 +252,16 @@ noise_floor_db = -100.0  # リファレンスピークに対するノイズ床�
 fallback_val = ref_peak * (10 ** (noise_floor_db / 20))
 N_f = np.full_like(f_win, fallback_val)
 print(f"Noise floor set to {noise_floor_db} dB relative to reference peak.")
+
+# [FIX-B] 経験的ノイズ床: 記録末尾 NOISE_GATE_NS の窓の中央値スペクトル（ビンごと）
+NOISE_GATE_NS = 5.0   # [FIX-B] 記録末尾のこの区間をノイズ床推定に使用
+noise_rows = np.where(t_win_ns >= t_axis[-1] - NOISE_GATE_NS)[0]   # [FIX-B]
+if len(noise_rows) >= 2:                                            # [FIX-B]
+    N_f = np.median(S_med[noise_rows, :], axis=0)                   # [FIX-B]
+    print(f"Empirical noise floor from {len(noise_rows)} windows "  # [FIX-B]
+          f"(t >= {t_axis[-1] - NOISE_GATE_NS:.1f} ns)")            # [FIX-B]
+else:                                                               # [FIX-B]
+    print("Warning: not enough tail windows; using flat fallback noise floor.")  # [FIX-B]
 
 # =============================================================================
 # Regression Function
@@ -317,6 +329,15 @@ if valid_windows > 0:
     min_b = np.min(n_bins_used[~np.isnan(tand_eff)])
     max_b = np.max(n_bins_used[~np.isnan(tand_eff)])
     print(f"Effective bins per window range: {min_b} - {max_b}")
+
+# [FIX-B] フィット帯域の診断
+for k_diag in [k_ref + 2, (k_ref + n_windows) // 2]:                      # [FIX-B]
+    if k_diag in fits_info and fits_info[k_diag] is not None:             # [FIX-B]
+        info_d = fits_info[k_diag]                                        # [FIX-B]
+        f_used = info_d['f_sel'][info_d['valid2']] / 1e9                  # [FIX-B]
+        print(f"  t={t_win_ns[k_diag]:.1f} ns: fit band "                 # [FIX-B]
+              f"{f_used.min():.2f}-{f_used.max():.2f} GHz, "              # [FIX-B]
+              f"{len(f_used)} bins")                                      # [FIX-B]
 
 # Q calculation
 with np.errstate(divide='ignore', invalid='ignore'):
@@ -392,6 +413,8 @@ if S0_calc is not None:
 # Output Setup
 # =============================================================================
 output_base_name = 'spectral_ratio_analysis'
+if MEAN_TRACE_REMOVAL:                      # [FIX-A]
+    output_base_name += '_meansub'          # [FIX-A]
 output_dir = os.path.join(os.path.dirname(os.path.abspath(json_file_path)), output_base_name)
 os.makedirs(output_dir, exist_ok=True)
 
@@ -491,6 +514,7 @@ if len(selected_k) > 0:
     print(f'Saved: {fig2_path}')
     plt.close(fig2)
 
+print(f'OUTPUT DIR: {output_dir}')  # [FIX-A]
 print(f'\nAll results saved to: {output_dir}')
 
 
