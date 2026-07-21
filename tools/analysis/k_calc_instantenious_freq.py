@@ -362,10 +362,17 @@ for itrace in range(n_traces):
     # フィルタ後のスペクトルを見る
     F = np.abs(np.fft.rfft(tr)); f = np.fft.rfftfreq(len(tr), dt_ns)
     print("spectral centroid of filtered =", np.sum(f*F**2)/np.sum(F**2), "GHz")
+
     z = signal.hilbert(tr)
-    A2_full[:, itrace] = np.abs(z) ** 2
-    phase = np.unwrap(np.angle(z))
-    IF_full[:, itrace] = np.gradient(phase, dt_ns) / (2.0 * np.pi)
+    A2_full[:, itrace] = np.abs(z)**2
+    phase_raw = np.angle(z)  # アンラップしない生位相
+    # 各サンプルのIFを、隣接位相差から直接計算(アンラップ不要)
+    dphase = np.angle(z[1:] * np.conj(z[:-1]))  # -π〜πに収まる位相増分
+    IF_full[:, itrace] = np.concatenate([[0], dphase / (2*np.pi*dt_ns)])
+    # z = signal.hilbert(tr)
+    # A2_full[:, itrace] = np.abs(z) ** 2
+    # phase = np.unwrap(np.angle(z))
+    # IF_full[:, itrace] = np.gradient(phase, dt_ns) / (2.0 * np.pi)
 
 IF_full = np.clip(IF_full, -fs/2, fs/2)
 
