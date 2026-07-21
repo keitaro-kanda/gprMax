@@ -7,6 +7,12 @@ gprMaxで計算した月レゴリスGPRシミュレーション（B-scan）に�
 得られる tanδ は「基準窓から各時刻までの経路平均値」となります。
 （幾何減衰や反射係数、アンテナ利得などの周波数非依存項は回帰の切片に
 吸収されるため、補正は不要です。）
+
+[FIX-E] 区間方式（移動窓ペア [t, t+DT_INT_NS]）による「局所 tanδ(t)」の
+推定を追加。固定基準方式の全出力に加えて tand_interval_profile.csv /
+tand_interval_profile.png を出力する。局所的な低損失層（水氷層など）の
+署名は固定基準方式では経路平均で希釈されるが、区間方式では希釈なしの
+箱型署名（層区間で tanδ が約-10%/10vol%）として現れる。
 """
 
 import os
@@ -37,6 +43,8 @@ n_min_bins      = 5            # 回帰に必要な最小ビン数  # [FIX-B]
 ref_margin_ns   = 5.0          # 基準窓中心 = 地表反射時刻 + このマージン  # [FIX-C]
 sigma_clip      = 3.0          # 回帰残差のシグマクリップ閾値（1回のみ）
 MEAN_TRACE_REMOVAL = True   # [FIX-A] True: 平均トレース除去（コヒーレントwake除去）
+MIN_DT_NS   = 3.0   # [FIX-D] 固定基準ペアの最小時間差 [ns]（Δt→0での 1/(πΔt) 発散を回避）
+DT_INT_NS   = 6.0   # [FIX-E] 区間方式LSRの窓ペア間隔 [ns]（局所 tanδ(t) 推定用）
 
 # =============================================================================
 # User input & Analytical settings
@@ -311,6 +319,8 @@ n_bins_used = np.zeros(n_windows, dtype=int)
 fits_info = {}
 
 for k in range(k_ref + 1, n_windows):
+    if (t_win_ns[k] - t_win_ns[k_ref]) < MIN_DT_NS:   # [FIX-D]
+        continue                                       # [FIX-D]
     dt_pair_s = (t_win_ns[k] - t_win_ns[k_ref]) * 1e-9
     slope, slope_err, n_bins, info = fit_log_spectral_ratio(
         f_win_hz, S_med[k, :], S_med[k_ref, :], N_f, 
@@ -392,6 +402,8 @@ if S0_calc is not None:
     N_f_theory = np.zeros_like(f_calc)
     
     for k in range(k_ref + 1, n_windows):
+        if (t_win_ns[k] - t_win_ns[k_ref]) < MIN_DT_NS:   # [FIX-D] 観測ループと同一条件
+            continue                                       # [FIX-D]
         idx_tgt = np.argmin(np.abs(t_model_array - t_win_ns[k]))
         if t_model_array[idx_tgt] <= t_model_array[idx_ref_model]:
             continue
@@ -408,6 +420,63 @@ if S0_calc is not None:
             tand_theory[k] = -slope / (np.pi * dt_pair_s)
             
         local_tand_model[k] = local_tan_array[idx_tgt]
+
+# =============================================================================
+# [FIX-E] Execution: Interval-mode Spectral Ratio (moving window pair)
+# =============================================================================
+# 固定基準方式は「基準窓から t までの経路平均 tanδ」を返すため、局所的な
+# 低損失層（例: 水氷層）の署名は経路長との比で希釈される（10 vol%氷で
+# Δtanδ ≈ -0.001〜-0.002）。区間方式は移動する窓ペア [t, t+DT_INT_NS] で
+# 回帰して局所 tanδ(t) を推定し、層内で希釈なしの Δtanδ（≈-10%）が
+# 箱型署名として現れる。層の上端・下端（深さ分布）の推定に対応する。
+# 既存の固定基準方式の計算・出力には一切影響しない。
+hop_ns = hop_samples * dt_ns                                        # [FIX-E]
+n_int = max(1, int(round(DT_INT_NS / hop_ns)))                      # [FIX-E]
+dt_int_actual_ns = n_int * hop_ns                                   # [FIX-E]
+print(f"[Interval LSR] pair separation: {n_int} windows "           # [FIX-E]
+      f"({dt_int_actual_ns:.2f} ns)")                               # [FIX-E]
+
+tand_int             = np.full(n_windows, np.nan)                   # [FIX-E]
+sigma_tand_int       = np.full(n_windows, np.nan)                   # [FIX-E]
+n_bins_int           = np.zeros(n_windows, dtype=int)               # [FIX-E]
+t_int_mid            = np.full(n_windows, np.nan)                   # [FIX-E]
+tand_theory_int      = np.full(n_windows, np.nan)                   # [FIX-E]
+local_tand_model_int = np.full(n_windows, np.nan)                   # [FIX-E]
+
+for k in range(k_ref, n_windows - n_int):                           # [FIX-E]
+    t_a = t_win_ns[k]                                               # [FIX-E]
+    t_b = t_win_ns[k + n_int]                                       # [FIX-E]
+    t_int_mid[k] = 0.5 * (t_a + t_b)                                # [FIX-E]
+    dt_pair_s = (t_b - t_a) * 1e-9                                  # [FIX-E]
+    slope, slope_err, n_bins, _ = fit_log_spectral_ratio(           # [FIX-E]
+        f_win_hz, S_med[k + n_int, :], S_med[k, :], N_f,            # [FIX-E]
+        snr_margin_db, n_min_bins, sigma_clip                       # [FIX-E]
+    )                                                               # [FIX-E]
+    n_bins_int[k] = n_bins                                          # [FIX-E]
+    if not np.isnan(slope):                                         # [FIX-E]
+        tand_int[k] = -slope / (np.pi * dt_pair_s)                  # [FIX-E]
+        sigma_tand_int[k] = slope_err / (np.pi * dt_pair_s)         # [FIX-E]
+
+valid_int = np.sum(~np.isnan(tand_int))                             # [FIX-E]
+print(f"[Interval LSR] valid windows: {valid_int} / "               # [FIX-E]
+      f"{max(0, n_windows - n_int - k_ref)}")                       # [FIX-E]
+
+if S0_calc is not None:                                             # [FIX-E]
+    for k in range(k_ref, n_windows - n_int):                       # [FIX-E]
+        idx_a = np.argmin(np.abs(t_model_array - t_win_ns[k]))          # [FIX-E]
+        idx_b = np.argmin(np.abs(t_model_array - t_win_ns[k + n_int]))  # [FIX-E]
+        if t_model_array[idx_b] <= t_model_array[idx_a]:            # [FIX-E]
+            continue                                                # [FIX-E]
+        dt_pair_s = (t_model_array[idx_b] - t_model_array[idx_a]) * 1e-9  # [FIX-E]
+        slope, _, _, _ = fit_log_spectral_ratio(                    # [FIX-E]
+            f_calc, S_model_array[idx_b], S_model_array[idx_a],     # [FIX-E]
+            N_f_theory, snr_margin=-999.0,                          # [FIX-E]
+            min_bins=n_min_bins, s_clip=sigma_clip                  # [FIX-E]
+        )                                                           # [FIX-E]
+        if not np.isnan(slope):                                     # [FIX-E]
+            tand_theory_int[k] = -slope / (np.pi * dt_pair_s)       # [FIX-E]
+        idx_mid = np.argmin(np.abs(t_model_array - t_int_mid[k]))   # [FIX-E]
+        local_tand_model_int[k] = local_tan_array[idx_mid]          # [FIX-E]
 
 # =============================================================================
 # Output Setup
@@ -430,6 +499,20 @@ with open(csv_path, 'w', newline='') as f_csv:
             n_bins_used[k], tand_theory[k]
         ])
 print(f"Saved: {csv_path}")
+
+# [FIX-E] CSV Export (interval mode)
+csv_int_path = os.path.join(output_dir, 'tand_interval_profile.csv')       # [FIX-E]
+with open(csv_int_path, 'w', newline='') as f_csv:                         # [FIX-E]
+    writer = csv.writer(f_csv)                                             # [FIX-E]
+    writer.writerow(['t_mid_ns', 'tand_int', 'sigma_tand_int', 'n_bins',   # [FIX-E]
+                     'tand_theory_int', 'local_tand_model_int'])           # [FIX-E]
+    for k in range(n_windows):                                             # [FIX-E]
+        if np.isnan(t_int_mid[k]):                                         # [FIX-E]
+            continue                                                       # [FIX-E]
+        writer.writerow([t_int_mid[k], tand_int[k], sigma_tand_int[k],     # [FIX-E]
+                         n_bins_int[k], tand_theory_int[k],                # [FIX-E]
+                         local_tand_model_int[k]])                         # [FIX-E]
+print(f"Saved: {csv_int_path}")                                            # [FIX-E]
 
 # =============================================================================
 # Plotting
@@ -513,6 +596,43 @@ if len(selected_k) > 0:
     fig2.savefig(fig2_path, dpi=300, bbox_inches='tight')
     print(f'Saved: {fig2_path}')
     plt.close(fig2)
+
+# --- [FIX-E] Figure 3: tand_interval_profile.png (区間方式・局所 tanδ) ---
+mask_int = ~np.isnan(t_int_mid)                                            # [FIX-E]
+if np.any(mask_int):                                                       # [FIX-E]
+    fig3, ax3 = plt.subplots(figsize=(8, 10))                              # [FIX-E]
+    ax3.plot(tand_int[mask_int], t_int_mid[mask_int],                      # [FIX-E]
+             color='k', linestyle='-',                                     # [FIX-E]
+             label=fr'Interval LSR ($\Delta t$ = {dt_int_actual_ns:.1f} ns)')  # [FIX-E]
+    ax3.fill_betweenx(t_int_mid[mask_int],                                 # [FIX-E]
+                      (tand_int - sigma_tand_int)[mask_int],               # [FIX-E]
+                      (tand_int + sigma_tand_int)[mask_int],               # [FIX-E]
+                      color='gray', alpha=0.4, label=r'$\pm 1\sigma$')     # [FIX-E]
+    if np.any(~np.isnan(tand_theory_int)):                                 # [FIX-E]
+        ax3.plot(tand_theory_int[mask_int], t_int_mid[mask_int],           # [FIX-E]
+                 color='r', linestyle='--', label='Analytical (interval)') # [FIX-E]
+    if np.any(~np.isnan(local_tand_model_int)):                            # [FIX-E]
+        ax3.plot(local_tand_model_int[mask_int], t_int_mid[mask_int],      # [FIX-E]
+                 color='g', linestyle=':',                                 # [FIX-E]
+                 label=r'Model Local tan$\delta$')                         # [FIX-E]
+    ax3.axhline(surf_t, color='gray', linestyle='--', lw=2,                # [FIX-E]
+                label='Surface')                                           # [FIX-E]
+    ax3.set_ylim(np.nanmax(t_int_mid), np.nanmin(t_int_mid))               # [FIX-E]
+    ax3.set_xlabel(r'Loss Tangent (tan$\delta$)', size=18)                 # [FIX-E]
+    ax3.set_ylabel('Delay time [ns]', size=18)                             # [FIX-E]
+    ax3.minorticks_on()                                                    # [FIX-E]
+    ax3.grid(True)                                                         # [FIX-E]
+    ax3.legend(loc='lower left', fontsize=14)                              # [FIX-E]
+    secax3 = ax3.secondary_xaxis('top',                                    # [FIX-E]
+                                 functions=(safe_reciprocal,               # [FIX-E]
+                                            safe_reciprocal))              # [FIX-E]
+    secax3.set_xlabel(r'Q-factor (1 / tan$\delta$)', size=18)              # [FIX-E]
+    secax3.set_ticks([10, 20, 50, 100, 200, 500])                          # [FIX-E]
+    fig3.tight_layout()                                                    # [FIX-E]
+    fig3_path = os.path.join(output_dir, 'tand_interval_profile.png')      # [FIX-E]
+    fig3.savefig(fig3_path, dpi=300, bbox_inches='tight')                  # [FIX-E]
+    print(f'Saved: {fig3_path}')                                           # [FIX-E]
+    plt.close(fig3)                                                        # [FIX-E]
 
 print(f'OUTPUT DIR: {output_dir}')  # [FIX-A]
 print(f'\nAll results saved to: {output_dir}')
