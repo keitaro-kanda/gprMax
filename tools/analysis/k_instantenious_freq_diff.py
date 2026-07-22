@@ -196,6 +196,10 @@ def main():
     # 時間グリッド整合性チェック
     if abs(dt_ice - dt_noice) > 1e-15 or out_ice.shape[0] != out_noice.shape[0]:
         raise ValueError("Error: dt or sample size mismatch between ice and no-ice datasets.")
+    
+    # トレース数整合性チェック
+    if abs(dt_ice - dt_noice) > 1e-15 or out_ice.shape != out_noice.shape:
+        raise ValueError("Error: shape/dt mismatch between ice and no-ice datasets.")
         
     print("Computing profiles for ice dataset...")
     res_ice = compute_ifw_profiles(out_ice, dt_ice, gstep_ice, p_ice, T_AVG_LIST_NS)
