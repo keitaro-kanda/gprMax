@@ -47,7 +47,7 @@ Hilbert変換を用いた包絡線二乗重み付き瞬時周波数 (IF_w) お�
 # =============================================================================
 T_AVG_LIST_NS = [1.0, 3.0, 10.0]   # 平均化窓長 [ns]（それぞれ別個に解析・出力）
 HOP_RATIO     = 0.5                # ホップ = 窓長 × この係数
-MEAN_TRACE_REMOVAL = False         # True: 平均トレース除去（コヒーレント背景の分離検証用）
+MEAN_TRACE_REMOVAL = True         # True: 平均トレース除去（コヒーレント背景の分離検証用）
 USE_BRICKWALL = True   # False にすると従来の butter+hilbert (比較実験用)
 
 freq_min = 0.5    # [GHz]
