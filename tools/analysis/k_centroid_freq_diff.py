@@ -70,37 +70,70 @@ def load_bscan(json_path):
     outputdata, dt = get_output_data(outfile, 1, 'Ez')
     return outputdata, dt, gpr_step, params
 
-def compute_centroid_profiles(outputdata, dt, gpr_step, params, ascan_outfile_path=""):
+def compute_centroid_profiles(outputdata, dt, gpr_step, params, ascan_outfile_path="", is_reference=False):
     """Computes STFT centroid profiles strictly adhering to original logic."""
     dt_ns = dt * 1e9
     fs = 1.0 / dt_ns
     n_samples, n_traces = outputdata.shape
 
-    # Debye parameters extraction
+    # Debye parameters and Ice parameters extraction
     debye_params = {'tau1': 4.6212e-11, 'tau2': 2.82195e-10, 'de_ratio': 0.261 / (0.261 + 0.088)}
+    f_ice = 0.0
+    ice_top = 0.0
+    ice_bot = 0.0
+    
     geom_json_path = params.get('geometry_settings', {}).get('geometry_json', '')
     in_dir = os.path.dirname(geom_json_path)
+    
     if in_dir and os.path.exists(in_dir):
         in_files = glob.glob(os.path.join(in_dir, '*.in'))
         for in_file in in_files:
+            print(f"Reading Debye/Ice parameters from: {in_file}")
             try:
                 with open(in_file, 'r', encoding='utf-8') as fin:
                     content = fin.read()
+                    
                     m_tau1 = re.search(r'DEBYE_TAU1\s*=\s*([0-9\.eE\+\-]+)', content)
                     m_tau2 = re.search(r'DEBYE_TAU2\s*=\s*([0-9\.eE\+\-]+)', content)
                     m_ratio = re.search(r'DE_RATIO\s*=\s*(.+)', content)
+                    m_disp = re.search(r'#add_dispersion_debye:\s*\d+\s+([0-9\.eE\+\-]+)\s+[0-9\.eE\+\-]+\s+([0-9\.eE\+\-]+)', content)
+                    
+                    if m_tau1: debye_params['tau1'] = float(m_tau1.group(1))
+                    if m_tau2: debye_params['tau2'] = float(m_tau2.group(1))
+                    
                     if m_ratio:
                         expr = m_ratio.group(1).split('#')[0].strip()
                         debye_params['de_ratio'] = eval(expr)
-                    m_disp = re.search(r'#add_dispersion_debye:\s*\d+\s+([0-9\.eE\+\-]+)\s+[0-9\.eE\+\-]+\s+([0-9\.eE\+\-]+)', content)
-                    if m_tau1: debye_params['tau1'] = float(m_tau1.group(1))
-                    if m_tau2: debye_params['tau2'] = float(m_tau2.group(1))
-                    if m_ratio: debye_params['de_ratio'] = float(m_ratio.group(1))
                     elif m_disp:
                         de1, de2 = float(m_disp.group(1)), float(m_disp.group(2))
                         if (de1 + de2) > 0: debye_params['de_ratio'] = de1 / (de1 + de2)
-            except Exception:
-                pass
+                        
+                    # Extract Ice parameters
+                    m_fice = re.search(r'f_ice\s*=\s*([0-9\.eE\+\-]+)', content)
+                    m_top = re.search(r'ice_top\s*=\s*([0-9\.eE\+\-]+)', content)
+                    m_bot = re.search(r'ice_bot\s*=\s*([0-9\.eE\+\-]+)', content)
+                    
+                    if m_fice: f_ice = float(m_fice.group(1))
+                    if m_top: ice_top = float(m_top.group(1))
+                    if m_bot: ice_bot = float(m_bot.group(1))
+                    
+            except Exception as e:
+                print(f"Warning: Failed to read parameters from {in_file}. Error: {e}")
+                print("Using defaults.")
+    else:
+        print("Warning: Geometry directory not found. Using default Debye/Ice parameters.")
+
+    # NO-ICE（リファレンス）計算の場合は、ファイルにf_iceの記述が残っていても強制的に0にする
+    if is_reference:
+        f_ice = 0.0
+
+    print(' ')
+    print(' === Parameters Extracted for Compute Centroid Profiles ===')
+    print(f"Debye Params: tau1={debye_params['tau1']}, tau2={debye_params['tau2']}, de_ratio={debye_params['de_ratio']}")
+    print(f"Ice Params: f_ice={f_ice}, ice_top={ice_top}, ice_bot={ice_bot}")
+    print(f"Reference Mode: {is_reference}")
+    print(' ==========================================================')
+    print(' ')
 
     # Constants
     nperseg, noverlap, window = 256, 256 * 3 // 4, 'hann'
@@ -151,6 +184,8 @@ def compute_centroid_profiles(outputdata, dt, gpr_step, params, ascan_outfile_pa
     # Analytical Profiles (Regolith Method A)
     analytical_f_peak_profile = np.full_like(t_axis, np.nan)
     analytical_shiftrate_profile = np.full_like(t_axis, np.nan)
+    t_layer_start_ns = np.nan
+    t_layer_end_ns = np.nan
     
     # We attempt an analytical profile calculation if an Ascan path is provided and exists
     if ascan_outfile_path and os.path.exists(ascan_outfile_path):
@@ -179,9 +214,17 @@ def compute_centroid_profiles(outputdata, dt, gpr_step, params, ascan_outfile_pa
             f_peak_d, t_delay_d = [], []
             cumulative_attenuation = np.zeros_like(omega)
             cumulative_time = np.zeros_like(omega)
+            eps_ice_complex = 3.17 * (1.0 - 1j * 6e-5)
 
             for i, d in enumerate(d_array):
-                eps_complex_w = get_eps_regolith(d, omega, debye_params, anchor_freq=f_center)
+                eps_host = get_eps_regolith(d, omega, debye_params, anchor_freq=f_center)
+                
+                if f_ice > 0 and ice_top <= d <= ice_bot:
+                    # Maxwell-Garnett mixing
+                    eps_complex_w = eps_host + 3.0 * f_ice * eps_host * (eps_ice_complex - eps_host) / (eps_ice_complex + 2.0 * eps_host - f_ice * (eps_ice_complex - eps_host))
+                else:
+                    eps_complex_w = eps_host
+                    
                 alpha_d = - (omega / const.c) * np.imag(np.sqrt(eps_complex_w))
                 v_d = const.c / np.real(np.sqrt(eps_complex_w))
                 
@@ -197,6 +240,11 @@ def compute_centroid_profiles(outputdata, dt, gpr_step, params, ascan_outfile_pa
 
             analytical_f_peak_profile = np.interp(t_axis, t_delay_d, np.array(f_peak_d) / 1e9, left=np.nan, right=np.nan)
             analytical_shiftrate_profile = np.gradient(analytical_f_peak_profile, dt_stft)
+            
+            if f_ice > 0:
+                t_layer_start_ns = float(np.interp(ice_top, d_array, t_delay_d))
+                t_layer_end_ns = float(np.interp(ice_bot, d_array, t_delay_d))
+
         except Exception as e:
             print(f"Warning: Analytical calculation failed: {e}")
 
@@ -206,7 +254,8 @@ def compute_centroid_profiles(outputdata, dt, gpr_step, params, ascan_outfile_pa
         't': t_axis, 'cen_med': cen_med, 'cen_p25': cen_p25, 'cen_p75': cen_p75,
         'sr_med': sr_med, 'sr_p25': sr_p25, 'sr_p75': sr_p75,
         'analytical_cen': analytical_f_peak_profile, 'analytical_sr': analytical_shiftrate_profile,
-        'surface_delay': surf_delay, 'n_traces': n_traces
+        'surface_delay': surf_delay, 'n_traces': n_traces,
+        't_layer_start': t_layer_start_ns, 't_layer_end': t_layer_end_ns
     }
 
 def region_stats(t, d, t0, t1, corr_len_ns):
@@ -231,6 +280,7 @@ if __name__ == "__main__":
     ice_json_path = input('Input ICE Bscan.json file path: ').strip()
     if not os.path.exists(ice_json_path):
         raise FileNotFoundError(f"ICE JSON file not found: {ice_json_path}")
+    print(f'Using ICE JSON: {ice_json_path}')
 
     _sel = input('Select rand_amp for no-ice reference [0.01 / 0.05] (default 0.05): ').strip()
     rand_amp = 0.01 if _sel == '0.01' else 0.05
@@ -238,22 +288,18 @@ if __name__ == "__main__":
 
     NOICE_JSON = {
         0.01: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/rand_amp_001/Bscan/Bscan.json',
-        # 0.05: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/rand_amp_005/Bscan/Bscan.json',
         0.05: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x4/Ice_Detection_NoRock/No_Ice/rand_amp_005/Bscan/Bscan.json'
     }
     noice_json_path = NOICE_JSON[rand_amp]
 
     if not os.path.exists(noice_json_path):
         raise FileNotFoundError(f"NO-ICE absolute path missing (Check NOICE_JSON placeholder): {noice_json_path}")
+    print(f'Using NO-ICE JSON: {noice_json_path}')
 
     # ---------------------------------------------------------
-    # [変更点] 出力ディレクトリの構築ロジック
+    # 出力ディレクトリの構築ロジック
     # ---------------------------------------------------------
-    # meansub の有無を判定するフラグ (必要に応じて対話的入力や引数に変更してください)
     use_meansub = False 
-    
-    # 手法に応じたディレクトリベース名（本コードは centroid 用）
-    # ※IF法の場合は 'hilbert_if_analysis_diff' に変更してください
     dir_name = 'centroid_frequency_analysis_diff'
     if use_meansub:
         dir_name += '_meansub'
@@ -263,17 +309,18 @@ if __name__ == "__main__":
     print(f'Output directory: {out_dir}')
     # ---------------------------------------------------------
     
-    # Optional A-scan file passed to analytical derivation if needed
-    ascan_path = "" # Point to an A-scan if analytical plotting is desired
+    # A-scan file passed to analytical derivation
+    ascan_path = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/waveform_test/gaussiandot_1.25GHz_underground/result/Ascan.out"
 
     # 2. Data Loading & Profiling
-    print("Computing ICE profiles...")
+    print("\nComputing ICE profiles...")
     out_ice, dt_ice, step_ice, params_ice = load_bscan(ice_json_path)
-    prof_ice = compute_centroid_profiles(out_ice, dt_ice, step_ice, params_ice, ascan_path)
+    prof_ice = compute_centroid_profiles(out_ice, dt_ice, step_ice, params_ice, ascan_path, is_reference=False)
 
     print("Computing NO-ICE profiles...")
     out_noice, dt_noice, step_noice, params_noice = load_bscan(noice_json_path)
-    prof_noice = compute_centroid_profiles(out_noice, dt_noice, step_noice, params_noice, ascan_path)
+    # NO-ICE計算時は強制的に f_ice=0.0 を適用する
+    prof_noice = compute_centroid_profiles(out_noice, dt_noice, step_noice, params_noice, ascan_path, is_reference=True)
 
     # 3. Matching & Difference Calculation
     t_ice, t_noice = prof_ice['t'], prof_noice['t']
@@ -293,21 +340,28 @@ if __name__ == "__main__":
     sig_sr_ice = (prof_ice['sr_p75'] - prof_ice['sr_p25']) / 1.349
     sig_sr_noice = (prof_noice['sr_p75'] - prof_noice['sr_p25']) / 1.349
     syn_sigma_sr = np.sqrt(sig_sr_ice**2 + sig_sr_noice**2) / np.sqrt(prof_ice['n_traces'])
+    
+    # Analytical difference Calculation
+    d_cen_analytical = prof_ice['analytical_cen'] - prof_noice['analytical_cen']
+    d_sr_analytical = prof_ice['analytical_sr'] - prof_noice['analytical_sr']
 
     # 4. Regional Stats
-    print("\nNote: The ice signature in STFT Centroid mapping is inherently small (ΔIF ≈ -0.01 to -0.03 GHz).")
     corr_len_ns = 3.0 # Defined in prompt due to Gaussian(3,3) smoothing
     
     t_surface = prof_ice['surface_delay']
-    t_layer_start = 14.4
-    t_layer_end = 37.8
+    t_layer_start = prof_ice.get('t_layer_start')
+    t_layer_end = prof_ice.get('t_layer_end')
+    if t_layer_start is None or np.isnan(t_layer_start):
+        t_layer_start = 0.0
+    if t_layer_end is None or np.isnan(t_layer_end):
+        t_layer_end = 0.0
 
     stats_cen_shallow = region_stats(t, d_cen, t_surface, t_layer_start, corr_len_ns)
     stats_cen_layer = region_stats(t, d_cen, t_layer_start, t_layer_end, corr_len_ns)
     stats_sr_shallow = region_stats(t, d_sr, t_surface, t_layer_start, corr_len_ns)
     stats_sr_layer = region_stats(t, d_sr, t_layer_start, t_layer_end, corr_len_ns)
 
-    print("\n=== Statistics (Shallow: Surface to 14.4ns | Layer: 14.4ns to 37.8ns) ===")
+    print(f"\n=== Statistics (Shallow: Surface to {t_layer_start:.1f}ns | Layer: {t_layer_start:.1f}ns to {t_layer_end:.1f}ns) ===")
     print(f"Δ Centroid - Shallow : Mean={stats_cen_shallow[0]:.5f} GHz ± SEM={stats_cen_shallow[1]:.5f} (n_eff={stats_cen_shallow[2]:.1f}, z={stats_cen_shallow[3]:.2f})")
     print(f"Δ Centroid - Layer   : Mean={stats_cen_layer[0]:.5f} GHz ± SEM={stats_cen_layer[1]:.5f} (n_eff={stats_cen_layer[2]:.1f}, z={stats_cen_layer[3]:.2f})")
     print(f"Δ ShiftRate - Shallow: Mean={stats_sr_shallow[0]:.5f} GHz/ns ± SEM={stats_sr_shallow[1]:.5f} (n_eff={stats_sr_shallow[2]:.1f}, z={stats_sr_shallow[3]:.2f})")
@@ -328,25 +382,33 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
     ice_base = os.path.basename(ice_json_path)
     noice_base = os.path.basename(noice_json_path)
-    fig.suptitle(f"Diff: {ice_base} vs {noice_base} (rand={rand_amp})", fontsize=16)
+    #fig.suptitle(f"Diff: {ice_base} vs {noice_base} (rand={rand_amp})", fontsize=16)
 
-    # Plot Settings Mapping
+    # Plot Settings Mapping [Axes, data, sigma, theory, xlabel, xlims]
     plots = [
-        (axes[0], d_cen, syn_sigma_cen, 'Δ Centroid [GHz]'),
-        (axes[1], d_sr, syn_sigma_sr, 'Δ Shift Rate [GHz/ns]')
+        (axes[0], d_cen, syn_sigma_cen, d_cen_analytical, 'Δ Centroid [GHz]', [-0.05, 0.05]),
+        (axes[1], d_sr, syn_sigma_sr, d_sr_analytical, 'Δ Shift Rate [GHz/ns]', [-0.005, 0.005])
     ]
 
-    for ax, data, sigma, title in plots:
-        ax.plot(data, t, 'k-', lw=1.5)
+    for ax, data, sigma, theory, title, xlims in plots:
+        ax.plot(data, t, 'k-', lw=1.5, label='Measured')
         ax.fill_betweenx(t, data - sigma, data + sigma, color='gray', alpha=0.4, label='±1σ (synth)')
-        ax.axhspan(t_layer_start, t_layer_end, color='blue', alpha=0.1, label='Ice Layer (14.4-37.8ns)')
-        ax.axvline(0, color='r', linestyle='--', alpha=0.7)
+        ax.axhspan(t_layer_start, t_layer_end, color='blue', alpha=0.1, label=f'Ice Layer ({t_layer_start:.1f}-{t_layer_end:.1f}ns)')
+        ax.axvline(0, color='gray', linestyle='-', lw=1)
+        
+        if theory is not None and not np.all(np.isnan(theory)):
+            ax.plot(theory, t, 'r--', lw=2, label='Theory Signature')
+            
         ax.set_ylim(t[-1], t[0])
-        ax.set_xlabel(title, fontsize=14)
+        # xlimを明示的に指定して外れ値による潰れを防ぐ
+        ax.set_xlim(xlims)
+        ax.set_xlabel(title, fontsize=18)
+        ax.set_ylabel('Delay Time [ns]', fontsize=18)
+        ax.tick_params(axis='both', which='major', labelsize=14)
         ax.grid(True)
         ax.legend(loc='lower left')
 
-    axes[0].set_ylabel('Delay time [ns]', fontsize=14)
+    #axes[0].set_ylabel('Delay time [ns]', fontsize=18)
     plt.tight_layout()
     
     img_path = os.path.join(out_dir, 'centroid_diff_profile.png')
