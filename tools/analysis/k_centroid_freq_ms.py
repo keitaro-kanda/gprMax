@@ -283,22 +283,84 @@ def get_ice_params(in_dir):
 # =============================================================================
 # 3. パス探索・seed 列挙（§1）
 # =============================================================================
-def _seed_num(path):
-    m = re.search(r'Seed_(\d+)', os.path.basename(path.rstrip('/')))
-    return int(m.group(1)) if m else -1
+# seed ディレクトリ名。大文字小文字を問わず `Seed_0` / `seed_0` の双方を受理する。
+# ディレクトリ名を番号から組み立てる処理は書かないこと（実在する名前を使う）。
+SEED_DIR_REGEX = re.compile(r'^seed_(\d+)$', re.IGNORECASE)
+
+
+def resolve_ci(parent, name):
+    """parent/name のパスを返す。完全一致が無ければ大文字小文字を無視して探す。
+
+    `Bscan` / `bscan`、`Ascan` / `ascan` のような表記ゆれで解析全体が
+    停止しないための保険。見つからなければ None。
+    """
+    if not parent:
+        return None
+    direct = os.path.join(parent, name)
+    if os.path.exists(direct):
+        return direct
+    try:
+        entries = os.listdir(parent)
+    except OSError:
+        return None
+    low = name.lower()
+    for e in entries:
+        if e.lower() == low:
+            return os.path.join(parent, e)
+    return None
+
+
+def find_seed_dirs(case_dir):
+    """case_dir 直下の seed ディレクトリを [(番号, パス), ...] 昇順で返す。
+
+    glob は（大文字小文字を区別しないファイルシステム上でも）パターン照合自体は
+    区別するため、`Seed_*` では `seed_0` にマッチしない。実在するディレクトリ名を
+    listdir で列挙し、正規表現で判定する。
+    """
+    try:
+        entries = os.listdir(case_dir)
+    except OSError:
+        return []
+    out = []
+    for name in entries:
+        m = SEED_DIR_REGEX.match(name)
+        if m and os.path.isdir(os.path.join(case_dir, name)):
+            out.append((int(m.group(1)), os.path.join(case_dir, name)))
+    return sorted(out, key=lambda x: x[0])
 
 
 def list_seed_jsons(case_dir):
-    """case_dir 配下の Seed_*/Bscan/Bscan.json を seed 番号昇順で返す。
-    0 から連番でない場合はエラー停止。"""
-    hits = glob.glob(os.path.join(case_dir, 'seed_*', 'Bscan', 'Bscan.json'))
-    if not hits:
-        raise FileNotFoundError(
-            f"seed_*/Bscan/Bscan.json が見つかりません: {case_dir}")
+    """case_dir 配下の <seed_N>/Bscan/Bscan.json を seed 番号昇順で返す。
 
-    pairs = sorted(((_seed_num(os.path.dirname(os.path.dirname(h))), h) for h in hits),
-                   key=lambda x: x[0])
-    nums = [n for n, _ in pairs]
+    0 から連番でない場合はエラー停止（共通仕様 §1.3）。
+    Returns: (nums, json_paths, seed_dirs)  ※ seed_dirs は実在するディレクトリパス
+    """
+    seed_dirs = find_seed_dirs(case_dir)
+    if not seed_dirs:
+        try:
+            present = sorted(d for d in os.listdir(case_dir)
+                             if os.path.isdir(os.path.join(case_dir, d)))
+        except OSError:
+            present = []
+        raise FileNotFoundError(
+            f"seed ディレクトリ (Seed_N / seed_N) が見つかりません: {case_dir}\n"
+            f"  直下のディレクトリ: {present}")
+
+    nums, jsons, dirs, no_json = [], [], [], []
+    for n, d in seed_dirs:
+        bdir = resolve_ci(d, 'Bscan')
+        jpath = resolve_ci(bdir, 'Bscan.json') if bdir else None
+        if jpath is None:
+            no_json.append((n, d))
+            continue
+        nums.append(n)
+        jsons.append(jpath)
+        dirs.append(d)
+
+    if no_json:
+        detail = '\n'.join(f"    seed {n}: {d}" for n, d in no_json)
+        raise FileNotFoundError(
+            f"Bscan/Bscan.json が見つからない seed があります: {case_dir}\n{detail}")
 
     expected = list(range(len(nums)))
     if nums != expected:
@@ -310,11 +372,11 @@ def list_seed_jsons(case_dir):
             f"  期待する seed : {expected}\n"
             f"  共通仕様 §1.3 によりエラー停止します。")
 
-    return nums, [h for _, h in pairs]
+    return nums, jsons, dirs
 
 
 def is_case_dir(path):
-    return bool(glob.glob(os.path.join(path, 'Seed_*')))
+    return bool(find_seed_dirs(path))
 
 
 def enumerate_cases(path):
@@ -328,10 +390,17 @@ def enumerate_cases(path):
         return [path]
 
     subs = sorted(d for d in glob.glob(os.path.join(path, '*'))
-                  if os.path.isdir(d) and glob.glob(os.path.join(d, 'seed_*')))
+                  if os.path.isdir(d) and find_seed_dirs(d))
     if not subs:
+        try:
+            present = sorted(d for d in os.listdir(path)
+                             if os.path.isdir(os.path.join(path, d)))
+        except OSError:
+            present = []
         raise FileNotFoundError(
-            f"seed_*/ も、seed_*/ を持つサブディレクトリも見つかりません: {path}")
+            f"seed ディレクトリ (Seed_N / seed_N) も、それを持つサブディレクトリも"
+            f"見つかりません: {path}\n"
+            f"  直下のディレクトリ: {present}")
 
     print(f"[入力判別] 親ディレクトリとして処理します: {path}")
     print(f"           対象 case ({len(subs)} 件): {[os.path.basename(s) for s in subs]}")
@@ -349,13 +418,25 @@ def derive_eval_type(case_dir):
 
 
 def derive_noice_dir(case_dir):
-    """パス中の Eval_XXX/rand_amp_YYY/ZZZ を No_Ice/rand_amp_YYY に置換。
-    （本ツールでは使用しないが、共通仕様 §1.2 の導出規則として実装し記録する）"""
-    m = re.search(r'(.*?)Eval_[^/\\]+[/\\]rand_amp_(\d+)[/\\][^/\\]+[/\\]?$',
-                  case_dir.rstrip('/\\') + os.sep)
+    """共通仕様 §1.2 の規約に従い No_Ice の case_dir を導出する。
+
+    パス中の `Eval_XXX/rand_amp_YYY/<case>` を `No_Ice/rand_amp_YYY` に置換する。
+    例) <root>/domain_5x4/Eval_thick/rand_amp_005/thick_20
+        -> <root>/domain_5x4/No_Ice/rand_amp_005
+    （No_Ice は Eval_* と同階層に置かれる規約。実配置で確認済み。）
+
+    本ツールでは記録のみで使用しない（差分ツール②が使う）。
+    規約から外れた配置には --noice_dir で明示指定する。
+
+    Returns: (path or None, exists: bool)
+    """
+    norm = case_dir.rstrip('/\\') + os.sep
+    m = re.search(r'(.*?)Eval_[^/\\]+[/\\]rand_amp_(\d+)[/\\][^/\\]+[/\\]?$', norm)
     if not m:
-        return None
-    return os.path.join(m.group(1), 'No_Ice', f'rand_amp_{m.group(2)}')
+        return None, False
+
+    noice = os.path.join(m.group(1), 'No_Ice', f'rand_amp_{m.group(2)}')
+    return noice, os.path.isdir(noice)
 
 
 # =============================================================================
@@ -871,7 +952,7 @@ SUMMARY_HEADER = [
 # =============================================================================
 def write_readme(path, info):
     sweep_txt = ', '.join(f'{f*100:g} vol%' for f in info['theory_sweep'])
-    seeds_txt = ', '.join(f'Seed_{i}' for i in info['seeds'])
+    seeds_txt = ', '.join(info['seed_names'])
     nseed_rows = '\n'.join(
         f"| {d['nseed']} | {d['n_traces']} | {d['line_length_m']:.1f} | `{d['dirname']}/` |"
         for d in info['nseed_table'])
@@ -895,7 +976,7 @@ def write_readme(path, info):
 | 項目 | 値 |
 |---|---|
 | case ディレクトリ | `{info['case_dir']}` |
-| No_Ice ディレクトリ | `{info['noice_dir']}`（**本ツールでは未使用**。参考記録） |
+| No_Ice ディレクトリ | `{info['noice_dir']}`（実在: {info['noice_exists']}。**本ツールでは未使用**、参考記録） |
 | 使用した seed | {seeds_txt}（計 {len(info['seeds'])} 個） |
 | A-scan 参照波形 | `{info['ascan_path']}` |
 | 1 seed のトレース数 | {info['n_traces_per_seed']}（実測値） |
@@ -1093,19 +1174,39 @@ def process_case(case_dir, incident, noice_dir_override=None):
     print('=' * 78)
 
     # --- a. seed 一覧の取得・検証 ---
-    seeds, seed_jsons = list_seed_jsons(case_dir)
+    seeds, seed_jsons, seed_dirs = list_seed_jsons(case_dir)
     print(f'  検出した seed: {seeds}')
+    print(f'  seed ディレクトリ名: {[os.path.basename(d) for d in seed_dirs]}')
 
-    # --- b. .in からパラメータ読み取り（ice 側 Seed_0/Ascan/）---
-    in_dir = os.path.join(case_dir, f'Seed_{seeds[0]}', 'Ascan')
+    # --- b. .in からパラメータ読み取り（ice 側 seed 0 の Ascan/）---
+    #     ディレクトリ名は番号から組み立てず、実在するパスを使う。
+    in_dir = resolve_ci(seed_dirs[0], 'Ascan')
+    if in_dir is None:
+        raise FileNotFoundError(
+            f'Ascan ディレクトリが見つかりません: {seed_dirs[0]}/Ascan\n'
+            f'  .in から氷層パラメータを読む必要があります（共通仕様 §3）。')
     p = get_ice_params(in_dir)
     debye_params = {'tau1': p['tau1'], 'tau2': p['tau2'], 'de_ratio': p['de_ratio']}
 
     rand_amp = derive_rand_amp(case_dir)
     eval_type = derive_eval_type(case_dir)
-    noice_dir = noice_dir_override or derive_noice_dir(case_dir)
+    if noice_dir_override:
+        noice_dir, noice_exists = noice_dir_override, os.path.isdir(noice_dir_override)
+    else:
+        noice_dir, noice_exists = derive_noice_dir(case_dir)
     print(f'  rand_amp={rand_amp}, eval_type={eval_type}')
-    print(f'  No_Ice dir (未使用・記録のみ): {noice_dir}')
+    print(f'  No_Ice dir (本ツールでは未使用・記録のみ): {noice_dir}'
+          f'{"" if noice_exists else "  [!] 実在しません"}')
+    noice_seeds = [n for n, _ in find_seed_dirs(noice_dir)] if noice_exists else []
+    if noice_exists:
+        need = len(seeds) + CROSS_SEED_OFFSET
+        print(f'      No_Ice の seed: {noice_seeds} ({len(noice_seeds)} 個)')
+        if len(noice_seeds) < need:
+            print(f'      [!] 差分ツール② の異シード差分には ice {len(seeds)} 個 + '
+                  f'CROSS_SEED_OFFSET={CROSS_SEED_OFFSET} で seed 0..{need-1} '
+                  f'({need} 個) が必要です。現在 {len(noice_seeds)} 個。')
+    else:
+        print('      差分ツール② を使う際は --noice_dir で明示指定してください。')
 
     # --- B-scan 読み込み（全 seed）と整合性検証 ---
     print('  B-scan を読み込み中...')
@@ -1261,10 +1362,12 @@ def process_case(case_dir, incident, noice_dir_override=None):
         'tool': 'k_ms_centroid_single.py', 'mode': 'single',
         'timestamp': timestamp,
         'case_dir': case_dir, 'case_name': case_name,
-        'noice_dir': noice_dir, 'noice_dir_used': False,
+        'noice_dir': noice_dir, 'noice_dir_exists': noice_exists,
+        'noice_seeds_available': noice_seeds, 'noice_dir_used': False,
         'eval_type': eval_type, 'rand_amp': rand_amp,
         'seeds_used': seeds, 'seed_jsons': seed_jsons,
         'in_dir': in_dir, 'in_files': p['in_files'],
+        'seed_dirs': seed_dirs,
         'ice_params': {'f_ice': p['f_ice'], 'ice_top': p['ice_top'],
                        'ice_bot': p['ice_bot'], 'eps_ice': p['eps_ice'],
                        'eps_ice_source': p['eps_ice_source'],
@@ -1297,7 +1400,9 @@ def process_case(case_dir, incident, noice_dir_override=None):
     tv0, tv1 = valid_time_range(t_axis, prof['cen_sm_med'])
     readme_info = {
         'timestamp': timestamp, 'case_name': case_name, 'case_dir': case_dir,
-        'noice_dir': noice_dir, 'seeds': seeds, 'ascan_path': ASCAN_OUTFILE_PATH,
+        'noice_dir': noice_dir, 'noice_exists': noice_exists, 'seeds': seeds,
+        'seed_names': [os.path.basename(d) for d in seed_dirs],
+        'ascan_path': ASCAN_OUTFILE_PATH,
         'n_traces_per_seed': n_traces_per_seed, 'gpr_step': gpr_step,
         'seed_line_length_m': n_traces_per_seed * gpr_step,
         'in_dir': in_dir, 'in_files': p['in_files'],
