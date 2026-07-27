@@ -289,7 +289,8 @@ if __name__ == "__main__":
     NOICE_JSON = {
         0.01: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/rand_amp_001/Bscan/Bscan.json',
         0.05: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/rand_amp_005/Bscan/Bscan.json'
-    }
+        #0.05: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x4/Ice_Detection_NoRock/No_Ice/rand_amp_005/Bscan/Bscan.json'
+        }
     noice_json_path = NOICE_JSON[rand_amp]
 
     if not os.path.exists(noice_json_path):
