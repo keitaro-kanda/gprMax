@@ -39,7 +39,7 @@ os.makedirs(output_dir_resolution, exist_ok=True)
 eps0 = 8.8541878128e-12          # 真空の誘電率 [F/m]
 
 # 深さ [m]
-z   = np.arange(0, 3.01, 0.02)   # [m]
+z   = np.arange(0, 5.01, 0.02)   # [m]
 FeOTiO2 = 20.0                   # [wt%]
 
 freqs = np.array([0.5e9, 1.25e9, 2.0e9])     # [Hz]
