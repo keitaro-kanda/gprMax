@@ -29,7 +29,8 @@ from tools.core.outputfiles_merge import get_output_data
 NOICE_JSON = {
         0.01: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/rand_amp_001/Bscan/Bscan.json',
         # 0.05: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/Ice_Detection_NoRock/No_Ice/rand_amp_005/Bscan/Bscan.json',
-        0.05: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x4/Ice_Detection_NoRock/No_Ice/rand_amp_005/Bscan/Bscan.json'
+        # 0.05: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_10x4/Ice_Detection_NoRock/No_Ice/rand_amp_005/Bscan/Bscan.json'
+        0.05: '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x4/No_Ice/rand_amp_005/seed_0/Bscan/Bscan.json'
     }
 
 # 入射波スペクトル計算用のA-scan出力ファイルパス
