@@ -326,8 +326,14 @@ def synth_theory_reflect(e_ref, dt_ref, n):
 # =============================================================================
 # 測定関数（実測・理論の両方に同一の関数を適用する）
 # =============================================================================
-def measure(trace, dt, t_predicted, search_halfwidth=SEARCH_HALFWIDTH_NS):
+def measure(trace, dt, t_predicted=None, search_halfwidth=SEARCH_HALFWIDTH_NS, label=''):
     """A-scan から直達波の特徴量を抽出する。
+
+    Parameters
+    ----------
+    t_predicted : float or None
+        探索窓の中心 [ns]。None なら全区間から包絡の最大値を探す
+        （自由空間参照のように、対象パルスが 1 つしかない場合に使う）。
 
     Returns
     -------
@@ -344,15 +350,26 @@ def measure(trace, dt, t_predicted, search_halfwidth=SEARCH_HALFWIDTH_NS):
     t_axis = np.arange(n_samples) * dt_ns
     envelope = np.abs(signal.hilbert(trace))
 
-    lo, hi = t_predicted - search_halfwidth, t_predicted + search_halfwidth
-    window_mask = (t_axis >= lo) & (t_axis <= hi)
-    if not np.any(window_mask):
-        raise CmdInputError(
-            '探索窓 [{:.3f}, {:.3f}] ns 内にサンプルがありません（trace 長: {:.3f} ns）'.format(
-                lo, hi, t_axis[-1]))
+    if t_predicted is None:
+        idx_in_window = np.arange(n_samples)
+        lo, hi = t_axis[0], t_axis[-1]
+    else:
+        lo, hi = t_predicted - search_halfwidth, t_predicted + search_halfwidth
+        window_mask = (t_axis >= lo) & (t_axis <= hi)
+        if not np.any(window_mask):
+            raise CmdInputError(
+                '探索窓 [{:.3f}, {:.3f}] ns 内にサンプルがありません（trace 長: {:.3f} ns）'.format(
+                    lo, hi, t_axis[-1]))
+        idx_in_window = np.where(window_mask)[0]
 
-    idx_in_window = np.where(window_mask)[0]
     peak_idx = idx_in_window[np.argmax(envelope[idx_in_window])]
+
+    # 探索窓の端でピークが見つかった場合、真のピークは窓の外にある可能性が高い。
+    # 波源の内部遅延を取り違えるとこの状態になり、残差が全深さで一様にずれる。
+    if t_predicted is not None and peak_idx in (idx_in_window[0], idx_in_window[-1]):
+        print('Warning: {}探索窓 [{:.2f}, {:.2f}] ns の端でピークが見つかりました。'
+              '真のピークが窓の外にある可能性があります。'.format(
+                  '[{}] '.format(label) if label else '', lo, hi))
 
     if 0 < peak_idx < n_samples - 1:
         y0, y1, y2 = envelope[peak_idx - 1], envelope[peak_idx], envelope[peak_idx + 1]
@@ -389,8 +406,21 @@ def analyze_level1(rx_paths, reference):
     level = 'Level_1'
     results = []
 
-    # dB の基準となる参照波形の包絡ピーク（全 rx 共通なのでループ外で 1 度だけ求める）
-    amp_ref = measure(e_ref, dt_ref, R_REF / C)['amp_peak']
+    # 参照波形（自由空間 1 m）の包絡ピークを全区間から求める。
+    # ここから dB の基準振幅と、波源自身の内部遅延の 2 つを得る。
+    ref_meas = measure(e_ref, dt_ref, None, label='reference far_1m')
+    amp_ref = ref_meas['amp_peak']
+
+    # 波源の内部遅延：波源波形のピークが t=0 からどれだけ後ろにあるか。
+    #   gaussiandot           -> chi = 1/f = 0.8 ns 程度
+    #   帯域制限 excitation   -> T_CENTER = 5.0 ns 程度
+    # 理論波形のピークは t_arr + この遅延に現れるので、探索窓の中心に必ず加える。
+    # 参照から実測するので、波源を変えても定数を書き換える必要がない。
+    t_src_delay = ref_meas['t_peak'] - R_REF / C
+    print('波源の内部遅延（参照波形から実測）: {:.3f} ns'.format(t_src_delay))
+    if t_src_delay > SEARCH_HALFWIDTH_NS:
+        print('  (SEARCH_HALFWIDTH_NS = {} ns より大きいため、'
+              '探索中心の補正は必須)'.format(SEARCH_HALFWIDTH_NS))
 
     # --- 深さ依存の rx（at_surface, depth_XXX） ---
     for key, path in rx_paths.items():
@@ -403,12 +433,12 @@ def analyze_level1(rx_paths, reference):
 
         e_theory, t_arr = synth_theory(e_ref, dt_ref, d, level, n)
 
-        # 探索窓の中心：理論波形は t_arr を中心に探し、実測波形はその理論ピーク位置を
-        # 中心に探す。波源（gaussiandot, chi=1/f=0.8 ns）自身の立ち上がり遅延ぶん
-        # ピークは t_arr より後ろに来るため、両方を t_arr 中心にすると窓の片側マージンが
-        # 削られる。measure() は同一関数のままで、中心の与え方だけを変えている。
-        theo = measure(e_theory, dt_ref, t_arr)
-        meas = measure(trace, dt, theo['t_peak'])
+        # 探索窓の中心：
+        #   理論波形 -> t_arr + 波源の内部遅延（ピークが実際に現れる位置）
+        #   実測波形 -> その理論ピーク位置
+        # measure() は同一関数のままで、中心の与え方だけを変えている。
+        theo = measure(e_theory, dt_ref, t_arr + t_src_delay, label=key + ' theory')
+        meas = measure(trace, dt, theo['t_peak'], label=key + ' measured')
 
         amp_meas_db = 20.0 * np.log10(meas['amp_peak'] / amp_ref)
         amp_theory_db = 20.0 * np.log10(theo['amp_peak'] / amp_ref)
@@ -443,8 +473,9 @@ def analyze_level1(rx_paths, reference):
         e_reflect = trace_at_tx - trace_at_tx_free
         e_theory_reflect, t_arr_reflect = synth_theory_reflect(e_ref, dt_ref, n)
 
-        theo = measure(e_theory_reflect, dt_ref, t_arr_reflect)
-        meas = measure(e_reflect, dt_at_tx, theo['t_peak'])
+        theo = measure(e_theory_reflect, dt_ref, t_arr_reflect + t_src_delay,
+                       label='at_tx theory')
+        meas = measure(e_reflect, dt_at_tx, theo['t_peak'], label='at_tx measured')
 
         amp_meas_db = 20.0 * np.log10(meas['amp_peak'] / amp_ref)
         amp_theory_db = 20.0 * np.log10(theo['amp_peak'] / amp_ref)
@@ -472,8 +503,10 @@ def analyze_level1(rx_paths, reference):
     elif 'at_surface' in rx_paths and 'at_surface' in reference:
         trace_surf, dt_surf = load_trace(rx_paths['at_surface'])
         trace_surf_free, _ = load_trace(reference['at_surface'])
-        amp_surf = measure(trace_surf, dt_surf, TX_HEIGHT / C)['amp_peak']
-        amp_surf_free = measure(trace_surf_free, dt_surf, TX_HEIGHT / C)['amp_peak']
+        amp_surf = measure(trace_surf, dt_surf, TX_HEIGHT / C + t_src_delay,
+                           label='at_surface (T check)')['amp_peak']
+        amp_surf_free = measure(trace_surf_free, dt_surf, TX_HEIGHT / C + t_src_delay,
+                                label='at_surface freespace (T check)')['amp_peak']
         T_meas = amp_surf / amp_surf_free
         T_theory = transfer_surface_T(n)
         t_check = {
