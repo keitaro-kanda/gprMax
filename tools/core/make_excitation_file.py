@@ -87,11 +87,16 @@ TUKEY_ALPHA = 0.2               # 帯域端のテーパー幅の割合 (0=矩形
 EXPONENT_P = 0.5                # 放射電界 E(f) ∝ I(f) * f^P の P
                                 #   --calibrate で実測値を確認してから設定する
 
-PHASE_CONST_DEG = 135.0         # [deg] I(f) -> E(f) の位相（周波数によらない定数）
-                                #   +90 deg : 電流 -> 電界の時間微分 (i*2*pi*f)
-                                #   +45 deg : 2D Green 関数 H0^(2) の遠方場漸近 exp(i*pi/4)
-                                #   合計 135 deg。振幅スペクトルには影響せず、
-                                #   予測「波形」の形だけを決める。--calibrate で検証できる。
+PHASE_CONST_DEG = -135.0        # [deg] I(f) -> E(f) の位相（周波数によらない定数）
+                                #   2D 線波源の厳密解 E_z = -(omega mu / 4) I H0^(2)(kr) より
+                                #     +180 deg : 前係数の -1
+                                #     +45 deg  : H0^(2) の遠方場漸近 exp(i pi/4)
+                                #   合計 225 deg = -135 deg。
+                                #   （3D の「電流 -> 電界は時間微分だから +90 deg」という
+                                #     直感は 2D では成り立たない。omega は実係数として現れ、
+                                #     Green 関数の前係数 1/(4j) が -90 deg を与える。）
+                                #   振幅スペクトルには影響せず、予測「波形」の形だけを決める。
+                                #   --calibrate で実測して検証できる。
 
 T_CENTER = 5.0e-9               # [s] パルス中心時刻
 T_HALF_WIDTH = 4.5e-9           # [s] 時間窓の半幅。t=0 と t=2*T_CENTER で厳密に
@@ -412,7 +417,7 @@ def plot_diagnostics(t, current, f, e_spec, png_path):
     ax[0, 1].plot(t[m] * 1e9, -env[m] / norm, color='gray', ls='--', lw=1.0)
     ax[0, 1].set_xlabel('Time [ns]')
     ax[0, 1].set_ylabel('Normalised amplitude')
-    ax[0, 1].set_title('(b) Radiated field E(t)  [predicted, far field]')
+    ax[0, 1].set_title('(b) Radiated field E(t)  [FAR FIELD, compare with rx >= 1 m away]')
     ax[0, 1].legend()
     ax[0, 1].grid(alpha=0.3)
 
