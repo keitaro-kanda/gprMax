@@ -80,44 +80,98 @@ OUTPUT_SUBDIRNAME = 'ascan_amplitude'
 # =============================================================================
 # 入出力
 # =============================================================================
-def load_paths(json_path):
-    """JSON からレベルを番号で選択し、rx パスと _reference を分離する。
+def _select(items, label):
+    """番号入力で 1 つ選ばせる。候補が 1 つなら自動選択。"""
+    if len(items) == 1:
+        print('{}: {} (候補が 1 つのため自動選択)'.format(label, items[0]))
+        return items[0]
+    print('利用可能な{}:'.format(label))
+    for i, name in enumerate(items, 1):
+        print('  {}: {}'.format(i, name))
+    while True:
+        choice = input('{}番号を選択してください (1-{}) > '.format(label, len(items))).strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(items):
+            picked = items[int(choice) - 1]
+            print('選択された{}: {}'.format(label, picked))
+            return picked
+        print('1 から {} の数字を入力してください。'.format(len(items)))
 
-    "_" 始まりのキーはレベルとして扱わない（_reference のみ想定）。
-    _reference は次の 2 箇所のどちらに置いてもよい。
-      - JSON のトップレベル … 全レベル共通の参照計算（自由空間計算など）
-      - 各レベルの中        … そのレベル専用の参照計算（同名キーはこちらが優先）
+
+def _kind_layer(node):
+    """波形種別の階層かどうかを判定する。
+
+    値がすべて dict なら「波形種別 -> rx」の階層、
+    値が文字列なら「rx -> パス」の階層（旧形式）とみなす。
+    """
+    entries = {k: v for k, v in node.items() if not k.startswith('_')}
+    if entries and all(isinstance(v, dict) for v in entries.values()):
+        return entries
+    return None
+
+
+def _pick_reference(ref_node, kind):
+    """_reference から、選択した波形種別に対応するエントリを取り出す。"""
+    if not ref_node:
+        return {}
+    nested = _kind_layer(ref_node)
+    if nested is None:
+        return dict(ref_node)                     # 直下に rx キー（旧形式）
+    if kind is not None and kind in nested:
+        return dict(nested[kind])
+    if kind is not None:
+        raise CmdInputError(
+            '_reference に波形種別 "{}" のエントリがありません（候補: {}）。'
+            'JSON の _reference を確認してください。'.format(kind, ', '.join(sorted(nested))))
+    if len(nested) == 1:
+        return dict(next(iter(nested.values())))
+    return {}
+
+
+def load_paths(json_path):
+    """JSON からレベルと波形種別を番号で選択し、rx パスと _reference を分離する。
+
+    想定する JSON 構成（"_" 始まりのキーはレベル／rx として扱わない）:
+
+        {
+          "_reference": {                     # 全レベル共通の参照計算
+            "gaussiandot":         {"far_1m": ..., "at_tx": ..., ...},
+            "excitation_waveform": {"far_1m": ..., "at_tx": ..., ...}
+          },
+          "Level_1": {
+            "gaussiandot":         {"at_surface": ..., "depth_025": ..., ...},
+            "excitation_waveform": {"at_surface": ..., "depth_025": ..., ...}
+          }
+        }
+
+    波形種別の階層を省いて、レベル直下に rx キーを並べた旧形式にも対応する。
+    その場合は波形種別の選択を行わない。
+
+    _reference はトップレベルにも各レベル内にも置ける（同名キーはレベル内が優先）。
     """
     if not os.path.exists(json_path):
         raise CmdInputError('JSON file {} does not exist'.format(json_path))
     with open(json_path) as f:
         all_paths = json.load(f)
 
-    # 全レベル共通の参照計算（トップレベルの _reference）
-    global_reference = all_paths.get('_reference', {})
-
     levels = [k for k in all_paths if not k.startswith('_')]
     if not levels:
         raise CmdInputError('{} に解析可能なレベルがありません'.format(json_path))
-
-    print('利用可能なレベル:')
-    for i, name in enumerate(levels, 1):
-        print('  {}: {}'.format(i, name))
-
-    level = None
-    while level is None:
-        choice = input('レベル番号を選択してください (1-{}) > '.format(len(levels))).strip()
-        if choice.isdigit() and 1 <= int(choice) <= len(levels):
-            level = levels[int(choice) - 1]
-        else:
-            print('1 から {} の数字を入力してください。'.format(len(levels)))
-    print('選択されたレベル: {}'.format(level))
+    level = _select(levels, 'レベル')
 
     level_data = all_paths[level]
-    # レベル固有の _reference があればトップレベルの設定を上書きする
-    reference = dict(global_reference)
-    reference.update(level_data.get('_reference', {}))
-    rx_paths = {k: v for k, v in level_data.items() if not k.startswith('_')}
+
+    # 波形種別の階層があれば選ばせる（gaussiandot / excitation_waveform など）
+    kinds = _kind_layer(level_data)
+    if kinds:
+        kind = _select(sorted(kinds), '波形種別')
+        rx_paths = dict(kinds[kind])
+    else:
+        kind = None
+        rx_paths = {k: v for k, v in level_data.items() if not k.startswith('_')}
+
+    # 参照計算：トップレベルをレベル内の設定で上書きする
+    reference = _pick_reference(all_paths.get('_reference', {}), kind)
+    reference.update(_pick_reference(level_data.get('_reference', {}), kind))
 
     # PML 内などの解析不能な rx を除外する (design_ascan_amplitude.md §3)
     excluded = sorted(set(rx_paths) & EXCLUDE_KEYS)
@@ -128,26 +182,28 @@ def load_paths(json_path):
 
     if not rx_paths:
         raise CmdInputError('Level {} に解析可能な rx がありません'.format(level))
-    return level, rx_paths, reference
+    return level, kind, rx_paths, reference
 
 
 def resolve_output_dir(level, rx_paths):
     """レベル親ディレクトリ配下に出力ディレクトリのパスを組み立てる。
 
-    rx の .out パス（例 .../Level_1/depth_025/result/Ascan.out）の共通祖先を
-    レベル親ディレクトリ（.../Level_1）とみなし、その下に
-    analysis/ascan_amplitude/ を作る。
+    rx の .out パス（例 .../Level_1_gaussian_dot/depth_025/result/Ascan.out）の
+    共通祖先をレベル親ディレクトリとみなし、その下に analysis/ascan_amplitude/ を作る。
+
+    波形種別ごとにディレクトリが分かれている構成なら、出力も自動的に分かれる。
     """
     paths = [os.path.abspath(p) for p in rx_paths.values()]
     if len(paths) > 1:
         level_root = os.path.commonpath(paths)
     else:
         # rx が 1 つだけの場合は共通祖先が取れないので、
-        # <Level_N>/<rx名>/result/Ascan.out という構成を仮定して 3 段上る。
+        # <親>/<rx名>/result/Ascan.out という構成を仮定して 3 段上る。
         level_root = os.path.dirname(os.path.dirname(os.path.dirname(paths[0])))
 
-    if os.path.basename(level_root) != level:
-        print('Warning: 推定したレベル親ディレクトリ "{}" が選択レベル "{}" と一致しません。'
+    # ディレクトリ名に波形種別のサフィックスが付く構成を許容するため部分一致で判定する
+    if level not in os.path.basename(level_root):
+        print('Warning: 推定した親ディレクトリ "{}" に選択レベル "{}" が含まれていません。'
               'JSON のパス構成を確認してください。'.format(level_root, level))
 
     return os.path.join(level_root, OUTPUT_PARENT_DIRNAME, OUTPUT_SUBDIRNAME)
@@ -587,12 +643,13 @@ def write_csv(results, t_check, output_dir):
     print('Saved:', path)
 
 
-def write_run_info(level, json_path, results, t_check, output_dir):
+def write_run_info(level, kind, json_path, results, t_check, output_dir):
     path = os.path.join(output_dir, 'run_info.txt')
     with open(path, 'w') as f:
         f.write('ascan_amplitude.py run info\n')
         f.write('executed at: {}\n'.format(datetime.now().isoformat()))
         f.write('level: {}\n'.format(level))
+        f.write('waveform: {}\n'.format(kind if kind else '(未指定)'))
         f.write('json_path: {}\n'.format(json_path))
         f.write('\nParameters:\n')
         f.write('  TX_HEIGHT = {} m\n'.format(TX_HEIGHT))
@@ -625,7 +682,7 @@ def main():
                          help='fig1 のショットギャザーを正規化せず真値振幅で表示する')
     args = parser.parse_args()
 
-    level, rx_paths, reference = load_paths(JSON_PATH)
+    level, kind, rx_paths, reference = load_paths(JSON_PATH)
 
     if level not in IMPLEMENTED_LEVELS:
         raise NotImplementedError(
@@ -641,7 +698,7 @@ def main():
     plot_timing(results, output_dir)
     plot_waveforms(results, output_dir)
     write_csv(results, t_check, output_dir)
-    write_run_info(level, JSON_PATH, results, t_check, output_dir)
+    write_run_info(level, kind, JSON_PATH, results, t_check, output_dir)
 
     print('\nAll outputs saved to:', output_dir)
 
