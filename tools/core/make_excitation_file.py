@@ -63,6 +63,7 @@ import argparse
 import os
 
 import numpy as np
+from scipy import signal
 
 # NumPy 2.0 で np.trapz が np.trapezoid に改名された。どちらの版でも動くようにする。
 # （数値計算の中身は同一。既存の k_centroid_freq_ms_diff.py と同じ方針。）
@@ -85,6 +86,12 @@ TUKEY_ALPHA = 0.2               # 帯域端のテーパー幅の割合 (0=矩形
 
 EXPONENT_P = 0.5                # 放射電界 E(f) ∝ I(f) * f^P の P
                                 #   --calibrate で実測値を確認してから設定する
+
+PHASE_CONST_DEG = 135.0         # [deg] I(f) -> E(f) の位相（周波数によらない定数）
+                                #   +90 deg : 電流 -> 電界の時間微分 (i*2*pi*f)
+                                #   +45 deg : 2D Green 関数 H0^(2) の遠方場漸近 exp(i*pi/4)
+                                #   合計 135 deg。振幅スペクトルには影響せず、
+                                #   予測「波形」の形だけを決める。--calibrate で検証できる。
 
 T_CENTER = 5.0e-9               # [s] パルス中心時刻
 T_HALF_WIDTH = 4.5e-9           # [s] 時間窓の半幅。t=0 と t=2*T_CENTER で厳密に
@@ -138,6 +145,16 @@ def _time_window(t, t_center, half_width, alpha):
     return w
 
 
+def radiation_transfer(f, p=EXPONENT_P, phase_deg=PHASE_CONST_DEG):
+    """電流 I(f) から放射電界 E(f) への伝達関数（伝搬遅延は含まない）。
+
+    |H(f)| ∝ f^P、位相は周波数によらない定数。
+    定数位相なので振幅スペクトルには影響せず、波形の形だけを決める。
+    """
+    mag = np.where(f > 0, np.power(np.maximum(f, 1e-30), p), 0.0)
+    return mag * np.exp(1j * np.deg2rad(phase_deg))
+
+
 def design_current(f_lo=F_LO, f_hi=F_HI, alpha=TUKEY_ALPHA, p=EXPONENT_P,
                    t_center=T_CENTER, dt=DT_FILE, nfft=NFFT):
     """放射電界が帯域内で平坦になるような電流波形を設計する。
@@ -147,7 +164,7 @@ def design_current(f_lo=F_LO, f_hi=F_HI, alpha=TUKEY_ALPHA, p=EXPONENT_P,
 
     Returns
     -------
-    t [s], current [A], f [Hz], E_pred(f) 予測放射スペクトル（振幅、任意単位）
+    t [s], current [A], f [Hz], e_spec 予測放射スペクトル（複素、任意単位）
     """
     f = np.fft.rfftfreq(nfft, d=dt)
     w_band = tukey_band(f, f_lo, f_hi, alpha)
@@ -171,9 +188,14 @@ def design_current(f_lo=F_LO, f_hi=F_HI, alpha=TUKEY_ALPHA, p=EXPONENT_P,
 
     current = current / np.max(np.abs(current)) * PEAK_CURRENT
 
-    # 予測される放射スペクトル（振幅）
-    e_pred = np.abs(np.fft.rfft(current)) * np.where(f > 0, np.power(np.maximum(f, 1e-30), p), 0.0)
-    return t, current, f, e_pred
+    # 予測される放射スペクトル（複素）。波形の合成にも使う。
+    e_spec = np.fft.rfft(current) * radiation_transfer(f, p)
+    return t, current, f, e_spec
+
+
+def synth_radiated(e_spec, nfft=NFFT):
+    """予測放射スペクトルから時間波形を合成する。"""
+    return np.fft.irfft(e_spec, n=nfft)
 
 
 def spectral_moments(f, amp, f_lo=0.25e9, f_hi=6.0e9):
@@ -186,8 +208,9 @@ def spectral_moments(f, amp, f_lo=0.25e9, f_hi=6.0e9):
     return fc, var
 
 
-def report(t, current, f, e_pred):
+def report(t, current, f, e_spec, dt=DT_FILE):
     """設計結果の診断を表示する。"""
+    e_pred = np.abs(e_spec)
     fc, var = spectral_moments(f, e_pred)
     # 平坦設計では単一のピークが定義できないため -3 dB 帯域で報告する
     ok = e_pred >= e_pred.max() / np.sqrt(2.0)
@@ -209,6 +232,17 @@ def report(t, current, f, e_pred):
     print('  放射スペクトル  : -3 dB 帯域 {:.3f} - {:.3f} GHz / 重心 {:.3f} GHz'.format(
         f3lo, f3hi, fc))
     print('  sigma_f^2       : {:.4f} GHz^2  (感度 ∝ この値)'.format(var))
+
+    # 放射波形の包絡幅 → 深さ分解能。帯域幅 B に対しおよそ 1/B。
+    e_wave = synth_radiated(e_spec)
+    env = np.abs(signal.hilbert(e_wave))
+    half = env >= env.max() / 2.0
+    idx = np.where(half)[0]
+    fwhm_ns = (idx[-1] - idx[0]) * dt * 1e9
+    v_reg = 0.29979 / np.sqrt(3.0)      # [m/ns] eps_r=3 のレゴリス中の速度
+    print('  放射波形の包絡幅: {:.3f} ns (FWHM) -> 深さ分解能 約 {:.3f} m (eps_r=3)'.format(
+        fwhm_ns, fwhm_ns * v_reg / 2.0))
+
     print('  帯域外漏れ      : {:.3e}  ({:.1f} dB)'.format(leak, 10 * np.log10(leak + 1e-30)))
     print('  時間窓端の残留   : {:.1f} dB (ピーク比)'.format(20 * np.log10(pre / pk + 1e-30)))
     if 20 * np.log10(pre / pk + 1e-30) > -60:
@@ -264,10 +298,11 @@ def calibrate_exponent(ascan_path, src_freq=1.25e9, f_lo=0.4e9, f_hi=3.0e9):
     i_src = -2.0 * zeta * (t - chi) * np.exp(-zeta * (t - chi) ** 2)
 
     f = np.fft.rfftfreq(n, d=dt)
-    g = np.abs(np.fft.rfft(e_ref)) / (np.abs(np.fft.rfft(i_src)) + 1e-30)
+    i_spec = np.fft.rfft(i_src)
+    e_spec = np.fft.rfft(e_ref)
+    g = np.abs(e_spec) / (np.abs(i_spec) + 1e-30)
 
-    m = (f >= f_lo) & (f <= f_hi) & (np.abs(np.fft.rfft(i_src)) >
-                                     1e-3 * np.max(np.abs(np.fft.rfft(i_src))))
+    m = (f >= f_lo) & (f <= f_hi) & (np.abs(i_spec) > 1e-3 * np.max(np.abs(i_spec)))
     p, logc = np.polyfit(np.log(f[m]), np.log(g[m]), 1)
 
     print('--- P の実測校正 ---')
@@ -277,6 +312,17 @@ def calibrate_exponent(ascan_path, src_freq=1.25e9, f_lo=0.4e9, f_hi=3.0e9):
     resid = np.log(g[m]) - (p * np.log(f[m]) + logc)
     print('  フィット残差 : RMS {:.3f} (自然対数) = {:.2f} dB'.format(
         np.std(resid), 20 * np.std(resid) / np.log(10)))
+
+    # 位相：1 m の伝搬遅延を取り除いた残りが PHASE_CONST_DEG に対応するはず
+    c0 = 2.998e8
+    phase = np.angle((e_spec[m] / (i_spec[m] + 1e-30)) * np.exp(2j * np.pi * f[m] * (1.0 / c0)))
+    phase_deg = np.rad2deg(np.angle(np.mean(np.exp(1j * phase))))
+    print('  実測 定数位相: {:+.1f} deg   (理論値 {:+.1f} deg, ばらつき {:.1f} deg)'.format(
+        phase_deg, PHASE_CONST_DEG,
+        np.rad2deg(np.std(np.angle(np.exp(1j * (phase - np.deg2rad(phase_deg))))))))
+    print('    -> PHASE_CONST_DEG に設定すると予測波形の形がより正確になる')
+    print('       （振幅スペクトルには影響しないので、解析結果は変わらない）')
+
     if abs(p - 0.5) > 0.15:
         print('  ** 実測値が理論値から離れています。EXPONENT_P を実測値に設定してください。')
     return p
@@ -326,8 +372,8 @@ def main():
         os.makedirs(outdir, exist_ok=True)
     out_path = os.path.join(outdir, OUT_FILENAME)
 
-    t, current, f, e_pred = design_current()
-    report(t, current, f, e_pred)
+    t, current, f, e_spec = design_current()
+    report(t, current, f, e_spec)
     write_excitation_file(out_path, WAVEFORM_ID, t, current)
 
     print('\n.in ファイルでの使い方:')
@@ -336,36 +382,67 @@ def main():
     print('  （#waveform は不要）')
 
     if not args.no_plot:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
+        plot_diagnostics(t, current, f, e_spec, os.path.join(outdir, PLOT_FILENAME))
 
-        fig, ax = plt.subplots(3, 1, figsize=(8, 10))
-        m = t < 2 * T_CENTER
-        ax[0].plot(t[m] * 1e9, current[m], 'k-')
-        ax[0].set_xlabel('Time [ns]'); ax[0].set_ylabel('Current [A]')
-        ax[0].set_title('Source current waveform'); ax[0].grid(alpha=0.3)
 
-        fm = f < 5e9
-        i_spec = np.abs(np.fft.rfft(current))
-        ax[1].plot(f[fm] / 1e9, i_spec[fm] / i_spec.max(), 'b-', label='Current I(f)')
-        ax[1].plot(f[fm] / 1e9, e_pred[fm] / e_pred.max(), 'r-', label='Radiated E(f) (predicted)')
-        for x in (F_LO / 1e9, F_HI / 1e9):
-            ax[1].axvline(x, color='gray', ls=':')
-        ax[1].set_xlabel('Frequency [GHz]'); ax[1].set_ylabel('Normalised amplitude')
-        ax[1].set_title('Spectra (linear)'); ax[1].legend(); ax[1].grid(alpha=0.3)
+def plot_diagnostics(t, current, f, e_spec, png_path):
+    """電流波形・放射電界波形・スペクトル(線形/dB) の 4 パネル図を保存する。"""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
 
-        ax[2].plot(f[fm] / 1e9, 20 * np.log10(e_pred[fm] / e_pred.max() + 1e-30), 'r-')
-        for x in (F_LO / 1e9, F_HI / 1e9):
-            ax[2].axvline(x, color='gray', ls=':')
-        ax[2].set_ylim(-100, 5)
-        ax[2].set_xlabel('Frequency [GHz]'); ax[2].set_ylabel('[dB]')
-        ax[2].set_title('Radiated spectrum (dB)'); ax[2].grid(alpha=0.3)
+    e_pred = np.abs(e_spec)
+    e_wave = synth_radiated(e_spec)
 
-        plt.tight_layout()
-        png = os.path.join(outdir, PLOT_FILENAME)
-        fig.savefig(png, dpi=150, bbox_inches='tight')
-        print('診断プロット: {}'.format(png))
+    fig, ax = plt.subplots(2, 2, figsize=(13, 8))
+
+    # --- (a) 電流波形（gprMax に渡すもの） ---
+    m = t < 2 * T_CENTER
+    ax[0, 0].plot(t[m] * 1e9, current[m], 'k-', lw=1.2)
+    ax[0, 0].set_xlabel('Time [ns]')
+    ax[0, 0].set_ylabel('Current [A]')
+    ax[0, 0].set_title('(a) Source current I(t)  [written to excitation file]')
+    ax[0, 0].grid(alpha=0.3)
+
+    # --- (b) 放射電界の予測波形 ---
+    env = np.abs(signal.hilbert(e_wave))
+    norm = np.max(np.abs(e_wave))
+    ax[0, 1].plot(t[m] * 1e9, e_wave[m] / norm, 'r-', lw=1.2, label='E(t)')
+    ax[0, 1].plot(t[m] * 1e9, env[m] / norm, color='gray', ls='--', lw=1.0, label='envelope')
+    ax[0, 1].plot(t[m] * 1e9, -env[m] / norm, color='gray', ls='--', lw=1.0)
+    ax[0, 1].set_xlabel('Time [ns]')
+    ax[0, 1].set_ylabel('Normalised amplitude')
+    ax[0, 1].set_title('(b) Radiated field E(t)  [predicted, far field]')
+    ax[0, 1].legend()
+    ax[0, 1].grid(alpha=0.3)
+
+    # --- (c) スペクトル（線形） ---
+    fm = f < 5e9
+    i_spec = np.abs(np.fft.rfft(current))
+    ax[1, 0].plot(f[fm] / 1e9, i_spec[fm] / i_spec.max(), 'b-', label='Current I(f)')
+    ax[1, 0].plot(f[fm] / 1e9, e_pred[fm] / e_pred.max(), 'r-', label='Radiated E(f)')
+    for x in (F_LO / 1e9, F_HI / 1e9):
+        ax[1, 0].axvline(x, color='gray', ls=':')
+    ax[1, 0].set_xlabel('Frequency [GHz]')
+    ax[1, 0].set_ylabel('Normalised amplitude')
+    ax[1, 0].set_title('(c) Spectra (linear)')
+    ax[1, 0].legend()
+    ax[1, 0].grid(alpha=0.3)
+
+    # --- (d) 放射スペクトル（dB） ---
+    ax[1, 1].plot(f[fm] / 1e9, 20 * np.log10(e_pred[fm] / e_pred.max() + 1e-30), 'r-')
+    for x in (F_LO / 1e9, F_HI / 1e9):
+        ax[1, 1].axvline(x, color='gray', ls=':')
+    ax[1, 1].set_ylim(-100, 5)
+    ax[1, 1].set_xlabel('Frequency [GHz]')
+    ax[1, 1].set_ylabel('[dB]')
+    ax[1, 1].set_title('(d) Radiated spectrum (dB)')
+    ax[1, 1].grid(alpha=0.3)
+
+    plt.tight_layout()
+    fig.savefig(png_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print('診断プロット: {}'.format(png_path))
 
 
 if __name__ == '__main__':
