@@ -85,6 +85,10 @@ IMPLEMENTED_LEVELS = {'Level_1'}
 # 解析対象から除外する rx キー (design_ascan_amplitude.md §3 と共通)
 EXCLUDE_KEYS = {'depth_300'}
 
+# 作図
+FIGURE_FORMATS = ('png', 'pdf')   # すべての図をこの形式すべてで保存する
+FIGURE_DPI = 300
+
 # 出力先 (レベル親ディレクトリ配下)
 OUTPUT_PARENT_DIRNAME = 'analysis'
 OUTPUT_SUBDIRNAME = 'ascan_spectrum'
@@ -664,7 +668,30 @@ def _depth_norm_cmap(results):
     return cmap, norm
 
 
-def plot_spectra_overview(results, freq_hz, E_ref, output_dir):
+def save_figure(fig, output_dir, stem):
+    """PNG と PDF の両方で保存する。"""
+    for ext in FIGURE_FORMATS:
+        path = os.path.join(output_dir, '{}.{}'.format(stem, ext))
+        fig.savefig(path, dpi=FIGURE_DPI, bbox_inches='tight')
+        print('Saved:', path)
+    plt.close(fig)
+
+
+# -----------------------------------------------------------------------------
+# fig1: スペクトルに関する集約
+# -----------------------------------------------------------------------------
+def plot_spectra(results, freq_hz, E_ref, output_dir):
+    """(a) 生スペクトル比較、(b) 帯域要約（f_lo / f_c / f_hi / sigma_f）。
+
+    (b) のエラーバーの意味:
+      * 外側の細いキャップ  : f_lo - f_hi（しきい値を横切る周波数、既定 -10 dB）
+      * 内側の太いバー      : f_c ± sigma_f（パワースペクトルの重心と標準偏差）
+      * マーカー            : f_c
+
+    f_lo/f_hi はしきい値を横切る「1 点」で決まる局所量、sigma_f はスペクトル
+    全体をパワー重みで積分した大域量であり、性格が異なる。感度の恒等式
+    df_c/dt = -2*pi*tan_delta*sigma_f^2 に現れるのは sigma_f のほう。
+    """
     depth_results = sorted(results, key=lambda r: r['depth_m'])
     if not depth_results:
         return
@@ -676,8 +703,9 @@ def plot_spectra_overview(results, freq_hz, E_ref, output_dir):
     band_mask = (freq_ghz >= band_lo) & (freq_ghz <= band_hi)
     ref_max = np.max(np.abs(E_ref)[band_mask])
 
-    fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(8, 14))
+    fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(9, 15))
 
+    # --- (a) 生スペクトル ---
     ax = axes[0]
     for r in depth_results:
         color = cmap(norm(r['depth_m']))
@@ -698,182 +726,184 @@ def plot_spectra_overview(results, freq_hz, E_ref, output_dir):
     ax.set_title('(a) Raw spectra')
     fig.colorbar(sm, ax=ax, label='rx depth [m]')
 
+    # --- (b) 帯域端 f_lo / f_c / f_hi ---
+    suffix = _th_suffix(FLOHI_PRIMARY_DB)
+    depths = np.array([r['depth_m'] for r in depth_results])
+    fc = np.array([r['fc_meas_ghz'] for r in depth_results])
+    sd = np.array([r['sigma_f_meas_ghz'] for r in depth_results])
+    flo = np.array([r['flo_{}_meas_ghz'.format(suffix)] for r in depth_results])
+    fhi = np.array([r['fhi_{}_meas_ghz'.format(suffix)] for r in depth_results])
+    fc_t = np.array([r['fc_theory_ghz'] for r in depth_results])
+    sd_t = np.array([r['sigma_f_theory_ghz'] for r in depth_results])
+    flo_t = np.array([r['flo_{}_theory_ghz'.format(suffix)] for r in depth_results])
+    fhi_t = np.array([r['fhi_{}_theory_ghz'.format(suffix)] for r in depth_results])
+
     ax = axes[1]
-    for r in depth_results:
-        color = cmap(norm(r['depth_m']))
-        mask = r['mask']
-        ax.plot(freq_ghz[mask], r['L_abs_meas'][mask] * LN_TO_DB20, color=color, lw=1.2)
-        ax.plot(freq_ghz[mask], r['L_abs_theory'][mask] * LN_TO_DB20, color=color, lw=1.0, ls='--')
-    ax.set_xlim(band_lo, band_hi)
+    # 理論は 3 本の赤点線。凡例は 1 つにまとめる。
+    # シミュレーション結果のプロット線を上にしたいので、先に理論曲線をプロットする
+    ax.plot(flo_t, depths, 'r--', lw=1.2, label='theory')
+    ax.plot(fc_t, depths, 'r--', lw=1.2)
+    ax.plot(fhi_t, depths, 'r--', lw=1.2)
+    ax.errorbar(fc, depths, xerr=[fc - flo, fhi - fc], fmt='o', color='k',
+                    markersize=4, elinewidth=0.9, capsize=4,
+                    label='measured: f_c with f_lo - f_hi ({:.0f} dB)'.format(FLOHI_PRIMARY_DB))
+    ax.invert_yaxis()
+    ax.set_xlim(flo.min() -  flo.min()*0.1, fhi.max() + flo.min()*0.1)
     ax.set_xlabel('Frequency [GHz]')
-    ax.set_ylabel('Absolute LSR [dB]')
+    ax.set_ylabel('rx depth [m]')
+    ax.legend(fontsize=8, loc='best')
     ax.grid(alpha=0.3)
-    ax.set_title('(b) Absolute LSR: measured (solid) vs theory (dashed)')
-    fig.colorbar(sm, ax=ax, label='rx depth [m]')
+    ax.set_title('(b) Band edges: f_lo / f_c / f_hi ({:.0f} dB)'.format(FLOHI_PRIMARY_DB))
 
+    # --- (c) 重心とスペクトル幅 f_c, sigma_f ---
     ax = axes[2]
-    for r in depth_results:
-        color = cmap(norm(r['depth_m']))
-        mask = r['mask']
-        resid = (r['L_abs_meas'] - r['L_abs_theory']) * LN_TO_DB20
-        ax.plot(freq_ghz[mask], resid[mask], color=color, lw=1.2)
-    ax.axhspan(-LSR_TOL_DB, LSR_TOL_DB, color='green', alpha=0.15, label='±{} dB'.format(LSR_TOL_DB))
-    ax.axhline(0, color='gray', lw=1)
-    ax.set_xlim(band_lo, band_hi)
+    # シミュレーション結果のプロット線を上にしたいので、先に理論曲線をプロットする
+    ax.plot(fc_t, depths, 'r--', lw=1.2, label='theory')
+    ax.plot(fc_t - sd_t, depths, 'r--', lw=1.2)
+    ax.plot(fc_t + sd_t, depths, 'r--', lw=1.2)
+    ax.errorbar(fc, depths, xerr=sd, fmt='o', color='k', markersize=4,
+                    elinewidth=2.0, capsize=4,
+                    label='measured: $f_c \\pm\\ \\sigma_f$')
+    # ax.fill_betweenx(depths, fc_t - sd_t, fc_t + sd_t, color='r', alpha=0.15,
+    #                 label='theory: $f_c \\pm\\ \\sigma_f$')
+    ax.set_xlim(flo.min() -  flo.min()*0.1, fhi.max() + flo.min()*0.1)
+    ax.invert_yaxis()
     ax.set_xlabel('Frequency [GHz]')
-    ax.set_ylabel('Residual [dB] (meas - theory)')
-    ax.legend()
+    ax.set_ylabel('rx depth [m]')
+    ax.legend(fontsize=8, loc='best')
     ax.grid(alpha=0.3)
-    ax.set_title('(c) Absolute LSR residual (pass/fail)')
-    fig.colorbar(sm, ax=ax, label='rx depth [m]')
+    ax.set_title('(c) Centroid and spectral width: $f_c$, $\\sigma_f$')
 
-    plt.tight_layout()
-    path = os.path.join(output_dir, 'fig1_spectra_overview.png')
-    fig.savefig(path, dpi=300, bbox_inches='tight')
-    print('Saved:', path)
-    plt.close(fig)
+    fig.tight_layout()
+    save_figure(fig, output_dir, 'fig1_spectra')
 
 
-def plot_moments(results, output_dir):
+# -----------------------------------------------------------------------------
+# fig2: LSR に関する集約
+# -----------------------------------------------------------------------------
+def plot_lsr(results, freq_hz, d0, output_dir):
+    """絶対LSR・相対LSR とそれぞれの残差（2x2）。"""
     depth_results = sorted(results, key=lambda r: r['depth_m'])
     if not depth_results:
         return
-    depths = np.array([r['depth_m'] for r in depth_results])
+    cmap, norm = _depth_norm_cmap(depth_results)
+    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+    freq_ghz = freq_hz * 1e-9
+    band_lo, band_hi = BAND_GHZ
 
-    fig, axes = plt.subplots(nrows=2, ncols=4, figsize=(18, 8))
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(15, 10))
+
+    panels = [
+        (axes[0, 0], 'L_abs_meas', 'L_abs_theory',
+         '(a) Absolute LSR: measured (solid) vs theory (dashed)', 'Absolute LSR [dB]'),
+        (axes[1, 0], 'L_rel_meas', 'L_rel_theory',
+         '(c) Relative LSR (ref depth = {:.2f} m)'.format(d0),
+         'Relative LSR [dB]'),
+    ]
+    for ax, key_m, key_t, title, ylabel in panels:
+        for r in depth_results:
+            color = cmap(norm(r['depth_m']))
+            mask = r['mask']
+            ax.plot(freq_ghz[mask], r[key_m][mask] * LN_TO_DB20, color=color, lw=1.2)
+            ax.plot(freq_ghz[mask], r[key_t][mask] * LN_TO_DB20, color=color, lw=1.0, ls='--')
+        ax.set_xlim(band_lo, band_hi)
+        ax.set_xlabel('Frequency [GHz]')
+        ax.set_ylabel(ylabel)
+        ax.grid(alpha=0.3)
+        ax.set_title(title)
+        fig.colorbar(sm, ax=ax, label='rx depth [m]')
+
+    resid_panels = [
+        (axes[0, 1], 'L_abs_meas', 'L_abs_theory', True,
+         '(b) Absolute LSR residual (pass/fail)'),
+        (axes[1, 1], 'L_rel_meas', 'L_rel_theory', False,
+         '(d) Relative LSR residual'),
+    ]
+    for ax, key_m, key_t, show_tol, title in resid_panels:
+        for r in depth_results:
+            color = cmap(norm(r['depth_m']))
+            mask = r['mask']
+            resid = (r[key_m] - r[key_t]) * LN_TO_DB20
+            ax.plot(freq_ghz[mask], resid[mask], color=color, lw=1.2)
+        if show_tol:
+            ax.axhspan(-LSR_TOL_DB, LSR_TOL_DB, color='green', alpha=0.15,
+                       label='$\\pm${} dB'.format(LSR_TOL_DB))
+            ax.legend()
+        ax.axhline(0, color='gray', lw=1)
+        ax.set_xlim(band_lo, band_hi)
+        ax.set_xlabel('Frequency [GHz]')
+        ax.set_ylabel('Residual [dB] (meas - theory)')
+        ax.grid(alpha=0.3)
+        ax.set_title(title)
+        fig.colorbar(sm, ax=ax, label='rx depth [m]')
+
+    fig.tight_layout()
+    save_figure(fig, output_dir, 'fig2_lsr')
+
+
+# -----------------------------------------------------------------------------
+# fig3: 減衰率に関する集約
+# -----------------------------------------------------------------------------
+def plot_attenuation(results, freq_hz, output_dir):
+    """alpha(f) と tan_delta(f) を、絶対LSR版・相対LSR版の両方で（2x2）。
+
+    浅い rx ほど乖離が大きく見えるのは、alpha = -(LSR残差)/d という定義により
+    同じ大きさの残差が 1/d で増幅されるため（README §2.4 参照）。
+    """
+    depth_results = sorted(results, key=lambda r: r['depth_m'])
+    if not depth_results:
+        return
+    cmap, norm = _depth_norm_cmap(depth_results)
+    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+    freq_ghz = freq_hz * 1e-9
+    band_lo, band_hi = BAND_GHZ
+
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(15, 10))
 
     specs = [
-        ('fc_meas_ghz', 'fc_theory_ghz', 'f_c [GHz]', FC_TOL_MHZ * 1e-3),
-        ('sigma_f_meas_ghz', 'sigma_f_theory_ghz', 'sigma_f [GHz]', None),
-        ('flo_m10_meas_ghz', 'flo_m10_theory_ghz', 'f_lo (-10dB) [GHz]', None),
-        ('fhi_m10_meas_ghz', 'fhi_m10_theory_ghz', 'f_hi (-10dB) [GHz]', None),
+        (axes[0, 0], 'alpha_abs', r'$\alpha(f)$ [1/m]',
+         '(a) Attenuation from absolute LSR (collapse check)'),
+        (axes[0, 1], 'alpha_rel', r'$\alpha(f)$ [1/m]',
+         '(b) Attenuation from relative LSR (field-measurable)'),
+        (axes[1, 0], 'tandelta_abs', r'$\tan\delta(f)$',
+         '(c) Loss tangent from absolute LSR'),
+        (axes[1, 1], 'tandelta_rel', r'$\tan\delta(f)$',
+         '(d) Loss tangent from relative LSR'),
     ]
-    titles = ['f_c', 'sigma_f', 'f_lo (-10dB)', 'f_hi (-10dB)']
-    for col, (meas_key, theory_key, label, tol) in enumerate(specs):
-        ax = axes[0, col]
-        meas = np.array([r[meas_key] for r in depth_results])
-        theory = np.array([r[theory_key] for r in depth_results])
-        ax.plot(theory, depths, 'r-', label='Theory')
-        ax.plot(meas, depths, 'ko', label='Measured')
-        ax.set_xlabel(label)
-        ax.set_title(titles[col])
-        ax.invert_yaxis()
+    for ax, key, ylabel, title in specs:
+        plotted = False
+        for r in depth_results:
+            arr = r[key]
+            if np.all(np.isnan(arr)):
+                continue
+            color = cmap(norm(r['depth_m']))
+            mask = r['mask']
+            ax.plot(freq_ghz[mask], arr[mask], color=color, lw=1.2)
+            plotted = True
+        ax.axhline(0.0, color='r', ls='--', lw=1.5,
+                   label='Theory (Level_1: 0)')
+        ax.set_xlim(band_lo, band_hi)
+        ax.set_xlabel('Frequency [GHz]')
+        ax.set_ylabel(ylabel)
         ax.grid(alpha=0.3)
-        if col == 0:
-            ax.set_ylabel('rx depth [m]')
-            ax.legend()
+        ax.set_title(title)
+        if plotted:
+            ax.legend(fontsize=8)
+        fig.colorbar(sm, ax=ax, label='rx depth [m]')
 
-        ax2 = axes[1, col]
-        resid = meas - theory
-        ax2.axvline(0, color='gray', lw=1)
-        if tol is not None:
-            ax2.axvspan(-tol, tol, color='green', alpha=0.15)
-        ax2.plot(resid, depths, 'ko-')
-        ax2.set_xlabel('Residual ({})'.format(label))
-        ax2.invert_yaxis()
-        ax2.grid(alpha=0.3)
-        if col == 0:
-            ax2.set_ylabel('rx depth [m]')
-
-    plt.tight_layout()
-    path = os.path.join(output_dir, 'fig2_moments.png')
-    fig.savefig(path, dpi=300, bbox_inches='tight')
-    print('Saved:', path)
-    plt.close(fig)
+    fig.tight_layout()
+    save_figure(fig, output_dir, 'fig3_attenuation')
 
 
-def plot_relative_lsr(results, freq_hz, d0, output_dir):
-    depth_results = sorted(results, key=lambda r: r['depth_m'])
-    if not depth_results:
-        return
-    cmap, norm = _depth_norm_cmap(depth_results)
-    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
-    freq_ghz = freq_hz * 1e-9
-    band_lo, band_hi = BAND_GHZ
-
-    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(8, 10))
-
-    ax = axes[0]
-    for r in depth_results:
-        color = cmap(norm(r['depth_m']))
-        mask = r['mask']
-        ax.plot(freq_ghz[mask], r['L_rel_meas'][mask] * LN_TO_DB20, color=color, lw=1.2)
-        ax.plot(freq_ghz[mask], r['L_rel_theory'][mask] * LN_TO_DB20, color=color, lw=1.0, ls='--')
-    ax.set_xlim(band_lo, band_hi)
-    ax.set_xlabel('Frequency [GHz]')
-    ax.set_ylabel('Relative LSR [dB] (ref depth={:.2f} m)'.format(d0))
-    ax.grid(alpha=0.3)
-    ax.set_title('(a) Relative LSR: measured (solid) vs theory (dashed)')
-    fig.colorbar(sm, ax=ax, label='rx depth [m]')
-
-    ax = axes[1]
-    for r in depth_results:
-        color = cmap(norm(r['depth_m']))
-        mask = r['mask']
-        resid = (r['L_rel_meas'] - r['L_rel_theory']) * LN_TO_DB20
-        ax.plot(freq_ghz[mask], resid[mask], color=color, lw=1.2)
-    ax.axhline(0, color='gray', lw=1)
-    ax.set_xlim(band_lo, band_hi)
-    ax.set_xlabel('Frequency [GHz]')
-    ax.set_ylabel('Residual [dB]')
-    ax.grid(alpha=0.3)
-    ax.set_title('(b) Relative LSR residual')
-    fig.colorbar(sm, ax=ax, label='rx depth [m]')
-
-    plt.tight_layout()
-    path = os.path.join(output_dir, 'fig3_relative_lsr.png')
-    fig.savefig(path, dpi=300, bbox_inches='tight')
-    print('Saved:', path)
-    plt.close(fig)
-
-
-def plot_attenuation(results, freq_hz, output_dir):
-    depth_results = sorted(results, key=lambda r: r['depth_m'])
-    if not depth_results:
-        return
-    cmap, norm = _depth_norm_cmap(depth_results)
-    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
-    freq_ghz = freq_hz * 1e-9
-    band_lo, band_hi = BAND_GHZ
-
-    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(8, 10))
-
-    ax = axes[0]
-    for r in depth_results:
-        color = cmap(norm(r['depth_m']))
-        mask = r['mask']
-        ax.plot(freq_ghz[mask], r['alpha_abs'][mask], color=color, lw=1.2)
-    ax.axhline(0.0, color='r', lw=1.5, ls='--', label='Theory (Level_1: alpha=0)')
-    ax.set_xlim(band_lo, band_hi)
-    ax.set_xlabel('Frequency [GHz]')
-    ax.set_ylabel('alpha(f) [1/m]')
-    ax.legend()
-    ax.grid(alpha=0.3)
-    ax.set_title('(a) Attenuation coefficient (collapse check)')
-    fig.colorbar(sm, ax=ax, label='rx depth [m]')
-
-    ax = axes[1]
-    for r in depth_results:
-        color = cmap(norm(r['depth_m']))
-        mask = r['mask']
-        ax.plot(freq_ghz[mask], r['tandelta_abs'][mask], color=color, lw=1.2)
-    ax.axhline(0.0, color='r', lw=1.5, ls='--', label='Theory (Level_1: tan_delta=0)')
-    ax.set_xlim(band_lo, band_hi)
-    ax.set_xlabel('Frequency [GHz]')
-    ax.set_ylabel('tan_delta(f)')
-    ax.legend()
-    ax.grid(alpha=0.3)
-    ax.set_title('(b) Loss tangent')
-    fig.colorbar(sm, ax=ax, label='rx depth [m]')
-
-    plt.tight_layout()
-    path = os.path.join(output_dir, 'fig4_attenuation.png')
-    fig.savefig(path, dpi=300, bbox_inches='tight')
-    print('Saved:', path)
-    plt.close(fig)
-
-
+# -----------------------------------------------------------------------------
+# fig4: 位相に関する集約
+# -----------------------------------------------------------------------------
 def plot_phase(results, freq_hz, output_dir):
+    """群遅延とその残差。残差は数値分散を直接測っている量。
+
+    深い rx ほど残差が大きくなるのは、数値分散が伝搬距離に比例して蓄積するため。
+    （alpha が浅いほど悪化するのとは逆の依存性になる。README §8.2 参照）
+    """
     depth_results = sorted(results, key=lambda r: r['depth_m'])
     if not depth_results:
         return
@@ -882,45 +912,38 @@ def plot_phase(results, freq_hz, output_dir):
     freq_ghz = freq_hz * 1e-9
     band_lo, band_hi = BAND_GHZ
 
-    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(8, 10))
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(9, 11))
 
     ax = axes[0]
     for r in depth_results:
         color = cmap(norm(r['depth_m']))
         mask = r['mask']
         ax.plot(freq_ghz[mask], r['tau_g'][mask], color=color, lw=1.2)
-        ax.axhline(r['t_arr_ns'], color=color, lw=1.0, ls='--')
+        ax.axhline(r['t_arr_ns'], color=color, ls='--', lw=0.9)
     ax.set_xlim(band_lo, band_hi)
     ax.set_xlabel('Frequency [GHz]')
     ax.set_ylabel('Group delay [ns]')
     ax.grid(alpha=0.3)
-    ax.set_title('(a) Group delay: measured (solid) vs theory t_arr (dashed)')
+    ax.set_title(r'(a) Group delay: measured (solid) vs theory $t_{arr}$ (dashed)')
     fig.colorbar(sm, ax=ax, label='rx depth [m]')
 
     ax = axes[1]
     for r in depth_results:
         color = cmap(norm(r['depth_m']))
         mask = r['mask']
-        resid = r['tau_g'] - r['t_arr_ns']
-        ax.plot(freq_ghz[mask], resid[mask], color=color, lw=1.2)
+        ax.plot(freq_ghz[mask], r['tau_g'][mask] - r['t_arr_ns'], color=color, lw=1.2)
     ax.axhline(0, color='gray', lw=1)
     ax.set_xlim(band_lo, band_hi)
     ax.set_xlabel('Frequency [GHz]')
-    ax.set_ylabel('Residual [ns] (tau_g - t_arr)')
+    ax.set_ylabel(r'Residual [ns] ($\tau_g - t_{arr}$)')
     ax.grid(alpha=0.3)
     ax.set_title('(b) Group delay residual (numerical dispersion)')
     fig.colorbar(sm, ax=ax, label='rx depth [m]')
 
-    plt.tight_layout()
-    path = os.path.join(output_dir, 'fig5_phase.png')
-    fig.savefig(path, dpi=300, bbox_inches='tight')
-    print('Saved:', path)
-    plt.close(fig)
+    fig.tight_layout()
+    save_figure(fig, output_dir, 'fig4_phase')
 
 
-# =============================================================================
-# 出力
-# =============================================================================
 CSV_FIELDNAMES = [
     'key', 'depth_m', 't_arr_ns',
     'lsr_level_db', 'lsr_theory_db', 'lsr_resid_mean_db', 'lsr_flatness_db',
@@ -1026,9 +1049,8 @@ def main():
     output_dir = resolve_output_dir(level, rx_paths)
     os.makedirs(output_dir, exist_ok=True)
 
-    plot_spectra_overview(results, freq_hz, E_ref, output_dir)
-    plot_moments(results, output_dir)
-    plot_relative_lsr(results, freq_hz, d0, output_dir)
+    plot_spectra(results, freq_hz, E_ref, output_dir)
+    plot_lsr(results, freq_hz, d0, output_dir)
     plot_attenuation(results, freq_hz, output_dir)
     plot_phase(results, freq_hz, output_dir)
     write_csv(results, output_dir)
