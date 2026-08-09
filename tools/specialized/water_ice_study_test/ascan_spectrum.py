@@ -745,7 +745,7 @@ def plot_spectra(results, freq_hz, E_ref, output_dir):
     ax.plot(fc_t, depths, 'r--', lw=1.2)
     ax.plot(fhi_t, depths, 'r--', lw=1.2)
     ax.errorbar(fc, depths, xerr=[fc - flo, fhi - fc], fmt='o', color='k',
-                    markersize=4, elinewidth=0.9, capsize=4,
+                    markersize=4, elinewidth=1.0, capsize=4,
                     label='measured: f_c with f_lo - f_hi ({:.0f} dB)'.format(FLOHI_PRIMARY_DB))
     ax.invert_yaxis()
     ax.set_xlim(flo.min() -  flo.min()*0.1, fhi.max() + flo.min()*0.1)
@@ -762,10 +762,8 @@ def plot_spectra(results, freq_hz, E_ref, output_dir):
     ax.plot(fc_t - sd_t, depths, 'r--', lw=1.2)
     ax.plot(fc_t + sd_t, depths, 'r--', lw=1.2)
     ax.errorbar(fc, depths, xerr=sd, fmt='o', color='k', markersize=4,
-                    elinewidth=2.0, capsize=4,
+                    elinewidth=1.0, capsize=4,
                     label='measured: $f_c \\pm\\ \\sigma_f$')
-    # ax.fill_betweenx(depths, fc_t - sd_t, fc_t + sd_t, color='r', alpha=0.15,
-    #                 label='theory: $f_c \\pm\\ \\sigma_f$')
     ax.set_xlim(flo.min() -  flo.min()*0.1, fhi.max() + flo.min()*0.1)
     ax.invert_yaxis()
     ax.set_xlabel('Frequency [GHz]')
