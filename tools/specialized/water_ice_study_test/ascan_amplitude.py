@@ -41,8 +41,8 @@ TX_HEIGHT = 0.35      # [m] 送信機高さ h
 R_REF = 1.0           # [m] 参照計算（ref_freespace_1m）の距離
 
 # Level_1 のレゴリス物性
-EPS_R_LEVEL1 = 3.0
-N_LEVEL1 = np.sqrt(EPS_R_LEVEL1)
+EPS_R_REGOLITH = 3.0
+N_REGOLITH = np.sqrt(EPS_R_REGOLITH)
 
 # 測定関数パラメータ
 SEARCH_HALFWIDTH_NS = 2.0     # [ns] 理論到達時刻からの探索窓半幅
@@ -62,7 +62,7 @@ LEVEL_EFFECTS = {
     'Level_4': ['geom', 'surface_T', 'absorb_debye', 'density_profile'],
 }
 # 現時点で実装済みのレベル（それ以外は未実装のため実行不可）
-IMPLEMENTED_LEVELS = {'Level_1'}
+IMPLEMENTED_LEVELS = {'Level_1', 'Level_2'}
 
 # fig3_waveforms.png で重ね描きする代表深さ
 REPRESENTATIVE_DEPTHS_M = [0.50, 1.50, 2.75]
@@ -73,6 +73,30 @@ SUBLEVEL_LABELS = ['波形種別', 'サブ条件', 'サブ条件']
 # 解析対象から除外する rx キー (design_ascan_amplitude.md §3)
 #   depth_300 は y=0.0 で PML（gprMax デフォルト 10 層 = 0.05 m）の中にあるため、
 #   物理的に意味のあるデータにならない。JSON に残っていても自動で除外する。
+# =============================================================================
+# [EDIT HERE] Level 2 の媒質パラメータ（損失モデル）
+# =============================================================================
+# gprMax の `#material: er sigma mr sigma*` が与えるのは「導電率 sigma 一定」で
+# あり、ロスタンジェント一定ではない。等価的に eps'' = sigma/(omega eps0) なので
+#
+#     tan_delta = eps'' / eps' = sigma / (omega eps0 eps_r)  ∝ 1/f
+#
+# となり、sigma が一定なら tan_delta は 1/f で落ちる。逆に tan_delta を一定に
+# したければ eps'' を周波数によらず一定（= sigma ∝ f）にする必要があり、
+# gprMax では #add_dispersion_debye による多極 Debye でしか実現できない。
+# さらに Kramers-Kronig の関係から eps'' を一定にすると eps' も必ず分散する。
+# したがって「tan_delta 一定」は Level 3（分散性）の領域であり、
+# Level 2（非分散な損失媒質）の物理的に自己整合な姿は「sigma 一定」である。
+LEVEL2_LOSS_MODEL = 'conductivity'   # 'conductivity' … gprMax の #material に対応（既定）
+                                     # 'tan_delta'    … 参考用。Level 3 相当の理想化
+LEVEL2_SIGMA = 0.0035                # [S/m] #material の第 2 引数と一致させること。
+                                     #   プロファイル計算の 0 vol% ice / 1.25 GHz の値。
+                                     #   tan_delta = 0.01678 @ 1.25 GHz に相当。
+LEVEL2_TAN_DELTA = 0.0155            # LEVEL2_LOSS_MODEL='tan_delta' のときのみ使う
+
+ETA0 = 376.730313668                 # [Ohm] 真空の波動インピーダンス
+EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
+
 EXCLUDE_KEYS = {'depth_300'}
 
 # 出力先 (レベル親ディレクトリ配下)
@@ -224,6 +248,11 @@ def load_paths(json_path):
     if level_ref:
         reference.update(_pick_reference(level_ref, chosen))
 
+    if reference:
+        print('使用する参照計算:')
+        for k in sorted(reference):
+            print('    {:<12} {}'.format(k, reference[k]))
+
     excluded = sorted(set(rx_paths) & EXCLUDE_KEYS)
     for key in excluded:
         del rx_paths[key]
@@ -307,10 +336,64 @@ def transfer_phase(f, d, n):
     return np.exp(-2j * np.pi * f * delay_s), t_arr
 
 
-def transfer_absorb(f, d, params):
-    raise NotImplementedError(
-        'Level_2 (absorb_const) は未実装です。tanδ 等の物性値が設計書で '
-        '未確定のため、Level_1 の合格確認後に実装してください。')
+def level2_tandelta(f, n):
+    """Level 2 の tan_delta(f)。
+
+    conductivity モデル : tan_delta = sigma / (omega eps0 eps_r)  ∝ 1/f
+    tan_delta モデル     : 定数
+    """
+    f_arr = np.asarray(f, dtype=float)
+    if LEVEL2_LOSS_MODEL == 'conductivity':
+        eps_r = n ** 2
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.where(f_arr > 0,
+                            LEVEL2_SIGMA / (2.0 * np.pi * np.maximum(f_arr, 1e-30)
+                                            * EPS0 * eps_r),
+                            np.nan)
+    if LEVEL2_LOSS_MODEL == 'tan_delta':
+        return np.full_like(f_arr, LEVEL2_TAN_DELTA)
+    raise CmdInputError(
+        "LEVEL2_LOSS_MODEL は 'conductivity' か 'tan_delta' にしてください: {}".format(
+            LEVEL2_LOSS_MODEL))
+
+
+def level2_alpha(f, n):
+    """Level 2 の減衰係数 alpha(f) [Np/m]（厳密式）。
+
+        alpha = (omega/c) * sqrt(eps_r / 2) * sqrt( sqrt(1 + tan_delta^2) - 1 )
+
+    低損失極限 (tan_delta << 1) では
+        conductivity モデル : alpha -> sigma * eta0 / (2 n)   ← 周波数に依存しない
+        tan_delta モデル     : alpha -> pi f n tan_delta / c   ← f に比例
+    に一致する。sigma=0.0035 S/m では両者の差は 0.02% 以下だが、
+    近似を持ち込まないよう厳密式で実装している。
+    """
+    f_arr = np.asarray(f, dtype=float)
+    td = level2_tandelta(f_arr, n)
+    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)          # C は m/ns なので秒系に直す
+    with np.errstate(invalid='ignore'):
+        alpha = w_over_c * np.sqrt(n ** 2 / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
+    return np.nan_to_num(alpha, nan=0.0)
+
+
+def describe_level2_medium(n):
+    """Level 2 の損失設定を人が読める形で返す（ログと run_info 用）。"""
+    f0 = 1.25e9
+    td0 = float(level2_tandelta(np.array([f0]), n)[0])
+    a0 = float(level2_alpha(np.array([f0]), n)[0])
+    if LEVEL2_LOSS_MODEL == 'conductivity':
+        return ('loss model = conductivity, sigma = {:.6g} S/m  '
+                '(tan_delta = {:.5f} @1.25 GHz, alpha = {:.4f} Np/m, '
+                'alpha は帯域内でほぼ一定)'.format(LEVEL2_SIGMA, td0, a0))
+    sigma_eq = 2.0 * np.pi * f0 * EPS0 * (n ** 2) * LEVEL2_TAN_DELTA
+    return ('loss model = tan_delta, tan_delta = {:.5f}  '
+            '(sigma = {:.6g} S/m @1.25 GHz 相当, alpha = {:.4f} Np/m @1.25 GHz, '
+            'alpha は f に比例)'.format(LEVEL2_TAN_DELTA, sigma_eq, a0))
+
+
+def transfer_absorb(f, d, n):
+    """媒質の吸収項 exp(-alpha(f) * d)（片道透過）。Level 2 以降で使う。"""
+    return np.exp(-level2_alpha(f, n) * d)
 
 
 def transfer_absorb_debye(f, d, params):
@@ -334,7 +417,7 @@ def build_transfer(f, d, level, n):
         elif effect == 'surface_T':
             H = H * transfer_surface_T(n)
         elif effect == 'absorb_const':
-            H = H * transfer_absorb(f, d, None)
+            H = H * transfer_absorb(f, d, n)
         elif effect == 'absorb_debye':
             H = H * transfer_absorb_debye(f, d, None)
         elif effect == 'density_profile':
@@ -384,9 +467,16 @@ def reference_on_grid(e_ref, dt_ref, dt_target, n_target, label=''):
     key = (round(dt_ref, 18), round(dt_target, 18), len(e_ref), n_target)
     if key not in _RESAMPLE_NOTICED:
         _RESAMPLE_NOTICED.add(key)
-        print('参照波形をリサンプル: dt {:.4f} -> {:.4f} ps, {} -> {} samples'
-              '（dx が参照計算と異なるため）'.format(
-                  dt_ref * 1e12, dt_target * 1e12, len(e_ref), n_target))
+        print('')
+        print('*** 警告: 参照計算と dt が異なります '
+              '(dt {:.4f} ps vs 参照 {:.4f} ps) ***'.format(dt_target * 1e12, dt_ref * 1e12))
+        print('    dt の違いは dx の違いを意味します。時間格子はリサンプルで揃えられますが、')
+        print('    gprMax の #hertzian_dipole は電流密度 J = I*dl/(dx*dy*dz) と')
+        print('    セル寸法で正規化されるため、2D では波源の絶対振幅が dx に依存します。')
+        print('    このまま進めると絶対振幅が定数倍ずれます（dx 2 倍で約 6 dB）。')
+        print('    → 解析対象と同じ dx で計算した参照計算を JSON に指定してください。')
+        print('    （相対LSR や深さ間の比較には影響しません）')
+        print('')
     return align_length(resample_trace(e_ref, dt_ref, dt_target), n_target)
 
 
@@ -490,13 +580,14 @@ def measure(trace, dt, t_predicted=None, search_halfwidth=SEARCH_HALFWIDTH_NS, l
 # =============================================================================
 # メイン処理：全 rx に対して実測・理論の比較を行う
 # =============================================================================
-def analyze_level1(rx_paths, reference):
+def analyze_level(rx_paths, reference, level):
     if 'far_1m' not in reference:
         raise CmdInputError('_reference.far_1m が JSON にありません（E_ref(f) の校正に必要）')
     e_ref, dt_ref = load_trace(reference['far_1m'])
 
-    n = N_LEVEL1
-    level = 'Level_1'
+    n = N_REGOLITH
+    if 'absorb_const' in LEVEL_EFFECTS[level]:
+        print('{} の媒質: {}'.format(level, describe_level2_medium(n)))
     results = []
 
     # 参照波形（自由空間 1 m）の包絡ピークを全区間から求める。
@@ -784,7 +875,9 @@ def write_run_info(level, kind, json_path, results, t_check, output_dir):
         f.write('\nParameters:\n')
         f.write('  TX_HEIGHT = {} m\n'.format(TX_HEIGHT))
         f.write('  R_REF = {} m\n'.format(R_REF))
-        f.write('  N_LEVEL1 = {:.6f} (eps_r={})\n'.format(N_LEVEL1, EPS_R_LEVEL1))
+        f.write('  N_REGOLITH = {:.6f} (eps_r={})\n'.format(N_REGOLITH, EPS_R_REGOLITH))
+        if 'absorb_const' in LEVEL_EFFECTS.get(level, []):
+            f.write('  Level 2 medium: {}\n'.format(describe_level2_medium(N_REGOLITH)))
         f.write('  SEARCH_HALFWIDTH_NS = {}\n'.format(SEARCH_HALFWIDTH_NS))
         f.write('  NOISE_WINDOW_NS = {}\n'.format(NOISE_WINDOW_NS))
         f.write('  AMP_TOL_DB = {}\n'.format(AMP_TOL_DB))
@@ -819,7 +912,7 @@ def main():
             '{} は未実装です（実装済み: {}）。Level_2 以降は吸収項の物性値確定後に '
             '追加してください。'.format(level, ', '.join(sorted(IMPLEMENTED_LEVELS))))
 
-    results, t_check, e_ref, dt_ref = analyze_level1(rx_paths, reference)
+    results, t_check, e_ref, dt_ref = analyze_level(rx_paths, reference, level)
 
     output_dir = resolve_output_dir(level, rx_paths)
     os.makedirs(output_dir, exist_ok=True)

@@ -41,8 +41,8 @@ TX_HEIGHT = 0.35      # [m] 送信機高さ h
 R_REF = 1.0           # [m] 参照計算（ref_freespace_1m）の距離
 
 # Level_1 のレゴリス物性
-EPS_R_LEVEL1 = 3.0
-N_LEVEL1 = np.sqrt(EPS_R_LEVEL1)
+EPS_R_REGOLITH = 3.0
+N_REGOLITH = np.sqrt(EPS_R_REGOLITH)
 
 # 解析帯域 (design_ascan_spectrum.md §3.1)
 BAND_GHZ = (0.5, 2.0)
@@ -80,12 +80,36 @@ LEVEL_EFFECTS = {
     'Level_3': ['geom', 'surface_T', 'absorb_debye'],
     'Level_4': ['geom', 'surface_T', 'absorb_debye', 'density_profile'],
 }
-IMPLEMENTED_LEVELS = {'Level_1'}
+IMPLEMENTED_LEVELS = {'Level_1', 'Level_2'}
 
 # JSON の下位選択階層につけるラベル（階層が深いほうまで使う）
 SUBLEVEL_LABELS = ['波形種別', 'サブ条件', 'サブ条件']
 
 # 解析対象から除外する rx キー (design_ascan_amplitude.md §3 と共通)
+# =============================================================================
+# [EDIT HERE] Level 2 の媒質パラメータ（損失モデル）
+# =============================================================================
+# gprMax の `#material: er sigma mr sigma*` が与えるのは「導電率 sigma 一定」で
+# あり、ロスタンジェント一定ではない。等価的に eps'' = sigma/(omega eps0) なので
+#
+#     tan_delta = eps'' / eps' = sigma / (omega eps0 eps_r)  ∝ 1/f
+#
+# となり、sigma が一定なら tan_delta は 1/f で落ちる。逆に tan_delta を一定に
+# したければ eps'' を周波数によらず一定（= sigma ∝ f）にする必要があり、
+# gprMax では #add_dispersion_debye による多極 Debye でしか実現できない。
+# さらに Kramers-Kronig の関係から eps'' を一定にすると eps' も必ず分散する。
+# したがって「tan_delta 一定」は Level 3（分散性）の領域であり、
+# Level 2（非分散な損失媒質）の物理的に自己整合な姿は「sigma 一定」である。
+LEVEL2_LOSS_MODEL = 'conductivity'   # 'conductivity' … gprMax の #material に対応（既定）
+                                     # 'tan_delta'    … 参考用。Level 3 相当の理想化
+LEVEL2_SIGMA = 0.0035                # [S/m] #material の第 2 引数と一致させること。
+                                     #   プロファイル計算の 0 vol% ice / 1.25 GHz の値。
+                                     #   tan_delta = 0.01678 @ 1.25 GHz に相当。
+LEVEL2_TAN_DELTA = 0.0155            # LEVEL2_LOSS_MODEL='tan_delta' のときのみ使う
+
+ETA0 = 376.730313668                 # [Ohm] 真空の波動インピーダンス
+EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
+
 EXCLUDE_KEYS = {'depth_300'}
 
 # 作図
@@ -224,6 +248,11 @@ def load_paths(json_path):
     level_ref = all_paths[level].get('_reference', {})
     if level_ref:
         reference.update(_pick_reference(level_ref, chosen))
+
+    if reference:
+        print('使用する参照計算:')
+        for k in sorted(reference):
+            print('    {:<12} {}'.format(k, reference[k]))
 
     excluded = sorted(set(rx_paths) & EXCLUDE_KEYS)
     for key in excluded:
@@ -371,10 +400,64 @@ def transfer_phase(f, d, n):
     return np.exp(-2j * np.pi * f * delay_s), t_arr
 
 
-def transfer_absorb(f, d, params):
-    raise NotImplementedError(
-        'Level_2 (absorb_const) は未実装です。tanδ 等の物性値が設計書で '
-        '未確定のため、Level_1 の合格確認後に実装してください。')
+def level2_tandelta(f, n):
+    """Level 2 の tan_delta(f)。
+
+    conductivity モデル : tan_delta = sigma / (omega eps0 eps_r)  ∝ 1/f
+    tan_delta モデル     : 定数
+    """
+    f_arr = np.asarray(f, dtype=float)
+    if LEVEL2_LOSS_MODEL == 'conductivity':
+        eps_r = n ** 2
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.where(f_arr > 0,
+                            LEVEL2_SIGMA / (2.0 * np.pi * np.maximum(f_arr, 1e-30)
+                                            * EPS0 * eps_r),
+                            np.nan)
+    if LEVEL2_LOSS_MODEL == 'tan_delta':
+        return np.full_like(f_arr, LEVEL2_TAN_DELTA)
+    raise CmdInputError(
+        "LEVEL2_LOSS_MODEL は 'conductivity' か 'tan_delta' にしてください: {}".format(
+            LEVEL2_LOSS_MODEL))
+
+
+def level2_alpha(f, n):
+    """Level 2 の減衰係数 alpha(f) [Np/m]（厳密式）。
+
+        alpha = (omega/c) * sqrt(eps_r / 2) * sqrt( sqrt(1 + tan_delta^2) - 1 )
+
+    低損失極限 (tan_delta << 1) では
+        conductivity モデル : alpha -> sigma * eta0 / (2 n)   ← 周波数に依存しない
+        tan_delta モデル     : alpha -> pi f n tan_delta / c   ← f に比例
+    に一致する。sigma=0.0035 S/m では両者の差は 0.02% 以下だが、
+    近似を持ち込まないよう厳密式で実装している。
+    """
+    f_arr = np.asarray(f, dtype=float)
+    td = level2_tandelta(f_arr, n)
+    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)          # C は m/ns なので秒系に直す
+    with np.errstate(invalid='ignore'):
+        alpha = w_over_c * np.sqrt(n ** 2 / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
+    return np.nan_to_num(alpha, nan=0.0)
+
+
+def describe_level2_medium(n):
+    """Level 2 の損失設定を人が読める形で返す（ログと run_info 用）。"""
+    f0 = 1.25e9
+    td0 = float(level2_tandelta(np.array([f0]), n)[0])
+    a0 = float(level2_alpha(np.array([f0]), n)[0])
+    if LEVEL2_LOSS_MODEL == 'conductivity':
+        return ('loss model = conductivity, sigma = {:.6g} S/m  '
+                '(tan_delta = {:.5f} @1.25 GHz, alpha = {:.4f} Np/m, '
+                'alpha は帯域内でほぼ一定)'.format(LEVEL2_SIGMA, td0, a0))
+    sigma_eq = 2.0 * np.pi * f0 * EPS0 * (n ** 2) * LEVEL2_TAN_DELTA
+    return ('loss model = tan_delta, tan_delta = {:.5f}  '
+            '(sigma = {:.6g} S/m @1.25 GHz 相当, alpha = {:.4f} Np/m @1.25 GHz, '
+            'alpha は f に比例)'.format(LEVEL2_TAN_DELTA, sigma_eq, a0))
+
+
+def transfer_absorb(f, d, n):
+    """媒質の吸収項 exp(-alpha(f) * d)（片道透過）。Level 2 以降で使う。"""
+    return np.exp(-level2_alpha(f, n) * d)
 
 
 def transfer_absorb_debye(f, d, params):
@@ -398,7 +481,7 @@ def build_transfer(f, d, level, n):
         elif effect == 'surface_T':
             H = H * transfer_surface_T(n)
         elif effect == 'absorb_const':
-            H = H * transfer_absorb(f, d, None)
+            H = H * transfer_absorb(f, d, n)
         elif effect == 'absorb_debye':
             H = H * transfer_absorb_debye(f, d, None)
         elif effect == 'density_profile':
@@ -545,10 +628,11 @@ def _th_suffix(threshold_db):
 # =============================================================================
 # メイン処理：全 rx に対して実測・理論の比較を行う
 # =============================================================================
-def analyze_level1(rx_paths, reference):
+def analyze_level(rx_paths, reference, level):
     e_ref, dt_ref = load_trace(reference['far_1m'])
-    n = N_LEVEL1
-    level = 'Level_1'
+    n = N_REGOLITH
+    if 'absorb_const' in LEVEL_EFFECTS[level]:
+        print('{} の媒質: {}'.format(level, describe_level2_medium(n)))
 
     ref_peak = measure_peak(e_ref, dt_ref)
     t_src_delay = ref_peak['t_peak'] - R_REF / C
@@ -578,9 +662,16 @@ def analyze_level1(rx_paths, reference):
             dt_common = dt
             freq_hz = np.fft.rfftfreq(n_samples_common, d=dt)
             if not _same_dt(dt, dt_ref, rtol=1e-6):
-                print('参照計算と dt が異なります（dt {:.4f} ps vs 参照 {:.4f} ps）。'
-                      '参照スペクトルを共通の周波数グリッドへ内挿します。'.format(
-                          dt * 1e12, dt_ref * 1e12))
+                print('')
+                print('*** 警告: 参照計算と dt が異なります '
+                      '(dt {:.4f} ps vs 参照 {:.4f} ps) ***'.format(dt * 1e12, dt_ref * 1e12))
+                print('    dt の違いは dx の違いを意味します。周波数グリッドは内挿で揃えられますが、')
+                print('    gprMax の #hertzian_dipole は電流密度 J = I*dl/(dx*dy*dz) と')
+                print('    セル寸法で正規化されるため、2D では波源の絶対振幅が dx に依存します。')
+                print('    このまま進めると絶対LSR が定数倍ずれます（dx 2 倍で約 6 dB）。')
+                print('    → 解析対象と同じ dx で計算した参照計算を JSON に指定してください。')
+                print('    （相対LSR・alpha(f)・群遅延には影響しません）')
+                print('')
         elif len(trace) != n_samples_common or not _same_dt(dt, dt_common, rtol=1e-6):
             raise CmdInputError(
                 'rx={} のサンプル数/dt が他の rx と一致しません'
@@ -896,7 +987,7 @@ def plot_lsr(results, freq_hz, d0, output_dir):
 # -----------------------------------------------------------------------------
 # fig3: 減衰率に関する集約
 # -----------------------------------------------------------------------------
-def plot_attenuation(results, freq_hz, output_dir):
+def plot_attenuation(results, freq_hz, level, n, output_dir):
     """alpha(f) と tan_delta(f) を、絶対LSR版・相対LSR版の両方で（2x2）。
 
     浅い rx ほど乖離が大きく見えるのは、alpha = -(LSR残差)/d という定義により
@@ -932,8 +1023,16 @@ def plot_attenuation(results, freq_hz, output_dir):
             mask = r['mask']
             ax.plot(freq_ghz[mask], arr[mask], color=color, lw=1.2)
             plotted = True
-        ax.axhline(0.0, color='r', ls='--', lw=1.5,
-                   label='Theory (Level_1: 0)')
+        # 理論曲線はレベルで変わる。Level 1 は alpha = 0、
+        # Level 2 以降は媒質の損失モデルから計算した alpha(f) / tan_delta(f)。
+        if 'absorb_const' in LEVEL_EFFECTS[level]:
+            th = (level2_alpha(freq_hz, n) if key.startswith('alpha')
+                  else level2_tandelta(freq_hz, n))
+            ax.plot(freq_ghz, th, color='r', ls='--', lw=1.5,
+                    label='Theory ({})'.format(level))
+        else:
+            ax.axhline(0.0, color='r', ls='--', lw=1.5,
+                       label='Theory ({}: alpha=0)'.format(level))
         ax.set_xlim(band_lo, band_hi)
         ax.set_xlabel('Frequency [GHz]')
         ax.set_ylabel(ylabel)
@@ -1059,7 +1158,9 @@ def write_run_info(level, kind, json_path, results, output_dir):
         f.write('\nParameters:\n')
         f.write('  TX_HEIGHT = {} m\n'.format(TX_HEIGHT))
         f.write('  R_REF = {} m\n'.format(R_REF))
-        f.write('  N_LEVEL1 = {:.6f} (eps_r={})\n'.format(N_LEVEL1, EPS_R_LEVEL1))
+        f.write('  N_REGOLITH = {:.6f} (eps_r={})\n'.format(N_REGOLITH, EPS_R_REGOLITH))
+        if 'absorb_const' in LEVEL_EFFECTS.get(level, []):
+            f.write('  Level 2 medium: {}\n'.format(describe_level2_medium(N_REGOLITH)))
         f.write('  BAND_GHZ = {}\n'.format(BAND_GHZ))
         f.write('  MASK_REF_FLOOR_DB = {}\n'.format(MASK_REF_FLOOR_DB))
         f.write('  MASK_SNR_MIN_DB = {}\n'.format(MASK_SNR_MIN_DB))
@@ -1096,14 +1197,14 @@ def main():
 
     check_paths_exist(rx_paths, reference)
 
-    results, freq_hz, E_ref, d0_key, d0 = analyze_level1(rx_paths, reference)
+    results, freq_hz, E_ref, d0_key, d0 = analyze_level(rx_paths, reference, level)
 
     output_dir = resolve_output_dir(level, rx_paths)
     os.makedirs(output_dir, exist_ok=True)
 
     plot_spectra(results, freq_hz, E_ref, output_dir)
     plot_lsr(results, freq_hz, d0, output_dir)
-    plot_attenuation(results, freq_hz, output_dir)
+    plot_attenuation(results, freq_hz, level, N_REGOLITH, output_dir)
     plot_phase(results, freq_hz, output_dir)
     write_csv(results, output_dir)
     write_npz(results, freq_hz, E_ref, output_dir)
