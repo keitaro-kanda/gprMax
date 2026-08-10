@@ -82,6 +82,9 @@ LEVEL_EFFECTS = {
 }
 IMPLEMENTED_LEVELS = {'Level_1'}
 
+# JSON の下位選択階層につけるラベル（階層が深いほうまで使う）
+SUBLEVEL_LABELS = ['波形種別', 'サブ条件', 'サブ条件']
+
 # 解析対象から除外する rx キー (design_ascan_amplitude.md §3 と共通)
 EXCLUDE_KEYS = {'depth_300'}
 
@@ -100,6 +103,15 @@ LN_TO_DB20 = 20.0 / np.log(10.0)
 # =============================================================================
 # 入出力 (ascan_amplitude.py と同一仕様)
 # =============================================================================
+def _same_dt(dt_a, dt_b, rtol=1e-9):
+    """時間刻みが同一かを相対誤差だけで判定する。
+
+    np.isclose の既定 atol=1e-8 は dt（1e-11 秒オーダー）より遥かに大きいため、
+    そのまま使うと 2 倍違う dt でも「一致」と判定されてしまう。必ず atol=0 にする。
+    """
+    return abs(dt_a - dt_b) <= rtol * abs(dt_a)
+
+
 def _select(items, label):
     """番号入力で 1 つ選ばせる。候補が 1 つなら自動選択。"""
     if len(items) == 1:
@@ -118,10 +130,10 @@ def _select(items, label):
 
 
 def _kind_layer(node):
-    """波形種別の階層かどうかを判定する。
+    """さらに下位の選択階層かどうかを判定する。
 
-    値がすべて dict なら「波形種別 -> rx」の階層、
-    値が文字列なら「rx -> パス」の階層（旧形式）とみなす。
+    値がすべて dict なら「選択キー -> 下位ノード」の階層、
+    値が文字列なら「rx -> パス」の終端階層とみなす。
     """
     entries = {k: v for k, v in node.items() if not k.startswith('_')}
     if entries and all(isinstance(v, dict) for v in entries.values()):
@@ -129,22 +141,61 @@ def _kind_layer(node):
     return None
 
 
-def _pick_reference(ref_node, kind):
-    """_reference から、選択した波形種別に対応するエントリを取り出す。"""
+def _descend(node, labels):
+    """rx の階層（値が文字列）に着くまで、番号選択で下位へ降りる。
+
+    JSON の階層の深さは枝ごとに違ってよい。たとえば
+
+        Level_1/gaussiandot/depth_025            … 2 段
+        Level_1/excitation_waveform/dx_0005/...  … 3 段
+
+    のように混在していても、値が文字列になった時点で終端と判断する。
+
+    Returns
+    -------
+    (選択したキーのリスト, rx 辞書)
+    """
+    chosen = []
+    while True:
+        nested = _kind_layer(node)
+        if nested is None:
+            break
+        label = labels[len(chosen)] if len(chosen) < len(labels) else labels[-1]
+        key = _select(sorted(nested), label)
+        chosen.append(key)
+        node = nested[key]
+    rx_paths = {k: v for k, v in node.items() if not k.startswith('_')}
+    return chosen, rx_paths
+
+
+def _pick_reference(ref_node, chosen):
+    """_reference から、選択したキー列に対応するエントリを取り出す。
+
+    _reference の階層は Level 側より浅くてよい。たとえば Level 側で
+    ['excitation_waveform', 'dx_0005'] を選んでも、_reference が
+    波形種別までしか分かれていなければ 'excitation_waveform' の中身を返す。
+    dx を変えても波源そのものは同じなので、これは正しい振る舞いである。
+    """
     if not ref_node:
         return {}
-    nested = _kind_layer(ref_node)
-    if nested is None:
-        return dict(ref_node)                     # 直下に rx キー（旧形式）
-    if kind is not None and kind in nested:
-        return dict(nested[kind])
-    if kind is not None:
+    node = ref_node
+    for key in chosen:
+        nested = _kind_layer(node)
+        if nested is None:
+            break                                  # ここが rx の階層
+        if key not in nested:
+            if len(nested) == 1:
+                node = next(iter(nested.values()))  # 候補が 1 つなら自動で降りる
+                continue
+            raise CmdInputError(
+                '_reference に "{}" のエントリがありません（候補: {}）。'
+                'JSON の _reference を確認してください。'.format(key, ', '.join(sorted(nested))))
+        node = nested[key]
+    if _kind_layer(node) is not None:
         raise CmdInputError(
-            '_reference に波形種別 "{}" のエントリがありません（候補: {}）。'
-            'JSON の _reference を確認してください。'.format(kind, ', '.join(sorted(nested))))
-    if len(nested) == 1:
-        return dict(next(iter(nested.values())))
-    return {}
+            '_reference の階層が Level 側より深く、rx まで辿り着けません（残り: {}）。'.format(
+                ', '.join(sorted(_kind_layer(node)))))
+    return {k: v for k, v in node.items() if not k.startswith('_')}
 
 
 def load_paths(json_path):
@@ -162,18 +213,17 @@ def load_paths(json_path):
         raise CmdInputError('{} に解析可能なレベルがありません'.format(json_path))
     level = _select(levels, 'レベル')
 
-    level_data = all_paths[level]
+    # rx の階層に着くまで降りる（階層の深さは枝ごとに違ってよい）
+    chosen, rx_paths = _descend(all_paths[level], SUBLEVEL_LABELS)
+    kind = ' / '.join(chosen) if chosen else None
+    if chosen:
+        print('選択された条件: {} / {}'.format(level, kind))
 
-    kinds = _kind_layer(level_data)
-    if kinds:
-        kind = _select(sorted(kinds), '波形種別')
-        rx_paths = dict(kinds[kind])
-    else:
-        kind = None
-        rx_paths = {k: v for k, v in level_data.items() if not k.startswith('_')}
-
-    reference = _pick_reference(all_paths.get('_reference', {}), kind)
-    reference.update(_pick_reference(level_data.get('_reference', {}), kind))
+    # 参照計算：トップレベルをレベル内の設定で上書きする
+    reference = _pick_reference(all_paths.get('_reference', {}), chosen)
+    level_ref = all_paths[level].get('_reference', {})
+    if level_ref:
+        reference.update(_pick_reference(level_ref, chosen))
 
     excluded = sorted(set(rx_paths) & EXCLUDE_KEYS)
     for key in excluded:
@@ -521,13 +571,17 @@ def analyze_level1(rx_paths, reference):
     traces = {}
     for key, path in depth_items.items():
         trace, dt = load_trace(path)
-        if not np.isclose(dt, dt_ref, rtol=1e-6):
-            raise CmdInputError('dt が rx={} と _reference.far_1m で一致しません'.format(key))
+        # 参照との dt 一致は不要（下で参照スペクトルを共通グリッドへ内挿するため）。
+        # dx を変えると dt も変わるので、ここで弾いてはいけない。
         if n_samples_common is None:
             n_samples_common = len(trace)
             dt_common = dt
             freq_hz = np.fft.rfftfreq(n_samples_common, d=dt)
-        elif len(trace) != n_samples_common or not np.isclose(dt, dt_common, rtol=1e-6):
+            if not _same_dt(dt, dt_ref, rtol=1e-6):
+                print('参照計算と dt が異なります（dt {:.4f} ps vs 参照 {:.4f} ps）。'
+                      '参照スペクトルを共通の周波数グリッドへ内挿します。'.format(
+                          dt * 1e12, dt_ref * 1e12))
+        elif len(trace) != n_samples_common or not _same_dt(dt, dt_common, rtol=1e-6):
             raise CmdInputError(
                 'rx={} のサンプル数/dt が他の rx と一致しません'
                 '（スペクトル比較には共通の周波数グリッドが必要です）'.format(key))

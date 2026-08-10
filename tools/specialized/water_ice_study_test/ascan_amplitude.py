@@ -67,6 +67,9 @@ IMPLEMENTED_LEVELS = {'Level_1'}
 # fig3_waveforms.png で重ね描きする代表深さ
 REPRESENTATIVE_DEPTHS_M = [0.50, 1.50, 2.75]
 
+# JSON の下位選択階層につけるラベル（階層が深いほうまで使う）
+SUBLEVEL_LABELS = ['波形種別', 'サブ条件', 'サブ条件']
+
 # 解析対象から除外する rx キー (design_ascan_amplitude.md §3)
 #   depth_300 は y=0.0 で PML（gprMax デフォルト 10 層 = 0.05 m）の中にあるため、
 #   物理的に意味のあるデータにならない。JSON に残っていても自動で除外する。
@@ -80,6 +83,15 @@ OUTPUT_SUBDIRNAME = 'ascan_amplitude'
 # =============================================================================
 # 入出力
 # =============================================================================
+def _same_dt(dt_a, dt_b, rtol=1e-9):
+    """時間刻みが同一かを相対誤差だけで判定する。
+
+    np.isclose の既定 atol=1e-8 は dt（1e-11 秒オーダー）より遥かに大きいため、
+    そのまま使うと 2 倍違う dt でも「一致」と判定されてしまう。必ず atol=0 にする。
+    """
+    return abs(dt_a - dt_b) <= rtol * abs(dt_a)
+
+
 def _select(items, label):
     """番号入力で 1 つ選ばせる。候補が 1 つなら自動選択。"""
     if len(items) == 1:
@@ -98,10 +110,10 @@ def _select(items, label):
 
 
 def _kind_layer(node):
-    """波形種別の階層かどうかを判定する。
+    """さらに下位の選択階層かどうかを判定する。
 
-    値がすべて dict なら「波形種別 -> rx」の階層、
-    値が文字列なら「rx -> パス」の階層（旧形式）とみなす。
+    値がすべて dict なら「選択キー -> 下位ノード」の階層、
+    値が文字列なら「rx -> パス」の終端階層とみなす。
     """
     entries = {k: v for k, v in node.items() if not k.startswith('_')}
     if entries and all(isinstance(v, dict) for v in entries.values()):
@@ -109,22 +121,61 @@ def _kind_layer(node):
     return None
 
 
-def _pick_reference(ref_node, kind):
-    """_reference から、選択した波形種別に対応するエントリを取り出す。"""
+def _descend(node, labels):
+    """rx の階層（値が文字列）に着くまで、番号選択で下位へ降りる。
+
+    JSON の階層の深さは枝ごとに違ってよい。たとえば
+
+        Level_1/gaussiandot/depth_025            … 2 段
+        Level_1/excitation_waveform/dx_0005/...  … 3 段
+
+    のように混在していても、値が文字列になった時点で終端と判断する。
+
+    Returns
+    -------
+    (選択したキーのリスト, rx 辞書)
+    """
+    chosen = []
+    while True:
+        nested = _kind_layer(node)
+        if nested is None:
+            break
+        label = labels[len(chosen)] if len(chosen) < len(labels) else labels[-1]
+        key = _select(sorted(nested), label)
+        chosen.append(key)
+        node = nested[key]
+    rx_paths = {k: v for k, v in node.items() if not k.startswith('_')}
+    return chosen, rx_paths
+
+
+def _pick_reference(ref_node, chosen):
+    """_reference から、選択したキー列に対応するエントリを取り出す。
+
+    _reference の階層は Level 側より浅くてよい。たとえば Level 側で
+    ['excitation_waveform', 'dx_0005'] を選んでも、_reference が
+    波形種別までしか分かれていなければ 'excitation_waveform' の中身を返す。
+    dx を変えても波源そのものは同じなので、これは正しい振る舞いである。
+    """
     if not ref_node:
         return {}
-    nested = _kind_layer(ref_node)
-    if nested is None:
-        return dict(ref_node)                     # 直下に rx キー（旧形式）
-    if kind is not None and kind in nested:
-        return dict(nested[kind])
-    if kind is not None:
+    node = ref_node
+    for key in chosen:
+        nested = _kind_layer(node)
+        if nested is None:
+            break                                  # ここが rx の階層
+        if key not in nested:
+            if len(nested) == 1:
+                node = next(iter(nested.values()))  # 候補が 1 つなら自動で降りる
+                continue
+            raise CmdInputError(
+                '_reference に "{}" のエントリがありません（候補: {}）。'
+                'JSON の _reference を確認してください。'.format(key, ', '.join(sorted(nested))))
+        node = nested[key]
+    if _kind_layer(node) is not None:
         raise CmdInputError(
-            '_reference に波形種別 "{}" のエントリがありません（候補: {}）。'
-            'JSON の _reference を確認してください。'.format(kind, ', '.join(sorted(nested))))
-    if len(nested) == 1:
-        return dict(next(iter(nested.values())))
-    return {}
+            '_reference の階層が Level 側より深く、rx まで辿り着けません（残り: {}）。'.format(
+                ', '.join(sorted(_kind_layer(node)))))
+    return {k: v for k, v in node.items() if not k.startswith('_')}
 
 
 def load_paths(json_path):
@@ -138,8 +189,11 @@ def load_paths(json_path):
             "excitation_waveform": {"far_1m": ..., "at_tx": ..., ...}
           },
           "Level_1": {
-            "gaussiandot":         {"at_surface": ..., "depth_025": ..., ...},
-            "excitation_waveform": {"at_surface": ..., "depth_025": ..., ...}
+            "gaussiandot":         {"at_surface": ..., "depth_025": ...},
+            "excitation_waveform": {                       # さらに下位階層があってもよい
+              "dx_0005":  {"at_surface": ..., "depth_025": ...},
+              "dx_00025": {"at_surface": ..., "depth_025": ...}
+            }
           }
         }
 
@@ -158,22 +212,18 @@ def load_paths(json_path):
         raise CmdInputError('{} に解析可能なレベルがありません'.format(json_path))
     level = _select(levels, 'レベル')
 
-    level_data = all_paths[level]
-
-    # 波形種別の階層があれば選ばせる（gaussiandot / excitation_waveform など）
-    kinds = _kind_layer(level_data)
-    if kinds:
-        kind = _select(sorted(kinds), '波形種別')
-        rx_paths = dict(kinds[kind])
-    else:
-        kind = None
-        rx_paths = {k: v for k, v in level_data.items() if not k.startswith('_')}
+    # rx の階層に着くまで降りる（階層の深さは枝ごとに違ってよい）
+    chosen, rx_paths = _descend(all_paths[level], SUBLEVEL_LABELS)
+    kind = ' / '.join(chosen) if chosen else None
+    if chosen:
+        print('選択された条件: {} / {}'.format(level, kind))
 
     # 参照計算：トップレベルをレベル内の設定で上書きする
-    reference = _pick_reference(all_paths.get('_reference', {}), kind)
-    reference.update(_pick_reference(level_data.get('_reference', {}), kind))
+    reference = _pick_reference(all_paths.get('_reference', {}), chosen)
+    level_ref = all_paths[level].get('_reference', {})
+    if level_ref:
+        reference.update(_pick_reference(level_ref, chosen))
 
-    # PML 内などの解析不能な rx を除外する (design_ascan_amplitude.md §3)
     excluded = sorted(set(rx_paths) & EXCLUDE_KEYS)
     for key in excluded:
         del rx_paths[key]
@@ -295,6 +345,49 @@ def build_transfer(f, d, level, n):
     phase, t_arr = transfer_phase(f, d, n)
     H = H * phase
     return H, t_arr
+
+
+def resample_trace(trace, dt_src, dt_dst):
+    """時間刻みの違う格子へリサンプルする。
+
+    dx を変えると gprMax の dt も変わるため、参照計算（例 dx=5 mm）と
+    解析対象（例 dx=2.5 mm）でサンプル数が食い違う。信号は 0.5-2.0 GHz に
+    帯域制限されており Nyquist より遥かに低いので、FFT 補間が実質厳密になる。
+    """
+    if _same_dt(dt_src, dt_dst):
+        return trace
+    n_dst = int(round(len(trace) * dt_src / dt_dst))
+    return signal.resample(trace, n_dst)
+
+
+def align_length(trace, n):
+    """長さ n に切り詰め、足りなければ 0 で埋める（差分・重ね描き用）。"""
+    if len(trace) == n:
+        return trace
+    if len(trace) > n:
+        return trace[:n]
+    out = np.zeros(n, dtype=trace.dtype)
+    out[:len(trace)] = trace
+    return out
+
+
+_RESAMPLE_NOTICED = set()
+
+
+def reference_on_grid(e_ref, dt_ref, dt_target, n_target, label=''):
+    """参照波形を対象トレースと同じ時間格子に載せ替える。
+
+    通知は格子（dt, サンプル数）の組み合わせごとに 1 度だけ出す。
+    """
+    if _same_dt(dt_ref, dt_target) and len(e_ref) == n_target:
+        return e_ref
+    key = (round(dt_ref, 18), round(dt_target, 18), len(e_ref), n_target)
+    if key not in _RESAMPLE_NOTICED:
+        _RESAMPLE_NOTICED.add(key)
+        print('参照波形をリサンプル: dt {:.4f} -> {:.4f} ps, {} -> {} samples'
+              '（dx が参照計算と異なるため）'.format(
+                  dt_ref * 1e12, dt_target * 1e12, len(e_ref), n_target))
+    return align_length(resample_trace(e_ref, dt_ref, dt_target), n_target)
 
 
 def synth_theory(e_ref, dt_ref, d, level, n):
@@ -428,16 +521,16 @@ def analyze_level1(rx_paths, reference):
             continue
         d = rx_depth(key)
         trace, dt = load_trace(path)
-        if not np.isclose(dt, dt_ref, rtol=1e-6):
-            raise CmdInputError('dt が rx={} と _reference.far_1m で一致しません'.format(key))
-
-        e_theory, t_arr = synth_theory(e_ref, dt_ref, d, level, n)
+        # 参照を実測と同じ時間格子に載せ替えてから理論波形を合成する。
+        # こうすると dt が違っても measure() も fig3 の重ね描きも成立する。
+        e_ref_g = reference_on_grid(e_ref, dt_ref, dt, len(trace), label=key)
+        e_theory, t_arr = synth_theory(e_ref_g, dt, d, level, n)
 
         # 探索窓の中心：
         #   理論波形 -> t_arr + 波源の内部遅延（ピークが実際に現れる位置）
         #   実測波形 -> その理論ピーク位置
         # measure() は同一関数のままで、中心の与え方だけを変えている。
-        theo = measure(e_theory, dt_ref, t_arr + t_src_delay, label=key + ' theory')
+        theo = measure(e_theory, dt, t_arr + t_src_delay, label=key + ' theory')
         meas = measure(trace, dt, theo['t_peak'], label=key + ' measured')
 
         amp_meas_db = 20.0 * np.log10(meas['amp_peak'] / amp_ref)
@@ -467,13 +560,15 @@ def analyze_level1(rx_paths, reference):
     elif 'at_tx' in rx_paths:
         trace_at_tx, dt_at_tx = load_trace(rx_paths['at_tx'])
         trace_at_tx_free, dt_free = load_trace(reference['at_tx'])
-        if not (np.isclose(dt_at_tx, dt_ref, rtol=1e-6) and np.isclose(dt_free, dt_ref, rtol=1e-6)):
-            raise CmdInputError('dt が at_tx / at_tx(freespace) / far_1m で一致しません')
+        # 自己場の差分はサンプルごとの引き算なので、格子を厳密に揃える必要がある。
+        trace_free_g = reference_on_grid(trace_at_tx_free, dt_free, dt_at_tx,
+                                         len(trace_at_tx), label='at_tx freespace')
+        e_reflect = trace_at_tx - trace_free_g
 
-        e_reflect = trace_at_tx - trace_at_tx_free
-        e_theory_reflect, t_arr_reflect = synth_theory_reflect(e_ref, dt_ref, n)
+        e_ref_g = reference_on_grid(e_ref, dt_ref, dt_at_tx, len(trace_at_tx), label='at_tx')
+        e_theory_reflect, t_arr_reflect = synth_theory_reflect(e_ref_g, dt_at_tx, n)
 
-        theo = measure(e_theory_reflect, dt_ref, t_arr_reflect + t_src_delay,
+        theo = measure(e_theory_reflect, dt_at_tx, t_arr_reflect + t_src_delay,
                        label='at_tx theory')
         meas = measure(e_reflect, dt_at_tx, theo['t_peak'], label='at_tx measured')
 
@@ -502,10 +597,12 @@ def analyze_level1(rx_paths, reference):
               '（レゴリスなしの同一位置計算との比が T = 2/(1+n) の直接検証になります）')
     elif 'at_surface' in rx_paths and 'at_surface' in reference:
         trace_surf, dt_surf = load_trace(rx_paths['at_surface'])
-        trace_surf_free, _ = load_trace(reference['at_surface'])
+        trace_surf_free, dt_surf_free = load_trace(reference['at_surface'])
+        # 自由空間側は dt が違いうるので、必ずそれぞれの dt で測る
+        # （実測側の dt を流用すると時間軸がずれ、静かに誤った T が出る）
         amp_surf = measure(trace_surf, dt_surf, TX_HEIGHT / C + t_src_delay,
                            label='at_surface (T check)')['amp_peak']
-        amp_surf_free = measure(trace_surf_free, dt_surf, TX_HEIGHT / C + t_src_delay,
+        amp_surf_free = measure(trace_surf_free, dt_surf_free, TX_HEIGHT / C + t_src_delay,
                                 label='at_surface freespace (T check)')['amp_peak']
         T_meas = amp_surf / amp_surf_free
         T_theory = transfer_surface_T(n)
