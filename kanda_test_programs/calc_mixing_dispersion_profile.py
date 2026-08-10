@@ -589,7 +589,7 @@ def draw_lines(ax, data, ref=None):
 
 freq_handles = [Line2D([0], [0], linestyle=freq_styles[i], color='k', lw=2, label=freq_labels[i]) for i in range(n_freq)]
 ice_handles = [Line2D([0], [0], color=ice_colors[i], linestyle='-', lw=2, label=ice_labels[i]) for i in range(n_ice)]
-heiken_handle = [Line2D([0], [0], color='gray', ls='--', lw=2, label=r'Heiken (for $ arepsilon_r$ and $	an \delta$)')]
+heiken_handle = [Line2D([0], [0], color='gray', ls='--', lw=2, label=r'Heiken (for $ \varepsilon_r$ and $ \tan  \delta$)')]
 
 def add_legend(fig):
     fig.legend(handles=freq_handles + ice_handles + heiken_handle,
@@ -620,13 +620,13 @@ def save_fig(fig, base_path):
 def make_summary_2x2():
     fig, axes = plt.subplots(2, 2, figsize=(10, 11))
     draw_lines(axes[0, 0], EPS_RE, ref=eps_re_Heiken)
-    axes[0, 0].set_xlabel(r"$ arepsilon^{\prime}$", fontsize=18)
+    axes[0, 0].set_xlabel(r"$\varepsilon^{\prime}$", fontsize=18)
     draw_lines(axes[0, 1], EPS_IM)
-    axes[0, 1].set_xlabel(r"$ arepsilon^{\prime\prime}$", fontsize=18)
+    axes[0, 1].set_xlabel(r"$\varepsilon^{\prime\prime}$", fontsize=18)
     draw_lines(axes[1, 0], SIGMA)
     axes[1, 0].set_xlabel(r"Conductivity $\sigma_{m eff}$ [S/m]", fontsize=18)
     draw_lines(axes[1, 1], TAND, ref=tan_d_heiken)
-    axes[1, 1].set_xlabel(r"$	an\delta$", fontsize=18)
+    axes[1, 1].set_xlabel(r"$\tan\delta$", fontsize=18)
     axes[1, 1].locator_params(axis='x', nbins=5)
     add_legend(fig)
     plt.tight_layout()
