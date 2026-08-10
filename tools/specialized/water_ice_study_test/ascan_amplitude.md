@@ -98,22 +98,103 @@ E_theory(f, d) = E_ref(f) · H_level(f, d)
 3. **2D 特有の波尾が自動的に含まれる**。2D の線波源は Huygens の原理を満たさず、Green 関数 1/(2π√(t²−r²/v²)) に由来する長い尾を引く。振幅をスケールしただけの波形と比較すると必ずズレる
 4. **gprMax の絶対スケーリング（1/dl 等）や波源の微分次数を知らなくてよい**
 
-### 3.2 伝達関数の中身
+### 3.2 伝達関数の全体像
 
-参照計算（自由空間、距離 r_ref = 1 m）との比を取る形で定義する。
+参照計算（自由空間、tx-rx 距離 r_ref = 1 m）との比を取る形で定義する。
 
 ```
-H_level(f, d) = T · √(n / r_eff(d)) · √r_ref · exp(−α(f)·d) · exp(−2πi·f·(t_arr(d) − r_ref/c))
+                          ①        ②              ③        ④              ⑤
+H_level(f, d) =  T  ×  √(n / r_eff(d))  ×  √r_ref  ×  exp(−α(f)·d)  ×  exp(−2πi·f·(t_arr(d) − r_ref/c))
 ```
 
-| 項 | 実装関数 | Level 1 での値 |
-|---|---|---|
-| 幾何減衰 | `transfer_geom` | √(n/r_eff)·√r_ref |
-| 地表面透過 | `transfer_surface_T` | 0.7321（定数） |
-| 吸収 | `transfer_absorb` | なし（α = 0） |
-| 走時位相 | `transfer_phase` | exp(−2πif(t_arr − r_ref/c)) |
+| # | 項 | 名前 | 深さ依存 | 周波数依存 | Level 1 での値 | 実装 |
+|---|---|---|---|---|---|---|
+| ① | T | 地表面透過係数 | なし | なし | 0.7321 | `transfer_surface_T` |
+| ② | √(n / r_eff(d)) | **幾何減衰** | あり | なし | 0.526〜1.237 | `transfer_geom` |
+| ③ | √r_ref | 参照距離への規格化 | なし | なし | 1（r_ref=1 m） | `transfer_geom` に同梱 |
+| ④ | exp(−α(f)·d) | 媒質の吸収 | あり | あり | **1（未実装）** | `transfer_absorb` |
+| ⑤ | exp(−2πif(t_arr−r_ref/c)) | 走時位相 | あり | あり | — | `transfer_phase` |
 
-**参照との比を取ると 2D Green 関数の周波数依存 1/√(k r) が相殺する**のが要点。結果として幾何項は周波数に依存しない実数になり、gprMax のスケーリングも波源スペクトルの形も知る必要がなくなる。
+> **重要**：上の式は**全レベル共通の一般形**である。実際にどの項が掛かるかは `LEVEL_EFFECTS` 辞書で決まる。
+>
+> ```python
+> LEVEL_EFFECTS = {
+>     'Level_1': ['geom', 'surface_T'],                        # ← 位相項は常に追加される
+>     'Level_2': ['geom', 'surface_T', 'absorb_const'],
+>     'Level_3': ['geom', 'surface_T', 'absorb_debye'],
+>     'Level_4': ['geom', 'surface_T', 'absorb_debye', 'density_profile'],
+> }
+> ```
+>
+> **Level 1 で効いているのは ①②③⑤ の 4 項だけ**で、④ の吸収項は `NotImplementedError` を投げる未実装状態にある。Level 2 の実装とはすなわち、`transfer_absorb()` を書いて `LEVEL_EFFECTS` に 1 行足すことである。
+
+### 3.2.1 ①②③ の導出：幾何減衰はどこにあるか
+
+式を見ると「幾何減衰」という名前の項が見当たらないが、**②と③がそれ**である。参照との比を取った結果、Hankel 関数の形が消えているために分かりにくくなっている。導出を追うと見える。
+
+S(f) を波源スペクトル、2D 遠方場の伝搬因子を G ∝ 1/√(k·r)·e^(−ikr) とする（§2.2）。
+
+**参照計算**（すべて空気中、距離 r_ref）：
+
+```
+E_ref(f) = S(f) · A / √(k_air · r_ref) · exp(−i·k_air·r_ref)
+```
+
+**対象**（空気中 h → 界面で透過 → レゴリス中 d）：
+
+| 段階 | 振幅 |
+|---|---|
+| 界面に到達 | S(f) · A / √(k_air · h) |
+| 透過 | × T |
+| レゴリス中を d 進む | × √(n·h / r_eff) |
+
+3 段目が肝心である。**レゴリス側から見ると、波面は半径 n·h の面として界面から始まり**（§2.3 の見かけの源距離）、深さ d だけ進むと半径 n·h + d = r_eff になる。2D では振幅が 1/√(半径) なので、比は √(n·h / r_eff) となる。
+
+**比を取る**：
+
+```
+H = E / E_ref
+  = T · √(k_air·r_ref) / √(k_air·h) · √(n·h / r_eff) · exp(−2πif·(t_arr − r_ref/c))
+  = T · √(r_ref / h) · √(n·h / r_eff) · exp(...)
+  = T · √(n · r_ref / r_eff) · exp(...)
+  = T · √(n / r_eff) · √r_ref · exp(...)
+```
+
+この過程で 3 つのことが起きている。
+
+1. **k_air が相殺する** → 幾何項が周波数に依存しない実数になる。**だから最終式に Hankel 関数が現れない**。r_eff を Hankel 関数の引数 kr に代入するわけではない
+2. **√h も相殺する** → √(r_ref/h) と √(n·h/r_eff) の中で h が消える
+3. **分子に n が残る** → √(1/h)·√(n·h) = √n から出てくる。参照は空気中、対象はレゴリス中という**媒質の乗り換え**の帳尻を合わせている項
+
+③の √r_ref は参照距離への規格化で、r_ref = 1 m なら値は 1 である。式に明示してあるのは、参照距離を変えたときに正しく効くようにするため。
+
+### 3.2.2 ④ 吸収項（Level 2 以降）
+
+```
+α(f) = π · f · n · tanδ / c
+exp(−α(f)·d)
+```
+
+Level 1 は無損失（tanδ = 0）なので α = 0、この項は 1 になる。**振幅を周波数の関数として傾ける唯一の項**であり、これが入って初めて絶対LSR が周波数に対して水平でなくなる。
+
+Level 2（tanδ = 0.0155 一定）での傾きの目安：
+
+| 深さ | 0.5→2 GHz の落ち込み |
+|---|---|
+| 0.5 m | −1.83 dB |
+| 1.5 m | −5.50 dB |
+| 2.75 m | −10.08 dB |
+
+### 3.2.3 ⑤ 走時位相項
+
+```
+t_arr(d) = h/c + n·d/c
+exp(−2πi·f·(t_arr(d) − r_ref/c))
+```
+
+**r_ref/c を引いているのが要点**である。E_ref にはすでに参照計算の 1 m 伝搬ぶんの遅延が含まれているので、そのまま t_arr を掛けると遅延を二重に計上してしまう。差分だけを掛ける。
+
+この項は振幅に一切影響しない（絶対値 1）。効くのは波形の時間位置と形だけである。
 
 ### 3.3 参照計算が必須な理由
 
@@ -210,24 +291,29 @@ T_meas = amp(at_surface, レゴリスあり) / amp(at_surface, 自由空間)
 ```json
 {
   "_reference": {
+    "gaussiandot": { "far_1m": "...", "at_tx": "...", "at_surface": "..." },
     "excitation_waveform": {
-      "far_1m":     ".../free_space/excitation_LUPEX/far_1m/result/Ascan.out",
-      "at_tx":      ".../free_space/excitation_LUPEX/at_tx/result/Ascan.out",
-      "at_surface": ".../free_space/excitation_LUPEX/at_surface/result/Ascan.out"
-    },
-    "gaussiandot": { "far_1m": "...", ... }
+      "dx_0005":  { "far_1m": "...", "at_tx": "...", "at_surface": "..." },
+      "dx_00025": { "far_1m": "...", "at_tx": "...", "at_surface": "..." }
+    }
   },
   "Level_1": {
-    "excitation_waveform": { "at_surface": "...", "depth_025": "...", ... },
-    "gaussiandot":         { "at_surface": "...", "depth_025": "...", ... }
+    "gaussiandot": { "at_surface": "...", "depth_025": "..." },
+    "excitation_waveform": {
+      "dx_0005":  { "at_surface": "...", "depth_025": "..." },
+      "dx_00025": { "at_surface": "...", "depth_025": "..." }
+    }
   }
 }
 ```
 
 - `_` 始まりのキーはレベル／rx として扱わない
-- 波形種別の階層は省略可（旧 2 階層形式にも対応）
+- **階層の深さは枝ごとに違ってよい**。値が文字列になった時点で rx の階層とみなし、そこまで番号選択で降りる
+- `_reference` は Level 側より浅くてよい。選択したキー列を順に辿り、該当階層が無ければそこで止まる
 - `_reference` はトップレベルにも各レベル内にも置ける（レベル内が優先）
 - rx キー名 `depth_XXX` の数値部が深さ [cm]
+
+> **dx ごとに参照計算を用意すること。** `#hertzian_dipole` は電流密度 J = I·dl/(Δx Δy Δz) とセル寸法で正規化されるため、2D では波源の絶対振幅が dx に依存する。dx が違う参照を使うと絶対振幅が定数倍ずれる（dx 2 倍で約 6 dB）。時間格子の違いはリサンプルで吸収できるが、振幅の正規化までは吸収できない。dt 不一致を検出したら警告が出る。
 
 ### 7.2 実行
 
@@ -307,6 +393,7 @@ $ python ascan_amplitude.py
 | 透過係数の離散化 | 実測 +0.97% | 界面ノードの材料平均に由来 |
 | 分散性媒質での走時 | Level 3 以降 | 位相速度を使っており、厳密には群速度 |
 | `depth_300` | 解析不能 | y = 0.0 で PML 内。自動除外 |
+| 波源の絶対振幅の dx 依存 | dx 2 倍で約 6 dB | 参照計算の dx を対象と揃えること（§7.1） |
 
 これらは合格基準（±0.5 dB）と同オーダーなので、残差が閾値を超えたときは**まず dx の収束性を確認する**こと。
 
