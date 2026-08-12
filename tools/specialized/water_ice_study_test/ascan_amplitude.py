@@ -62,7 +62,7 @@ LEVEL_EFFECTS = {
     'Level_4': ['geom', 'surface_T', 'absorb_debye', 'density_profile'],
 }
 # 現時点で実装済みのレベル（それ以外は未実装のため実行不可）
-IMPLEMENTED_LEVELS = {'Level_1', 'Level_2'}
+IMPLEMENTED_LEVELS = {'Level_1', 'Level_2', 'Level_3'}
 
 # fig3_waveforms.png で重ね描きする代表深さ
 REPRESENTATIVE_DEPTHS_M = [0.50, 1.50, 2.75]
@@ -96,6 +96,30 @@ LEVEL2_TAN_DELTA = 0.0155            # LEVEL2_LOSS_MODEL='tan_delta' のとき�
 
 ETA0 = 376.730313668                 # [Ohm] 真空の波動インピーダンス
 EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
+
+# =============================================================================
+# [EDIT HERE] Level 3 の媒質パラメータ（2 極 Debye 分散）
+# =============================================================================
+# .in ファイル（Level_3.in）および calc_mixing_dispersion_profile.py と
+# 同一の定義を使う。値を変えるときは 3 者を必ず揃えること。
+#
+# Level 3 では eps' が周波数依存になるため、屈折率 n(f) も周波数依存になる。
+# その結果、吸収項だけでなく「幾何減衰・地表面透過・走時位相」も
+# すべて周波数依存になる点が Level 1・2 との決定的な違いである。
+LEVEL3_RHO      = 1.820224        # [g/cm^3] 1.25 GHz で eps' = 3.0 になる密度
+LEVEL3_FEOTIO2  = 20.0            # [wt%]
+LEVEL3_ANCHOR_FREQ = 450e6        # [Hz] Heiken 1991 Fig 9.54 の 450 MHz 計測
+
+LEVEL3_HEIKEN_EPS_BASE = 1.843
+LEVEL3_HEIKEN_TAND_A   = 0.033
+LEVEL3_HEIKEN_TAND_B   = 0.231
+LEVEL3_HEIKEN_TAND_C   = 3.061
+
+LEVEL3_DEBYE_DE1,  LEVEL3_DEBYE_TAU1 = 0.261, 4.6212e-11    # [s]
+LEVEL3_DEBYE_DE2,  LEVEL3_DEBYE_TAU2 = 0.088, 2.82195e-10   # [s]
+
+# 走時・探索窓の基準に使う周波数（帯域中心）
+BAND_CENTRE_HZ = 1.25e9
 
 EXCLUDE_KEYS = {'depth_300'}
 
@@ -314,7 +338,10 @@ def rx_depth(key):
 # =============================================================================
 def transfer_geom(d, n):
     """幾何減衰項（2D遠方場、法線入射の見かけの源距離 r_eff を用いる）。
-    周波数依存の 1/sqrt(k) は参照計算との比を取ると相殺するため、f に依存しない。
+
+    参照計算との比を取ると 2D Green 関数の 1/sqrt(k) が相殺するため、
+    この項自体は「周波数に依存しない実数」になる。ただし n が周波数依存の
+    Level 3 では n を通じて f 依存が復活する（n は配列で渡ってくる）。
     """
     r_eff = n * TX_HEIGHT + d
     return np.sqrt(n / r_eff) * np.sqrt(R_REF)
@@ -330,10 +357,17 @@ def transfer_phase(f, d, n):
 
     f は Hz（np.fft.rfftfreq に SI 秒の dt を渡した結果）、t_arr は ns 単位のため、
     位相計算では (t_arr - r_ref/c) を秒に変換してから f と掛け合わせる。
+
+    位相には「位相速度」を決める n(f) を使う。Level 3 のように n が周波数依存だと
+    位相走時も周波数依存になり、逆 FFT した波形の包絡ピークは自動的に
+    群速度で決まる位置に現れる（群遅延を別途足す必要はない）。
+
+    戻り値の t_arr はスカラー（探索窓の中心と CSV 用）で、n の代表値から作る。
     """
-    t_arr = TX_HEIGHT / C + n * d / C
-    delay_s = (t_arr - R_REF / C) * 1e-9
-    return np.exp(-2j * np.pi * f * delay_s), t_arr
+    t_arr_f = TX_HEIGHT / C + n * d / C
+    delay_s = (t_arr_f - R_REF / C) * 1e-9
+    phase = np.exp(-2j * np.pi * f * delay_s)
+    return phase, t_arr_f
 
 
 def level2_tandelta(f, n):
@@ -396,20 +430,129 @@ def transfer_absorb(f, d, n):
     return np.exp(-level2_alpha(f, n) * d)
 
 
-def transfer_absorb_debye(f, d, params):
-    raise NotImplementedError('Level_3 (absorb_debye) は未実装です。')
+def level3_heiken(rho):
+    """密度 -> Heiken 経験式の (静的 eps', eps'')。周波数依存は持たない。"""
+    eps_re = LEVEL3_HEIKEN_EPS_BASE ** rho
+    tan_d = 10.0 ** (LEVEL3_HEIKEN_TAND_A * LEVEL3_FEOTIO2
+                     + LEVEL3_HEIKEN_TAND_B * rho - LEVEL3_HEIKEN_TAND_C)
+    return eps_re, eps_re * tan_d
+
+
+def level3_debye_scale(rho):
+    """eps''(450 MHz) が Heiken に一致するよう 2 極 Debye をスケールする係数。"""
+    _, eps_im_h = level3_heiken(rho)
+    w = 2.0 * np.pi * LEVEL3_ANCHOR_FREQ
+    unit = (LEVEL3_DEBYE_DE1 * w * LEVEL3_DEBYE_TAU1 / (1.0 + (w * LEVEL3_DEBYE_TAU1) ** 2)
+            + LEVEL3_DEBYE_DE2 * w * LEVEL3_DEBYE_TAU2 / (1.0 + (w * LEVEL3_DEBYE_TAU2) ** 2))
+    return eps_im_h / unit
+
+
+def level3_eps(f, rho=None):
+    """Level 3 の複素比誘電率 (eps', eps'')。f は Hz。
+
+    eps'(w)  = eps'_s - sum scale*De_p (w tau)^2 / (1 + (w tau)^2)
+    eps''(w) = sum scale*De_p (w tau) / (1 + (w tau)^2)
+    """
+    rho = LEVEL3_RHO if rho is None else rho
+    f_arr = np.asarray(f, dtype=float)
+    eps_s, _ = level3_heiken(rho)
+    s = level3_debye_scale(rho)
+    w = 2.0 * np.pi * f_arr
+    x1, x2 = w * LEVEL3_DEBYE_TAU1, w * LEVEL3_DEBYE_TAU2
+    drop = (LEVEL3_DEBYE_DE1 * s * x1 ** 2 / (1.0 + x1 ** 2)
+            + LEVEL3_DEBYE_DE2 * s * x2 ** 2 / (1.0 + x2 ** 2))
+    imag = (LEVEL3_DEBYE_DE1 * s * x1 / (1.0 + x1 ** 2)
+            + LEVEL3_DEBYE_DE2 * s * x2 / (1.0 + x2 ** 2))
+    return eps_s - drop, imag
+
+
+def level3_tandelta(f):
+    """Level 3 の tan_delta(f) = eps'' / eps'。f とともに増加する。"""
+    er, ei = level3_eps(f)
+    return ei / er
+
+
+def level3_alpha(f):
+    """Level 3 の減衰係数 alpha(f) [Np/m]（厳密式）。
+
+        alpha = (omega/c) * sqrt(eps'/2) * sqrt( sqrt(1 + tan_delta^2) - 1 )
+
+    Debye 分散により alpha は帯域内で約 6.8 倍変化する（おおよそ alpha ∝ f^1.38）。
+    Level 2（sigma 一定, alpha ∝ f^0）と tan_delta 一定（alpha ∝ f^1）の中間。
+    """
+    f_arr = np.asarray(f, dtype=float)
+    er, ei = level3_eps(f_arr)
+    td = ei / er
+    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)
+    with np.errstate(invalid='ignore'):
+        alpha = w_over_c * np.sqrt(er / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
+    return np.nan_to_num(alpha, nan=0.0)
+
+
+def refractive_index(f, level):
+    """レベルに応じた屈折率 n を返す。
+
+    Level 1・2 : 定数 N_REGOLITH（f と同じ形の配列にブロードキャストして返す）
+    Level 3    : n(f) = sqrt(eps'(f))  ← 周波数依存
+
+    n が周波数依存になると、幾何項 sqrt(n/r_eff)、透過係数 2/(1+n)、
+    走時位相のすべてが周波数依存になる。
+    """
+    f_arr = np.asarray(f, dtype=float)
+    if 'absorb_debye' in LEVEL_EFFECTS[level]:
+        er, _ = level3_eps(f_arr)
+        return np.sqrt(er)
+    return np.full_like(f_arr, N_REGOLITH)
+
+
+def level3_group_index(f):
+    """群屈折率 n_g = n + f dn/df。包絡ピークの到達時刻を決める量。
+
+    分散性媒質では位相速度と群速度が分かれるため、走時位相に使う n(f) と
+    包絡ピークが伝わる速さを決める n_g(f) は別物になる。
+    """
+    f_arr = np.atleast_1d(np.asarray(f, dtype=float))
+    fs = np.linspace(0.5e9, 2.0e9, 601)
+    er, _ = level3_eps(fs)
+    n_fs = np.sqrt(er)
+    ng_fs = n_fs + fs * np.gradient(n_fs, fs)
+    return np.interp(f_arr, fs, ng_fs)
+
+
+def describe_level3_medium():
+    """Level 3 の媒質設定を人が読める形で返す（ログと run_info 用）。"""
+    eps_s, _ = level3_heiken(LEVEL3_RHO)
+    s = level3_debye_scale(LEVEL3_RHO)
+    de1, de2 = s * LEVEL3_DEBYE_DE1, s * LEVEL3_DEBYE_DE2
+    er_c, _ = level3_eps(BAND_CENTRE_HZ)
+    a_lo = float(level3_alpha(np.array([0.5e9]))[0])
+    a_hi = float(level3_alpha(np.array([2.0e9]))[0])
+    return ('2-pole Debye, rho = {:.6f} g/cm^3, eps_s = {:.6f}, eps_inf = {:.6f}, '
+            'De1 = {:.6f}, De2 = {:.6f}  '
+            "(eps'@1.25GHz = {:.5f}, alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz)"
+            .format(LEVEL3_RHO, eps_s, eps_s - de1 - de2, de1, de2, er_c, a_lo, a_hi))
+
+
+def transfer_absorb_debye(f, d, n=None):
+    """Level 3 の吸収項 exp(-alpha(f) * d)（片道透過）。"""
+    return np.exp(-level3_alpha(f) * d)
 
 
 def transfer_density_profile(f, d, params):
     raise NotImplementedError('Level_4 (density_profile) は未実装です。')
 
 
-def build_transfer(f, d, level, n):
+def build_transfer(f, d, level, n=None):
     """LEVEL_EFFECTS に従って伝達関数 H_level(f,d) を効果の積で構成する。
 
     レベル依存はこの関数と LEVEL_EFFECTS 辞書にのみ現れる。
+
+    n は refractive_index(f, level) から取得する。Level 1・2 では定数配列、
+    Level 3 では n(f) = sqrt(eps'(f)) となり、幾何項・透過係数・走時位相の
+    すべてが周波数依存になる。
     """
     effects = LEVEL_EFFECTS[level]
+    n = refractive_index(f, level)
     H = np.ones_like(f, dtype=complex)
     for effect in effects:
         if effect == 'geom':
@@ -419,14 +562,23 @@ def build_transfer(f, d, level, n):
         elif effect == 'absorb_const':
             H = H * transfer_absorb(f, d, n)
         elif effect == 'absorb_debye':
-            H = H * transfer_absorb_debye(f, d, None)
+            H = H * transfer_absorb_debye(f, d, n)
         elif effect == 'density_profile':
             H = H * transfer_density_profile(f, d, None)
         else:
             raise CmdInputError('Unknown effect: {}'.format(effect))
 
-    phase, t_arr = transfer_phase(f, d, n)
+    phase, t_arr_f = transfer_phase(f, d, n)
     H = H * phase
+
+    # 探索窓の中心と CSV に載せる代表値としてスカラーの走時を作る。
+    # Level 3 では包絡ピークが群速度で決まるため、群屈折率から算出する
+    # （位相走時ではズレる）。Level 1・2 では両者は一致する。
+    if 'absorb_debye' in effects:
+        ng = float(level3_group_index(BAND_CENTRE_HZ)[0])
+        t_arr = TX_HEIGHT / C + ng * d / C
+    else:
+        t_arr = float(np.atleast_1d(t_arr_f)[0]) if np.ndim(t_arr_f) else float(t_arr_f)
     return H, t_arr
 
 
@@ -588,6 +740,8 @@ def analyze_level(rx_paths, reference, level):
     n = N_REGOLITH
     if 'absorb_const' in LEVEL_EFFECTS[level]:
         print('{} の媒質: {}'.format(level, describe_level2_medium(n)))
+    if 'absorb_debye' in LEVEL_EFFECTS[level]:
+        print('{} の媒質: {}'.format(level, describe_level3_medium()))
     results = []
 
     # 参照波形（自由空間 1 m）の包絡ピークを全区間から求める。
@@ -696,7 +850,9 @@ def analyze_level(rx_paths, reference, level):
         amp_surf_free = measure(trace_surf_free, dt_surf_free, TX_HEIGHT / C + t_src_delay,
                                 label='at_surface freespace (T check)')['amp_peak']
         T_meas = amp_surf / amp_surf_free
-        T_theory = transfer_surface_T(n)
+        # Level 3 では n が周波数依存なので、帯域中心の値で代表させる
+        n_check = float(np.atleast_1d(refractive_index(BAND_CENTRE_HZ, level))[0])
+        T_theory = transfer_surface_T(n_check)
         t_check = {
             'T_meas': T_meas, 'T_theory': T_theory,
             'pass': abs(T_meas - T_theory) / T_theory < T_TOL_FRAC,
@@ -878,6 +1034,8 @@ def write_run_info(level, kind, json_path, results, t_check, output_dir):
         f.write('  N_REGOLITH = {:.6f} (eps_r={})\n'.format(N_REGOLITH, EPS_R_REGOLITH))
         if 'absorb_const' in LEVEL_EFFECTS.get(level, []):
             f.write('  Level 2 medium: {}\n'.format(describe_level2_medium(N_REGOLITH)))
+        if 'absorb_debye' in LEVEL_EFFECTS.get(level, []):
+            f.write('  Level 3 medium: {}\n'.format(describe_level3_medium()))
         f.write('  SEARCH_HALFWIDTH_NS = {}\n'.format(SEARCH_HALFWIDTH_NS))
         f.write('  NOISE_WINDOW_NS = {}\n'.format(NOISE_WINDOW_NS))
         f.write('  AMP_TOL_DB = {}\n'.format(AMP_TOL_DB))
