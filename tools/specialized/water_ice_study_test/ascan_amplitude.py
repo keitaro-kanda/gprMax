@@ -58,17 +58,107 @@ T_TOL_FRAC = 0.01          # 透過係数 ±1%
 LEVEL_EFFECTS = {
     'Level_1': ['geom', 'surface_T'],
     'Level_2': ['geom', 'surface_T', 'absorb_const'],
-    'Level_3': ['geom', 'surface_T', 'absorb_debye'],
-    'Level_4': ['geom', 'surface_T', 'absorb_debye', 'density_profile'],
+    'Level_3': ['geom', 'surface_T', 'absorb_tandelta'],
+    'Level_3b': ['geom', 'surface_T', 'absorb_debye'],
+    'Level_4': ['geom', 'surface_T', 'absorb_tandelta', 'density_profile'],
 }
 # 現時点で実装済みのレベル（それ以外は未実装のため実行不可）
-IMPLEMENTED_LEVELS = {'Level_1', 'Level_2', 'Level_3'}
+IMPLEMENTED_LEVELS = {'Level_1', 'Level_2', 'Level_3', 'Level_3b'}
 
 # fig3_waveforms.png で重ね描きする代表深さ
 REPRESENTATIVE_DEPTHS_M = [0.50, 1.50, 2.75]
 
 # JSON の下位選択階層につけるラベル（階層が深いほうまで使う）
-SUBLEVEL_LABELS = ['波形種別', 'サブ条件', 'サブ条件']
+SUBLEVEL_LABELS = ['波形種別', 'サブ条件', '組成 (FeO+TiO2)', 'サブ条件']
+
+# 解析対象から除外する rx キー (design_ascan_amplitude.md §3)
+#   depth_300 は y=0.0 で PML（gprMax デフォルト 10 層 = 0.05 m）の中にあるため、
+#   物理的に意味のあるデータにならない。JSON に残っていても自動で除外する。
+# =============================================================================
+# [EDIT HERE] Level 2 の媒質パラメータ（損失モデル）
+# =============================================================================
+# gprMax の `#material: er sigma mr sigma*` が与えるのは「導電率 sigma 一定」で
+# あり、ロスタンジェント一定ではない。等価的に eps'' = sigma/(omega eps0) なので
+#
+#     tan_delta = eps'' / eps' = sigma / (omega eps0 eps_r)  ∝ 1/f
+#
+# となり、sigma が一定なら tan_delta は 1/f で落ちる。逆に tan_delta を一定に
+# したければ eps'' を周波数によらず一定（= sigma ∝ f）にする必要があり、
+# gprMax では #add_dispersion_debye による多極 Debye でしか実現できない。
+# さらに Kramers-Kronig の関係から eps'' を一定にすると eps' も必ず分散する。
+# したがって「tan_delta 一定」は Level 3（分散性）の領域であり、
+# Level 2（非分散な損失媒質）の物理的に自己整合な姿は「sigma 一定」である。
+LEVEL2_LOSS_MODEL = 'conductivity'   # 'conductivity' … gprMax の #material に対応（既定）
+                                     # 'tan_delta'    … 参考用。Level 3 相当の理想化
+LEVEL2_SIGMA = 0.0035                # [S/m] #material の第 2 引数と一致させること。
+                                     #   プロファイル計算の 0 vol% ice / 1.25 GHz の値。
+                                     #   tan_delta = 0.01678 @ 1.25 GHz に相当。
+LEVEL2_TAN_DELTA = 0.0155            # LEVEL2_LOSS_MODEL='tan_delta' のときのみ使う
+
+ETA0 = 376.730313668                 # [Ohm] 真空の波動インピーダンス
+EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
+
+# =============================================================================
+# [EDIT HERE] Level 3 の媒質パラメータ（非分散 = tan_delta 一定）
+# =============================================================================
+# Boivin+2022 の実測により、月南極（イルメナイト <1 wt%）は非分散であることが
+# 確認された（Table 7 の純バイトウナイトは P/L/S/X 帯で eps'=3.29, eps''=0.006
+# が完全一定。1, 5 wt% でも有意な分散を検出できずフィット不能と報告）。
+# したがって Level 3 は「tan_delta 一定」= alpha ∝ f をベースラインとする。
+#
+# 損失の振幅は Heiken/Carrier 経験式（450 MHz 版）から与える。
+#   tan_delta = 10^(0.033*(FeO+TiO2) + 0.231*rho - 3.061)
+# Boivin のバイトウナイト値（0.002）を使わないのは、バイトウナイトが純長石で
+# Fe をほぼ含まないのに対し、実際の南極レゴリスは olivine/pyroxene 由来の
+# FeO を 5-6 wt% 含むため。Boivin から採るのは「非分散である」という
+# 形状情報だけにする。
+#
+# eps' は組成に依らず 3.0 とし、密度はそこから一意に決まる。
+#   eps' = 1.843^rho = 3.0  ->  rho = 1.796895
+# eps' が組成に依らないので、全組成で走時・幾何減衰が共通になり、
+# 違いは吸収だけという比較しやすい構成になる。
+LEVEL3_EPS_R = 3.0                # 全組成共通（非分散なので全周波数で一定）
+LEVEL3_RHO   = 1.796895           # [g/cm^3] eps' = 1.843^rho = 3.0 の解
+
+LEVEL3_HEIKEN_TAND_A = 0.033
+LEVEL3_HEIKEN_TAND_B = 0.231
+LEVEL3_HEIKEN_TAND_C = 3.061
+
+# FeO+TiO2 [wt%] ごとの設定。JSON のサブ階層キーと対応させる。
+#   月南極域   : 5 / 7.5 / 10 wt%（先行研究の収束域 6-11 wt% を挟む）
+#   高Tiバサルト: 20 wt%（月の海。参考ケース。既存計算がこれに相当）
+LEVEL3_COMPOSITIONS = {
+    'feo5':    5.0,
+    'feo7p5':  7.5,
+    'feo10':  10.0,
+    'feo20':  20.0,
+}
+LEVEL3_DEFAULT_COMPOSITION = 'feo7p5'   # サブ階層で指定がないときの既定値
+
+# =============================================================================
+# [EDIT HERE] Level 3b の媒質パラメータ（2 極 Debye 分散 = 高Tiバサルト想定）
+# =============================================================================
+# Boivin+2022 の 20 wt% イルメナイト試料（= FeO+TiO2 20 wt% に化学量論的に対応）
+# の Cole-Cole を 2 極 Debye でフィットした形状を使う。月の海の高Tiバサルトを
+# 想定した参考ケースであり、月南極（Level_3）には適用しない。
+#
+# Level_3 との違いは「周波数依存性の有無」だけで、下表のとおり。
+#   Level_3  : tan_delta 一定    -> alpha ∝ f       （帯域内 4.0 倍）
+#   Level_3b : 2 極 Debye 分散   -> alpha ∝ f^1.38  （帯域内 6.8 倍）
+#
+# rho は「1.25 GHz で eps' = 3.0」になる値。Level_3 の rho（1.796895）と
+# 異なるのは、Level_3b では eps' 自体が分散するため、どの周波数で 3.0 に
+# 揃えるかを決める必要があるからである。
+LEVEL3B_RHO      = 1.820224       # [g/cm^3] 1.25 GHz で eps' = 3.0 になる密度
+LEVEL3B_FEOTIO2  = 20.0           # [wt%] 高Tiバサルト想定
+LEVEL3B_ANCHOR_FREQ = 450e6       # [Hz] Heiken 1991 Fig 9.54 の 450 MHz 計測
+
+LEVEL3B_HEIKEN_EPS_BASE = 1.843
+LEVEL3B_DEBYE_DE1, LEVEL3B_DEBYE_TAU1 = 0.261, 4.6212e-11    # [s]
+LEVEL3B_DEBYE_DE2, LEVEL3B_DEBYE_TAU2 = 0.088, 2.82195e-10   # [s]
+
+# 走時・探索窓の基準に使う周波数（帯域中心）
+BAND_CENTRE_HZ = 1.25e9
 
 # 解析対象から除外する rx キー (design_ascan_amplitude.md §3)
 #   depth_300 は y=0.0 で PML（gprMax デフォルト 10 層 = 0.05 m）の中にあるため、
@@ -99,27 +189,6 @@ EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
 
 # =============================================================================
 # [EDIT HERE] Level 3 の媒質パラメータ（2 極 Debye 分散）
-# =============================================================================
-# .in ファイル（Level_3.in）および calc_mixing_dispersion_profile.py と
-# 同一の定義を使う。値を変えるときは 3 者を必ず揃えること。
-#
-# Level 3 では eps' が周波数依存になるため、屈折率 n(f) も周波数依存になる。
-# その結果、吸収項だけでなく「幾何減衰・地表面透過・走時位相」も
-# すべて周波数依存になる点が Level 1・2 との決定的な違いである。
-LEVEL3_RHO      = 1.820224        # [g/cm^3] 1.25 GHz で eps' = 3.0 になる密度
-LEVEL3_FEOTIO2  = 20.0            # [wt%]
-LEVEL3_ANCHOR_FREQ = 450e6        # [Hz] Heiken 1991 Fig 9.54 の 450 MHz 計測
-
-LEVEL3_HEIKEN_EPS_BASE = 1.843
-LEVEL3_HEIKEN_TAND_A   = 0.033
-LEVEL3_HEIKEN_TAND_B   = 0.231
-LEVEL3_HEIKEN_TAND_C   = 3.061
-
-LEVEL3_DEBYE_DE1,  LEVEL3_DEBYE_TAU1 = 0.261, 4.6212e-11    # [s]
-LEVEL3_DEBYE_DE2,  LEVEL3_DEBYE_TAU2 = 0.088, 2.82195e-10   # [s]
-
-# 走時・探索窓の基準に使う周波数（帯域中心）
-BAND_CENTRE_HZ = 1.25e9
 
 EXCLUDE_KEYS = {'depth_300'}
 
@@ -188,7 +257,12 @@ def _descend(node, labels):
         nested = _kind_layer(node)
         if nested is None:
             break
-        label = labels[len(chosen)] if len(chosen) < len(labels) else labels[-1]
+        # 階層の中身からラベルを決める。組成キーが並んでいれば専用のラベルを使う。
+        # （階層の深さは枝ごとに違いうるので、位置ではなく内容で判定する）
+        if set(nested) <= set(LEVEL3_COMPOSITIONS):
+            label = '組成 (FeO+TiO2)'
+        else:
+            label = labels[len(chosen)] if len(chosen) < len(labels) else labels[-1]
         key = _select(sorted(nested), label)
         chosen.append(key)
         node = nested[key]
@@ -430,58 +504,67 @@ def transfer_absorb(f, d, n):
     return np.exp(-level2_alpha(f, n) * d)
 
 
-def level3_heiken(rho):
-    """密度 -> Heiken 経験式の (静的 eps', eps'')。周波数依存は持たない。"""
-    eps_re = LEVEL3_HEIKEN_EPS_BASE ** rho
-    tan_d = 10.0 ** (LEVEL3_HEIKEN_TAND_A * LEVEL3_FEOTIO2
-                     + LEVEL3_HEIKEN_TAND_B * rho - LEVEL3_HEIKEN_TAND_C)
-    return eps_re, eps_re * tan_d
-
-
-def level3_debye_scale(rho):
-    """eps''(450 MHz) が Heiken に一致するよう 2 極 Debye をスケールする係数。"""
-    _, eps_im_h = level3_heiken(rho)
-    w = 2.0 * np.pi * LEVEL3_ANCHOR_FREQ
-    unit = (LEVEL3_DEBYE_DE1 * w * LEVEL3_DEBYE_TAU1 / (1.0 + (w * LEVEL3_DEBYE_TAU1) ** 2)
-            + LEVEL3_DEBYE_DE2 * w * LEVEL3_DEBYE_TAU2 / (1.0 + (w * LEVEL3_DEBYE_TAU2) ** 2))
-    return eps_im_h / unit
-
-
-def level3_eps(f, rho=None):
-    """Level 3 の複素比誘電率 (eps', eps'')。f は Hz。
-
-    eps'(w)  = eps'_s - sum scale*De_p (w tau)^2 / (1 + (w tau)^2)
-    eps''(w) = sum scale*De_p (w tau) / (1 + (w tau)^2)
-    """
+def level3_heiken_tandelta(feotio2_wt, rho=None):
+    """Heiken/Carrier 経験式（450 MHz 版）の tan_delta。周波数に依存しない。"""
     rho = LEVEL3_RHO if rho is None else rho
+    return 10.0 ** (LEVEL3_HEIKEN_TAND_A * feotio2_wt
+                    + LEVEL3_HEIKEN_TAND_B * rho - LEVEL3_HEIKEN_TAND_C)
+
+
+def level3_feotio2(kind):
+    """選択されたサブ階層キーから FeO+TiO2 [wt%] を取り出す。
+
+    kind は load_paths が返す ' / ' 区切りのキー列（例 'excitation_waveform / feo7p5'）。
+    LEVEL3_COMPOSITIONS のキーが含まれていればその値を、なければ既定値を返す。
+    """
+    if kind:
+        for token in str(kind).replace('/', ' ').split():
+            if token in LEVEL3_COMPOSITIONS:
+                return LEVEL3_COMPOSITIONS[token], token
+    key = LEVEL3_DEFAULT_COMPOSITION
+    return LEVEL3_COMPOSITIONS[key], key
+
+
+# 解析対象の FeO+TiO2。main() が JSON の選択結果から設定する。
+_LEVEL3_ACTIVE_WT = LEVEL3_COMPOSITIONS[LEVEL3_DEFAULT_COMPOSITION]
+_LEVEL3_ACTIVE_KEY = LEVEL3_DEFAULT_COMPOSITION
+
+
+def set_level3_composition(kind):
+    """JSON の選択結果から Level 3 の組成を設定する（main から呼ぶ）。"""
+    global _LEVEL3_ACTIVE_WT, _LEVEL3_ACTIVE_KEY
+    _LEVEL3_ACTIVE_WT, _LEVEL3_ACTIVE_KEY = level3_feotio2(kind)
+    return _LEVEL3_ACTIVE_WT, _LEVEL3_ACTIVE_KEY
+
+
+def level3_eps(f, feotio2_wt=None):
+    """Level 3 の複素比誘電率 (eps', eps'')。非分散なので f に依存しない。
+
+    f と同じ形の配列で返す（呼び出し側の一貫性のため）。
+    """
+    wt = _LEVEL3_ACTIVE_WT if feotio2_wt is None else feotio2_wt
     f_arr = np.asarray(f, dtype=float)
-    eps_s, _ = level3_heiken(rho)
-    s = level3_debye_scale(rho)
-    w = 2.0 * np.pi * f_arr
-    x1, x2 = w * LEVEL3_DEBYE_TAU1, w * LEVEL3_DEBYE_TAU2
-    drop = (LEVEL3_DEBYE_DE1 * s * x1 ** 2 / (1.0 + x1 ** 2)
-            + LEVEL3_DEBYE_DE2 * s * x2 ** 2 / (1.0 + x2 ** 2))
-    imag = (LEVEL3_DEBYE_DE1 * s * x1 / (1.0 + x1 ** 2)
-            + LEVEL3_DEBYE_DE2 * s * x2 / (1.0 + x2 ** 2))
-    return eps_s - drop, imag
+    er = np.full_like(f_arr, LEVEL3_EPS_R)
+    ei = np.full_like(f_arr, LEVEL3_EPS_R * level3_heiken_tandelta(wt))
+    return er, ei
 
 
-def level3_tandelta(f):
-    """Level 3 の tan_delta(f) = eps'' / eps'。f とともに増加する。"""
-    er, ei = level3_eps(f)
+def level3_tandelta(f, feotio2_wt=None):
+    """Level 3 の tan_delta(f)。非分散なので一定。"""
+    er, ei = level3_eps(f, feotio2_wt)
     return ei / er
 
 
-def level3_alpha(f):
+def level3_alpha(f, feotio2_wt=None):
     """Level 3 の減衰係数 alpha(f) [Np/m]（厳密式）。
 
         alpha = (omega/c) * sqrt(eps'/2) * sqrt( sqrt(1 + tan_delta^2) - 1 )
 
-    Debye 分散により alpha は帯域内で約 6.8 倍変化する（おおよそ alpha ∝ f^1.38）。
-    Level 2（sigma 一定, alpha ∝ f^0）と tan_delta 一定（alpha ∝ f^1）の中間。
+    tan_delta が一定なので alpha は f にほぼ比例する（帯域内で 4.0 倍）。
+    Level 2（sigma 一定, alpha ∝ f^0）との違いがここに現れる。
     """
     f_arr = np.asarray(f, dtype=float)
-    er, ei = level3_eps(f_arr)
+    er, ei = level3_eps(f_arr, feotio2_wt)
     td = ei / er
     w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)
     with np.errstate(invalid='ignore'):
@@ -492,50 +575,117 @@ def level3_alpha(f):
 def refractive_index(f, level):
     """レベルに応じた屈折率 n を返す。
 
-    Level 1・2 : 定数 N_REGOLITH（f と同じ形の配列にブロードキャストして返す）
-    Level 3    : n(f) = sqrt(eps'(f))  ← 周波数依存
-
-    n が周波数依存になると、幾何項 sqrt(n/r_eff)、透過係数 2/(1+n)、
-    走時位相のすべてが周波数依存になる。
+    Level 1・2・3 とも eps' は周波数に依存しないため n は定数。
+    （旧 Level 3 は 2 極 Debye で eps' が分散していたが、改訂後は非分散）
+    f と同じ形の配列で返す。
     """
     f_arr = np.asarray(f, dtype=float)
+    if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
+        return np.full_like(f_arr, np.sqrt(LEVEL3_EPS_R))
     if 'absorb_debye' in LEVEL_EFFECTS[level]:
-        er, _ = level3_eps(f_arr)
+        er, _ = level3b_eps(f_arr)
         return np.sqrt(er)
     return np.full_like(f_arr, N_REGOLITH)
 
 
-def level3_group_index(f):
-    """群屈折率 n_g = n + f dn/df。包絡ピークの到達時刻を決める量。
+def describe_level3_medium():
+    """Level 3 の媒質設定を人が読める形で返す（ログと run_info 用）。"""
+    wt = _LEVEL3_ACTIVE_WT
+    td = level3_heiken_tandelta(wt)
+    a_lo = float(level3_alpha(np.array([0.5e9]))[0])
+    a_hi = float(level3_alpha(np.array([2.0e9]))[0])
+    return ('non-dispersive (constant tan_delta), FeO+TiO2 = {:.1f} wt% [{}], '
+            'rho = {:.6f}, eps_r = {:.3f}, tan_delta = {:.6f}  '
+            '(alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz, ratio {:.3f})'
+            .format(wt, _LEVEL3_ACTIVE_KEY, LEVEL3_RHO, LEVEL3_EPS_R, td,
+                    a_lo, a_hi, a_hi / a_lo))
+
+
+def transfer_absorb_tandelta(f, d, n=None):
+    """Level 3 の吸収項 exp(-alpha(f) * d)（片道透過、非分散）。"""
+    return np.exp(-level3_alpha(f) * d)
+
+
+def level3b_heiken(rho=None):
+    """密度 -> Heiken 経験式の (静的 eps', eps'')。周波数依存は持たない。"""
+    rho = LEVEL3B_RHO if rho is None else rho
+    eps_re = LEVEL3B_HEIKEN_EPS_BASE ** rho
+    tan_d = 10.0 ** (LEVEL3_HEIKEN_TAND_A * LEVEL3B_FEOTIO2
+                     + LEVEL3_HEIKEN_TAND_B * rho - LEVEL3_HEIKEN_TAND_C)
+    return eps_re, eps_re * tan_d
+
+
+def level3b_debye_scale(rho=None):
+    """eps''(450 MHz) が Heiken に一致するよう 2 極 Debye をスケールする係数。"""
+    _, eps_im_h = level3b_heiken(rho)
+    w = 2.0 * np.pi * LEVEL3B_ANCHOR_FREQ
+    unit = (LEVEL3B_DEBYE_DE1 * w * LEVEL3B_DEBYE_TAU1 / (1.0 + (w * LEVEL3B_DEBYE_TAU1) ** 2)
+            + LEVEL3B_DEBYE_DE2 * w * LEVEL3B_DEBYE_TAU2 / (1.0 + (w * LEVEL3B_DEBYE_TAU2) ** 2))
+    return eps_im_h / unit
+
+
+def level3b_eps(f):
+    """Level 3b の複素比誘電率 (eps', eps'')。2 極 Debye により分散する。"""
+    f_arr = np.asarray(f, dtype=float)
+    eps_s, _ = level3b_heiken()
+    s = level3b_debye_scale()
+    w = 2.0 * np.pi * f_arr
+    x1, x2 = w * LEVEL3B_DEBYE_TAU1, w * LEVEL3B_DEBYE_TAU2
+    drop = (LEVEL3B_DEBYE_DE1 * s * x1 ** 2 / (1.0 + x1 ** 2)
+            + LEVEL3B_DEBYE_DE2 * s * x2 ** 2 / (1.0 + x2 ** 2))
+    imag = (LEVEL3B_DEBYE_DE1 * s * x1 / (1.0 + x1 ** 2)
+            + LEVEL3B_DEBYE_DE2 * s * x2 / (1.0 + x2 ** 2))
+    return eps_s - drop, imag
+
+
+def level3b_tandelta(f):
+    """Level 3b の tan_delta(f)。f とともに増加する。"""
+    er, ei = level3b_eps(f)
+    return ei / er
+
+
+def level3b_alpha(f):
+    """Level 3b の減衰係数 alpha(f) [Np/m]（厳密式）。alpha ∝ f^1.38 程度。"""
+    f_arr = np.asarray(f, dtype=float)
+    er, ei = level3b_eps(f_arr)
+    td = ei / er
+    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)
+    with np.errstate(invalid='ignore'):
+        alpha = w_over_c * np.sqrt(er / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
+    return np.nan_to_num(alpha, nan=0.0)
+
+
+def level3b_group_index(f):
+    """Level 3b の群屈折率 n_g = n + f dn/df。包絡ピークの到達時刻を決める。
 
     分散性媒質では位相速度と群速度が分かれるため、走時位相に使う n(f) と
     包絡ピークが伝わる速さを決める n_g(f) は別物になる。
     """
     f_arr = np.atleast_1d(np.asarray(f, dtype=float))
     fs = np.linspace(0.5e9, 2.0e9, 601)
-    er, _ = level3_eps(fs)
+    er, _ = level3b_eps(fs)
     n_fs = np.sqrt(er)
     ng_fs = n_fs + fs * np.gradient(n_fs, fs)
     return np.interp(f_arr, fs, ng_fs)
 
 
-def describe_level3_medium():
-    """Level 3 の媒質設定を人が読める形で返す（ログと run_info 用）。"""
-    eps_s, _ = level3_heiken(LEVEL3_RHO)
-    s = level3_debye_scale(LEVEL3_RHO)
-    de1, de2 = s * LEVEL3_DEBYE_DE1, s * LEVEL3_DEBYE_DE2
-    er_c, _ = level3_eps(BAND_CENTRE_HZ)
-    a_lo = float(level3_alpha(np.array([0.5e9]))[0])
-    a_hi = float(level3_alpha(np.array([2.0e9]))[0])
-    return ('2-pole Debye, rho = {:.6f} g/cm^3, eps_s = {:.6f}, eps_inf = {:.6f}, '
-            'De1 = {:.6f}, De2 = {:.6f}  '
-            "(eps'@1.25GHz = {:.5f}, alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz)"
-            .format(LEVEL3_RHO, eps_s, eps_s - de1 - de2, de1, de2, er_c, a_lo, a_hi))
+def describe_level3b_medium():
+    """Level 3b の媒質設定を人が読める形で返す。"""
+    eps_s, _ = level3b_heiken()
+    s = level3b_debye_scale()
+    de1, de2 = s * LEVEL3B_DEBYE_DE1, s * LEVEL3B_DEBYE_DE2
+    a_lo = float(level3b_alpha(np.array([0.5e9]))[0])
+    a_hi = float(level3b_alpha(np.array([2.0e9]))[0])
+    return ('2-pole Debye (high-Ti basalt case), FeO+TiO2 = {:.1f} wt%, '
+            'rho = {:.6f}, eps_s = {:.6f}, eps_inf = {:.6f}, De1 = {:.6f}, De2 = {:.6f}  '
+            '(alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz, ratio {:.3f})'
+            .format(LEVEL3B_FEOTIO2, LEVEL3B_RHO, eps_s, eps_s - de1 - de2, de1, de2,
+                    a_lo, a_hi, a_hi / a_lo))
 
 
 def transfer_absorb_debye(f, d, n=None):
-    """Level 3 の吸収項 exp(-alpha(f) * d)（片道透過）。"""
-    return np.exp(-level3_alpha(f) * d)
+    """Level 3b の吸収項 exp(-alpha(f) * d)（片道透過）。"""
+    return np.exp(-level3b_alpha(f) * d)
 
 
 def transfer_density_profile(f, d, params):
@@ -561,6 +711,8 @@ def build_transfer(f, d, level, n=None):
             H = H * transfer_surface_T(n)
         elif effect == 'absorb_const':
             H = H * transfer_absorb(f, d, n)
+        elif effect == 'absorb_tandelta':
+            H = H * transfer_absorb_tandelta(f, d, n)
         elif effect == 'absorb_debye':
             H = H * transfer_absorb_debye(f, d, n)
         elif effect == 'density_profile':
@@ -574,8 +726,10 @@ def build_transfer(f, d, level, n=None):
     # 探索窓の中心と CSV に載せる代表値としてスカラーの走時を作る。
     # Level 3 では包絡ピークが群速度で決まるため、群屈折率から算出する
     # （位相走時ではズレる）。Level 1・2 では両者は一致する。
+    # Level 3b は分散性なので、包絡ピークの位置は群速度で決まる。
+    # Level 1/2/3 は非分散なので位相速度と群速度が一致し、スカラー化するだけでよい。
     if 'absorb_debye' in effects:
-        ng = float(level3_group_index(BAND_CENTRE_HZ)[0])
+        ng = float(level3b_group_index(BAND_CENTRE_HZ)[0])
         t_arr = TX_HEIGHT / C + ng * d / C
     else:
         t_arr = float(np.atleast_1d(t_arr_f)[0]) if np.ndim(t_arr_f) else float(t_arr_f)
@@ -740,8 +894,10 @@ def analyze_level(rx_paths, reference, level):
     n = N_REGOLITH
     if 'absorb_const' in LEVEL_EFFECTS[level]:
         print('{} の媒質: {}'.format(level, describe_level2_medium(n)))
-    if 'absorb_debye' in LEVEL_EFFECTS[level]:
+    if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
         print('{} の媒質: {}'.format(level, describe_level3_medium()))
+    if 'absorb_debye' in LEVEL_EFFECTS[level]:
+        print('{} の媒質: {}'.format(level, describe_level3b_medium()))
     results = []
 
     # 参照波形（自由空間 1 m）の包絡ピークを全区間から求める。
@@ -1034,8 +1190,10 @@ def write_run_info(level, kind, json_path, results, t_check, output_dir):
         f.write('  N_REGOLITH = {:.6f} (eps_r={})\n'.format(N_REGOLITH, EPS_R_REGOLITH))
         if 'absorb_const' in LEVEL_EFFECTS.get(level, []):
             f.write('  Level 2 medium: {}\n'.format(describe_level2_medium(N_REGOLITH)))
-        if 'absorb_debye' in LEVEL_EFFECTS.get(level, []):
+        if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
             f.write('  Level 3 medium: {}\n'.format(describe_level3_medium()))
+        if 'absorb_debye' in LEVEL_EFFECTS.get(level, []):
+            f.write('  Level 3b medium: {}\n'.format(describe_level3b_medium()))
         f.write('  SEARCH_HALFWIDTH_NS = {}\n'.format(SEARCH_HALFWIDTH_NS))
         f.write('  NOISE_WINDOW_NS = {}\n'.format(NOISE_WINDOW_NS))
         f.write('  AMP_TOL_DB = {}\n'.format(AMP_TOL_DB))
@@ -1064,6 +1222,11 @@ def main():
     args = parser.parse_args()
 
     level, kind, rx_paths, reference = load_paths(JSON_PATH)
+
+    # Level 3 の組成をサブ階層キーから設定する（他レベルでは無視される）
+    if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
+        wt, key = set_level3_composition(kind)
+        print('Level 3 の組成: FeO+TiO2 = {:.1f} wt%  [{}]'.format(wt, key))
 
     if level not in IMPLEMENTED_LEVELS:
         raise NotImplementedError(
