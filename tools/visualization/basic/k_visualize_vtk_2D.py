@@ -32,10 +32,10 @@ json_file = input("Enter geometry JSON file path: ").strip()
 if not os.path.exists(json_file):
     sys.exit("Error: Geometry JSON file not found.")
 
-freq = input("Enter GPR frequency (Hz): ").strip()
-if freq == '':
-    sys.exit("Error: Frequency is required.")
-freq = float(freq)
+#freq = input("Enter GPR frequency (Hz): ").strip()
+# if freq == '':
+#     sys.exit("Error: Frequency is required.")
+#freq = float(freq)
 
 output_basename = 'geometry_plot'
 output_dir = os.path.join(os.path.dirname(json_file), output_basename)
@@ -118,37 +118,42 @@ print(f"Geometry map shape (rows=depth, cols=x): {geometry_data.shape}")
 # Build property maps
 # =============================================================================
 epsilon_0 = 8.854187817e-12
-omega     = 2 * np.pi * freq
 
-permittivity_map = np.zeros((z_num, x_num), dtype=float)
-conductivity_map = np.zeros((z_num, x_num), dtype=float)
-losstangent_map  = np.zeros((z_num, x_num), dtype=float)
+def build_property_maps(freq):
+    omega     = 2 * np.pi * freq
 
-for i in tqdm(range(x_num), desc="Building property maps"):
-    for j in range(z_num):
-        idx    = int(geometry_data[j, i])
-        eps_inf = epsilon_list[idx]
-        sigma   = conductivity_list[idx]
-        poles   = poles_list[idx]
+    permittivity_map_at_freq = np.zeros((z_num, x_num), dtype=float)
+    conductivity_map_at_freq = np.zeros((z_num, x_num), dtype=float)
+    losstangent_map_at_freq  = np.zeros((z_num, x_num), dtype=float)
 
-        # Evaluate multi-pole Debye at target freq (no poles -> static / non-dispersive)
-        eps_real      = eps_inf
-        eps_imag_disp = 0.0
-        for (de, tau) in poles:
-            denom          = 1.0 + (omega * tau) ** 2
-            eps_real      += de / denom
-            eps_imag_disp += de * omega * tau / denom
+    for i in tqdm(range(x_num), desc="Building property maps"):
+        for j in range(z_num):
+            idx    = int(geometry_data[j, i])
+            eps_inf = epsilon_list[idx]
+            sigma   = conductivity_list[idx]
+            poles   = poles_list[idx]
 
-        eps_imag_total = eps_imag_disp + sigma / (omega * epsilon_0)
+            # Evaluate multi-pole Debye at target freq (no poles -> static / non-dispersive)
+            eps_real      = eps_inf
+            eps_imag_disp = 0.0
+            for (de, tau) in poles:
+                denom          = 1.0 + (omega * tau) ** 2
+                eps_real      += de / denom
+                eps_imag_disp += de * omega * tau / denom
 
-        permittivity_map[j, i] = eps_real
-        conductivity_map[j, i] = sigma
-        losstangent_map[j, i]  = eps_imag_total / (eps_real + 1e-30)
+            eps_imag_total = eps_imag_disp + sigma / (omega * epsilon_0)
 
-permittivity_profile = np.mean(permittivity_map, axis=1)
-conductivity_profile = np.mean(conductivity_map, axis=1)
-losstangent_profile  = np.mean(losstangent_map,  axis=1)
-print("Property maps and depth profiles computed.")
+            permittivity_map_at_freq[j, i] = eps_real
+            conductivity_map_at_freq[j, i] = sigma
+            losstangent_map_at_freq[j, i]  = eps_imag_total / (eps_real + 1e-30)
+
+    permittivity_profile_at_freq = np.mean(permittivity_map_at_freq, axis=1)
+    conductivity_profile_at_freq = np.mean(conductivity_map_at_freq, axis=1)
+    losstangent_profile_at_freq  = np.mean(losstangent_map_at_freq,  axis=1)
+    print("Property maps and depth profiles computed.")
+
+    return permittivity_map_at_freq, conductivity_map_at_freq, losstangent_map_at_freq, \
+            permittivity_profile_at_freq, conductivity_map_at_freq, losstangent_profile_at_freq
 
 
 # =============================================================================
@@ -176,7 +181,7 @@ def _add_surface_line(ax):
     ax.axhline(0.0, color='white', linewidth=1.2, linestyle='--', label='Surface')
 
 
-def plot_map_profile(map_data, profile_data, idx):
+def plot_map_profile(freq, map_data, profile_data, idx):
     """Plot 2D map (left) and depth profile (right) side by side, then save."""
     map_aspect = map_data.shape[0] / map_data.shape[1]
 
@@ -201,7 +206,7 @@ def plot_map_profile(map_data, profile_data, idx):
     im = ax[0].imshow(map_data, **imshow_kwargs)
     # _add_surface_line(ax[0])
 
-    ax[0].set_title(names[idx] + disp_tag + f'  @ {freq:.3e} Hz', size=14)
+    ax[0].set_title(names[idx] + disp_tag + f'  @ {freq:.2e} Hz', size=14)
     ax[0].set_xlabel('X [m]', size=18)
     ax[0].set_ylabel('Depth [m]', size=18)
     ax[0].set_ylim(depth_bottom, depth_top)   # deep at bottom (positive), vacuum at top (negative)
@@ -230,13 +235,13 @@ def plot_map_profile(map_data, profile_data, idx):
 
     plt.tight_layout()
     base = output_names[idx]
-    plt.savefig(os.path.join(output_dir, base + '_map.png'), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join(output_dir, base + '_map.pdf'), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dir, base + f'_{freq:.2e}' + '_map.png'), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dir, base + f'_{freq:.2e}' + '_map.pdf'), dpi=300, bbox_inches='tight')
     print(f"Saved: {base}_map.png / .pdf")
     plt.show()
 
 
-def plot_profile(profile_data, idx):
+def plot_profile(freq, profile_data, idx):
     """Plot depth profile only, then save."""
     fig, ax = plt.subplots(figsize=(4, 8))
     ax.plot(profile_data, depth_axis)
@@ -253,9 +258,12 @@ def plot_profile(profile_data, idx):
     ax.grid(alpha=0.3)
     #ax.legend(fontsize=14)
     plt.tight_layout()
+    output_dir_profile = output_dir + '/profiles'
+    if not os.path.exists(output_dir_profile):
+        os.makedirs(output_dir_profile)
     base = output_names[idx]
-    plt.savefig(os.path.join(output_dir, base + '_profile.png'), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join(output_dir, base + '_profile.pdf'), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dir_profile, base + f'_{freq:.2e}' + '_profile.png'), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dir_profile, base + f'_{freq:.2e}' + '_profile.pdf'), dpi=300, bbox_inches='tight')
     print(f"Saved: {base}_profile.png / .pdf")
     plt.close()
 
@@ -263,10 +271,19 @@ def plot_profile(profile_data, idx):
 # =============================================================================
 # Run
 # =============================================================================
-for idx, (map_data, profile_data) in enumerate([
-    (permittivity_map, permittivity_profile),
-    (conductivity_map, conductivity_profile),
-    (losstangent_map,  losstangent_profile),
-]):
-    plot_map_profile(map_data, profile_data, idx)
-    plot_profile(profile_data, idx)
+freqs = [0.5e9, 1.25e9, 2.0e9] # Hz
+
+for freq in freqs:
+    print(f'===== Processing {freq:.2e} Hz =====')
+    permittivity_map ,conductivity_map, losstangent_map, \
+        permittivity_profile, conductivity_profile, losstangent_profile = build_property_maps(freq)
+
+    for idx, (map_data, profile_data) in enumerate([
+        (permittivity_map, permittivity_profile),
+        (conductivity_map, conductivity_profile),
+        (losstangent_map,  losstangent_profile),
+    ]):
+        plot_map_profile(freq, map_data, profile_data, idx)
+        plot_profile(freq, profile_data, idx)
+
+    print(' ')
