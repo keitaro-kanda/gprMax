@@ -277,7 +277,7 @@ def _descend(node, labels):
             break
         # 階層の中身からラベルを決める。組成キーが並んでいれば専用のラベルを使う。
         # （階層の深さは枝ごとに違いうるので、位置ではなく内容で判定する）
-        if set(nested) <= set(LEVEL3_COMPOSITIONS):
+        if _is_composition_layer(nested):
             label = '組成 (FeO+TiO2)'
         else:
             label = labels[len(chosen)] if len(chosen) < len(labels) else labels[-1]
@@ -563,18 +563,61 @@ def level3_heiken_tandelta(feotio2_wt, rho=None):
                     + LEVEL3_HEIKEN_TAND_B * rho - LEVEL3_HEIKEN_TAND_C)
 
 
+def _parse_composition_key(key):
+    """組成キーから FeO+TiO2 [wt%] を読み取る。表記ゆれに強くする。
+
+    JSON のキー名とコードの定数名が食い違うと、既定値に落ちたまま
+    気づかず誤った理論曲線で解析してしまう（実際に起きた）。
+    そこで LEVEL3_COMPOSITIONS の完全一致に加えて、
+    'FeO_100' / 'feo10' / 'FEO_7P5' のような表記からも数値を読み取る。
+
+      FeO_050 -> 5.0     （3 桁ゼロ詰め = 10 倍表記とみなす）
+      FeO_075 -> 7.5
+      FeO_100 -> 10.0
+      feo5    -> 5.0
+      feo7p5  -> 7.5
+
+    読み取れなければ None を返す（呼び出し側でエラーにする）。
+    """
+    if key in LEVEL3_COMPOSITIONS:
+        return LEVEL3_COMPOSITIONS[key]
+
+    m = re.fullmatch(r'(?i)feo[_-]?(\d+)(?:[p.](\d+))?', str(key))
+    if not m:
+        return None
+    intpart, frac = m.group(1), m.group(2)
+    if frac is not None:                       # feo7p5 形式
+        return float('{}.{}'.format(intpart, frac))
+    if len(intpart) >= 3:                      # FeO_050 形式（3 桁 = 10 倍表記）
+        return int(intpart) / 10.0
+    return float(intpart)                      # feo5, feo10 形式
+
+
+def _is_composition_layer(keys):
+    """その階層が組成の階層かどうかを判定する（ラベル表示用）。"""
+    return bool(keys) and all(_parse_composition_key(k) is not None for k in keys)
+
+
 def level3_feotio2(kind):
     """選択されたサブ階層キーから FeO+TiO2 [wt%] を取り出す。
 
-    kind は load_paths が返す ' / ' 区切りのキー列（例 'excitation_waveform / feo7p5'）。
-    LEVEL3_COMPOSITIONS のキーが含まれていればその値を、なければ既定値を返す。
+    kind は load_paths が返す ' / ' 区切りのキー列
+    （例 'excitation_waveform / dx_00025 / FeO_100'）。
+
+    組成キーが 1 つも見つからない場合は、既定値に落とさずエラーにする。
+    黙って既定値を使うと、誤った理論曲線のまま解析が完走してしまうため。
     """
     if kind:
         for token in str(kind).replace('/', ' ').split():
-            if token in LEVEL3_COMPOSITIONS:
-                return LEVEL3_COMPOSITIONS[token], token
-    key = LEVEL3_DEFAULT_COMPOSITION
-    return LEVEL3_COMPOSITIONS[key], key
+            wt = _parse_composition_key(token)
+            if wt is not None:
+                return wt, token
+    raise CmdInputError(
+        'Level 3 の組成を JSON のキーから判定できませんでした（選択: {}）。\n'
+        'キー名を FeO_050 / FeO_075 / FeO_100 や feo5 / feo7p5 / feo10 の形式に'
+        'するか、LEVEL3_COMPOSITIONS に追加してください。\n'
+        '（既定値に落とすと誤った tan_delta で解析が完走してしまうため、'
+        'あえてエラーにしています）'.format(kind))
 
 
 # 解析対象の FeO+TiO2。main() が JSON の選択結果から設定する。
