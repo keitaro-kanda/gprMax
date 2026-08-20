@@ -204,6 +204,10 @@ EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
 EXCLUDE_KEYS = {'depth_300'}
 
 # 作図
+# fig3 の縦軸範囲を決めるパーセンタイル。浅い rx の 1/d 増幅による外れ値を
+# 落として傾向を見やすくする。(0, 100) にすると最小最大になる。
+ATTEN_YLIM_PCT = (2.0, 98.0)
+
 FIGURE_FORMATS = ('png', 'pdf')   # すべての図をこの形式すべてで保存する
 FIGURE_DPI = 300
 
@@ -1269,6 +1273,35 @@ def plot_spectra(results, freq_hz, E_ref, output_dir):
 # -----------------------------------------------------------------------------
 # fig2: LSR に関する集約
 # -----------------------------------------------------------------------------
+def _shared_ylim(data_arrays, pad_frac=0.08, pct=(1.0, 99.0)):
+    """複数パネルで共有する縦軸範囲を、実データから頑健に決める。
+
+    浅い rx では alpha = -(LSR残差)/d の 1/d 増幅で外れ値が出るため、
+    最小最大をそのまま使うと範囲が広がりすぎて傾向が読めなくなる。
+    そこでパーセンタイル（既定 1-99%）で外れ値を落としてから余白を付ける。
+
+    data_arrays: 1 次元配列のリスト（NaN を含んでよい）
+    戻り値: (lo, hi)。有効なデータがなければ None。
+    """
+    pooled = []
+    for a in data_arrays:
+        a = np.asarray(a, dtype=float)
+        a = a[np.isfinite(a)]
+        if a.size:
+            pooled.append(a)
+    if not pooled:
+        return None
+    pooled = np.concatenate(pooled)
+    lo, hi = np.percentile(pooled, pct[0]), np.percentile(pooled, pct[1])
+    if not np.isfinite(lo) or not np.isfinite(hi):
+        return None
+    if np.isclose(lo, hi):
+        span = max(abs(lo), 1e-12) * 0.1
+        return lo - span, hi + span
+    pad = (hi - lo) * pad_frac
+    return lo - pad, hi + pad
+
+
 def plot_lsr(results, freq_hz, d0, output_dir):
     """絶対LSR・相対LSR とそれぞれの残差（2x2）。"""
     depth_results = sorted(results, key=lambda r: r['depth_m'])
@@ -1288,12 +1321,23 @@ def plot_lsr(results, freq_hz, d0, output_dir):
          '(c) Relative LSR (ref depth = {:.2f} m)'.format(d0),
          'Relative LSR [dB]'),
     ]
+    # (a) 絶対LSR と (c) 相対LSR は同じ「LSR [dB]」なので縦軸を揃える。
+    value_pool = []
+    for _, key_m, key_t, _, _ in panels:
+        for r in depth_results:
+            mask = r['mask']
+            value_pool.append(r[key_m][mask] * LN_TO_DB20)
+            value_pool.append(r[key_t][mask] * LN_TO_DB20)
+    value_ylim = _shared_ylim(value_pool, pct=(0.0, 100.0))
+
     for ax, key_m, key_t, title, ylabel in panels:
         for r in depth_results:
             color = cmap(norm(r['depth_m']))
             mask = r['mask']
             ax.plot(freq_ghz[mask], r[key_m][mask] * LN_TO_DB20, color=color, lw=1.2)
             ax.plot(freq_ghz[mask], r[key_t][mask] * LN_TO_DB20, color=color, lw=1.0, ls='--')
+        if value_ylim:
+            ax.set_ylim(*value_ylim)
         ax.set_xlim(band_lo, band_hi)
         ax.set_xlabel('Frequency [GHz]')
         ax.set_ylabel(ylabel)
@@ -1307,12 +1351,24 @@ def plot_lsr(results, freq_hz, d0, output_dir):
         (axes[1, 1], 'L_rel_meas', 'L_rel_theory', False,
          '(d) Relative LSR residual'),
     ]
+    # (b) 絶対LSR残差 と (d) 相対LSR残差 も縦軸を揃える。
+    # 合否帯（±LSR_TOL_DB）が入る側に合わせると残差そのものが潰れるため、
+    # 残差の実データ範囲で決めたうえで、合否帯が入りきる場合だけ広げる。
+    resid_pool = []
+    for _, key_m, key_t, _, _ in resid_panels:
+        for r in depth_results:
+            mask = r['mask']
+            resid_pool.append((r[key_m] - r[key_t])[mask] * LN_TO_DB20)
+    resid_ylim = _shared_ylim(resid_pool, pct=(0.0, 100.0))
+
     for ax, key_m, key_t, show_tol, title in resid_panels:
         for r in depth_results:
             color = cmap(norm(r['depth_m']))
             mask = r['mask']
             resid = (r[key_m] - r[key_t]) * LN_TO_DB20
             ax.plot(freq_ghz[mask], resid[mask], color=color, lw=1.2)
+        if resid_ylim:
+            ax.set_ylim(*resid_ylim)
         if show_tol:
             ax.axhspan(-LSR_TOL_DB, LSR_TOL_DB, color='green', alpha=0.15,
                        label='$\\pm${} dB'.format(LSR_TOL_DB))
@@ -1345,19 +1401,55 @@ def plot_attenuation(results, freq_hz, level, n, output_dir):
     sm = cm.ScalarMappable(norm=norm, cmap=cmap)
     freq_ghz = freq_hz * 1e-9
     band_lo, band_hi = BAND_GHZ
+    band_mask = (freq_ghz >= band_lo) & (freq_ghz <= band_hi)
 
     fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(15, 10))
 
+    # fig2 と同じ並びにする: 上段 (a)(b) が絶対LSR 由来、下段 (c)(d) が相対LSR 由来。
+    # 左列 (a)(c) が alpha、右列 (b)(d) が tan_delta。
+    # 同じ量どうし（左列・右列）で縦軸を揃える。
     specs = [
         (axes[0, 0], 'alpha_abs', r'$\alpha(f)$ [1/m]',
          '(a) Attenuation from absolute LSR (collapse check)'),
-        (axes[0, 1], 'alpha_rel', r'$\alpha(f)$ [1/m]',
-         '(b) Attenuation from relative LSR (field-measurable)'),
-        (axes[1, 0], 'tandelta_abs', r'$\tan\delta(f)$',
-         '(c) Loss tangent from absolute LSR'),
+        (axes[0, 1], 'tandelta_abs', r'$\tan\delta(f)$',
+         '(b) Loss tangent from absolute LSR'),
+        (axes[1, 0], 'alpha_rel', r'$\alpha(f)$ [1/m]',
+         '(c) Attenuation from relative LSR (field-measurable)'),
         (axes[1, 1], 'tandelta_rel', r'$\tan\delta(f)$',
          '(d) Loss tangent from relative LSR'),
     ]
+
+    # 縦軸範囲は実データのパーセンタイルから決める。浅い rx は 1/d 増幅で
+    # 外れ値が出るため、最小最大では範囲が広がりすぎて傾向が読めない。
+    def theory_curve(key):
+        if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
+            return level3_alpha(freq_hz) if key.startswith('alpha') \
+                else level3_tandelta(freq_hz)
+        if 'absorb_debye' in LEVEL_EFFECTS[level]:
+            return level3b_alpha(freq_hz) if key.startswith('alpha') \
+                else level3b_tandelta(freq_hz)
+        if 'absorb_const' in LEVEL_EFFECTS[level]:
+            return level2_alpha(freq_hz, n) if key.startswith('alpha') \
+                else level2_tandelta(freq_hz, n)
+        return np.zeros_like(freq_hz)
+
+    ylims = {}
+    for group_keys in (('alpha_abs', 'alpha_rel'), ('tandelta_abs', 'tandelta_rel')):
+        pool = []
+        for key in group_keys:
+            for r in depth_results:
+                arr = r[key]
+                if np.all(np.isnan(arr)):
+                    continue
+                # 必ず有効マスクを掛けてから集める。帯域端のマスク外は
+                # LSR の分母が小さく alpha が発散するため、含めると範囲が
+                # 数桁広がって傾向が読めなくなる（実際にそうなった）。
+                pool.append(arr[r['mask']])
+            pool.append(theory_curve(key)[band_mask])   # 理論曲線も枠内に入れる
+        lim = _shared_ylim(pool, pct=ATTEN_YLIM_PCT)
+        for key in group_keys:
+            ylims[key] = lim
+
     for ax, key, ylabel, title in specs:
         plotted = False
         for r in depth_results:
@@ -1389,6 +1481,8 @@ def plot_attenuation(results, freq_hz, level, n, output_dir):
             ax.axhline(0.0, color='r', ls='--', lw=1.5,
                        label='Theory ({}: alpha=0)'.format(level))
         ax.set_xlim(band_lo, band_hi)
+        if ylims.get(key):
+            ax.set_ylim(*ylims[key])
         ax.set_xlabel('Frequency [GHz]')
         ax.set_ylabel(ylabel)
         ax.grid(alpha=0.3)
