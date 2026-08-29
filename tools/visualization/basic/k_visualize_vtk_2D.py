@@ -227,7 +227,7 @@ def plot_map_profile(freq, map_data, profile_data, idx):
     if idx == 0:
         ax[1].set_xlim(0.95, 3.5)
     elif idx == 2:
-        ax[1].set_xlim(-0.0005, 0.010)
+        ax[1].set_xlim(-0.0005, 0.006)
     ax[1].set_ylim(depth_bottom, depth_top)
     ax[1].tick_params(labelsize=14)
     ax[1].minorticks_on()
@@ -250,7 +250,7 @@ def plot_profile(freq, profile_data, idx):
     if idx == 0:
         ax.set_xlim(0.95, 3.5)
     elif idx == 2:
-        ax.set_xlim(-0.0005, 0.010)
+        ax.set_xlim(-0.0005, 0.006)
     ax.set_ylabel('Depth [m]', size=18)
     ax.set_ylim(depth_bottom, depth_top)
     ax.tick_params(labelsize=14)
