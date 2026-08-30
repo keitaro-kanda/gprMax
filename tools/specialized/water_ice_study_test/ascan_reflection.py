@@ -1,613 +1,762 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-ascan_reflection.py - at_tx (モノスタティック) 地下界面反射解析ツール
+"""ascan_reflection.py — round-trip reflection analysis of an at_tx A-scan.
 
-【既知の限界（README §9）】
-1. 多重反射: 理論モデルには含まない（残差・干渉成分として現れる）。
-2. 斜め入射: モノスタティック（オフセット 0）前提。垂直入射 Fresnel 係数を適用。
-3. 背景差分: 実機観測では取得不能。シミュレーション上の理論上限評価としてのみ扱う。
-4. 直達波の裾: 2D 線源グリーン関数の長時間テールが差分なし時のフロアを決定する。
-5. 層厚と屈折率の縮退: 単一オフセットでは走時差 delta_t から n と L を完全分離不可（将来の CMP 展開課題）。
-6. ラフネス・ランダム媒質: 平坦・水平成層を前提としており、粗動界面（Level 6/7）では散乱により崩れる。
-"""
+Extracts subsurface interface reflections from a monostatic surface (at_tx) GPR
+A-scan and quantifies three channels to see which reaches its detection limit
+first:
+  1. reflection  : interface amplitude -> R -> permittivity contrast -> ice
+  2. traveltime  : two-way time -> layer thickness / index -> ice
+  3. attenuation : interface amplitude ratio -> layer attenuation alpha
 
+The medium model (permittivity / attenuation) is imported from ascan_spectrum;
+no constant is duplicated here.
+
+Known limitations: multiple reflections are not modelled (they appear in the
+fig2 residual); monostatic normal incidence is assumed; background subtraction
+is an upper bound (no ice-free observation exists in the field); the two-way
+time difference cannot separate layer thickness from index; interface roughness
+breaks the flat-layer assumption.
+"""
+from __future__ import annotations
+
+import csv
+import json
+import math
 import os
 import sys
-import json
-import logging
-from pathlib import Path
-
-# 自身が存在するディレクトリを検索パスの先頭に追加 (Phase 1 T-1.1, README §3.1)
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dataclasses import dataclass
 
 import numpy as np
-from scipy.constants import c as C0
 from scipy.signal import hilbert
+from scipy.fft import rfft, irfft, rfftfreq
+
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# ==============================================================================
-# 媒質モデルのインポート (README §3.1, Phase 1 T-1.1)
-# ==============================================================================
+from ascan_spectrum import level3_eps, level4_eps, describe_level4_medium
 try:
-    from ascan_spectrum import (
-        LEVEL3_EPS_R,
-        LEVEL3_RHO,
-        level3_eps,
-        level4_targets,
-        level4_eps,
-        level4_alpha,
-        level4_ice_volume_fraction,
-        describe_level4_medium,
-    )
-except ImportError as e:
-    raise ImportError(
-        "媒質モデルモジュール (ascan_spectrum.py) が見つかりません。"
-    ) from e
+    from ascan_spectrum import level4_alpha
+except ImportError:
+    level4_alpha = None
 
 
-# ==============================================================================
-# [EDIT HERE] 設定ブロック (Phase 1 T-1.3, README §8)
-# ==============================================================================
-TX_HEIGHT = 0.35              # [m] アンテナ地上高 (Level_N.in と一致)
-ICE_TOP_M = 1.00              # [m] 氷層上面深さ (Level_4.in と一致)
-ICE_THICK_M = 1.00            # [m] 氷層層厚 (Level_4.in と一致)
-R_REF = 1.00                  # [m] 参照計算 (far_1m) の距離
-CENTER_FREQ_HZ = 1.25e9       # [Hz] レーダ中心周波数 (1.25 GHz)
+# ---------------------------------------------------------------------------
+# [EDIT HERE] configuration (keep in sync with the .in files)
+# ---------------------------------------------------------------------------
+TX_HEIGHT_M   = 0.35              # tx/rx height above surface [m]
+ICE_TOP_M     = 1.00             # depth of ice-layer top = upper regolith thickness [m]
+ICE_THICK_M   = 1.00             # ice-layer thickness [m]
+C             = 299_792_458.0    # speed of light [m/s]
+R_REF_M       = 1.00             # far_1m reference distance [m]
 
-USE_BACKGROUND_SUBTRACTION = True  # 背景差分の有効化フラグ
-NOISE_BAND_NS = (8.0, 40.0)        # [ns] ノイズフロア測定時間帯 (README §2.2)
-EVENT_WINDOW_NS = 2.0              # [ns] イベント探索窓の半幅 (README F-3)
-DEFAULT_PATHS_JSON = "out_file_paths.json"
-OUTPUT_DIR_NAME = "ascan_reflection_out"
+NOISE_BAND_NS      = (8.0, 40.0) # window used to measure the noise floor [ns]
+EVENT_WINDOW_NS    = 2.0         # half-width of the event search window [ns]
+GATE_HALFWIDTH_NS  = 3.0         # half-width of the attenuation time gate [ns]
+BELOW_FLOOR_FACTOR = 3.0         # peak below this * floor_rms is "below floor"
+DETECTED_ICE_VOL   = 0.10        # ice volume fraction of the real data (Level_4)
+ICE_VOL_SWEEP      = (0.005, 0.01, 0.05, 0.10)   # swept ice fractions
+CENTER_FREQ_HZ     = 1.25e9      # representative frequency [Hz]
+FIG_DPI            = 150
+
+# out_file_paths.json branch selectors (the JSON is deeply nested)
+WAVEFORM_KEY     = "excitation_waveform"
+DX_KEY           = "dx_00025"
+FEO_KEY          = "FeO_075"
+ICE_FRACTION_KEY = "f_ice_10"
+REFERENCE_KEY    = "_reference"
+NOICE_LEVEL_KEY  = "Level_3"                 # ice-free baseline (bg-sub / no-ice theory)
+_BRANCH_PREFS    = (WAVEFORM_KEY, DX_KEY, FEO_KEY, ICE_FRACTION_KEY)
+
+DEFAULT_PATHS_JSON = ("/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/"
+                      "water_ice_study_test/out_file_paths.json")
 
 
-# ==============================================================================
-# Phase 2: 理論モデル (README §4)
-# ==============================================================================
-def r_eff_round_trip(L_layers, n_layers, h=TX_HEIGHT):
+# ---------------------------------------------------------------------------
+# Medium adapter (the only code that touches ascan_spectrum)
+# ---------------------------------------------------------------------------
+def _eps_to_complex(raw) -> np.ndarray:
+    """Normalise ascan_spectrum permittivity to a 1-D complex array.
+
+    Accepts a complex array, or a real 2-component [eps', eps''] array
+    (trailing or leading axis of size 2), or a real eps' array (loss-free).
     """
-    往復経路の見かけ源距離 r_eff = 2h + 2 * sum(L_j / n_j) (README §4.3)
+    a = np.asarray(raw)
+    if np.iscomplexobj(a):
+        return np.atleast_1d(a).ravel()
+    a = np.atleast_1d(a.astype(float))
+    if a.ndim >= 2 and a.shape[-1] == 2:          # (..., 2) = [eps', eps'']
+        a = a.reshape(-1, 2)
+        return a[:, 0] + 1j * a[:, 1]
+    if a.ndim == 2 and a.shape[0] == 2:           # (2, N)
+        return a[0] + 1j * a[1]
+    return a.ravel().astype(complex)              # 1-D eps' only
+
+
+def _n_alpha(raw, f) -> tuple[np.ndarray, np.ndarray]:
+    """Return (n, alpha[Np/m]) from permittivity.
+
+    eps = eps' - i|eps''|,  n = Re sqrt(eps),  alpha = (2 pi f / c)|Im sqrt(eps)|.
     """
-    if len(L_layers) == 0:
-        return 2.0 * h
-    r = 2.0 * h
-    for L_j, n_j in zip(L_layers, n_layers):
-        r += 2.0 * (L_j / n_j)
+    eps = _eps_to_complex(raw)
+    eps = eps.real - 1j * np.abs(eps.imag)
+    sq = np.sqrt(eps)
+    alpha = (2.0 * np.pi * np.atleast_1d(np.asarray(f, float)) / C) * np.abs(sq.imag)
+    return sq.real, alpha
+
+
+@dataclass
+class MediumModel:
+    """Thin wrapper over ascan_spectrum. Adjust here if signatures differ."""
+    ice_vol: float
+
+    def regolith_index(self, f):
+        return _n_alpha(level3_eps(np.atleast_1d(f)), f)[0]
+
+    def regolith_alpha(self, f):
+        return _n_alpha(level3_eps(np.atleast_1d(f)), f)[1]
+
+    def ice_index(self, f):
+        return _n_alpha(level4_eps(np.atleast_1d(f), self.ice_vol), f)[0]
+
+    def ice_alpha(self, f):
+        f = np.atleast_1d(f)
+        if level4_alpha is not None:
+            a = np.asarray(level4_alpha(f, self.ice_vol), dtype=float)
+            return np.atleast_1d(np.squeeze(a)).ravel()
+        return _n_alpha(level4_eps(f, self.ice_vol), f)[1]
+
+    def describe(self):
+        return describe_level4_medium()
+
+
+# ---------------------------------------------------------------------------
+# Round-trip reflection theory (pure functions of refractive index n)
+# ---------------------------------------------------------------------------
+def r_eff_round_trip(depth_index, layer_L, layer_n):
+    """Apparent source distance r_eff = 2h + 2 Sum L_j / n_j."""
+    r = np.asarray(2.0 * TX_HEIGHT_M, dtype=float)
+    for j in range(depth_index):
+        r = r + 2.0 * layer_L[j] / np.asarray(layer_n[j], dtype=float)
     return r
 
 
-def calc_fresnel_reflection(n1, n2):
-    """垂直入射反射係数 R = (n1 - n2) / (n1 + n2)"""
-    return (n1 - n2) / (n1 + n2)
-
-
-def calc_round_trip_transmission(n1, n2):
-    """界面の往復透過係数 T_down * T_up = 4*n1*n2 / (n1 + n2)^2 (README §4.4)"""
-    return 4.0 * n1 * n2 / ((n1 + n2) ** 2)
-
-
-def get_layer_properties(ice_vol_frac, f_hz=CENTER_FREQ_HZ):
-    """
-    指定氷量における誘電率実部 eps' と減衰定数 alpha [Np/m] を取得 (LLL混合則補間)
-    """
-    eps_reg = LEVEL3_EPS_R
-    alpha_reg = level4_alpha(f_hz, in_ice=False)
-
-    if ice_vol_frac <= 0.0:
-        return eps_reg, alpha_reg
-    elif np.isclose(ice_vol_frac, 0.10):
-        eps_ice_10 = level4_targets()[-1][0]
-        alpha_ice_10 = level4_alpha(f_hz, in_ice=True)
-        return eps_ice_10, alpha_ice_10
-    else:
-        eps_ice_10 = level4_targets()[-1][0]
-        alpha_ice_10 = level4_alpha(f_hz, in_ice=True)
-        # LLL混合則: eps^(1/3) の体積分率線形補間
-        cbrt_reg = eps_reg ** (1.0 / 3.0)
-        cbrt_10 = eps_ice_10 ** (1.0 / 3.0)
-        cbrt_v = cbrt_reg + (ice_vol_frac / 0.10) * (cbrt_10 - cbrt_reg)
-        eps_v = cbrt_v ** 3.0
-        alpha_v = alpha_reg + (ice_vol_frac / 0.10) * (alpha_ice_10 - alpha_reg)
-        return eps_v, alpha_v
-
-
-def calc_theoretical_events(ice_vol_frac=0.10, h=TX_HEIGHT, L_top=ICE_TOP_M, L_ice=ICE_THICK_M, f_hz=CENTER_FREQ_HZ):
-    """
-    指定氷量における各反射イベント（地表、氷層上面、氷層下面）の理論値を計算 (README §4.2, §4.5)
-    """
-    eps_reg, alpha_reg = get_layer_properties(0.0, f_hz=f_hz)
-    n_reg = np.sqrt(eps_reg)
-
-    eps_ice, alpha_ice = get_layer_properties(ice_vol_frac, f_hz=f_hz)
-    n_ice = np.sqrt(eps_ice)
-
-    events = {}
-
-    # Event 0: 地表面 (k=0, depth=0 m)
-    r_eff_0 = r_eff_round_trip([], [], h=h)
-    G_0 = np.sqrt(R_REF / r_eff_0)
-    T_0 = 1.0
-    R_0 = calc_fresnel_reflection(1.0, n_reg)
-    A_0 = 1.0
-    t_0 = 2.0 * h / C0
-    amp_0 = G_0 * T_0 * np.abs(R_0) * A_0
-
-    events["surface"] = {
-        "depth_m": 0.0,
-        "r_eff": r_eff_0,
-        "G": G_0,
-        "T": T_0,
-        "R": R_0,
-        "A": A_0,
-        "time_s": t_0,
-        "time_ns": t_0 * 1e9,
-        "amp_lin": amp_0,
-        "amp_db_rel_surf": 0.0,
-    }
-
-    # Event 1: 氷層上面 (k=1, depth=L_top)
-    r_eff_1 = r_eff_round_trip([L_top], [n_reg], h=h)
-    G_1 = np.sqrt(R_REF / r_eff_1)
-    T_surf = calc_round_trip_transmission(1.0, n_reg)
-    T_1 = T_surf
-    R_1 = calc_fresnel_reflection(n_reg, n_ice)
-    A_1 = np.exp(-2.0 * alpha_reg * L_top)
-    t_1 = (2.0 * h + 2.0 * n_reg * L_top) / C0
-    amp_1 = G_1 * T_1 * np.abs(R_1) * A_1
-
-    events["ice_top"] = {
-        "depth_m": L_top,
-        "r_eff": r_eff_1,
-        "G": G_1,
-        "T": T_1,
-        "R": R_1,
-        "A": A_1,
-        "time_s": t_1,
-        "time_ns": t_1 * 1e9,
-        "amp_lin": amp_1,
-        "amp_db_rel_surf": 20.0 * np.log10(amp_1 / amp_0),
-    }
-
-    # Event 2: 氷層下面 (k=2, depth=L_top + L_ice)
-    r_eff_2 = r_eff_round_trip([L_top, L_ice], [n_reg, n_ice], h=h)
-    G_2 = np.sqrt(R_REF / r_eff_2)
-    T_icetop = calc_round_trip_transmission(n_reg, n_ice)
-    T_2 = T_surf * T_icetop
-    R_2 = calc_fresnel_reflection(n_ice, n_reg)  # 符号反転
-    A_2 = np.exp(-2.0 * (alpha_reg * L_top + alpha_ice * L_ice))
-    t_2 = (2.0 * h + 2.0 * n_reg * L_top + 2.0 * n_ice * L_ice) / C0
-    amp_2 = G_2 * T_2 * np.abs(R_2) * A_2
-
-    events["ice_bot"] = {
-        "depth_m": L_top + L_ice,
-        "r_eff": r_eff_2,
-        "G": G_2,
-        "T": T_2,
-        "R": R_2,
-        "A": A_2,
-        "time_s": t_2,
-        "time_ns": t_2 * 1e9,
-        "amp_lin": amp_2,
-        "amp_db_rel_surf": 20.0 * np.log10(amp_2 / amp_0),
-    }
-
-    return events
-
-
-# ==============================================================================
-# 入出力および前処理ユーティリティ (Phase 1 T-1.2, README §2.3)
-# ==============================================================================
-def load_paths(json_path=DEFAULT_PATHS_JSON):
-    """out_file_paths.json から各トレースのパス情報を取得"""
-    p = Path(json_path)
-    if not p.exists():
-        logging.warning(f"{json_path} が見つかりません。モック/相対探索を行います。")
-        return {}
-    with open(p, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def resolve_output_dir(base_dir="."):
-    out_dir = Path(base_dir) / OUTPUT_DIR_NAME
-    out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir
-
-
-def load_trace(file_path):
-    """gprMax または numpy 形式の A-scan 出力ファイルを読み込む"""
-    p = Path(file_path)
-    if not p.exists():
-        raise FileNotFoundError(f"ファイルが見つかりません: {file_path}")
-    
-    if p.suffix == ".out":
-        try:
-            import h5py
-            with h5py.File(p, "r") as f:
-                dt = f.attrs["dt"]
-                ez = f["rxs"]["rx1"]["Ez"][:]
-                time = np.arange(len(ez)) * dt
-                return time, ez
-        except ImportError:
-            raise ImportError("HDF5 (.out) 読み込みには h5py が必要です。")
-    else:
-        data = np.loadtxt(p)
-        if data.ndim == 2:
-            return data[:, 0], data[:, 1]
-        return np.arange(len(data)), data
-
-
-def resample_trace(t_src, trace_src, t_target):
-    """時間軸のリサンプリング"""
-    return np.interp(t_target, t_src, trace_src, left=0.0, right=0.0)
-
-
-# ==============================================================================
-# 信号処理・イベント検出・ノイズフロア (Phase 4, Phase 5)
-# ==============================================================================
-def calc_envelope(trace):
-    """ヒルベルト変換による解析信号の包絡線"""
-    analytic_signal = hilbert(trace)
-    return np.abs(analytic_signal)
-
-
-def measure_noise_floor(time_ns, trace, surf_peak_amp, band_ns=NOISE_BAND_NS):
-    """
-    指定時間帯におけるノイズフロア (RMS) の測定と 3 段階判定 (README §2.2, F-2)
-    """
-    mask = (time_ns >= band_ns[0]) & (time_ns <= band_ns[1])
-    if not np.any(mask):
-        return 0.0, -999.0, "INVALID_BAND"
-    
-    noise_rms = np.sqrt(np.mean(trace[mask] ** 2))
-    floor_db = 20.0 * np.log10(noise_rms / surf_peak_amp) if surf_peak_amp > 0 else -999.0
-
-    if floor_db < -70.0:
-        verdict = "< -70 dB (0.5 vol% まで検出可能)"
-    elif floor_db <= -60.0:
-        verdict = "-60 〜 -70 dB (1.0 vol% は可能、0.5 vol% は厳しい)"
-    else:
-        verdict = "> -55 dB (反射チャネル成立困難・PML/直接波要対策)"
-
-    return noise_rms, floor_db, verdict
-
-
-def detect_event_peak(time_ns, env, t_theo_ns, window_ns=EVENT_WINDOW_NS, noise_floor=1e-12):
-    """
-    理論走時 t_theo_ns の周辺窓からピークを検出 (README F-3)
-    """
-    mask = (time_ns >= (t_theo_ns - window_ns)) & (time_ns <= (t_theo_ns + window_ns))
-    if not np.any(mask):
-        return None
-
-    t_sub = time_ns[mask]
-    env_sub = env[mask]
-    peak_idx = np.argmax(env_sub)
-    peak_amp = env_sub[peak_idx]
-    peak_time_ns = t_sub[peak_idx]
-
-    snr = peak_amp / noise_floor if noise_floor > 0 else np.nan
-    snr_db = 20.0 * np.log10(snr) if snr > 0 else -999.0
-
-    return {
-        "time_ns": peak_time_ns,
-        "amp": peak_amp,
-        "snr": snr,
-        "snr_db": snr_db,
-    }
-
-
-# ==============================================================================
-# プロット生成関数群 (README §6.1, §6.4)
-# ==============================================================================
-def plot_fig1_trace(time_ns, trace_raw, trace_sub, env_sub, theo_events, floor_db, out_dir):
-    fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-
-    axes[0].plot(time_ns, trace_raw, color="black", lw=1.0, label="Raw at_tx")
-    axes[0].set_ylabel("Amplitude")
-    axes[0].set_title("(a) Raw Trace (No Background Subtraction)")
-    axes[0].grid(True, linestyle=":", alpha=0.6)
-
-    axes[1].plot(time_ns, trace_sub, color="tab:blue", lw=1.0, label="Subtracted at_tx")
-    axes[1].set_ylabel("Amplitude")
-    axes[1].set_title("(b) Background Subtracted Trace")
-    axes[1].grid(True, linestyle=":", alpha=0.6)
-
-    surf_peak = np.max(calc_envelope(trace_raw))
-    env_db = 20.0 * np.log10(np.maximum(env_sub, 1e-12) / surf_peak)
-    axes[2].plot(time_ns, env_db, color="tab:red", lw=1.2, label="Envelope (Sub)")
-    axes[2].axhline(floor_db, color="gray", linestyle="--", label=f"Noise Floor ({floor_db:.1f} dB)")
-
-    for name, ev in theo_events.items():
-        color = "green" if name == "surface" else ("orange" if name == "ice_top" else "purple")
-        for ax in axes:
-            ax.axvline(ev["time_ns"], color=color, linestyle=":", alpha=0.7)
-        axes[2].text(ev["time_ns"] + 0.3, -20, name, color=color, rotation=90, verticalalignment="bottom")
-
-    axes[2].set_ylabel("Amplitude [dB rel. surface]")
-    axes[2].set_xlabel("Time [ns]")
-    axes[2].set_title("(c) Envelope & Theoretical Travel Times")
-    axes[2].set_ylim([-80, 5])
-    axes[2].grid(True, linestyle=":", alpha=0.6)
-    axes[2].legend(loc="upper right")
-
-    plt.tight_layout()
-    fig.savefig(out_dir / "fig1_trace.png", dpi=300)
-    fig.savefig(out_dir / "fig1_trace.pdf")
-    plt.close(fig)
-
-
-def plot_fig2_events(events_res, theo_events, out_dir):
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
-    names = ["surface", "ice_top", "ice_bot"]
-
-    t_obs = [events_res[k]["obs_time_ns"] if events_res[k] else np.nan for k in names]
-    t_the = [theo_events[k]["time_ns"] for k in names]
-    amp_obs = [events_res[k]["obs_amp_db"] if events_res[k] else np.nan for k in names]
-    amp_the = [theo_events[k]["amp_db_rel_surf"] for k in names]
-
-    axes[0].plot(names, t_the, "s--", label="Theory", color="tab:blue")
-    axes[0].plot(names, t_obs, "o", label="Observed", color="tab:red")
-    axes[0].set_ylabel("Travel Time [ns]")
-    axes[0].set_title("(a) Travel Time")
-    axes[0].grid(True, linestyle=":", alpha=0.6)
-    axes[0].legend()
-
-    axes[1].plot(names, amp_the, "s--", label="Theory", color="tab:blue")
-    axes[1].plot(names, amp_obs, "o", label="Observed", color="tab:red")
-    axes[1].set_ylabel("Amplitude [dB rel. surface]")
-    axes[1].set_title("(b) Amplitude")
-    axes[1].grid(True, linestyle=":", alpha=0.6)
-    axes[1].legend()
-
-    res_amp = np.array(amp_obs) - np.array(amp_the)
-    axes[2].bar(names, res_amp, color="tab:purple", alpha=0.7)
-    axes[2].axhline(0, color="black", lw=0.8)
-    axes[2].set_ylabel("Residual [dB]")
-    axes[2].set_title("(c) Residuals")
-    axes[2].grid(True, linestyle=":", alpha=0.6)
-
-    dt_layer = t_the[2] - t_the[1]
-    f_multiple = 1.0 / (dt_layer * 1e-9) / 1e6 if dt_layer > 0 else 0.0
-    axes[2].text(
-        0.05, 0.15,
-        f"* 多重反射の寄与（理論に非含有）\n  層内周期 1/Δt = {f_multiple:.1f} MHz",
-        transform=axes[2].transAxes,
-        fontsize=8,
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.3)
-    )
-
-    plt.tight_layout()
-    fig.savefig(out_dir / "fig2_events.png", dpi=300)
-    fig.savefig(out_dir / "fig2_events.pdf")
-    plt.close(fig)
-
-
-def plot_fig3_reflection(vols, r_theories, obs_vol, obs_r, floor_db, out_dir):
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(vols * 100, 20 * np.log10(np.abs(r_theories)), "b-", lw=1.5, label="Theoretical |R_top|")
-    if obs_r is not None:
-        ax.plot(obs_vol * 100, 20 * np.log10(np.abs(obs_r)), "ro", markersize=8, label=f"Observed ({obs_vol*100:.1f} vol%)")
-    ax.axhline(floor_db, color="gray", linestyle="--", label=f"Noise Floor ({floor_db:.1f} dB)")
-    ax.set_xlabel("Ice Volume Fraction [%]")
-    ax.set_ylabel("Reflection Coefficient |R| [dB]")
-    ax.set_title("Reflection Channel: Ice Content vs R_top")
-    ax.grid(True, linestyle=":", alpha=0.6)
-    ax.legend()
-    plt.tight_layout()
-    fig.savefig(out_dir / "fig3_reflection.png", dpi=300)
-    fig.savefig(out_dir / "fig3_reflection.pdf")
-    plt.close(fig)
-
-
-def plot_fig4_traveltime(vols, dt_theories, obs_vol, obs_dt, out_dir):
-    fig, ax1 = plt.subplots(figsize=(7, 5))
-    dt_no_ice = dt_theories[0]
-    delay_ps = (dt_theories - dt_no_ice) * 1e3
-
-    ax1.plot(vols * 100, dt_theories, "g-", lw=1.5, label="Round-trip Travel Time (Bottom)")
-    ax1.set_xlabel("Ice Volume Fraction [%]")
-    ax1.set_ylabel("Travel Time [ns]", color="green")
-    ax1.tick_params(axis="y", labelcolor="green")
-
-    ax2 = ax1.twinx()
-    ax2.plot(vols * 100, delay_ps, "m--", lw=1.5, label="Delay from Dry Base [ps]")
-    ax2.set_ylabel("Delay relative to Dry Base [ps]", color="purple")
-    ax2.tick_params(axis="y", labelcolor="purple")
-
-    if obs_dt is not None:
-        ax1.plot(obs_vol * 100, obs_dt, "ro", markersize=8, label="Observed")
-
-    ax1.set_title("Travel-time Channel: Ice Content vs Delay")
-    ax1.grid(True, linestyle=":", alpha=0.6)
-    plt.tight_layout()
-    fig.savefig(out_dir / "fig4_traveltime.png", dpi=300)
-    fig.savefig(out_dir / "fig4_traveltime.pdf")
-    plt.close(fig)
-
-
-def plot_fig5_attenuation(freq_ghz, alpha_the, alpha_obs, out_dir):
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(freq_ghz, alpha_the, "b-", lw=1.5, label="Theory alpha(f)")
-    if alpha_obs is not None:
-        ax.plot(freq_ghz, alpha_obs, "r--", lw=1.5, label="Observed LSR alpha(f)")
-    ax.set_xlabel("Frequency [GHz]")
-    ax.set_ylabel("Attenuation Constant alpha [Np/m]")
-    ax.set_title("Attenuation Channel: In-layer Loss")
-    ax.grid(True, linestyle=":", alpha=0.6)
-    ax.legend()
-    plt.tight_layout()
-    fig.savefig(out_dir / "fig5_attenuation.png", dpi=300)
-    fig.savefig(out_dir / "fig5_attenuation.pdf")
-    plt.close(fig)
-
-
-def plot_fig6_channels(vols, snr_ref, snr_time, snr_att, out_dir):
-    fig, ax = plt.subplots(figsize=(8, 5.5))
-    ax.plot(vols * 100, snr_ref, "tab:red", lw=2, label="Reflection Channel")
-    ax.plot(vols * 100, snr_time, "tab:green", lw=2, label="Travel-time Channel")
-    ax.plot(vols * 100, snr_att, "tab:blue", lw=2, label="Attenuation Channel")
-
-    ax.axhline(1.0, color="black", linestyle="--", lw=1.2, label="Detection Limit (SNR = 1)")
-    ax.set_yscale("log")
-    ax.set_xlabel("Ice Volume Fraction [%]")
-    ax.set_ylabel("Signal-to-Noise Ratio (SNR)")
-    ax.set_title("Detection Limit Comparison Across 3 Channels (fig6)")
-    ax.grid(True, which="both", linestyle=":", alpha=0.6)
-    ax.legend(loc="lower right")
-
-    plt.tight_layout()
-    fig.savefig(out_dir / "fig6_channels.png", dpi=300)
-    fig.savefig(out_dir / "fig6_channels.pdf")
-    plt.close(fig)
-
-
-# ==============================================================================
-# メイン実行ルーチン
-# ==============================================================================
-def main():
-    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-    logging.info("=== at_tx 反射解析ツール (ascan_reflection.py) 実行開始 ===")
-
-    if "describe_level4_medium" in globals():
-        logging.info("媒質モデル設定:\n" + describe_level4_medium())
-
-    out_dir = resolve_output_dir()
-    paths_data = load_paths(DEFAULT_PATHS_JSON)
-
-    # 理論値テーブルの照合 (Phase 2 検証)
-    theo_events_10 = calc_theoretical_events(ice_vol_frac=0.10)
-    logging.info("--- Phase 2 理論値の検証 (10 vol%) ---")
-    for k, v in theo_events_10.items():
-        logging.info(
-            f"イベント [{k:8s}]: r_eff = {v['r_eff']:.4f} m, 走時 = {v['time_ns']:.3f} ns, "
-            f"R = {v['R']:+.6f}, 相対振幅 = {v['amp_db_rel_surf']:.1f} dB"
+def optical_path_round_trip(depth_index, layer_L, layer_n):
+    """Two-way optical path P = 2h + 2 Sum n_j L_j [m] (traveltime = P/c)."""
+    p = np.asarray(2.0 * TX_HEIGHT_M, dtype=float)
+    for j in range(depth_index):
+        p = p + 2.0 * np.asarray(layer_n[j], dtype=float) * layer_L[j]
+    return p
+
+
+def travel_time(depth_index, layer_L, layer_n):
+    return optical_path_round_trip(depth_index, layer_L, layer_n) / C
+
+
+def absorption_round_trip(depth_index, layer_L, layer_alpha):
+    """Two-way absorption A = exp(-2 Sum alpha_j L_j)."""
+    s = np.asarray(0.0, dtype=float)
+    for j in range(depth_index):
+        s = s + np.asarray(layer_alpha[j], dtype=float) * layer_L[j]
+    return np.exp(-2.0 * s)
+
+
+def reflection_coefficient(n_above, n_below):
+    """Interface reflection R = (n_above - n_below)/(n_above + n_below)."""
+    na = np.asarray(n_above, dtype=float)
+    nb = np.asarray(n_below, dtype=float)
+    return (na - nb) / (na + nb)
+
+
+def roundtrip_transmission(index_pairs):
+    """Product of two-way transmission across shallower interfaces:
+    Prod 4 n_a n_b / (n_a + n_b)^2."""
+    t = np.asarray(1.0, dtype=float)
+    for na, nb in index_pairs:
+        na = np.asarray(na, dtype=float)
+        nb = np.asarray(nb, dtype=float)
+        t = t * (4.0 * na * nb / (na + nb) ** 2)
+    return t
+
+
+def invert_layer_index(dt, L_layer):
+    """Layer index from the two-way time difference: n = dt c / (2 L)."""
+    return dt * C / (2.0 * L_layer)
+
+
+def invert_layer_alpha(A_bot, A_top, R_top, R_bot, G_top, G_bot, T_top, L_layer):
+    """Layer alpha from the top/bottom amplitude ratio:
+    alpha = -ln( (A_bot/A_top)(|R_top|/|R_bot|)(G_top/G_bot)/T_top ) / (2 L)."""
+    ratio = (np.asarray(A_bot) / np.asarray(A_top)) \
+        * (np.abs(R_top) / np.abs(R_bot)) \
+        * (np.asarray(G_top) / np.asarray(G_bot)) / np.asarray(T_top)
+    return -np.log(ratio) / (2.0 * L_layer)
+
+
+@dataclass
+class Interface:
+    name: str
+    depth_index: int
+    n_above: object
+    n_below: object
+    shallower_pairs: list
+    layer_L: list
+    layer_n: list
+    layer_alpha: list
+
+
+def build_interfaces(medium, f):
+    """Three interfaces of the two-layer model:
+    0 = surface (vacuum/regolith), 1 = ice-top (regolith/ice), 2 = ice-bottom.
+    f may be a scalar (representative freq) or an array (full spectrum)."""
+    n0 = np.ones_like(np.atleast_1d(np.asarray(f, dtype=float)))
+
+    def _b(x):
+        x = np.atleast_1d(np.asarray(x)).ravel()
+        return x if x.shape == n0.shape else np.broadcast_to(x, n0.shape)
+
+    n_reg = _b(medium.regolith_index(f))
+    n_ice = _b(medium.ice_index(f))
+    a_reg = _b(medium.regolith_alpha(f))
+    a_ice = _b(medium.ice_alpha(f))
+    n0 = _b(n0)
+
+    return [
+        Interface("surface", 0, n0, n_reg, [], [], [], []),
+        Interface("ice_top", 1, n_reg, n_ice,
+                  [(n0, n_reg)], [ICE_TOP_M], [n_reg], [a_reg]),
+        Interface("ice_bot", 2, n_ice, n_reg,
+                  [(n0, n_reg), (n_reg, n_ice)],
+                  [ICE_TOP_M, ICE_THICK_M], [n_reg, n_ice], [a_reg, a_ice]),
+    ]
+
+
+def event_transfer(iface, f):
+    """Complex transfer function H(f) = G T R A exp(-2 pi i f P/c).
+    The phase uses the frequency-dependent optical path so dispersion is not
+    double-counted."""
+    f = np.asarray(f, dtype=float)
+    G = np.sqrt(R_REF_M / r_eff_round_trip(iface.depth_index, iface.layer_L, iface.layer_n))
+    T = roundtrip_transmission(iface.shallower_pairs)
+    R = reflection_coefficient(iface.n_above, iface.n_below)
+    A = absorption_round_trip(iface.depth_index, iface.layer_L, iface.layer_alpha)
+    P = optical_path_round_trip(iface.depth_index, iface.layer_L, iface.layer_n)
+    return G * T * R * A * np.exp(-2j * np.pi * f * P / C)
+
+
+@dataclass
+class EventTheory:
+    name: str
+    t: float
+    R: float
+    G: float
+    T: float
+    A: float
+    r_eff: float
+    peak: float = 0.0
+    peak_db: float = 0.0
+
+
+def _scalar(x):
+    return float(np.ravel(np.asarray(x))[0])
+
+
+def theory_events(medium, freqs, E_ref, dt):
+    """Theory quantities per event. E_ref/freqs are the far_1m reference spectrum;
+    the envelope peak is the reference pulse convolved with H(f)."""
+    ifaces = build_interfaces(medium, freqs)
+    ifc = build_interfaces(medium, CENTER_FREQ_HZ)   # single representative values
+    out = []
+    for iface, ic in zip(ifaces, ifc):
+        ev = EventTheory(
+            name=iface.name,
+            t=_scalar(travel_time(ic.depth_index, ic.layer_L, ic.layer_n)),
+            R=_scalar(reflection_coefficient(ic.n_above, ic.n_below)),
+            G=_scalar(np.sqrt(R_REF_M / r_eff_round_trip(ic.depth_index, ic.layer_L, ic.layer_n))),
+            T=_scalar(roundtrip_transmission(ic.shallower_pairs)),
+            A=_scalar(absorption_round_trip(ic.depth_index, ic.layer_L, ic.layer_alpha)),
+            r_eff=_scalar(r_eff_round_trip(ic.depth_index, ic.layer_L, ic.layer_n)),
         )
+        sig = irfft(E_ref * event_transfer(iface, freqs), n=2 * (len(freqs) - 1))
+        ev.peak = float(np.abs(hilbert(sig)).max())
+        out.append(ev)
+    ref = out[0].peak
+    for ev in out:
+        ev.peak_db = 20.0 * np.log10(ev.peak / ref) if ref > 0 else np.nan
+    return out
 
-    # トレースデータの取得
-    dt = 1e-11
-    t_arr = np.arange(0, 50e-9, dt)
-    t_ns = t_arr * 1e9
 
-    target_path = paths_data.get("Level_4", {}).get("at_tx", None)
-    ref_dry_path = paths_data.get("Level_4_dry", {}).get("at_tx", None)
+# ---------------------------------------------------------------------------
+# out_file_paths.json navigation and trace loading
+# ---------------------------------------------------------------------------
+def _resolve_leaf(node, leaf):
+    """Descend the nested dict to the path string for `leaf` (at_tx / far_1m / ...).
+    Prefer the configured branch keys; if a single child dict exists, descend it."""
+    cur = node
+    while isinstance(cur, dict):
+        if isinstance(cur.get(leaf), str):
+            return cur[leaf]
+        nxt = next((cur[k] for k in _BRANCH_PREFS if isinstance(cur.get(k), dict)), None)
+        if nxt is None:
+            children = [v for v in cur.values() if isinstance(v, dict)]
+            if len(children) != 1:
+                raise KeyError(f"'{leaf}' not found; set the branch selectors.")
+            nxt = children[0]
+        cur = nxt
+    raise KeyError(f"'{leaf}' not found.")
 
-    if target_path and Path(target_path).exists():
-        t_arr, trace_raw = load_trace(target_path)
-        t_ns = t_arr * 1e9
+
+def resolve_input_paths(paths, level_key):
+    """Resolve at_tx (target level), far_1m (_reference tree) and the ice-free
+    baseline at_tx (NOICE_LEVEL_KEY)."""
+    at_tx = _resolve_leaf(paths[level_key], "at_tx")
+    far_1m = _resolve_leaf(paths[REFERENCE_KEY], "far_1m")
+    noice = None
+    if NOICE_LEVEL_KEY in paths:
+        noice = _resolve_leaf(paths[NOICE_LEVEL_KEY], "at_tx")
+    return {"at_tx": at_tx, "far_1m": far_1m, "noice_at_tx": noice}
+
+
+def load_paths(json_path):
+    with open(json_path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def resolve_output_dir(paths, level_key):
+    """Put outputs next to the data: .../<condition>/reflection/."""
+    at_tx = _resolve_leaf(paths[level_key], "at_tx")
+    cond = os.path.dirname(os.path.dirname(os.path.dirname(at_tx)))
+    out = os.path.join(cond, "reflection")
+    os.makedirs(out, exist_ok=True)
+    return out
+
+
+def load_trace(path, component="Ez"):
+    """Load a gprMax .out (HDF5) trace -> (time [s], amplitude)."""
+    import h5py
+    with h5py.File(path, "r") as f:
+        dt = float(f.attrs["dt"])
+        data = f[f"/rxs/rx1/{component}"][()]
+    return np.arange(len(data)) * dt, np.asarray(data, dtype=float)
+
+
+# ---------------------------------------------------------------------------
+# Noise floor
+# ---------------------------------------------------------------------------
+@dataclass
+class NoiseFloor:
+    rms: float
+    surface_peak: float
+    db: float
+    band_ns: tuple
+    verdict: str
+
+
+def measure_noise_floor(t, amp, surface_peak, band_ns=NOISE_BAND_NS):
+    """RMS in the noise window, in dB relative to the surface peak, with a
+    three-tier verdict."""
+    lo, hi = band_ns
+    m = (t >= lo * 1e-9) & (t <= hi * 1e-9)
+    rms = float(np.sqrt(np.mean(amp[m] ** 2))) if np.any(m) else float("nan")
+    db = 20.0 * np.log10(rms / surface_peak) if surface_peak > 0 else float("nan")
+    if db < -70:
+        verdict = "< -70 dB: reflection channel usable down to 0.5 vol%"
+    elif db <= -60:
+        verdict = "-70..-60 dB: 1 vol% ok, 0.5 vol% marginal"
+    elif db <= -55:
+        verdict = "-60..-55 dB: borderline (1 vol% only)"
     else:
-        logging.warning("実データトレースが見つからないため、検証用テスト波形を生成します。")
-        pulse = np.exp(-((t_ns - 2.335) / 0.35) ** 2) * np.sin(2 * np.pi * 1.25 * (t_ns - 2.335))
-        pulse_top = -0.042 * np.exp(-((t_ns - 13.890) / 0.35) ** 2) * np.sin(2 * np.pi * 1.25 * (t_ns - 13.890))
-        pulse_bot = +0.027 * np.exp(-((t_ns - 26.010) / 0.35) ** 2) * np.sin(2 * np.pi * 1.25 * (t_ns - 26.010))
-        noise = np.random.normal(0, 1e-4, len(t_ns))
-        trace_raw = pulse + pulse_top + pulse_bot + noise
+        verdict = "> -55 dB: reflection channel not viable (fix PML/domain first)"
+    return NoiseFloor(rms, surface_peak, db, band_ns, verdict)
 
-    if ref_dry_path and Path(ref_dry_path).exists():
-        t_ref, trace_dry = load_trace(ref_dry_path)
-        trace_dry = resample_trace(t_ref, trace_dry, t_arr)
-    else:
-        trace_dry = np.exp(-((t_ns - 2.335) / 0.35) ** 2) * np.sin(2 * np.pi * 1.25 * (t_ns - 2.335))
 
-    trace_sub = trace_raw - trace_dry if USE_BACKGROUND_SUBTRACTION else trace_raw
+# ---------------------------------------------------------------------------
+# Event detection
+# ---------------------------------------------------------------------------
+@dataclass
+class Detection:
+    name: str
+    t_theory: float
+    t_measured: float
+    peak: float
+    snr: float
+    below_floor: bool
+    signed_peak: float = 0.0
 
-    # ノイズフロア測定 (Phase 4)
-    surf_peak = np.max(calc_envelope(trace_raw))
-    noise_rms, floor_db, verdict = measure_noise_floor(t_ns, trace_dry, surf_peak, band_ns=NOISE_BAND_NS)
-    logging.info(f"ノイズフロア測定: RMS = {noise_rms:.3e}, {floor_db:.2f} dB (対地表反射ピーク)")
-    logging.info(f"判定: {verdict}")
 
-    # イベント検出と解析 (Phase 5)
-    env_sub = calc_envelope(trace_sub)
-    events_res = {}
-    for name, theo in theo_events_10.items():
-        ev_env = calc_envelope(trace_raw) if name == "surface" else env_sub
-        res = detect_event_peak(t_ns, ev_env, theo["time_ns"], window_ns=EVENT_WINDOW_NS, noise_floor=noise_rms)
-        if res:
-            res["obs_time_ns"] = res["time_ns"]
-            res["obs_amp_db"] = 20.0 * np.log10(res["amp"] / surf_peak)
-            events_res[name] = res
+def envelope(amp):
+    return np.abs(hilbert(amp))
+
+
+def detect_event(t, amp, t_theory, floor_rms, half_ns=EVENT_WINDOW_NS):
+    """Envelope peak in a window around the theory arrival. Records the signed
+    sample at the peak (used to recover the reflection polarity)."""
+    env = envelope(amp)
+    m = (t >= t_theory - half_ns * 1e-9) & (t <= t_theory + half_ns * 1e-9)
+    if not np.any(m):
+        return Detection("", t_theory, np.nan, 0.0, 0.0, True, 0.0)
+    idx = np.where(m)[0]
+    k = idx[np.argmax(env[idx])]
+    peak = float(env[k])
+    snr = peak / floor_rms if floor_rms > 0 else np.inf
+    return Detection("", t_theory, float(t[k]), peak, snr,
+                     peak < BELOW_FLOOR_FACTOR * floor_rms, float(amp[k]))
+
+
+def detect_all(t, amp, events, floor_rms):
+    dets = []
+    for ev in events:
+        d = detect_event(t, amp, ev.t, floor_rms)
+        d.name = ev.name
+        dets.append(d)
+    return dets
+
+
+# ---------------------------------------------------------------------------
+# Three channels
+# ---------------------------------------------------------------------------
+def channel_reflection(dets, events):
+    """Invert R at each interface using the surface reflection as internal
+    reference. Magnitude from the envelope-peak ratio, sign from the signed-peak
+    polarity relative to the surface."""
+    ev0, d0 = events[0], dets[0]
+    base, s0 = d0.peak, d0.signed_peak
+    out = {}
+    for ev, d in zip(events, dets):
+        if d.below_floor or base <= 0:
+            R = np.nan
         else:
-            events_res[name] = None
+            corr = (ev0.G * ev0.T * ev0.A) / (ev.G * ev.T * ev.A)
+            pol = math.copysign(1.0, d.signed_peak * s0) if (s0 and d.signed_peak) else 1.0
+            R = (d.peak / base) * corr * ev0.R * pol
+        out[ev.name] = {"R_theory": ev.R, "R_measured": float(R),
+                        "residual": float(R - ev.R) if np.isfinite(R) else np.nan}
+    return out
 
-    # 層内屈折率の逆算
-    if events_res["ice_top"] and events_res["ice_bot"]:
-        dt_obs = events_res["ice_bot"]["obs_time_ns"] - events_res["ice_top"]["obs_time_ns"]
-        n_layer_est = (dt_obs * 1e-9 * C0) / (2.0 * ICE_THICK_M)
-        logging.info(f"層内走時差 delta_t = {dt_obs:.3f} ns -> 逆算屈折率 n = {n_layer_est:.5f}")
 
-    # スイープ計算と 3 チャネル SNR 比較 (Phase 6)
-    vol_sweep = np.linspace(0.001, 0.10, 50)
-    r_theories = []
-    dt_theories = []
-    snr_ref_arr = []
-    snr_time_arr = []
-    snr_att_arr = []
+def channel_traveltime(dets, events, events_noice):
+    """Match arrivals, invert the layer index from the top/bottom time
+    difference, and report the shift versus the ice-free theory."""
+    by = {e.name: e for e in events}
+    byn = {e.name: e for e in events_noice}
+    dby = {d.name: d for d in dets}
+    per = {}
+    for name in by:
+        e, d = by[name], dby[name]
+        per[name] = {"t_theory": e.t, "t_measured": d.t_measured,
+                     "residual": float(d.t_measured - e.t) if np.isfinite(d.t_measured) else np.nan,
+                     "delta_vs_noice": float(e.t - byn[name].t)}
+    dt_meas = dby["ice_bot"].t_measured - dby["ice_top"].t_measured
+    dt_theory = by["ice_bot"].t - by["ice_top"].t
+    layer = {"dt_measured": float(dt_meas), "dt_theory": float(dt_theory),
+             "n_layer_measured": float(invert_layer_index(dt_meas, ICE_THICK_M)),
+             "n_layer_theory": float(invert_layer_index(dt_theory, ICE_THICK_M))}
+    return {"per_event": per, "layer": layer}
 
-    t_dry_bot = (2.0 * TX_HEIGHT + 2.0 * np.sqrt(LEVEL3_EPS_R) * (ICE_TOP_M + ICE_THICK_M)) / C0 * 1e9
 
-    for v in vol_sweep:
-        evs = calc_theoretical_events(ice_vol_frac=v)
-        r_val = evs["ice_top"]["R"]
-        t_bot = evs["ice_bot"]["time_ns"]
-        r_theories.append(r_val)
-        dt_theories.append(t_bot)
+def _gate(t, amp, t_center, half_ns=GATE_HALFWIDTH_NS):
+    m = (t >= t_center - half_ns * 1e-9) & (t <= t_center + half_ns * 1e-9)
+    g = np.zeros_like(amp)
+    g[m] = amp[m]
+    return g
 
-        sig_amp = evs["ice_top"]["amp_lin"]
-        snr_ref_arr.append(sig_amp / (noise_rms / surf_peak) if noise_rms > 0 else 1e3)
 
-        delay_ns = t_bot - t_dry_bot
-        snr_time_arr.append(np.maximum(delay_ns / 0.025, 1e-3))
+def channel_attenuation(t, amp, dets, events, medium):
+    """Gate the ice-top and ice-bottom events and invert the layer alpha(f)
+    from their spectral amplitude ratio (README 4.7). T_top is the two-way
+    transmission of the ice-top interface = (ice_bot cumulative T)/(ice_top)."""
+    dby = {d.name: d for d in dets}
+    eby = {e.name: e for e in events}
+    n = len(t)
+    freqs = rfftfreq(n, t[1] - t[0])
+    S_top = rfft(_gate(t, amp, dby["ice_top"].t_measured))
+    S_bot = rfft(_gate(t, amp, dby["ice_bot"].t_measured))
+    band = (freqs > 0.6e9) & (freqs < 1.9e9)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        A_ratio = np.abs(S_bot) / np.abs(S_top)
+    et, eb = eby["ice_top"], eby["ice_bot"]
+    T_top = (eb.T / et.T) if et.T else et.T
+    alpha_f = invert_layer_alpha(A_ratio, 1.0, et.R, eb.R, et.G, eb.G, T_top, ICE_THICK_M)
+    return {
+        "freqs": freqs[band],
+        "alpha_measured": alpha_f[band],
+        "alpha_theory": np.atleast_1d(medium.ice_alpha(freqs[band])),
+        "alpha_at_center": float(np.interp(CENTER_FREQ_HZ, freqs[band], alpha_f[band])),
+        "alpha_theory_at_center": float(medium.ice_alpha(CENTER_FREQ_HZ)[0]),
+    }
 
-        _, alpha_v = get_layer_properties(v)
-        snr_att_arr.append(np.maximum((2.0 * alpha_v * ICE_THICK_M) / 0.02, 1e-3))
 
-    r_theories = np.array(r_theories)
-    dt_theories = np.array(dt_theories)
+# ---------------------------------------------------------------------------
+# Detection-limit sweep (fig6, the main deliverable)
+# ---------------------------------------------------------------------------
+def _cross(vols, snr):
+    """Ice fraction where SNR crosses 1 (linear interpolation)."""
+    snr = np.asarray(snr, dtype=float)
+    for i in range(len(vols) - 1):
+        a, b = snr[i], snr[i + 1]
+        if (a - 1) * (b - 1) <= 0 and b != a:
+            return float(vols[i] + (1 - a) / (b - a) * (vols[i + 1] - vols[i]))
+    return np.nan
 
-    # プロット生成と数値保存 (Phase 7)
-    logging.info("図・数値データの出力中...")
-    plot_fig1_trace(t_ns, trace_raw, trace_sub, env_sub, theo_events_10, floor_db, out_dir)
-    plot_fig2_events(events_res, theo_events_10, out_dir)
-    plot_fig3_reflection(vol_sweep, r_theories, 0.10, events_res["ice_top"]["amp"] / surf_peak if events_res["ice_top"] else None, floor_db, out_dir)
-    plot_fig4_traveltime(vol_sweep, dt_theories, 0.10, events_res["ice_bot"]["obs_time_ns"] if events_res["ice_bot"] else None, out_dir)
-    
-    freqs = np.linspace(0.5e9, 2.0e9, 50)
-    alpha_curve = [level4_alpha(f, in_ice=True) for f in freqs]
-    plot_fig5_attenuation(freqs / 1e9, alpha_curve, None, out_dir)
-    
-    plot_fig6_channels(vol_sweep, snr_ref_arr, snr_time_arr, snr_att_arr, out_dir)
 
-    # CSV 出力
-    csv_events_path = out_dir / "events.csv"
-    with open(csv_events_path, "w", encoding="utf-8") as f:
-        f.write("event_name,theo_time_ns,obs_time_ns,theo_amp_db,obs_amp_db,snr_db\n")
-        for name, theo in theo_events_10.items():
-            obs = events_res.get(name)
-            o_t = f"{obs['obs_time_ns']:.4f}" if obs else "NaN"
-            o_a = f"{obs['obs_amp_db']:.2f}" if obs else "NaN"
-            snr_v = f"{obs['snr_db']:.2f}" if obs else "NaN"
-            f.write(f"{name},{theo['time_ns']:.4f},{o_t},{theo['amp_db_rel_surf']:.2f},{o_a},{snr_v}\n")
+def sweep_detection_limits(freqs, E_ref, dt, floor_db, traveltime_noise_ns,
+                           alpha_noise, ice_vols=ICE_VOL_SWEEP):
+    """SNR of each channel versus ice fraction, and the SNR=1 crossing.
+    Signal/noise: reflection = ice-top peak / floor; traveltime = bottom-time
+    shift vs ice-free / numerical-dispersion residual; attenuation = layer
+    alpha shift vs ice-free / LSR residual."""
+    floor_lin = 10 ** (floor_db / 20.0)
+    vols = np.asarray(ice_vols, dtype=float)
+    ev0 = theory_events(MediumModel(1e-6), freqs, E_ref, dt)
+    alpha0 = float(MediumModel(1e-6).ice_alpha(CENTER_FREQ_HZ)[0])
+    snr_refl, snr_time, snr_atten = [], [], []
+    for v in vols:
+        med = MediumModel(float(v))
+        evs = theory_events(med, freqs, E_ref, dt)
+        snr_refl.append((evs[1].peak / evs[0].peak) / floor_lin)
+        snr_time.append(abs((evs[2].t - ev0[2].t) * 1e9) / traveltime_noise_ns)
+        alpha_v = float(med.ice_alpha(CENTER_FREQ_HZ)[0])
+        snr_atten.append(abs(alpha_v - alpha0) / alpha_noise if alpha_noise > 0 else np.nan)
+    return {
+        "ice_vols": vols,
+        "snr_reflection": np.asarray(snr_refl),
+        "snr_traveltime": np.asarray(snr_time),
+        "snr_attenuation": np.asarray(snr_atten),
+        "limit_reflection": _cross(vols, snr_refl),
+        "limit_traveltime": _cross(vols, snr_time),
+        "limit_attenuation": _cross(vols, snr_atten),
+    }
 
-    csv_chan_path = out_dir / "channels.csv"
-    with open(csv_chan_path, "w", encoding="utf-8") as f:
-        f.write("channel,signal_def,noise_def,snr_10vol\n")
-        f.write(f"reflection,R_top peak amplitude,Noise floor RMS ({floor_db:.1f} dB),{snr_ref_arr[-1]:.2f}\n")
-        f.write(f"travel_time,Delay from dry base ({dt_theories[-1]-t_dry_bot:.3f} ns),Dispersion residual (0.025 ns),{snr_time_arr[-1]:.2f}\n")
-        f.write(f"attenuation,In-layer attenuation alpha,LSR residual RMS,{snr_att_arr[-1]:.2f}\n")
 
-    info_path = out_dir / "run_info.txt"
-    with open(info_path, "w", encoding="utf-8") as f:
-        f.write("=== ascan_reflection.py 実行結果サマリー ===\n")
-        f.write(f"アンテナ地上高 h: {TX_HEIGHT} m\n")
-        f.write(f"氷層設定: 深さ {ICE_TOP_M} m, 層厚 {ICE_THICK_M} m\n")
-        f.write(f"ノイズフロア (8-40 ns): {floor_db:.2f} dB\n")
-        f.write(f"フロア判定: {verdict}\n")
-        if events_res["ice_top"] and events_res["ice_bot"]:
-            f.write(f"逆算屈折率 n_layer: {n_layer_est:.5f} (理論値: {np.sqrt(level4_targets()[-1][0]):.5f})\n")
+# ---------------------------------------------------------------------------
+# Figures (English labels)
+# ---------------------------------------------------------------------------
+def _save(fig, out_dir, name):
+    for ext in ("png", "pdf"):
+        fig.savefig(os.path.join(out_dir, f"{name}.{ext}"), dpi=FIG_DPI, bbox_inches="tight")
+    plt.close(fig)
 
-    logging.info(f"解析完了: 出力ファイルは '{out_dir}' に保存されました。")
+
+def fig1_trace(out_dir, t, amp_raw, amp_sub, events, floor):
+    fig, ax = plt.subplots(3, 1, figsize=(9, 8), sharex=True)
+    tn = t * 1e9
+    ax[0].plot(tn, amp_raw, lw=0.8)
+    ax[0].set_ylabel("Ez (raw)"); ax[0].set_title("fig1 (a) waveform (no bg-sub)")
+    if amp_sub is not None:
+        ax[1].plot(tn, amp_sub, lw=0.8, color="C1")
+    ax[1].set_ylabel("Ez (bg-sub)"); ax[1].set_title("(b) waveform (bg-sub)")
+    env_db = 20 * np.log10(np.maximum(envelope(amp_raw), 1e-30) / events[0].peak)
+    ax[2].plot(tn, env_db, lw=0.8, color="C2")
+    ax[2].axhline(floor.db, ls="--", color="k", label=f"noise floor {floor.db:.1f} dB")
+    ax[2].set_ylabel("envelope [dB re surface]"); ax[2].set_xlabel("time [ns]")
+    ax[2].set_ylim(min(floor.db - 10, -80), 5); ax[2].set_title("(c) envelope (dB)")
+    for a in ax:
+        for ev in events:
+            a.axvline(ev.t * 1e9, ls=":", color="gray", lw=0.8)
+    ax[2].legend(loc="upper right", fontsize=8)
+    _save(fig, out_dir, "fig1_trace")
+
+
+def fig2_events(out_dir, dets, events, dt):
+    names = [e.name for e in events]
+    t_th = np.array([e.t for e in events]) * 1e9
+    t_ms = np.array([d.t_measured for d in dets]) * 1e9
+    a_th = np.array([e.peak for e in events])
+    a_ms = np.array([d.peak for d in dets])
+    fig, ax = plt.subplots(1, 3, figsize=(13, 4))
+    ax[0].plot(t_th, t_ms, "o"); ax[0].plot(t_th, t_th, "k--", lw=0.8)
+    ax[0].set_xlabel("t theory [ns]"); ax[0].set_ylabel("t measured [ns]")
+    ax[0].set_title("(a) arrival time")
+    ax[1].loglog(a_th, a_ms, "o"); ax[1].loglog(a_th, a_th, "k--", lw=0.8)
+    ax[1].set_xlabel("amplitude theory"); ax[1].set_ylabel("amplitude measured")
+    ax[1].set_title("(b) amplitude")
+    ax[2].bar(range(len(names)), t_ms - t_th)
+    ax[2].set_xticks(range(len(names))); ax[2].set_xticklabels(names, rotation=30)
+    ax[2].set_ylabel("traveltime residual [ns]"); ax[2].set_title("(c) residual")
+    ax[2].annotate("multiple reflections (not modelled)", xy=(0.02, 0.9),
+                   xycoords="axes fraction", fontsize=8, color="crimson")
+    _save(fig, out_dir, "fig2_events")
+
+
+def fig3_reflection(out_dir, vols, R_theory_curve, meas_points, floor):
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(np.asarray(vols) * 100, 20 * np.log10(np.abs(R_theory_curve)),
+            "-", label="theory |R_top|")
+    for v, R in meas_points:
+        if np.isfinite(R):
+            ax.plot(v * 100, 20 * np.log10(abs(R)), "o", color="C1", label="measured")
+    ax.axhline(floor.db, ls="--", color="k", label=f"noise floor {floor.db:.1f} dB")
+    ax.set_xlabel("ice content [vol%]"); ax.set_ylabel("|R_top| [dB]")
+    ax.set_title("fig3 reflection channel"); ax.legend()
+    _save(fig, out_dir, "fig3_reflection")
+
+
+def fig4_traveltime(out_dir, vols, dt_bot_vs_noice_ns):
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(np.asarray(vols) * 100, dt_bot_vs_noice_ns, "o-")
+    ax.set_xlabel("ice content [vol%]")
+    ax.set_ylabel("bottom traveltime shift vs ice-free [ns]")
+    ax.set_title("fig4 traveltime channel")
+    _save(fig, out_dir, "fig4_traveltime")
+
+
+def fig5_attenuation(out_dir, atten):
+    fig, ax = plt.subplots(figsize=(7, 5))
+    f = atten["freqs"] / 1e9
+    ax.plot(f, atten["alpha_measured"], ".", ms=3, label="measured")
+    if len(np.atleast_1d(atten["alpha_theory"])) == len(f):
+        ax.plot(f, atten["alpha_theory"], "-", label="theory")
+    ax.set_xlabel("frequency [GHz]"); ax.set_ylabel(r"layer $\alpha$ [Np/m]")
+    ax.set_title("fig5 attenuation channel"); ax.legend()
+    _save(fig, out_dir, "fig5_attenuation")
+
+
+def fig6_channels(out_dir, sweep):
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    v = sweep["ice_vols"] * 100
+    ax.loglog(v, np.maximum(sweep["snr_reflection"], 1e-3), "o-", label="reflection")
+    ax.loglog(v, np.maximum(sweep["snr_traveltime"], 1e-3), "s-", label="traveltime")
+    ax.loglog(v, np.maximum(sweep["snr_attenuation"], 1e-3), "^-", label="attenuation")
+    ax.axhline(1.0, ls="--", color="k", label="detection limit SNR=1")
+    ax.set_xlabel("ice content [vol%]"); ax.set_ylabel("SNR")
+    ax.set_title("fig6 channel detection limits"); ax.legend()
+    ax.text(0.02, 0.02, "main deliverable", transform=ax.transAxes,
+            fontsize=8, color="gray")
+    _save(fig, out_dir, "fig6_channels")
+
+
+# ---------------------------------------------------------------------------
+# Numeric outputs
+# ---------------------------------------------------------------------------
+def write_events_csv(path, dets, events, refl):
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["event", "t_theory_ns", "t_measured_ns", "peak", "peak_db",
+                    "R_theory", "R_measured", "R_residual", "below_floor"])
+        for e, d in zip(events, dets):
+            r = refl.get(e.name, {})
+            w.writerow([e.name, f"{e.t*1e9:.4f}", f"{d.t_measured*1e9:.4f}",
+                        f"{d.peak:.6e}", f"{e.peak_db:.2f}",
+                        f"{r.get('R_theory', np.nan):.6f}",
+                        f"{r.get('R_measured', np.nan):.6f}",
+                        f"{r.get('residual', np.nan):.6f}", d.below_floor])
+
+
+def write_channels_csv(path, sweep):
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["ice_vol", "snr_reflection", "snr_traveltime", "snr_attenuation"])
+        for i, v in enumerate(sweep["ice_vols"]):
+            w.writerow([f"{v:.4f}", f"{sweep['snr_reflection'][i]:.4f}",
+                        f"{sweep['snr_traveltime'][i]:.4f}",
+                        f"{sweep['snr_attenuation'][i]:.4f}"])
+        w.writerow([])
+        w.writerow(["limit_reflection_vol", f"{sweep['limit_reflection']:.4f}"])
+        w.writerow(["limit_traveltime_vol", f"{sweep['limit_traveltime']:.4f}"])
+        w.writerow(["limit_attenuation_vol", f"{sweep['limit_attenuation']:.4f}"])
+
+
+def write_run_info(path, medium, floor, tt, atten):
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("=== ascan_reflection run_info ===\n\n[config]\n")
+        for k in ("TX_HEIGHT_M", "ICE_TOP_M", "ICE_THICK_M", "R_REF_M",
+                  "NOISE_BAND_NS", "EVENT_WINDOW_NS", "CENTER_FREQ_HZ",
+                  "DETECTED_ICE_VOL"):
+            fh.write(f"  {k} = {globals()[k]}\n")
+        fh.write("\n[medium]\n  " + medium.describe().replace("\n", "\n  ") + "\n")
+        fh.write("\n[noise floor]\n")
+        fh.write(f"  band = {floor.band_ns} ns\n  rms = {floor.rms:.6e}\n")
+        fh.write(f"  vs surface peak = {floor.db:.2f} dB\n  verdict = {floor.verdict}\n")
+        fh.write("\n[traveltime channel]\n")
+        fh.write(f"  dt_measured = {tt['layer']['dt_measured']*1e9:.4f} ns\n")
+        fh.write(f"  n_layer measured = {tt['layer']['n_layer_measured']:.5f} "
+                 f"(theory {tt['layer']['n_layer_theory']:.5f})\n")
+        fh.write("\n[attenuation channel]\n")
+        fh.write(f"  alpha(1.25GHz) measured = {atten['alpha_at_center']:.5f} Np/m "
+                 f"(theory {atten['alpha_theory_at_center']:.5f})\n")
+
+
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
+def run_analysis(paths, level_key, traces=None,
+                 ice_vol=DETECTED_ICE_VOL, use_bg_sub=False):
+    """Run one condition. `traces` = {'at_tx':(t,a), 'far_1m':(t,a), 'noice':(t,a)}
+    may be injected for testing; otherwise traces are read from `paths`."""
+    out_dir = resolve_output_dir(paths, level_key)
+
+    if traces is None:
+        p = resolve_input_paths(paths, level_key)
+        t_at, a_at = load_trace(p["at_tx"])
+        t_ref, a_ref = load_trace(p["far_1m"])
+        t_ni, a_ni = load_trace(p["noice_at_tx"]) if p["noice_at_tx"] else (t_at, a_at)
+    else:
+        t_at, a_at = traces["at_tx"]
+        t_ref, a_ref = traces["far_1m"]
+        t_ni, a_ni = traces.get("noice", (t_at, a_at))
+
+    dt = t_at[1] - t_at[0]
+    freqs = rfftfreq(len(a_ref), dt)
+    E_ref = rfft(a_ref)
+
+    medium = MediumModel(ice_vol)
+    medium0 = MediumModel(1e-6)
+    events = theory_events(medium, freqs, E_ref, dt)
+    events_noice = theory_events(medium0, freqs, E_ref, dt)
+
+    surf = detect_event(t_ni, a_ni, events[0].t, floor_rms=1.0)
+    floor = measure_noise_floor(t_ni, a_ni, surface_peak=surf.peak)
+
+    a_sub = a_at - np.interp(t_at, t_ni, a_ni) if use_bg_sub else None
+    a_use = a_sub if a_sub is not None else a_at
+
+    dets = detect_all(t_at, a_use, events, floor.rms)
+    refl = channel_reflection(dets, events)
+    tt = channel_traveltime(dets, events, events_noice)
+    atten = channel_attenuation(t_at, a_use, dets, events, medium)
+
+    sweep = sweep_detection_limits(
+        freqs, E_ref, dt, floor_db=floor.db,
+        traveltime_noise_ns=0.025,
+        alpha_noise=max(atten["alpha_theory_at_center"] * 0.1, 1e-6))
+
+    fig1_trace(out_dir, t_at, a_at, a_sub, events, floor)
+    fig2_events(out_dir, dets, events, dt)
+    R_curve = np.array([reflection_coefficient(
+        MediumModel(v).regolith_index(CENTER_FREQ_HZ)[0],
+        MediumModel(v).ice_index(CENTER_FREQ_HZ)[0]) for v in ICE_VOL_SWEEP])
+    fig3_reflection(out_dir, ICE_VOL_SWEEP, R_curve,
+                    [(ice_vol, refl.get("ice_top", {}).get("R_measured", np.nan))], floor)
+    dt_bot = [abs((theory_events(MediumModel(v), freqs, E_ref, dt)[2].t
+                   - events_noice[2].t) * 1e9) for v in ICE_VOL_SWEEP]
+    fig4_traveltime(out_dir, ICE_VOL_SWEEP, dt_bot)
+    fig5_attenuation(out_dir, atten)
+    fig6_channels(out_dir, sweep)
+
+    write_events_csv(os.path.join(out_dir, "events.csv"), dets, events, refl)
+    write_channels_csv(os.path.join(out_dir, "channels.csv"), sweep)
+    write_run_info(os.path.join(out_dir, "run_info.txt"), medium, floor, tt, atten)
+
+    return {"out_dir": out_dir, "events": events, "detections": dets,
+            "floor": floor, "reflection": refl, "traveltime": tt,
+            "attenuation": atten, "sweep": sweep}
+
+
+def main(argv=None):
+    argv = argv if argv is not None else sys.argv[1:]
+    json_path = argv[0] if argv else DEFAULT_PATHS_JSON
+    level_key = argv[1] if len(argv) > 1 else "Level_4"
+
+    print("=== ascan_reflection ===")
+    print(MediumModel(DETECTED_ICE_VOL).describe())
+    paths = load_paths(json_path)
+    for bg in (False, True):
+        res = run_analysis(paths, level_key, use_bg_sub=bg)
+        print(f"[bg_sub={bg}] out_dir = {res['out_dir']}  "
+              f"floor = {res['floor'].db:.1f} dB ({res['floor'].verdict})")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
