@@ -1,0 +1,296 @@
+Level 3 : 均質レゴリス + eps'' 一定の損失
+============================================================================
+月南極域（低 Ti、FeO+TiO2 = 5-10 wt%）を想定した均質媒質のベースライン。
+
+--- 設計思想 -------------------------------------------------------------
+Level 1 (無損失) -> Level 2 (sigma 一定) -> Level 3 (eps'' 一定) と
+複雑性を一段ずつ足していく「はしご」の 3 段目。ここで初めて
+alpha が周波数に比例する（= LSR が傾く）状態になる。
+
+Level 2 との違い:
+  Level 2 : sigma 一定  -> eps'' = sigma/(w eps0) ∝ 1/f -> alpha ほぼ一定
+  Level 3 : eps'' 一定                                  -> alpha ∝ f
+
+--- 用語について ---------------------------------------------------------
+本ファイルでは「非分散」という語を使わない。eps'' != 0 の媒質は
+Kramers-Kronig 則により eps' が必ず対数的に変化するため、厳密な意味で
+非分散な損失媒質は存在しない。本モデルは
+    eps'' = 一定（帯域内）、eps' は KK により約 0.44% 変化
+であり、これを「eps'' 一定モデル」と呼ぶ。
+解析コードの理論曲線もこの eps'(f) を使うこと（修正項目 A-3）。
+
+============================================================================
+参考文献と使用する式
+============================================================================
+[1] Carrier, W.D. III, Olhoeft, G.R., Mendell, W. (1991)
+    "Physical Properties of the Lunar Surface", in Lunar Sourcebook,
+    Heiken, Vaniman & French (eds.), Cambridge Univ. Press, pp.475-594.
+
+    本ファイルは Fig. 9.53（SOILS = 土壌試料のみの回帰）の図中式を使う:
+        eps'      = 1.871^rho
+        tan_delta = 10^(0.027*(%TiO2 + %FeO) + 0.273*rho - 3.058)
+
+    Fig. 9.53 を選ぶ理由:
+      (a) 本研究の対象はレゴリス（土壌）であり、岩石片を含む Fig. 9.52
+          (ALL DATA) や Fig. 9.54 (450 MHz DATA) より母集団が適切。
+      (b) tan_delta の周波数依存を無視する立場をとる以上、周波数で切った
+          サブセット（Fig. 9.54 = 450 MHz）を選ぶのは仮定と矛盾する。
+          選ぶべき軸は周波数ではなく試料種別。
+      (c) 土壌データは rho ≈ 1.0-2.1 に分布し、本ファイルで使う
+          rho = 1.7536 はその中心付近にある（内挿であって外挿でない）。
+
+    【重要】eps' の式と tan_delta の式は同一図・同一サブセットから取ること。
+    片方だけ他図の式（例: 1.919^rho）に差し替えると自己整合が崩れる。
+
+    参考: 他図の回帰式（本ファイルでは使わない）
+      Fig. 9.52 ALL DATA      : 1.919^rho, 10^(0.038 S + 0.312 rho - 3.260)
+      Fig. 9.54 450 MHz DATA  : 1.843^rho, 10^(0.033 S + 0.231 rho - 3.061)
+      Fig. 9.55 APOLLO 15-17  : 1.908^rho, 10^(0.028 S + 0.167 rho - 2.975)
+
+[2] Boivin, A. et al. (2022)
+    低イルメナイト試料が広帯域で eps'' 一定であることの実測根拠。
+      * 純バイトウナイト (Table 7): P/L/S/X 帯で eps'=3.29, eps''=0.006 が一定
+      * 1, 5 wt% ilm: 有意な分散を検出できずフィット不能と報告
+    Boivin から採るのは「eps'' が周波数に依らない」という形状情報だけで、
+    損失の大きさ (eps''=0.006) は採らない。バイトウナイトは純長石で Fe を
+    ほぼ含まないのに対し、南極レゴリスは olivine/pyroxene 由来の FeO を
+    含むため。損失の大きさは [1] の経験式から与える。
+
+    注記: Lunar Sourcebook 本文および Fig. 9.60 は「ロスタンジェントは
+    強い周波数依存を示す」と述べている。ただし Fig. 9.60 は異なる研究室・
+    異なる手法（<1MHz: Strangway+1972 / 450MHz: Gold+1972 /
+    9375MHz: Bassett & Shackleford 1972）による単一試料の測定を並べた図で
+    あり、単一装置で P-X 帯を通して測定した [2] のほうが周波数依存性の
+    判定としては信頼できる。分散が存在する場合の影響は Level 3b で評価する。
+
+[3] 最大平坦（maximally flat）2 極 Debye の解析解
+    本ファイルの section 2 を参照。数値最適化を使わない閉形式。
+
+============================================================================
+設計上の選択（測定値ではなく、こちらで決めた値）
+============================================================================
+* eps' = 3.0 (@ 1.0 GHz) …… 設計判断。全組成で走時・幾何減衰を共通にし、
+  組成の効果を吸収だけに閉じ込めるため。
+* rho = 1.753647 …… 上の eps' から 1.871^rho = 3.0 を解いた逆算値。
+  月のどこかで測られた密度ではない。ただし [1] の密度プロファイル
+  rho(z) = 1.92(z+12.2)/(z+18) [z:cm] と照合すると深さ約 49 cm に相当し、
+  「深さ 50 cm 付近のレゴリスを一様に敷き詰めた媒質」と解釈できる。
+* eps' の基準周波数 = 1.0 GHz（帯域の幾何平均）…… 設計判断。
+  section 2 の解析解がこの周波数で厳密な閉形式になるため。
+  帯域中心 1.25 GHz では eps' = 2.998（-0.07%）となる。
+
+#domain: 3.0 4.0 0.0025
+#dx_dy_dz: 0.0025 0.0025 0.0025
+#time_window: 50e-9
+
+PML を厚くする場合はこの行を有効化する（既定は 10 セル）。
+反射チャネルのノイズフロアが不足する場合に検討すること。
+##pml_cells: 20
+
+#python:
+import numpy as np
+
+# =============================================================================
+# 0. モデル設定  [EDIT HERE]
+# =============================================================================
+DOMAIN_X   = 3.0          # [m] #domain と一致させること
+DX         = 0.0025       # [m] #dx_dy_dz と一致させること
+SURFACE_Y  = 3.0          # [m] 地表面の y 座標
+TX_X       = 1.5          # [m] tx の x 座標
+TX_HEIGHT  = 0.35         # [m] 地表面からの tx の高さ
+
+# --- rx 配置 -----------------------------------------------------------------
+# 'buried' : 地表面〜地中に rx を置く（A 系統）。片道透過を測る。
+#            RX_DEPTH_M = 0.0 なら地表面（従来の at_surface）。
+# 'at_tx'  : tx と同位置に rx を置く（B 系統）。往復反射を測る。
+#            Level 4 以降の反射チャネルおよびノイズフロア測定に使う。
+RX_MODE    = 'buried'
+RX_DEPTH_M = 0.00         # [m] RX_MODE='buried' のときの埋設深さ
+RX_OFFSET_X = 0.0         # [m] RX_MODE='at_tx' のときの tx からの水平オフセット
+                          #     0.0 = モノスタティック。将来のバイスタティック用。
+
+WAVEFORM_ID = 'lupex_src'
+
+# --- 組成 [wt%]。ディレクトリ名と対応させること -------------------------------
+#   月南極域   : 5.0 / 7.5 / 10.0（先行研究の収束域 6-11 wt% を挟む）
+#   高Tiバサルト: Level_3b.in で別途扱う（イルメナイト由来の分散が加わるため）
+FEOTIO2_WT = 5.0
+
+# =============================================================================
+# 1. 誘電モデル
+#    出典: Carrier et al. 1991, Lunar Sourcebook Ch.9, Fig. 9.53 (SOILS)
+# =============================================================================
+EPS_R = 3.0                       # [設計判断] eps' @ 1.0 GHz。全組成共通。
+
+CARRIER_EPS_BASE = 1.871          # Fig. 9.53 図中: eps' = 1.871^rho
+CARRIER_TAND_A   = 0.027          # Fig. 9.53 図中: 10^(0.027 S + 0.273 rho - 3.058)
+CARRIER_TAND_B   = 0.273
+CARRIER_TAND_C   = 3.058
+
+BAND_LO, BAND_HI = 0.5e9, 2.0e9   # [Hz] eps'' を平坦にする帯域（LUPEX GPR 想定）
+BAND_F0 = np.sqrt(BAND_LO * BAND_HI)   # [Hz] 帯域の幾何平均 = 1.0 GHz
+                                       # 解析解の対称中心であり eps' の基準周波数
+
+RHO_UNIFORM = np.log(EPS_R) / np.log(CARRIER_EPS_BASE)   # eps' = 3.0 の逆算値
+
+
+def carrier_tandelta(feotio2_wt, rho):
+    """Carrier et al. 1991 Fig. 9.53 の tan_delta。
+
+    tan_delta = 10^(0.027*(%TiO2+%FeO) + 0.273*rho - 3.058)
+
+    この式は周波数を含まない。Lunar Sourcebook の回帰は特定の周波数で
+    切ったサブセット（Fig. 9.54）を除き周波数を説明変数に持たないため、
+    「周波数に依らない量」として扱う。この扱いの根拠は [2] Boivin+2022。
+    """
+    return 10.0 ** (CARRIER_TAND_A * feotio2_wt
+                    + CARRIER_TAND_B * rho - CARRIER_TAND_C)
+
+
+def carrier_eps_real(rho):
+    """Carrier et al. 1991 Fig. 9.53 の eps'（乾燥レゴリス）。eps' = 1.871^rho"""
+    return CARRIER_EPS_BASE ** rho
+
+
+def density_profile(depth_m):
+    """深さ [m] -> バルク密度 [g/cm^3]。Carrier et al. 1991。
+
+    rho(z) = 1.92 * (z + 12.2) / (z + 18)   [z: cm]
+
+    Level 3 では使わない（均質のため）。Level 5 で有効化する。
+    参考値: z=0 -> 1.301, z=49cm -> 1.754, z=300cm -> 1.885
+    """
+    z_cm = depth_m * 100.0
+    return 1.92 * (z_cm + 12.2) / (z_cm + 18.0)
+
+
+# =============================================================================
+# 2. gprMax の Debye パラメータへの変換（eps'' の平坦化）
+# =============================================================================
+# gprMax の材料モデルは Debye / Lorentz / Drude しか持たないため、
+# 「eps'' 一定」を作るには複数の Debye 極を重ねて平坦化するしかない。
+# 分散モデルで非分散に近い状態を作る構成だが、物理的には eps'' 一定の
+# 媒質そのものを表している。
+#
+# --- 解析解の導出（数値最適化は使わない）-------------------------------------
+# 1 極 Debye の eps'' を対数周波数 u = ln(w tau) で書くと sech 関数になる:
+#       eps''(u) / De = (1/2) sech(u)
+# これを u = ±s の 2 点に等しい強度で置いて重ねると
+#       eps''(u) / De = (1/2)[ sech(u-s) + sech(u+s) ]
+# となり、u=0 で最大平坦（2 階微分 = 0）になる条件は
+#       s = arcsinh(1) = ln(1 + sqrt(2)) = 0.881374
+# すなわち緩和時間の比は (1+sqrt2)^2 = 3 + 2*sqrt2 = 5.8284。
+# このとき u=0 での値は sech(s) = 1/sqrt(2) なので
+#       De = sqrt(2) * eps''_target        （各極）
+#
+# さらに対称中心を帯域の幾何平均 f0 = sqrt(f_lo*f_hi) に取ると、
+#       1/(1+(w0 tau1)^2) + 1/(1+(w0 tau2)^2) = 1   （厳密に 1）
+# という恒等式が成り立つ。よって f0 で eps' = EPS_R とするには
+#       eps_inf = EPS_R - De                （De は 1 極分）
+# となり、eps_inf も閉形式で決まる。
+#
+# --- 数値解（等リップル解）を使わない理由 ------------------------------------
+# 数値最適化（least_squares）で等リップル解を求めると eps'' 誤差は
+# RMS 0.19%（解析解 0.89%）まで下がるが、
+#   * 論文で式を一行で書けなくなる
+#   * ソルバの初期値・収束条件が結果に効く
+# ため採用しない。解析解の誤差が振幅に与える影響は深さ 2.75 m で
+# 約 -0.06 dB であり、合否判定幅 ±0.5 dB に対して十分小さい。
+# ただし fig3(a) の alpha(f) は帯域端で理論線から約 -2.5% ずれる。
+# これは既知の設計誤差であり、解析コードがそれを検出できることの
+# 確認にもなる（隠さずに図示して説明すること）。
+# =============================================================================
+S_FLAT   = np.arcsinh(1.0)          # = ln(1+sqrt2) = 0.881374
+TAU_RATIO = np.exp(S_FLAT)          # = 1+sqrt2 = 2.414214
+
+
+def debye_flat_eps_imag(eps_r, eps_imag_target):
+    """eps'' が帯域内でほぼ eps_imag_target 一定になる 2 極 Debye を返す。
+
+    引数 eps_r を取るのは、Level 4 の氷層のように背景と eps' が異なる
+    材料にも同じ関数を使うため（修正項目 A-4）。
+
+    戻り値: (eps_inf, de[2], tau[2])
+    """
+    w0 = 2.0 * np.pi * BAND_F0
+    tau = np.array([1.0 / (w0 * TAU_RATIO), TAU_RATIO / w0])
+    de = np.full(2, np.sqrt(2.0) * eps_imag_target)
+    eps_inf = eps_r - np.sqrt(2.0) * eps_imag_target
+    return eps_inf, de, tau
+
+
+def emit_material(name, eps_r, eps_imag_target):
+    """1 材料について #material と #add_dispersion_debye を発行する。"""
+    eps_inf, de, tau = debye_flat_eps_imag(eps_r, eps_imag_target)
+    print('#material: {:.6f} 0 1 0 {}'.format(eps_inf, name))
+    print('#add_dispersion_debye: {}{} {}'.format(
+        len(de),
+        ''.join(' {:.6f} {:.6e}'.format(d, t) for d, t in zip(de, tau)),
+        name))
+    return eps_inf, de, tau
+
+
+# =============================================================================
+# 3. モデルの構築
+# =============================================================================
+TAND = carrier_tandelta(FEOTIO2_WT, RHO_UNIFORM)
+EPS_IMAG = EPS_R * TAND
+
+EPS_INF, DE, TAU = emit_material('regolith', EPS_R, EPS_IMAG)
+print('#box: 0 0 0 {:.6f} {:.6f} {:.6f} regolith n'.format(
+    DOMAIN_X, SURFACE_Y, DX))
+
+# --- 送受信 -------------------------------------------------------------------
+if RX_MODE == 'at_tx':
+    rx_x = TX_X + RX_OFFSET_X
+    rx_y = SURFACE_Y + TX_HEIGHT
+elif RX_MODE == 'buried':
+    rx_x = TX_X
+    rx_y = SURFACE_Y - RX_DEPTH_M
+else:
+    raise ValueError("RX_MODE は 'buried' か 'at_tx'")
+
+print('#hertzian_dipole: z {:.6f} {:.6f} 0 {}'.format(
+    TX_X, SURFACE_Y + TX_HEIGHT, WAVEFORM_ID))
+print('#rx: {:.6f} {:.6f} 0'.format(rx_x, rx_y))
+
+# =============================================================================
+# 4. 検算（実行ログに #title として出る）
+# =============================================================================
+c0 = 299792458.0
+dt = DX / (np.sqrt(2.0) * c0)          # 2D クーラン条件
+
+# 設計誤差（帯域端での eps'' のずれ）を解析的に評価
+_f = np.array([BAND_LO, BAND_F0, BAND_HI])
+_w = 2.0 * np.pi * _f
+_ei = sum(d * (_w * t) / (1.0 + (_w * t) ** 2) for d, t in zip(DE, TAU))
+_er = EPS_INF + sum(d / (1.0 + (_w * t) ** 2) for d, t in zip(DE, TAU))
+
+lines = ['Level 3 | FeO+TiO2={:.1f} wt% | rho={:.6f} | eps_r={:.4f}@{:.2f}GHz | '
+         'tan_delta={:.6f} | eps_inf={:.6f}'.format(
+             FEOTIO2_WT, RHO_UNIFORM, EPS_R, BAND_F0 / 1e9, TAND, EPS_INF)]
+lines.append('  De={:.6f} (x2), tau={:.6e}, {:.6e} s (f={:.3f}, {:.3f} GHz)'.format(
+    DE[0], TAU[0], TAU[1],
+    1.0 / (2 * np.pi * TAU[0]) / 1e9, 1.0 / (2 * np.pi * TAU[1]) / 1e9))
+lines.append('  eps_imag: target={:.6f}, band edge={:.6f} ({:+.2f}%)'.format(
+    EPS_IMAG, _ei[0], 100 * (_ei[0] / EPS_IMAG - 1.0)))
+lines.append("  eps' : {:.6f} ({:.2f}GHz) -> {:.6f} ({:.2f}GHz) [KK による変化 {:.2f}%]".format(
+    _er[0], BAND_LO / 1e9, _er[2], BAND_HI / 1e9,
+    100 * (_er[0] - _er[2]) / _er[1]))
+for f0, a in zip(_f, (2 * np.pi * _f / c0) * np.sqrt(EPS_R / 2.0)
+                 * np.sqrt(np.sqrt(1 + TAND ** 2) - 1)):
+    lines.append('  f={:.2f} GHz: alpha={:.4f} Np/m'.format(f0 / 1e9, a))
+lines.append('  tau/dt = {}'.format(', '.join('{:.1f}'.format(t / dt) for t in TAU)))
+lines.append('  rx: mode={} at ({:.3f}, {:.3f})'.format(RX_MODE, rx_x, rx_y))
+if min(TAU) / dt < 5.0:
+    lines.append('  ** WARNING: tau/dt が小さい。dx を細かくすること **')
+print('#title: ' + ' | '.join(lines))
+#end_python:
+
+地形モデル書き出し（不要ならコメントアウト）
+#geometry_objects_write: 0 0 0 3.0 4.0 0.0025 geometry
+#geometry_view: 0 0 0 3.0 4.0 0.0025 0.0025 0.0025 0.0025 geometry n
+
+GPR設定
+#excitation_file: /Volumes/SSD_Kanda_BUFFALO/gprMax/Excitation_waveform_files/lupex_WaSSPeR/lupex_src.txt linear extrapolate
+#output_dir: result

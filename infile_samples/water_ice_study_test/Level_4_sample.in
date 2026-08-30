@@ -1,0 +1,373 @@
+Level 4 : 均質レゴリス + 水氷層
+============================================================================
+Level 3（均質・eps'' 一定）の背景に水氷層を 1 枚追加した段。
+本研究の主眼である「水氷が検出できるか」に最短で到達するための段。
+
+--- 設計思想 -------------------------------------------------------------
+section 0-2 は Level_3.in と完全に同一に保つこと。差分は section 3
+（氷の混合則）と section 4（氷層の配置）だけ。背景が Level 3 と厳密に
+一致していないと、背景差分（後述）が成立しない。
+
+ENABLE_ICE = False にすると Level_3.in と同一の出力になる。
+これは次の 2 つの用途を兼ねる:
+  (a) ノイズフロア測定
+      RX_MODE='at_tx' かつ ENABLE_ICE=False で 1 本回すと、媒質は完全に
+      均質なので地表反射より後の時間帯には何も返ってこないはず。
+      そこに残る振幅が FDTD の数値ノイズフロア（主に PML 反射）。
+      1 vol% の氷層上面反射は地表反射比で約 -46 dB（上面 0.5 m）なので、
+      フロアがこれを上回ると反射チャネルは成立しない。
+      判定: フロア < -70 dB なら 0.5 vol% まで可 /
+             -60〜-70 dB なら 1 vol% は可 / -55 dB より上なら要対策
+  (b) 背景差分の参照トレース
+      氷ありトレースから引くと、地表反射・直達波・PML 反射がまとめて
+      消え、氷の寄与だけが残る。ただし実機では「氷がない場合の観測」は
+      得られないので、論文には差分あり（理論上限）と差分なし（現実的な
+      条件）の両方を示すこと。
+
+--- 検出チャネル ---------------------------------------------------------
+Level 4 では次の 3 つを同じデータから測る（修正項目 D-2, D-7）。
+  減衰 : f_c シフト / LSR 傾き   … 1 vol% で 0.48 MHz（判定基準 10 MHz）
+  反射 : 界面反射の振幅          … 1 vol% で -50.8 dB（急峻界面）
+  走時 : 界面到達時刻の遅れ      … 1 vol% で片道 2 m あたり +0.066 ns
+減衰チャネルだけでは 1 vol% 級の検出は現実的な平均化数では不可能なので、
+反射・走時と並べてどれが先に限界に達するかを示すのが本研究の問い。
+
+============================================================================
+参考文献と使用する式（Level 3 からの追加分）
+============================================================================
+[1] Carrier, Olhoeft & Mendell (1991), Lunar Sourcebook Ch.9, Fig. 9.53
+    乾燥レゴリスの eps' と tan_delta。Level_3.in と同じ。
+
+[4] Looyenga, H. (1965) "Dielectric constants of heterogeneous mixtures",
+    Physica 31, 401-406.  /  Landau & Lifshitz
+    Landau-Lifshitz-Looyenga (LLL) 混合則:
+        eps^(1/3) = sum_i v_i * eps_i^(1/3)
+    注記: LLL は静電場の摂動展開から導かれるが、その前提は「成分間の
+    誘電率差が小さいこと」であり、粒子 (eps~6) と真空 (eps=1) の混合では
+    成り立たない。レゴリスに使う正当化は導出ではなく実測への当てはまりで
+    あり、実質的には経験則として運用する。
+    ただし成分に対して対称（どちらを母材と呼ぶかを決めなくてよい）なので、
+    空隙率 30-45% の粒状媒質には Maxwell-Garnett より適する。
+
+[5] Takekura, S., Miyamoto, H., Kobayashi, M. (2025)
+    "Detecting Lunar Subsurface Water Ice Using FMCW Ground Penetrating
+     Radar: Numerical Analysis with Realistic Permittivity Variations",
+    Remote Sensing 17, 1050.
+    本ファイルの 3 相混合（粒子・真空・水氷）は同論文 Eq.(6)-(9) と同構造。
+    水氷はレゴリス粒子を置き換えるのではなく粒子間の空隙に凝結する、と
+    いう描像（同論文 Fig. 2）を採用する。
+
+[6] Fujita, S. et al. (2000) / Matsuoka, T. et al. (1996)
+    氷の複素誘電率。GHz 帯で eps' ≈ 3.1-3.2、低温では温度依存が小さい。
+    [5] は外挿値 3.11 を採用。本ファイルは 3.15 を既定とするが、
+    3.11 との差は 1 vol% の界面反射で約 0.1 dB であり結論に影響しない。
+
+[7] Ghormley, J.A. & Hochanadel, C.J. (1971) Science 171, 62-64.
+    82-110 K における氷の密度 0.94 g/cm^3（浮力法）。wt% <-> vol% 変換に使う。
+
+============================================================================
+氷の混合則：なぜこの形なのか
+============================================================================
+氷が「何を押しのけるか」で結果が 20 倍以上変わる。
+
+  描像 A（誤り）: 氷がレゴリス（eps'=3.0）を置き換える
+                  -> 1 vol% で eps' は +0.05% しか変わらず反射が立たない
+  描像 B（採用）: 氷が空隙の真空（eps'=1.0）を埋める
+                  -> 1 vol% で eps' が +0.97%、界面反射 -52 dB
+
+極域の氷は水蒸気が空隙に凝結したものなので B が正しい。
+
+LLL を 3 相（粒子・真空・氷）に適用すると
+    eps_wet^(1/3) = v_grain*eps_grain^(1/3) + v_ice*eps_ice^(1/3) + v_void*1
+乾燥時は
+    eps_dry^(1/3) = v_grain*eps_grain^(1/3) + (v_void + v_ice)*1
+なので差を取ると粒子の項が消えて
+    eps_wet^(1/3) = eps_dry^(1/3) + v_ice * (eps_ice^(1/3) - 1)
+となる。この形の利点:
+  * 粒子密度 rho_grain も粒子誘電率 eps_grain も式に現れない
+    （どちらも文献値として確定させにくい量なので、使わずに済むのが重要）
+  * eps_dry には Carrier の経験式 1.871^rho をそのまま使えるので、
+    乾燥レゴリスについては経験式との接続が完全に保たれる
+
+混合則の選択（LLL か対数混合か）による差は 1 vol% の反射で約 1.5 dB。
+描像 A/B の差（約 26 dB）に比べて桁違いに小さいので、規則の選択は
+結論を変えない。重要なのは規則ではなく描像。
+
+--- 損失（eps''）について -------------------------------------------------
+電波の損失はレゴリス粒子の中で起きる。氷が空隙に入っても粒子の量は
+変わらないので eps'' は変わらない（氷自身の微小な損失だけを足す）。
+    eps''_wet = eps''_dry + v_ice * eps_ice * tan_delta_ice
+tan_delta = eps''/eps' は分母が増えるぶん下がるが、これは損失が減った
+のではなく薄まっただけ。検出信号として使うのは tan_delta ではなく alpha。
+
+虚部に LLL や対数混合を適用してはならない。複素数のまま混合則を適用すると
+「損失源が増えていないのに減衰が増える」という非物理的な結果になる。
+また Carrier の tan_delta は密度の指数関数であり、混合則が予測する
+線形形とは関数形が異なる（rho=1.4 と 1.8 で約 9% ずれる）ことからも、
+虚部に混合則が使えないことが確認できる。
+
+#domain: 3.0 4.0 0.0025
+#dx_dy_dz: 0.0025 0.0025 0.0025
+#time_window: 50e-9
+
+PML を厚くする場合はこの行を有効化する（既定は 10 セル）。
+ノイズフロア測定の結果 -55 dB より高い場合に検討すること。
+##pml_cells: 20
+
+#python:
+import numpy as np
+
+# =============================================================================
+# 0. モデル設定  [EDIT HERE]      ※ Level_3.in と同一に保つこと
+# =============================================================================
+DOMAIN_X   = 3.0          # [m] #domain と一致させること
+DX         = 0.0025       # [m] #dx_dy_dz と一致させること
+SURFACE_Y  = 3.0          # [m] 地表面の y 座標
+TX_X       = 1.5          # [m] tx の x 座標
+TX_HEIGHT  = 0.35         # [m] 地表面からの tx の高さ
+
+# --- rx 配置 -----------------------------------------------------------------
+# 'buried' : 地表面〜地中に rx を置く（A 系統）。片道透過を測る。
+# 'at_tx'  : tx と同位置に rx を置く（B 系統）。往復反射を測る。
+#            Level 4 の主目的（反射チャネル）はこちら。
+RX_MODE    = 'at_tx'
+RX_DEPTH_M = 0.00         # [m] RX_MODE='buried' のときの埋設深さ
+RX_OFFSET_X = 0.0         # [m] RX_MODE='at_tx' のときの tx からの水平オフセット
+
+WAVEFORM_ID = 'lupex_src'
+
+FEOTIO2_WT = 5.0          # [wt%] 5.0 / 7.5 / 10.0
+
+# --- 氷層 [EDIT HERE] ---------------------------------------------------------
+ENABLE_ICE = True         # False にすると Level_3.in と同一（参照トレース）
+
+ICE_TOP_M   = 0.50        # [m] 地表面から氷層上面までの深さ
+ICE_THICK_M = 2.00        # [m] 氷層の厚さ
+# 既定は感度シート（厚 2 m）に合わせた配置。下面が y=0.5 となり、
+# 下端 PML から 0.5 m 離れる。
+# 参考: 水移動モデル [5] に基づく浅く薄いシナリオも試す価値がある
+#       (a) 深さ 0.05 m / 厚 0.05 m   (b) 深さ 0.20 m / 厚 0.10 m
+#       ただし厚 0.10 m だと上下面の往復走時差が約 1.2 ns しかなく、
+#       帯域 1.5 GHz のパルス幅（約 0.7 ns）に対して分離が厳しい。
+
+ICE_SPEC = 'wt'           # 'wt' : 質量分率で指定（ミッション要求に対応）
+                          # 'vol': 体積分率で直接指定
+ICE_WT_FRAC  = 0.005      # [-] 0.005 = 0.5 wt%（LUPEX 想定の保守側）
+ICE_VOL_FRAC = 0.010      # [-] ICE_SPEC='vol' のときに使う
+
+# =============================================================================
+# 1. 誘電モデル（乾燥レゴリス）
+#    出典: Carrier et al. 1991, Lunar Sourcebook Ch.9, Fig. 9.53 (SOILS)
+# =============================================================================
+EPS_R = 3.0                       # [設計判断] eps' @ 1.0 GHz。全組成共通。
+
+CARRIER_EPS_BASE = 1.871          # Fig. 9.53 図中: eps' = 1.871^rho
+CARRIER_TAND_A   = 0.027          # Fig. 9.53 図中: 10^(0.027 S + 0.273 rho - 3.058)
+CARRIER_TAND_B   = 0.273
+CARRIER_TAND_C   = 3.058
+
+BAND_LO, BAND_HI = 0.5e9, 2.0e9   # [Hz] eps'' を平坦にする帯域
+BAND_F0 = np.sqrt(BAND_LO * BAND_HI)   # [Hz] 帯域の幾何平均 = 1.0 GHz
+
+RHO_UNIFORM = np.log(EPS_R) / np.log(CARRIER_EPS_BASE)   # = 1.753647
+
+
+def carrier_tandelta(feotio2_wt, rho):
+    """Carrier et al. 1991 Fig. 9.53 の tan_delta（周波数に依らない）。"""
+    return 10.0 ** (CARRIER_TAND_A * feotio2_wt
+                    + CARRIER_TAND_B * rho - CARRIER_TAND_C)
+
+
+def carrier_eps_real(rho):
+    """Carrier et al. 1991 Fig. 9.53 の eps'（乾燥レゴリス）。"""
+    return CARRIER_EPS_BASE ** rho
+
+
+def density_profile(depth_m):
+    """深さ [m] -> バルク密度 [g/cm^3]。Carrier et al. 1991。Level 5 で使う。"""
+    z_cm = depth_m * 100.0
+    return 1.92 * (z_cm + 12.2) / (z_cm + 18.0)
+
+
+# =============================================================================
+# 2. gprMax の Debye パラメータへの変換（eps'' の平坦化）
+#    最大平坦 2 極 Debye の解析解。導出は Level_3.in の section 2 を参照。
+#      s   = arcsinh(1) = ln(1+sqrt2),  tau 比 = (1+sqrt2)^2 = 5.8284
+#      De  = sqrt(2) * eps''_target  （各極）
+#      eps_inf = eps_r - De          （f0 = 帯域の幾何平均で eps' = eps_r）
+# =============================================================================
+S_FLAT    = np.arcsinh(1.0)         # = ln(1+sqrt2) = 0.881374
+TAU_RATIO = np.exp(S_FLAT)          # = 1+sqrt2 = 2.414214
+
+
+def debye_flat_eps_imag(eps_r, eps_imag_target):
+    """eps'' が帯域内でほぼ一定になる 2 極 Debye を返す。
+
+    eps_r を引数に取ることで、氷層のように背景と eps' が異なる材料にも
+    同じ関数を使える（修正項目 A-4）。
+    """
+    w0 = 2.0 * np.pi * BAND_F0
+    tau = np.array([1.0 / (w0 * TAU_RATIO), TAU_RATIO / w0])
+    de = np.full(2, np.sqrt(2.0) * eps_imag_target)
+    eps_inf = eps_r - np.sqrt(2.0) * eps_imag_target
+    return eps_inf, de, tau
+
+
+def emit_material(name, eps_r, eps_imag_target):
+    """1 材料について #material と #add_dispersion_debye を発行する。"""
+    eps_inf, de, tau = debye_flat_eps_imag(eps_r, eps_imag_target)
+    print('#material: {:.6f} 0 1 0 {}'.format(eps_inf, name))
+    print('#add_dispersion_debye: {}{} {}'.format(
+        len(de),
+        ''.join(' {:.6f} {:.6e}'.format(d, t) for d, t in zip(de, tau)),
+        name))
+    return eps_inf, de, tau
+
+
+# =============================================================================
+# 3. 水氷の混合則（LLL、3 相：粒子・真空・氷）  [5] Takekura+2025 Eq.(6)-(9)
+# =============================================================================
+EPS_ICE  = 3.15           # [6] GHz 帯の氷の eps'。低温での温度依存は小さい。
+TAND_ICE = 2.0e-4         # [要文献確認] 氷の tan_delta。低温ほど小さくなるので
+                          # この値は保守側（検出しにくい側）。永久影の
+                          # 40-100 K における値を文献で確認すること。
+RHO_ICE  = 0.94           # [7] [g/cm^3] 82-110 K での氷の密度。wt%->vol% 変換用。
+
+RHO_GRAIN = 2.645         # [g/cm^3] 斜長岩の粒子密度 [5]。
+                          # 【用途は空隙率チェックのみ】混合則の式には現れない。
+                          # Lunar Sourcebook Table 9.3 の推奨値 3.1 は海の
+                          # 玄武岩片を含む全土壌の平均なので、斜長岩質を仮定
+                          # する南極には 2.645 のほうが適する。
+
+
+def ice_volume_fraction():
+    """氷の体積分率を返す。ICE_SPEC に応じて wt% から換算する。
+
+    v_ice = (rho_bulk / rho_ice) * w / (1 - w)      [5] Eq.(8)
+    """
+    if ICE_SPEC == 'vol':
+        return ICE_VOL_FRAC
+    if ICE_SPEC == 'wt':
+        w = ICE_WT_FRAC
+        return (RHO_UNIFORM / RHO_ICE) * w / (1.0 - w)
+    raise ValueError("ICE_SPEC は 'wt' か 'vol'")
+
+
+def mix_ice(eps_re_dry, eps_im_dry, v_ice):
+    """乾燥レゴリスに氷を加えたときの (eps', eps'') を返す。
+
+    実部: LLL の 3 相形から粒子の項が相殺して
+              eps_wet^(1/3) = eps_dry^(1/3) + v_ice*(eps_ice^(1/3) - 1)
+          となる。rho_grain も eps_grain も不要。
+    虚部: 損失は粒子にあり氷は空隙を埋めるだけなので eps'' は保存し、
+          氷自身の微小な損失だけを加える。
+    """
+    eps_re = (eps_re_dry ** (1.0 / 3.0)
+              + v_ice * (EPS_ICE ** (1.0 / 3.0) - 1.0)) ** 3
+    eps_im = eps_im_dry + v_ice * EPS_ICE * TAND_ICE
+    return eps_re, eps_im
+
+
+# =============================================================================
+# 4. モデルの構築
+# =============================================================================
+# --- 背景（乾燥レゴリス）。Level_3.in と完全に同じ ---------------------------
+TAND = carrier_tandelta(FEOTIO2_WT, RHO_UNIFORM)
+EPS_IMAG = EPS_R * TAND
+
+EPS_INF, DE, TAU = emit_material('regolith', EPS_R, EPS_IMAG)
+print('#box: 0 0 0 {:.6f} {:.6f} {:.6f} regolith n'.format(
+    DOMAIN_X, SURFACE_Y, DX))
+
+# --- 氷層 ---------------------------------------------------------------------
+if ENABLE_ICE:
+    V_ICE = ice_volume_fraction()
+    porosity = 1.0 - RHO_UNIFORM / RHO_GRAIN
+    if V_ICE > porosity:
+        raise ValueError(
+            '氷の体積分率 {:.4f} が空隙率 {:.4f} を超えています'.format(
+                V_ICE, porosity))
+    if ICE_TOP_M + ICE_THICK_M > SURFACE_Y:
+        raise ValueError('氷層が計算領域の下端を突き抜けています')
+
+    EPS_R_ICE, EPS_IMAG_ICE = mix_ice(EPS_R, EPS_IMAG, V_ICE)
+    EPS_INF_ICE, DE_ICE, TAU_ICE = emit_material(
+        'regolith_ice', EPS_R_ICE, EPS_IMAG_ICE)
+
+    # gprMax は後から書いた #box が上書きするので、背景の後に氷層を置く
+    y_bot = SURFACE_Y - (ICE_TOP_M + ICE_THICK_M)
+    y_top = SURFACE_Y - ICE_TOP_M
+    print('#box: 0 {:.6f} 0 {:.6f} {:.6f} {:.6f} regolith_ice n'.format(
+        y_bot, DOMAIN_X, y_top, DX))
+else:
+    V_ICE = 0.0
+    EPS_R_ICE = EPS_R
+
+# --- 送受信 -------------------------------------------------------------------
+if RX_MODE == 'at_tx':
+    rx_x = TX_X + RX_OFFSET_X
+    rx_y = SURFACE_Y + TX_HEIGHT
+elif RX_MODE == 'buried':
+    rx_x = TX_X
+    rx_y = SURFACE_Y - RX_DEPTH_M
+else:
+    raise ValueError("RX_MODE は 'buried' か 'at_tx'")
+
+print('#hertzian_dipole: z {:.6f} {:.6f} 0 {}'.format(
+    TX_X, SURFACE_Y + TX_HEIGHT, WAVEFORM_ID))
+print('#rx: {:.6f} {:.6f} 0'.format(rx_x, rx_y))
+
+# =============================================================================
+# 5. 検算（実行ログに #title として出る）
+# =============================================================================
+c0 = 299792458.0
+dt = DX / (np.sqrt(2.0) * c0)
+
+n_dry = np.sqrt(EPS_R)
+n_wet = np.sqrt(EPS_R_ICE)
+
+lines = ['Level 4 | FeO+TiO2={:.1f} wt% | rho={:.6f} | tan_delta={:.6f} | '
+         'ice={}'.format(FEOTIO2_WT, RHO_UNIFORM, TAND,
+                         'ON' if ENABLE_ICE else 'OFF (= Level 3 参照トレース)')]
+lines.append('  背景: eps_r={:.6f}, eps_imag={:.6f}, eps_inf={:.6f}, '
+             'tau/dt={:.1f}, {:.1f}'.format(
+                 EPS_R, EPS_IMAG, EPS_INF, TAU[0] / dt, TAU[1] / dt))
+
+if ENABLE_ICE:
+    # 界面反射係数（急峻界面・垂直入射）
+    R = (n_dry - n_wet) / (n_dry + n_wet)
+    # 往復走時（RX_MODE='at_tx' を想定）
+    t_surf = 2.0 * TX_HEIGHT / c0 * 1e9
+    t_top = t_surf + 2.0 * ICE_TOP_M * n_dry / c0 * 1e9
+    t_bot = t_top + 2.0 * ICE_THICK_M * n_wet / c0 * 1e9
+    # 氷なしの場合に対する減衰率の変化
+    a_dry = np.pi * BAND_F0 * n_dry * TAND / c0
+    a_wet = np.pi * BAND_F0 * n_wet * (EPS_IMAG_ICE / EPS_R_ICE) / c0
+
+    lines.append('  氷: {:.4f} vol% ({:.3f} wt%), 空隙率={:.4f}, 深さ {:.2f}-{:.2f} m'.format(
+        100 * V_ICE, 100 * V_ICE * RHO_ICE / (RHO_UNIFORM + V_ICE * RHO_ICE),
+        1.0 - RHO_UNIFORM / RHO_GRAIN, ICE_TOP_M, ICE_TOP_M + ICE_THICK_M))
+    lines.append("  氷層: eps_r={:.6f} ({:+.2f}%), eps_imag={:.6f} ({:+.3f}%), "
+                 "tan_delta={:.6f} ({:+.2f}%)".format(
+                     EPS_R_ICE, 100 * (EPS_R_ICE / EPS_R - 1),
+                     EPS_IMAG_ICE, 100 * (EPS_IMAG_ICE / EPS_IMAG - 1),
+                     EPS_IMAG_ICE / EPS_R_ICE,
+                     100 * (EPS_IMAG_ICE / EPS_R_ICE / TAND - 1)))
+    lines.append('  界面反射 R={:+.6f} ({:.1f} dB), alpha 変化 {:+.2f}%'.format(
+        R, 20 * np.log10(abs(R)), 100 * (a_wet / a_dry - 1)))
+    lines.append('  往復走時(at_tx): 地表 {:.2f} ns / 上面 {:.2f} ns / '
+                 '下面 {:.2f} ns'.format(t_surf, t_top, t_bot))
+
+lines.append('  rx: mode={} at ({:.3f}, {:.3f})'.format(RX_MODE, rx_x, rx_y))
+if min(TAU) / dt < 5.0:
+    lines.append('  ** WARNING: tau/dt が小さい。dx を細かくすること **')
+print('#title: ' + ' | '.join(lines))
+#end_python:
+
+地形モデル書き出し（不要ならコメントアウト）
+#geometry_objects_write: 0 0 0 3.0 4.0 0.0025 geometry
+#geometry_view: 0 0 0 3.0 4.0 0.0025 0.0025 0.0025 0.0025 geometry n
+
+GPR設定
+#excitation_file: /Volumes/SSD_Kanda_BUFFALO/gprMax/Excitation_waveform_files/lupex_WaSSPeR/lupex_src.txt linear extrapolate
+#output_dir: result
