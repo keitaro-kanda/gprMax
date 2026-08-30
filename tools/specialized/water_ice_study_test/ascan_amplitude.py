@@ -86,8 +86,9 @@ SUBLEVEL_LABELS = ['波形種別', 'サブ条件', '組成 (FeO+TiO2)', 'サブ�
 # したければ eps'' を周波数によらず一定（= sigma ∝ f）にする必要があり、
 # gprMax では #add_dispersion_debye による多極 Debye でしか実現できない。
 # さらに Kramers-Kronig の関係から eps'' を一定にすると eps' も必ず分散する。
-# したがって「tan_delta 一定」は Level 3（分散性）の領域であり、
-# Level 2（非分散な損失媒質）の物理的に自己整合な姿は「sigma 一定」である。
+# したがって「tan_delta 一定」は Level 3 の領域であり、Level 2 で eps' を
+# 厳密に一定に保てるのは sigma 一定のときだけである（DC 導電率の KK 対応項は
+# eps' に寄与しないため、sigma 一定は eps' 一定と両立する数少ない損失モデル）。
 LEVEL2_LOSS_MODEL = 'conductivity'   # 'conductivity' … gprMax の #material に対応（既定）
                                      # 'tan_delta'    … 参考用。Level 3 相当の理想化
 LEVEL2_SIGMA = 0.0035                # [S/m] #material の第 2 引数と一致させること。
@@ -99,30 +100,67 @@ ETA0 = 376.730313668                 # [Ohm] 真空の波動インピーダン�
 EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
 
 # =============================================================================
-# [EDIT HERE] Level 3 の媒質パラメータ（非分散 = tan_delta 一定）
+# [EDIT HERE] Level 3 の媒質パラメータ（eps'' 一定）
 # =============================================================================
-# Boivin+2022 の実測により、月南極（イルメナイト <1 wt%）は非分散であることが
-# 確認された（Table 7 の純バイトウナイトは P/L/S/X 帯で eps'=3.29, eps''=0.006
-# が完全一定。1, 5 wt% でも有意な分散を検出できずフィット不能と報告）。
-# したがって Level 3 は「tan_delta 一定」= alpha ∝ f をベースラインとする。
+# 用語について:
+#   本コードでは Level 3 を「非分散」と呼ばない。eps'' != 0 の媒質は
+#   Kramers-Kronig 則により eps' が必ず対数的に変化するため、厳密な意味で
+#   非分散な損失媒質は存在しない。Level 3 の正しい記述は
+#       eps'' = 一定（帯域内）、eps' は KK により約 0.37% 変化
+#   である。eps' が定数なのは Level 1（無損失）と Level 2（sigma 一定。
+#   DC 導電率の KK 対応項は eps' に寄与しない）だけ。
+#   【未対応】本コードの理論曲線は現状 eps' を定数として扱っている。
+#   eps'(f) に置き換える作業が修正項目 A-3。深さ 2.75 m の群遅延で
+#   -0.032 ns（数値分散 +0.051 ns の 62%、符号は逆）の効きがある。
 #
-# 損失の振幅は Heiken/Carrier 経験式（450 MHz 版）から与える。
-#   tan_delta = 10^(0.033*(FeO+TiO2) + 0.231*rho - 3.061)
-# Boivin のバイトウナイト値（0.002）を使わないのは、バイトウナイトが純長石で
-# Fe をほぼ含まないのに対し、実際の南極レゴリスは olivine/pyroxene 由来の
-# FeO を 5-6 wt% 含むため。Boivin から採るのは「非分散である」という
-# 形状情報だけにする。
+# eps'' が帯域内でほぼ一定であることの実測根拠は Boivin+2022:
+#   Table 7 の純バイトウナイトは P/L/S/X 帯で eps'=3.29, eps''=0.006 が
+#   完全一定。1, 5 wt% でも有意な分散を検出できずフィット不能と報告。
+# したがって Level 3 は「eps'' 一定」= alpha ∝ f をベースラインとする。
 #
-# eps' は組成に依らず 3.0 とし、密度はそこから一意に決まる。
-#   eps' = 1.843^rho = 3.0  ->  rho = 1.796895
+# 損失の振幅は Carrier 経験式から与える。
+#   出典: Carrier, Olhoeft & Mendell (1991), Lunar Sourcebook Ch.9,
+#         Fig. 9.53 (SOILS = 土壌試料のみの回帰) の図中式
+#     eps'      = 1.871^rho
+#     tan_delta = 10^(0.027*(%TiO2 + %FeO) + 0.273*rho - 3.058)
+#
+#   Fig. 9.53 を選ぶ理由:
+#     (a) 本研究の対象はレゴリス（土壌）であり、岩石片を含む Fig. 9.52
+#         (ALL DATA) や Fig. 9.54 (450 MHz DATA) より母集団が適切。
+#     (b) tan_delta の周波数依存を無視する立場をとる以上、周波数で切った
+#         サブセット（Fig. 9.54 = 450 MHz）を選ぶのは仮定と矛盾する。
+#         選ぶべき軸は周波数ではなく試料種別。
+#     (c) 土壌データは rho ~ 1.0-2.1 に分布し、下の rho = 1.753647 は
+#         その中心付近にある（内挿であって外挿でない）。
+#
+#   【重要】eps' の式と tan_delta の式は同一図・同一サブセットから取ること。
+#   片方だけ他図の式に差し替えると自己整合が崩れる。参考（本節では使わない）:
+#     Fig. 9.52 ALL DATA     : 1.919^rho, 10^(0.038 S + 0.312 rho - 3.260)
+#     Fig. 9.54 450 MHz DATA : 1.843^rho, 10^(0.033 S + 0.231 rho - 3.061)
+#                              -> Level 3b（分散モデル）でこちらを使う
+#     Fig. 9.55 APOLLO 15-17 : 1.908^rho, 10^(0.028 S + 0.167 rho - 2.975)
+#   4 式の振れ幅は 5-10 wt% で 0.80-1.09 倍、N_eff で 0.9-1.5 倍。
+#
+# Boivin のバイトウナイト値（tan_delta=0.002）を使わないのは、バイトウナイトが
+# 純長石で Fe をほぼ含まないのに対し、実際の南極レゴリスは olivine/pyroxene
+# 由来の FeO を 5-6 wt% 含むため。Boivin から採るのは「eps'' が周波数に
+# 依らない」という形状情報だけにする。
+#
+# eps' は組成に依らず 3.0（設計判断）とし、密度はそこから一意に決まる。
+#   eps' = 1.871^rho = 3.0  ->  rho = 1.753647
 # eps' が組成に依らないので、全組成で走時・幾何減衰が共通になり、
 # 違いは吸収だけという比較しやすい構成になる。
-LEVEL3_EPS_R = 3.0                # 全組成共通（非分散なので全周波数で一定）
-LEVEL3_RHO   = 1.796895           # [g/cm^3] eps' = 1.843^rho = 3.0 の解
+# 参考: rho = 1.753647 は Carrier の密度プロファイル
+#       rho(z) = 1.92(z+12.2)/(z+18) [z:cm] の深さ約 49 cm に相当する。
+LEVEL3_EPS_R = 3.0                # 全組成共通。基準周波数は帯域の幾何平均
+                                  # f0 = sqrt(0.5*2.0) = 1.0 GHz（.in と共通）。
+                                  # 帯域中心 1.25 GHz では 2.998（-0.07%）。
+LEVEL3_RHO   = 1.753647           # [g/cm^3] eps' = 1.871^rho = 3.0 の逆算値
 
-LEVEL3_HEIKEN_TAND_A = 0.033
-LEVEL3_HEIKEN_TAND_B = 0.231
-LEVEL3_HEIKEN_TAND_C = 3.061
+LEVEL3_CARRIER_EPS_BASE = 1.871   # Fig. 9.53 図中: eps' = 1.871^rho
+LEVEL3_CARRIER_TAND_A   = 0.027   # Fig. 9.53 図中の 3 次元回帰
+LEVEL3_CARRIER_TAND_B   = 0.273
+LEVEL3_CARRIER_TAND_C   = 3.058
 
 # FeO+TiO2 [wt%] ごとの設定。JSON のサブ階層キーと対応させる。
 #   月南極域   : 5 / 7.5 / 10 wt%（先行研究の収束域 6-11 wt% を挟む）
@@ -146,14 +184,25 @@ LEVEL3_DEFAULT_COMPOSITION = 'feo7p5'   # サブ階層で指定がないとき�
 #   Level_3  : tan_delta 一定    -> alpha ∝ f       （帯域内 4.0 倍）
 #   Level_3b : 2 極 Debye 分散   -> alpha ∝ f^1.38  （帯域内 6.8 倍）
 #
-# rho は「1.25 GHz で eps' = 3.0」になる値。Level_3 の rho（1.796895）と
-# 異なるのは、Level_3b では eps' 自体が分散するため、どの周波数で 3.0 に
+# rho は「1.25 GHz で eps' = 3.0」になる値。Level_3 の rho（1.753647）と
+# 異なるのは、Level_3b では eps' 自体が大きく分散するため、どの周波数で 3.0 に
 # 揃えるかを決める必要があるからである。
+#
+# 【経験式が Level 3 と違うことに注意】
+#   Level 3b は分散モデルなので「経験式の値はどの周波数の値か」を決めないと
+#   スケールが定まらない。そのためアンカー周波数が特定できる唯一のサブセット
+#   である Fig. 9.54 (450 MHz DATA) を使う。
+#   Level 3 は eps'' 一定を仮定するのでアンカーが不要であり、試料種別で切った
+#   Fig. 9.53 (SOILS) を使う。両者で eps' の底も tan_delta の係数も異なる。
+#   この不統一は意図的なもので、モデルの性質の違いに由来する。
 LEVEL3B_RHO      = 1.820224       # [g/cm^3] 1.25 GHz で eps' = 3.0 になる密度
 LEVEL3B_FEOTIO2  = 20.0           # [wt%] 高Tiバサルト想定
-LEVEL3B_ANCHOR_FREQ = 450e6       # [Hz] Heiken 1991 Fig 9.54 の 450 MHz 計測
+LEVEL3B_ANCHOR_FREQ = 450e6       # [Hz] Carrier+1991 Fig. 9.54 の 450 MHz 計測
 
-LEVEL3B_HEIKEN_EPS_BASE = 1.843
+LEVEL3B_CARRIER_EPS_BASE = 1.843  # Fig. 9.54 図中: eps' = 1.843^rho
+LEVEL3B_CARRIER_TAND_A   = 0.033  # Fig. 9.54 図中の 3 次元回帰
+LEVEL3B_CARRIER_TAND_B   = 0.231
+LEVEL3B_CARRIER_TAND_C   = 3.061
 LEVEL3B_DEBYE_DE1, LEVEL3B_DEBYE_TAU1 = 0.261, 4.6212e-11    # [s]
 LEVEL3B_DEBYE_DE2, LEVEL3B_DEBYE_TAU2 = 0.088, 2.82195e-10   # [s]
 
@@ -163,33 +212,6 @@ BAND_CENTRE_HZ = 1.25e9
 # 解析対象から除外する rx キー (design_ascan_amplitude.md §3)
 #   depth_300 は y=0.0 で PML（gprMax デフォルト 10 層 = 0.05 m）の中にあるため、
 #   物理的に意味のあるデータにならない。JSON に残っていても自動で除外する。
-# =============================================================================
-# [EDIT HERE] Level 2 の媒質パラメータ（損失モデル）
-# =============================================================================
-# gprMax の `#material: er sigma mr sigma*` が与えるのは「導電率 sigma 一定」で
-# あり、ロスタンジェント一定ではない。等価的に eps'' = sigma/(omega eps0) なので
-#
-#     tan_delta = eps'' / eps' = sigma / (omega eps0 eps_r)  ∝ 1/f
-#
-# となり、sigma が一定なら tan_delta は 1/f で落ちる。逆に tan_delta を一定に
-# したければ eps'' を周波数によらず一定（= sigma ∝ f）にする必要があり、
-# gprMax では #add_dispersion_debye による多極 Debye でしか実現できない。
-# さらに Kramers-Kronig の関係から eps'' を一定にすると eps' も必ず分散する。
-# したがって「tan_delta 一定」は Level 3（分散性）の領域であり、
-# Level 2（非分散な損失媒質）の物理的に自己整合な姿は「sigma 一定」である。
-LEVEL2_LOSS_MODEL = 'conductivity'   # 'conductivity' … gprMax の #material に対応（既定）
-                                     # 'tan_delta'    … 参考用。Level 3 相当の理想化
-LEVEL2_SIGMA = 0.0035                # [S/m] #material の第 2 引数と一致させること。
-                                     #   プロファイル計算の 0 vol% ice / 1.25 GHz の値。
-                                     #   tan_delta = 0.01678 @ 1.25 GHz に相当。
-LEVEL2_TAN_DELTA = 0.0155            # LEVEL2_LOSS_MODEL='tan_delta' のときのみ使う
-
-ETA0 = 376.730313668                 # [Ohm] 真空の波動インピーダンス
-EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
-
-# =============================================================================
-# [EDIT HERE] Level 3 の媒質パラメータ（2 極 Debye 分散）
-
 EXCLUDE_KEYS = {'depth_300'}
 
 # 出力先 (レベル親ディレクトリ配下)
@@ -507,11 +529,17 @@ def transfer_absorb(f, d, n):
     return np.exp(-level2_alpha(f, n) * d)
 
 
-def level3_heiken_tandelta(feotio2_wt, rho=None):
-    """Heiken/Carrier 経験式（450 MHz 版）の tan_delta。周波数に依存しない。"""
+def level3_carrier_tandelta(feotio2_wt, rho=None):
+    """Carrier 経験式（Lunar Sourcebook Fig. 9.53, SOILS）の tan_delta。
+
+        tan_delta = 10^(0.027*(%TiO2 + %FeO) + 0.273*rho - 3.058)
+
+    この式は周波数を説明変数に持たないため、周波数に依らない量として扱う。
+    その扱いの根拠は Boivin+2022（section 冒頭のコメントを参照）。
+    """
     rho = LEVEL3_RHO if rho is None else rho
-    return 10.0 ** (LEVEL3_HEIKEN_TAND_A * feotio2_wt
-                    + LEVEL3_HEIKEN_TAND_B * rho - LEVEL3_HEIKEN_TAND_C)
+    return 10.0 ** (LEVEL3_CARRIER_TAND_A * feotio2_wt
+                    + LEVEL3_CARRIER_TAND_B * rho - LEVEL3_CARRIER_TAND_C)
 
 
 def _parse_composition_key(key):
@@ -584,19 +612,22 @@ def set_level3_composition(kind):
 
 
 def level3_eps(f, feotio2_wt=None):
-    """Level 3 の複素比誘電率 (eps', eps'')。非分散なので f に依存しない。
+    """Level 3 の複素比誘電率 (eps', eps'')。
+
+    eps'' は帯域内で一定。eps' は KK により約 0.37% 変化するが、
+    本コードは現状これを定数として扱う（修正項目 A-3 で eps'(f) にする）。
 
     f と同じ形の配列で返す（呼び出し側の一貫性のため）。
     """
     wt = _LEVEL3_ACTIVE_WT if feotio2_wt is None else feotio2_wt
     f_arr = np.asarray(f, dtype=float)
     er = np.full_like(f_arr, LEVEL3_EPS_R)
-    ei = np.full_like(f_arr, LEVEL3_EPS_R * level3_heiken_tandelta(wt))
+    ei = np.full_like(f_arr, LEVEL3_EPS_R * level3_carrier_tandelta(wt))
     return er, ei
 
 
 def level3_tandelta(f, feotio2_wt=None):
-    """Level 3 の tan_delta(f)。非分散なので一定。"""
+    """Level 3 の tan_delta(f)。eps'' 一定なのでほぼ定数。"""
     er, ei = level3_eps(f, feotio2_wt)
     return ei / er
 
@@ -621,8 +652,9 @@ def level3_alpha(f, feotio2_wt=None):
 def refractive_index(f, level):
     """レベルに応じた屈折率 n を返す。
 
-    Level 1・2・3 とも eps' は周波数に依存しないため n は定数。
-    （旧 Level 3 は 2 極 Debye で eps' が分散していたが、改訂後は非分散）
+    Level 1（無損失）と Level 2（sigma 一定）は eps' が厳密に定数。
+    Level 3 は eps'' 一定なので KK により eps' が約 0.37% 変化するが、
+    ここでは暫定的に定数として扱っている（修正項目 A-3 で置き換える）。
     f と同じ形の配列で返す。
     """
     f_arr = np.asarray(f, dtype=float)
@@ -637,10 +669,10 @@ def refractive_index(f, level):
 def describe_level3_medium():
     """Level 3 の媒質設定を人が読める形で返す（ログと run_info 用）。"""
     wt = _LEVEL3_ACTIVE_WT
-    td = level3_heiken_tandelta(wt)
+    td = level3_carrier_tandelta(wt)
     a_lo = float(level3_alpha(np.array([0.5e9]))[0])
     a_hi = float(level3_alpha(np.array([2.0e9]))[0])
-    return ('non-dispersive (constant tan_delta), FeO+TiO2 = {:.1f} wt% [{}], '
+    return ('constant eps_imag (tan_delta ~ const), FeO+TiO2 = {:.1f} wt% [{}], '
             'rho = {:.6f}, eps_r = {:.3f}, tan_delta = {:.6f}  '
             '(alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz, ratio {:.3f})'
             .format(wt, _LEVEL3_ACTIVE_KEY, LEVEL3_RHO, LEVEL3_EPS_R, td,
@@ -648,22 +680,28 @@ def describe_level3_medium():
 
 
 def transfer_absorb_tandelta(f, d, n=None):
-    """Level 3 の吸収項 exp(-alpha(f) * d)（片道透過、非分散）。"""
+    """Level 3 の吸収項 exp(-alpha(f) * d)（片道透過、eps'' 一定）。"""
     return np.exp(-level3_alpha(f) * d)
 
 
-def level3b_heiken(rho=None):
-    """密度 -> Heiken 経験式の (静的 eps', eps'')。周波数依存は持たない。"""
+def level3b_carrier(rho=None):
+    """密度 -> Carrier 経験式の (eps', eps'')。Level 3b 専用。
+
+    Level 3 と違い Fig. 9.54 (450 MHz DATA) の式を使う。分散モデルでは
+    「経験式の値がどの周波数の値か」を決める必要があり、周波数が特定できる
+    サブセットはこれだけであるため。返す値は 450 MHz における値として扱い、
+    level3b_debye_scale() で 2 極 Debye をこの値に合わせる。
+    """
     rho = LEVEL3B_RHO if rho is None else rho
-    eps_re = LEVEL3B_HEIKEN_EPS_BASE ** rho
-    tan_d = 10.0 ** (LEVEL3_HEIKEN_TAND_A * LEVEL3B_FEOTIO2
-                     + LEVEL3_HEIKEN_TAND_B * rho - LEVEL3_HEIKEN_TAND_C)
+    eps_re = LEVEL3B_CARRIER_EPS_BASE ** rho
+    tan_d = 10.0 ** (LEVEL3B_CARRIER_TAND_A * LEVEL3B_FEOTIO2
+                     + LEVEL3B_CARRIER_TAND_B * rho - LEVEL3B_CARRIER_TAND_C)
     return eps_re, eps_re * tan_d
 
 
 def level3b_debye_scale(rho=None):
     """eps''(450 MHz) が Heiken に一致するよう 2 極 Debye をスケールする係数。"""
-    _, eps_im_h = level3b_heiken(rho)
+    _, eps_im_h = level3b_carrier(rho)
     w = 2.0 * np.pi * LEVEL3B_ANCHOR_FREQ
     unit = (LEVEL3B_DEBYE_DE1 * w * LEVEL3B_DEBYE_TAU1 / (1.0 + (w * LEVEL3B_DEBYE_TAU1) ** 2)
             + LEVEL3B_DEBYE_DE2 * w * LEVEL3B_DEBYE_TAU2 / (1.0 + (w * LEVEL3B_DEBYE_TAU2) ** 2))
@@ -673,7 +711,7 @@ def level3b_debye_scale(rho=None):
 def level3b_eps(f):
     """Level 3b の複素比誘電率 (eps', eps'')。2 極 Debye により分散する。"""
     f_arr = np.asarray(f, dtype=float)
-    eps_s, _ = level3b_heiken()
+    eps_s, _ = level3b_carrier()
     s = level3b_debye_scale()
     w = 2.0 * np.pi * f_arr
     x1, x2 = w * LEVEL3B_DEBYE_TAU1, w * LEVEL3B_DEBYE_TAU2
@@ -717,7 +755,7 @@ def level3b_group_index(f):
 
 def describe_level3b_medium():
     """Level 3b の媒質設定を人が読める形で返す。"""
-    eps_s, _ = level3b_heiken()
+    eps_s, _ = level3b_carrier()
     s = level3b_debye_scale()
     de1, de2 = s * LEVEL3B_DEBYE_DE1, s * LEVEL3B_DEBYE_DE2
     a_lo = float(level3b_alpha(np.array([0.5e9]))[0])
@@ -773,7 +811,8 @@ def build_transfer(f, d, level, n=None):
     # Level 3 では包絡ピークが群速度で決まるため、群屈折率から算出する
     # （位相走時ではズレる）。Level 1・2 では両者は一致する。
     # Level 3b は分散性なので、包絡ピークの位置は群速度で決まる。
-    # Level 1/2/3 は非分散なので位相速度と群速度が一致し、スカラー化するだけでよい。
+    # Level 1/2 は eps' が厳密に定数なので位相速度と群速度が一致する。
+    # Level 3 も現状は定数扱い（A-3 で eps'(f) を入れると 0.2% ずれる）。
     if 'absorb_debye' in effects:
         ng = float(level3b_group_index(BAND_CENTRE_HZ)[0])
         t_arr = TX_HEIGHT / C + ng * d / C
