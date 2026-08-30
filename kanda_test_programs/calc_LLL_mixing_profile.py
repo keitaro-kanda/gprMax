@@ -457,8 +457,8 @@ def draw_lines(ax, data, ref=None, ref_label='Carrier (dry)'):
     if ref is not None:
         ref_arr = np.atleast_2d(ref)
         for si in range(ref_arr.shape[0]):
-            ls = STYLE_SET[si] if ref_arr.shape[0] > 1 else '--'
-            ax.plot(ref_arr[si], z, color='gray', ls=ls, lw=2, zorder=1,
+            ls = STYLE_SET[si] if ref_arr.shape[0] > 1 else '-.'
+            ax.plot(ref_arr[si], z, color='magenta', ls=ls, lw=1, zorder=10,
                     label=ref_label if si == 0 else None)
     n_style = data.shape[1]
     for ii in range(n_ice):
@@ -474,7 +474,7 @@ def draw_lines(ax, data, ref=None, ref_label='Carrier (dry)'):
 
 ice_handles = [Line2D([0], [0], color=ice_colors[i], ls='-', lw=2,
                       label=ice_labels[i]) for i in range(n_ice)]
-carrier_handle = [Line2D([0], [0], color='gray', ls='--', lw=2,
+carrier_handle = [Line2D([0], [0], color='magenta', ls='-.', lw=1,
                          label='Carrier (dry)')]
 
 
@@ -829,8 +829,8 @@ def run_checks():
     add('    -> alpha は 5.0 -> 10.0 wt% で {:.3f} 倍'.format(v[2] / v[0]))
     add('       これは tan_delta の比そのもの（alpha ∝ tan_delta）')
     add('    -> 往復 3 m の減衰差: {:.2f} dB (5.0 wt%) vs {:.2f} dB (10.0 wt%)'
-        .format(-8.686 * 2 * np.trapezoid(SET_COMP['alpha'][0, 0], z),
-                -8.686 * 2 * np.trapezoid(SET_COMP['alpha'][0, 2], z)))
+        .format(-8.686 * 2 * trapz(SET_COMP['alpha'][0, 0], z),
+                -8.686 * 2 * trapz(SET_COMP['alpha'][0, 2], z)))
     add('')
 
     # -----------------------------------------------------------------
