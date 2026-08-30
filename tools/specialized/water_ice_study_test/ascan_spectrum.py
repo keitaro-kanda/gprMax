@@ -79,9 +79,26 @@ LEVEL_EFFECTS = {
     'Level_2': ['geom', 'surface_T', 'absorb_const'],
     'Level_3': ['geom', 'surface_T', 'absorb_tandelta'],
     'Level_3b': ['geom', 'surface_T', 'absorb_debye'],
-    'Level_4': ['geom', 'surface_T', 'absorb_tandelta', 'density_profile'],
+    'Level_4': ['geom', 'surface_T', 'absorb_tandelta', 'ice_layer'],
+    'Level_5': ['geom', 'surface_T', 'absorb_tandelta', 'ice_layer',
+                'density_profile'],
 }
-IMPLEMENTED_LEVELS = {'Level_1', 'Level_2', 'Level_3', 'Level_3b'}
+
+# 【はしごの順序変更について】
+# 本研究の主眼が水氷であることから、Level 4 と Level 5 の中身を入れ替えた。
+#   旧: Level 4 = 密度プロファイル（氷なし） / Level 5 = 密度 + 水氷
+#   新: Level 4 = 水氷層（均質背景）        / Level 5 = 密度 + 水氷
+# 均質背景に氷層を 1 枚置くほうが実装が軽く（材料 2 個、理論は 2 層 Fresnel の
+# 解析解）、反射・走時チャネルが成立するかを最短で確認できるため。
+# Level 4 の「氷なし」に相当するのは Level 3 そのものなので、対照は別途
+# 用意する必要がない（Level 5 以降は背景が変わるのでペア実行が必要になる）。
+#
+# 注意: 本ツールは「地表 tx + 埋設 rx」（片道透過, A 系統）専用である。
+# at_tx（地表 tx/rx で地下反射を見る B 系統）の解析は別ツールで扱う。
+# したがって Level 4 の理論は、氷層を「透過して」深さ d に届く波の
+# 振幅・走時であり、氷層からの反射そのものは扱わない。
+IMPLEMENTED_LEVELS = {'Level_1', 'Level_2', 'Level_3', 'Level_3b',
+                      'Level_4'}
 
 # JSON の下位選択階層につけるラベル（階層が深いほうまで使う）
 SUBLEVEL_LABELS = ['波形種別', 'サブ条件', '組成 (FeO+TiO2)', 'サブ条件']
@@ -185,6 +202,117 @@ LEVEL3_COMPOSITIONS = {
     'feo20':  20.0,
 }
 LEVEL3_DEFAULT_COMPOSITION = 'feo7p5'   # サブ階層で指定がないときの既定値
+
+
+# =============================================================================
+# [EDIT HERE] Level 3 の 2 極 Debye 実現（Level_3.in と同一の解析解）
+# =============================================================================
+# gprMax は eps'' 一定の材料を直接持てないため、Level_3.in は最大平坦の
+# 2 極 Debye でそれを実現している。理論側でも同じ式を使えるようにしておく。
+#
+#   1 極 Debye の eps'' は対数周波数 u = ln(w*tau) で sech 関数になる。
+#   u = ±s に等強度で 2 極置くと u=0 で最大平坦になる条件が
+#       s = arcsinh(1) = ln(1+sqrt2)      -> tau 比 = (1+sqrt2)^2 = 5.8284
+#   と閉形式で決まり、対称中心を帯域の幾何平均 f0 に取ると
+#       1/(1+(w0*tau1)^2) + 1/(1+(w0*tau2)^2) = 1   （厳密に 1）
+#   が成り立つので eps_inf も閉形式になる。
+#       De      = sqrt(2) * eps''_target   （各極）
+#       eps_inf = eps'_target - De
+#
+# --- 2 つのモードを分けている理由 --------------------------------------------
+# LEVEL3_EPS_REAL_MODE = 'debye'（既定, 修正項目 A-3）
+#   eps'' != 0 の媒質は Kramers-Kronig 則により eps' が必ず変化する。これは
+#   実装の副作用ではなく物理なので、理論側にも入れる。深さ 2.75 m の群遅延で
+#   -0.032 ns（数値分散 +0.051 ns の 62%、符号は逆）効く。'ideal' にすると
+#   従来どおり eps' = 定数として扱う。
+#
+# LEVEL3_EPS_IMAG_MODE = 'ideal'（既定）
+#   eps'' の帯域内リップル（帯域端で -2.44%）は 2 極近似の設計誤差であって
+#   物理ではない。理論は設計目標値（一定）のままにして、fig3(a) の alpha(f)
+#   に -2.5% のずれが見えるようにしておく。解析コードがその大きさの系統誤差を
+#   検出できていることの確認になる。'debye' にすると実装値に合わせられる。
+LEVEL3_EPS_REAL_MODE = 'debye'    # 'debye' … KK 由来の eps'(f) を理論に入れる
+                                  # 'ideal' … eps' = LEVEL3_EPS_R 一定（旧挙動）
+LEVEL3_EPS_IMAG_MODE = 'ideal'    # 'ideal' … eps'' = 設計目標値 一定（既定）
+                                  # 'debye' … 2 極 Debye の実装値に合わせる
+
+LEVEL3_DEBYE_BAND_HZ = (0.5e9, 2.0e9)   # Level_3.in の BAND_LO / BAND_HI と一致させる
+LEVEL3_DEBYE_F0 = float(np.sqrt(LEVEL3_DEBYE_BAND_HZ[0] * LEVEL3_DEBYE_BAND_HZ[1]))
+_L3_S_FLAT = float(np.arcsinh(1.0))          # = ln(1+sqrt2) = 0.881374
+_L3_TAU_RATIO = float(np.exp(_L3_S_FLAT))    # = 1+sqrt2 = 2.414214
+_L3_W0 = 2.0 * np.pi * LEVEL3_DEBYE_F0
+LEVEL3_DEBYE_TAU = (1.0 / (_L3_W0 * _L3_TAU_RATIO), _L3_TAU_RATIO / _L3_W0)
+
+
+def debye_flat_eps(eps_r_target, eps_imag_target, f):
+    """最大平坦 2 極 Debye の (eps'(f), eps''(f))。Level_3.in と同一の式。
+
+    eps_r_target / eps_imag_target は帯域の幾何平均 f0 での目標値。
+    氷層のように背景と eps' が違う材料にもそのまま使える。
+    """
+    f_arr = np.asarray(f, dtype=float)
+    de = np.sqrt(2.0) * eps_imag_target
+    eps_inf = eps_r_target - de
+    w = 2.0 * np.pi * f_arr
+    x1 = w * LEVEL3_DEBYE_TAU[0]
+    x2 = w * LEVEL3_DEBYE_TAU[1]
+    er = eps_inf + de / (1.0 + x1 ** 2) + de / (1.0 + x2 ** 2)
+    ei = de * x1 / (1.0 + x1 ** 2) + de * x2 / (1.0 + x2 ** 2)
+    return er, ei
+
+
+def apply_eps_modes(eps_r_target, eps_imag_target, f):
+    """モード設定に従って (eps', eps'') を返す共通ヘルパ。
+
+    Level 3（背景レゴリス）と Level 4（氷層）の両方から使う。
+    """
+    f_arr = np.asarray(f, dtype=float)
+    er_d, ei_d = debye_flat_eps(eps_r_target, eps_imag_target, f_arr)
+    er = er_d if LEVEL3_EPS_REAL_MODE == 'debye' \
+        else np.full_like(f_arr, float(eps_r_target))
+    ei = ei_d if LEVEL3_EPS_IMAG_MODE == 'debye' \
+        else np.full_like(f_arr, float(eps_imag_target))
+    return er, ei
+
+
+# =============================================================================
+# [EDIT HERE] Level 4 の媒質パラメータ（水氷層）
+# =============================================================================
+# 背景は Level 3 と完全に同一（均質レゴリス、eps'' 一定）。そこに水氷を含む
+# 層を 1 枚挟む。Level_4.in の設定と必ず一致させること。
+#
+# --- 混合則（LLL 増分形）------------------------------------------------------
+# 水氷はレゴリス粒子を置き換えるのではなく、粒子間の空隙（真空）に凝結する
+# （Takekura et al. 2025, Remote Sensing 17, 1050 の Fig.2 と同じ描像）。
+# LLL 混合則 eps^(1/3) = sum_i v_i eps_i^(1/3) を 3 相（粒子・真空・氷）に
+# 適用すると、乾燥時との差で粒子の項が相殺して
+#       eps'_wet^(1/3) = eps'_dry^(1/3) + v_ice * (eps_ice^(1/3) - 1)
+# となる。この形なら粒子密度も粒子誘電率も式に現れず、乾燥側に Carrier の
+# 経験式をそのまま使えるので経験式との接続が保たれる。
+#
+# 損失は粒子にあり氷はほぼ無損失なので eps'' は保存し、氷自身の微小な損失
+# だけを加える。虚部に混合則を適用してはならない（損失源が増えていないのに
+# 減衰が増えるという非物理的な結果になる）。
+#       eps''_wet = eps''_dry + v_ice * eps_ice * tan_delta_ice
+#
+# 参考: 混合則の選択（LLL か対数混合か）による差は 1 vol% の界面反射で約
+# 1.5 dB。「氷が空隙を埋める」か「レゴリスを置き換える」かの差（約 26 dB）に
+# 比べて桁違いに小さい。重要なのは規則ではなく描像。
+LEVEL4_ICE_TOP_M   = 1.00     # [m] 地表面から氷層上面までの深さ
+LEVEL4_ICE_THICK_M = 1.00     # [m] 氷層の厚さ
+
+LEVEL4_ICE_SPEC = 'vol'       # 'vol' … 体積パーセントで指定
+                              # 'wt'  … 質量パーセントで指定
+# 【単位に注意】どちらもパーセント。分率ではない（10 vol% なら 10.0）。
+LEVEL4_ICE_VOL_PCT = 10.0     # [vol%]
+LEVEL4_ICE_WT_PCT  = 0.5      # [wt%]
+
+LEVEL4_EPS_ICE  = 3.15        # 氷の eps'（GHz 帯。低温での温度依存は小さい）
+LEVEL4_TAND_ICE = 2.0e-4      # [要文献確認] 氷の tan_delta。低温ほど小さいので保守側
+LEVEL4_RHO_ICE  = 0.94        # [g/cm^3] 82-110 K での氷の密度（wt% 換算用）
+LEVEL4_RHO_GRAIN = 2.645      # [g/cm^3] 斜長岩の粒子密度。空隙率チェックにのみ使う
+
+_L4_ICE_INC = LEVEL4_EPS_ICE ** (1.0 / 3.0) - 1.0      # = 0.46590
 
 # =============================================================================
 # [EDIT HERE] Level 3b の媒質パラメータ（2 極 Debye 分散 = 高Tiバサルト想定）
@@ -666,19 +794,28 @@ def set_level3_composition(kind):
     return _LEVEL3_ACTIVE_WT, _LEVEL3_ACTIVE_KEY
 
 
+def level3_targets(feotio2_wt=None):
+    """Level 3 の設計目標値 (eps'_target, eps''_target) を返す。
+
+    帯域の幾何平均 f0 = 1.0 GHz における値であり、Level_3.in が
+    debye_flat_eps_imag() に渡す 2 つの数そのもの。
+    """
+    wt = _LEVEL3_ACTIVE_WT if feotio2_wt is None else feotio2_wt
+    er_t = LEVEL3_EPS_R
+    return er_t, er_t * level3_carrier_tandelta(wt)
+
+
 def level3_eps(f, feotio2_wt=None):
     """Level 3 の複素比誘電率 (eps', eps'')。
 
-    eps'' は帯域内で一定。eps' は KK により約 0.37% 変化するが、
-    本コードは現状これを定数として扱う（修正項目 A-3 で eps'(f) にする）。
+    LEVEL3_EPS_REAL_MODE / LEVEL3_EPS_IMAG_MODE の設定に従う。
+    既定では eps' は実装した 2 極 Debye の値（KK 由来の 0.43% の変化を含む。
+    修正項目 A-3）、eps'' は設計目標値の一定値。
 
     f と同じ形の配列で返す（呼び出し側の一貫性のため）。
     """
-    wt = _LEVEL3_ACTIVE_WT if feotio2_wt is None else feotio2_wt
-    f_arr = np.asarray(f, dtype=float)
-    er = np.full_like(f_arr, LEVEL3_EPS_R)
-    ei = np.full_like(f_arr, LEVEL3_EPS_R * level3_carrier_tandelta(wt))
-    return er, ei
+    er_t, ei_t = level3_targets(feotio2_wt)
+    return apply_eps_modes(er_t, ei_t, f)
 
 
 def level3_tandelta(f, feotio2_wt=None):
@@ -704,17 +841,224 @@ def level3_alpha(f, feotio2_wt=None):
     return np.nan_to_num(alpha, nan=0.0)
 
 
+def _group_index_from_eps(eps_fn, f, rel_df=1e-3):
+    """eps'(f) を返す関数から群屈折率 n_g = n + f dn/df を数値微分で求める。"""
+    f_arr = np.atleast_1d(np.asarray(f, dtype=float))
+    df = np.maximum(np.abs(f_arr) * rel_df, 1.0e3)
+    n0 = np.sqrt(eps_fn(f_arr))
+    np1 = np.sqrt(eps_fn(f_arr + df))
+    nm1 = np.sqrt(eps_fn(f_arr - df))
+    return n0 + f_arr * (np1 - nm1) / (2.0 * df)
+
+
+def level3_group_index(f, feotio2_wt=None):
+    """Level 3 の群屈折率。LEVEL3_EPS_REAL_MODE='ideal' なら n と一致する。"""
+    return _group_index_from_eps(
+        lambda ff: level3_eps(ff, feotio2_wt)[0], f)
+
+
+# =============================================================================
+# 理論：Level 4（水氷層を透過して深さ d に届く波）
+# =============================================================================
+def level4_ice_volume_fraction():
+    """氷の体積分率（0-1 の分率）。入力はパーセントで受け取る。
+
+        v_ice = (rho_bulk / rho_ice) * w / (1 - w)     Takekura+2025 Eq.(8)
+    """
+    if LEVEL4_ICE_SPEC == 'vol':
+        v = LEVEL4_ICE_VOL_PCT / 100.0
+    elif LEVEL4_ICE_SPEC == 'wt':
+        w = LEVEL4_ICE_WT_PCT / 100.0
+        v = (LEVEL3_RHO / LEVEL4_RHO_ICE) * w / (1.0 - w)
+    else:
+        raise CmdInputError("LEVEL4_ICE_SPEC は 'wt' か 'vol'")
+    if v < 0.0:
+        raise CmdInputError('氷の体積分率が負です')
+    porosity = 1.0 - LEVEL3_RHO / LEVEL4_RHO_GRAIN
+    if v > porosity:
+        raise CmdInputError(
+            '氷の体積分率 {:.4f} が空隙率 {:.4f} を超えています'.format(v, porosity))
+    return v
+
+
+def level4_targets(feotio2_wt=None):
+    """(背景の目標値, 氷層の目標値) をそれぞれ (eps', eps'') の組で返す。
+
+    Level_4.in の mix_ice() と同じ順序（目標値を混合してから Debye 化）。
+    """
+    er_dry, ei_dry = level3_targets(feotio2_wt)
+    v = level4_ice_volume_fraction()
+    er_ice = (er_dry ** (1.0 / 3.0) + v * _L4_ICE_INC) ** 3
+    ei_ice = ei_dry + v * LEVEL4_EPS_ICE * LEVEL4_TAND_ICE
+    return (er_dry, ei_dry), (er_ice, ei_ice)
+
+
+def level4_eps(f, in_ice, feotio2_wt=None):
+    """Level 4 の複素比誘電率。in_ice=True で氷層、False で背景レゴリス。"""
+    dry, ice = level4_targets(feotio2_wt)
+    er_t, ei_t = ice if in_ice else dry
+    return apply_eps_modes(er_t, ei_t, f)
+
+
+def level4_tandelta(f, in_ice=False, feotio2_wt=None):
+    """Level 4 の tan_delta(f)。既定は背景レゴリス。"""
+    er, ei = level4_eps(f, in_ice, feotio2_wt)
+    return ei / er
+
+
+def level4_alpha(f, in_ice=False, feotio2_wt=None):
+    """Level 4 の減衰係数 alpha(f) [Np/m]（厳密式）。既定は背景レゴリス。"""
+    f_arr = np.asarray(f, dtype=float)
+    er, ei = level4_eps(f_arr, in_ice, feotio2_wt)
+    td = ei / er
+    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)
+    with np.errstate(invalid='ignore'):
+        alpha = w_over_c * np.sqrt(er / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
+    return np.nan_to_num(alpha, nan=0.0)
+
+
+def level4_segments(depth_m):
+    """地表 (0) から深さ d までの経路を [(区間長, 氷層か), ...] に分ける。"""
+    top = float(LEVEL4_ICE_TOP_M)
+    bot = top + float(LEVEL4_ICE_THICK_M)
+    d = float(depth_m)
+    edges = sorted({0.0, d, min(max(top, 0.0), d), min(max(bot, 0.0), d)})
+    segs = []
+    for a, b in zip(edges[:-1], edges[1:]):
+        if b - a <= 0.0:
+            continue
+        mid = 0.5 * (a + b)
+        segs.append((b - a, top <= mid < bot))
+    return segs
+
+
+def level4_interfaces_crossed(depth_m):
+    """深さ d までに横切る氷層界面の数（0, 1, 2）を返す。"""
+    top = float(LEVEL4_ICE_TOP_M)
+    bot = top + float(LEVEL4_ICE_THICK_M)
+    d = float(depth_m)
+    return int(d > top) + int(d > bot)
+
+
+def level4_alpha_path_avg(f, depth_m, feotio2_wt=None):
+    """経路平均の減衰係数 (1/d) * ∫alpha dz。
+
+    fig3 で LSR から逆算される alpha はこの量に対応する（単層なら
+    level4_alpha と一致する）。
+    """
+    d = float(depth_m)
+    if d <= 0.0:
+        return level4_alpha(f, False, feotio2_wt)
+    acc = np.zeros_like(np.asarray(f, dtype=float))
+    for length, in_ice in level4_segments(d):
+        acc = acc + level4_alpha(f, in_ice, feotio2_wt) * length
+    return acc / d
+
+
+def transfer_absorb_layered(f, d, n=None):
+    """Level 4 の吸収項 exp(-∫alpha dz)（片道透過、層ごとに積分）。"""
+    acc = np.zeros_like(np.asarray(f, dtype=float))
+    for length, in_ice in level4_segments(d):
+        acc = acc + level4_alpha(f, in_ice) * length
+    return np.exp(-acc)
+
+
+def transfer_ice_T(f, d, n=None):
+    """氷層界面の透過係数の積（Ez は界面に接線なので T = 2 n1/(n1+n2)）。
+
+    上面（レゴリス -> 氷）と下面（氷 -> レゴリス）を横切った分だけ掛ける。
+    両方を横切ると積は 4 n1 n2/(n1+n2)^2 となりほぼ 1（10 vol% で -0.005 dB）
+    だが、氷層の内部に rx がある場合は上面の 1 回分だけが効く（-0.21 dB）。
+    多重反射は R^2 のオーダー（10 vol% で -64 dB）なので無視する。
+    """
+    n_reg = np.sqrt(level4_eps(f, False)[0])
+    n_ice = np.sqrt(level4_eps(f, True)[0])
+    crossed = level4_interfaces_crossed(d)
+    T = np.ones_like(n_reg)
+    if crossed >= 1:
+        T = T * (2.0 * n_reg / (n_reg + n_ice))      # レゴリス -> 氷
+    if crossed >= 2:
+        T = T * (2.0 * n_ice / (n_reg + n_ice))      # 氷 -> レゴリス
+    return T
+
+
+def transfer_geom_layered(f, d):
+    """層構造での幾何減衰項。
+
+    見かけ源距離を界面ごとに更新する（近軸の屈折則 r -> r * n_new/n_old）。
+    界面がなければ r_eff = n*TX_HEIGHT + d となり transfer_geom と一致する。
+    """
+    n_reg = np.sqrt(level4_eps(f, False)[0])
+    n_ice = np.sqrt(level4_eps(f, True)[0])
+    r = n_reg * TX_HEIGHT           # 真空 -> レゴリスの見かけ源距離
+    n_prev = n_reg
+    for length, in_ice in level4_segments(d):
+        n_cur = n_ice if in_ice else n_reg
+        r = r * (n_cur / n_prev) + length
+        n_prev = n_cur
+    return np.sqrt(n_prev / r) * np.sqrt(R_REF)
+
+
+def transfer_phase_layered(f, d):
+    """層構造での走時位相項。t_arr = h/c + Σ n_i L_i / c。"""
+    n_reg = np.sqrt(level4_eps(f, False)[0])
+    n_ice = np.sqrt(level4_eps(f, True)[0])
+    t_arr_f = np.full_like(n_reg, TX_HEIGHT / C)
+    for length, in_ice in level4_segments(d):
+        t_arr_f = t_arr_f + (n_ice if in_ice else n_reg) * length / C
+    delay_s = (t_arr_f - R_REF / C) * 1e-9
+    return np.exp(-2j * np.pi * f * delay_s), t_arr_f
+
+
+def level4_group_arrival(d, f0=None):
+    """包絡ピークの位置に対応する群走時 [ns]（スカラー）。"""
+    fc = BAND_CENTRE_HZ if f0 is None else f0
+    ng_reg = float(_group_index_from_eps(
+        lambda ff: level4_eps(ff, False)[0], np.array([fc]))[0])
+    ng_ice = float(_group_index_from_eps(
+        lambda ff: level4_eps(ff, True)[0], np.array([fc]))[0])
+    t = TX_HEIGHT / C
+    for length, in_ice in level4_segments(d):
+        t += (ng_ice if in_ice else ng_reg) * length / C
+    return t
+
+
+def describe_level4_medium():
+    """Level 4 の氷層設定を人が読める形で返す（ログと run_info 用）。"""
+    v = level4_ice_volume_fraction()
+    (er_d, ei_d), (er_i, ei_i) = level4_targets()
+    wt_pct = 100.0 * v * LEVEL4_RHO_ICE / (LEVEL3_RHO + v * LEVEL4_RHO_ICE)
+    n0, n1 = np.sqrt(er_d), np.sqrt(er_i)
+    R = (n0 - n1) / (n0 + n1)
+    a_d = float(level4_alpha(np.array([BAND_CENTRE_HZ]), False)[0])
+    a_i = float(level4_alpha(np.array([BAND_CENTRE_HZ]), True)[0])
+    return ('ice layer {:.3f} vol% ({:.3f} wt%) at {:.2f}-{:.2f} m, '
+            'LLL mixing (pore filling), '
+            "eps' {:.6f} -> {:.6f} ({:+.2f}%), eps'' {:.6f} -> {:.6f} ({:+.3f}%), "
+            'alpha {:+.2f}% @{:.2f} GHz, interface R = {:.1f} dB'
+            .format(100.0 * v, wt_pct, LEVEL4_ICE_TOP_M,
+                    LEVEL4_ICE_TOP_M + LEVEL4_ICE_THICK_M,
+                    er_d, er_i, 100.0 * (er_i / er_d - 1.0),
+                    ei_d, ei_i, 100.0 * (ei_i / ei_d - 1.0),
+                    100.0 * (a_i / a_d - 1.0), BAND_CENTRE_HZ / 1e9,
+                    20.0 * np.log10(abs(R))))
+
+
 def refractive_index(f, level):
     """レベルに応じた屈折率 n を返す。
 
     Level 1（無損失）と Level 2（sigma 一定）は eps' が厳密に定数。
-    Level 3 は eps'' 一定なので KK により eps' が約 0.37% 変化するが、
-    ここでは暫定的に定数として扱っている（修正項目 A-3 で置き換える）。
+    Level 3・4 は eps'' 一定なので KK により eps' が約 0.43% 変化する。
+    LEVEL3_EPS_REAL_MODE='debye'（既定, 修正項目 A-3）ならその変化を含めた
+    n(f) を返し、'ideal' なら従来どおり定数を返す。
+    Level 4 でここが返すのは背景レゴリスの n（地表透過係数などに使う）で、
+    氷層を含む経路の計算は transfer_*_layered が別途行う。
     f と同じ形の配列で返す。
     """
     f_arr = np.asarray(f, dtype=float)
     if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
-        return np.full_like(f_arr, np.sqrt(LEVEL3_EPS_R))
+        er, _ = level3_eps(f_arr)
+        return np.sqrt(er)
     if 'absorb_debye' in LEVEL_EFFECTS[level]:
         er, _ = level3b_eps(f_arr)
         return np.sqrt(er)
@@ -729,9 +1073,11 @@ def describe_level3_medium():
     a_hi = float(level3_alpha(np.array([2.0e9]))[0])
     return ('constant eps_imag (tan_delta ~ const), FeO+TiO2 = {:.1f} wt% [{}], '
             'rho = {:.6f}, eps_r = {:.3f}, tan_delta = {:.6f}  '
-            '(alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz, ratio {:.3f})'
+            '(alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz, ratio {:.3f}) '
+            "[eps' mode = {}, eps'' mode = {}]"
             .format(wt, _LEVEL3_ACTIVE_KEY, LEVEL3_RHO, LEVEL3_EPS_R, td,
-                    a_lo, a_hi, a_hi / a_lo))
+                    a_lo, a_hi, a_hi / a_lo,
+                    LEVEL3_EPS_REAL_MODE, LEVEL3_EPS_IMAG_MODE))
 
 
 def transfer_absorb_tandelta(f, d, n=None):
@@ -828,7 +1174,7 @@ def transfer_absorb_debye(f, d, n=None):
 
 
 def transfer_density_profile(f, d, params):
-    raise NotImplementedError('Level_4 (density_profile) は未実装です。')
+    raise NotImplementedError('Level_5 (density_profile) は未実装です。')
 
 
 def build_transfer(f, d, level, n=None):
@@ -842,24 +1188,34 @@ def build_transfer(f, d, level, n=None):
     """
     effects = LEVEL_EFFECTS[level]
     n = refractive_index(f, level)
+    # 'ice_layer' があるレベル（Level 4 以降）は経路が層構造になるので、
+    # 幾何項・吸収項・走時位相を層ごとに積む版に差し替える。
+    layered = 'ice_layer' in effects
     H = np.ones_like(f, dtype=complex)
     for effect in effects:
         if effect == 'geom':
-            H = H * transfer_geom(d, n)
+            H = H * (transfer_geom_layered(f, d) if layered
+                     else transfer_geom(d, n))
         elif effect == 'surface_T':
             H = H * transfer_surface_T(n)
         elif effect == 'absorb_const':
             H = H * transfer_absorb(f, d, n)
         elif effect == 'absorb_tandelta':
-            H = H * transfer_absorb_tandelta(f, d, n)
+            H = H * (transfer_absorb_layered(f, d, n) if layered
+                     else transfer_absorb_tandelta(f, d, n))
         elif effect == 'absorb_debye':
             H = H * transfer_absorb_debye(f, d, n)
+        elif effect == 'ice_layer':
+            H = H * transfer_ice_T(f, d, n)
         elif effect == 'density_profile':
             H = H * transfer_density_profile(f, d, None)
         else:
             raise CmdInputError('Unknown effect: {}'.format(effect))
 
-    phase, t_arr_f = transfer_phase(f, d, n)
+    if layered:
+        phase, t_arr_f = transfer_phase_layered(f, d)
+    else:
+        phase, t_arr_f = transfer_phase(f, d, n)
     H = H * phase
 
     # 探索窓の中心と CSV に載せる代表値としてスカラーの走時を作る。
@@ -868,8 +1224,15 @@ def build_transfer(f, d, level, n=None):
     # Level 3b は分散性なので、包絡ピークの位置は群速度で決まる。
     # Level 1/2 は eps' が厳密に定数なので位相速度と群速度が一致する。
     # Level 3 も現状は定数扱い（A-3 で eps'(f) を入れると 0.2% ずれる）。
+    # eps' が周波数依存のときは位相走時を代表値に使えない（f=0 の値になる）。
+    # 包絡ピークの位置を決めるのは群速度なので、群屈折率から作る。
     if 'absorb_debye' in effects:
         ng = float(level3b_group_index(BAND_CENTRE_HZ)[0])
+        t_arr = TX_HEIGHT / C + ng * d / C
+    elif layered:
+        t_arr = level4_group_arrival(d)
+    elif 'absorb_tandelta' in effects:
+        ng = float(level3_group_index(BAND_CENTRE_HZ)[0])
         t_arr = TX_HEIGHT / C + ng * d / C
     else:
         t_arr = float(np.atleast_1d(t_arr_f)[0]) if np.ndim(t_arr_f) else float(t_arr_f)
@@ -1019,6 +1382,8 @@ def analyze_level(rx_paths, reference, level):
         print('{} の媒質: {}'.format(level, describe_level3_medium()))
     if 'absorb_debye' in LEVEL_EFFECTS[level]:
         print('{} の媒質: {}'.format(level, describe_level3b_medium()))
+    if 'ice_layer' in LEVEL_EFFECTS[level]:
+        print('{} の氷層: {}'.format(level, describe_level4_medium()))
 
     ref_peak = measure_peak(e_ref, dt_ref)
     t_src_delay = ref_peak['t_peak'] - R_REF / C
@@ -1469,6 +1834,8 @@ def plot_attenuation(results, freq_hz, level, n, output_dir):
         if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
             return level3_alpha(freq_hz) if key.startswith('alpha') \
                 else level3_tandelta(freq_hz)
+        # 注: Level 4 も 'absorb_tandelta' を持つので上の分岐に入り、
+        #     背景レゴリスの理論値が返る。氷層側は別途重ね描きする。
         if 'absorb_debye' in LEVEL_EFFECTS[level]:
             return level3b_alpha(freq_hz) if key.startswith('alpha') \
                 else level3b_tandelta(freq_hz)
@@ -1509,8 +1876,16 @@ def plot_attenuation(results, freq_hz, level, n, output_dir):
         if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
             th = (level3_alpha(freq_hz) if key.startswith('alpha')
                   else level3_tandelta(freq_hz))
-            ax.plot(freq_ghz, th, color='r', ls='--', lw=1.5,
-                    label='Theory ({})'.format(level))
+            bg_label = ('Theory (regolith)' if 'ice_layer' in LEVEL_EFFECTS[level]
+                        else 'Theory ({})'.format(level))
+            ax.plot(freq_ghz, th, color='r', ls='--', lw=1.5, label=bg_label)
+            # Level 4 では LSR から逆算される alpha は経路平均になるため、
+            # 背景レゴリスと氷層の 2 本の間に測定値が入るのが期待される姿。
+            if 'ice_layer' in LEVEL_EFFECTS[level]:
+                th_ice = (level4_alpha(freq_hz, True) if key.startswith('alpha')
+                          else level4_tandelta(freq_hz, True))
+                ax.plot(freq_ghz, th_ice, color='m', ls=':', lw=1.5,
+                        label='Theory (ice layer)')
         elif 'absorb_debye' in LEVEL_EFFECTS[level]:
             th = (level3b_alpha(freq_hz) if key.startswith('alpha')
                   else level3b_tandelta(freq_hz))
@@ -1656,6 +2031,8 @@ def write_run_info(level, kind, json_path, results, output_dir):
             f.write('  Level 2 medium: {}\n'.format(describe_level2_medium(N_REGOLITH)))
         if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
             f.write('  Level 3 medium: {}\n'.format(describe_level3_medium()))
+        if 'ice_layer' in LEVEL_EFFECTS[level]:
+            f.write('  Level 4 ice layer: {}\n'.format(describe_level4_medium()))
         if 'absorb_debye' in LEVEL_EFFECTS.get(level, []):
             f.write('  Level 3b medium: {}\n'.format(describe_level3b_medium()))
         f.write('  BAND_GHZ = {}\n'.format(BAND_GHZ))
@@ -1687,10 +2064,11 @@ def write_run_info(level, kind, json_path, results, output_dir):
 def main():
     level, kind, rx_paths, reference = load_paths(JSON_PATH)
 
-    # Level 3 の組成をサブ階層キーから設定する（他レベルでは無視される）
+    # 背景レゴリスの組成をサブ階層キーから設定する。
+    # Level 3 と Level 4 は背景が同一なので同じ経路を通る（他レベルでは無視）。
     if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
         wt, key = set_level3_composition(kind)
-        print('Level 3 の組成: FeO+TiO2 = {:.1f} wt%  [{}]'.format(wt, key))
+        print('背景レゴリスの組成: FeO+TiO2 = {:.1f} wt%  [{}]'.format(wt, key))
 
     if level not in IMPLEMENTED_LEVELS:
         raise NotImplementedError(
