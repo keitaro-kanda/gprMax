@@ -22,9 +22,9 @@ from __future__ import annotations
 
 import csv
 import json
-import math
 import os
 import sys
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import numpy as np
@@ -35,27 +35,26 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from ascan_spectrum import level3_eps, level4_eps, describe_level4_medium
-try:
-    from ascan_spectrum import level4_alpha
-except ImportError:
-    level4_alpha = None
+import ascan_spectrum as asp
 
 
 # ---------------------------------------------------------------------------
-# [EDIT HERE] configuration (keep in sync with the .in files)
+# [EDIT HERE] configuration
 # ---------------------------------------------------------------------------
-TX_HEIGHT_M   = 0.35              # tx/rx height above surface [m]
-ICE_TOP_M     = 1.00             # depth of ice-layer top = upper regolith thickness [m]
-ICE_THICK_M   = 1.00             # ice-layer thickness [m]
-C             = 299_792_458.0    # speed of light [m/s]
-R_REF_M       = 1.00             # far_1m reference distance [m]
+# Geometry / placement and the real-data ice fraction come from ascan_spectrum
+# (single source of truth, kept in sync with the .in files; no duplication).
+TX_HEIGHT_M = asp.TX_HEIGHT              # tx/rx height above surface [m]
+ICE_TOP_M   = asp.LEVEL4_ICE_TOP_M       # depth of ice-layer top [m]
+ICE_THICK_M = asp.LEVEL4_ICE_THICK_M     # ice-layer thickness [m]
+R_REF_M     = asp.R_REF                  # far_1m reference distance [m]
+DETECTED_ICE_VOL = asp.level4_ice_volume_fraction()   # real-data ice fraction
+
+C = 299_792_458.0                # speed of light [m/s] (traveltime/geometry only)
 
 NOISE_BAND_NS      = (8.0, 40.0) # window used to measure the noise floor [ns]
 EVENT_WINDOW_NS    = 2.0         # half-width of the event search window [ns]
 GATE_HALFWIDTH_NS  = 3.0         # half-width of the attenuation time gate [ns]
 BELOW_FLOOR_FACTOR = 3.0         # peak below this * floor_rms is "below floor"
-DETECTED_ICE_VOL   = 0.10        # ice volume fraction of the real data (Level_4)
 ICE_VOL_SWEEP      = (0.005, 0.01, 0.05, 0.10)   # swept ice fractions
 CENTER_FREQ_HZ     = 1.25e9      # representative frequency [Hz]
 FIG_DPI            = 150
@@ -76,59 +75,53 @@ DEFAULT_PATHS_JSON = ("/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/"
 # ---------------------------------------------------------------------------
 # Medium adapter (the only code that touches ascan_spectrum)
 # ---------------------------------------------------------------------------
-def _eps_to_complex(raw) -> np.ndarray:
-    """Normalise ascan_spectrum permittivity to a 1-D complex array.
+@contextmanager
+def _ice_fraction(v):
+    """Temporarily set ascan_spectrum's ice volume fraction so its own mixing
+    model is evaluated at `v` (used for the detection-limit sweep). v=None keeps
+    the module default (the real-data fraction). No constants are duplicated."""
+    if v is None:
+        yield
+        return
+    spec, pct = asp.LEVEL4_ICE_SPEC, asp.LEVEL4_ICE_VOL_PCT
+    asp.LEVEL4_ICE_SPEC = "vol"
+    asp.LEVEL4_ICE_VOL_PCT = v * 100.0
+    try:
+        yield
+    finally:
+        asp.LEVEL4_ICE_SPEC, asp.LEVEL4_ICE_VOL_PCT = spec, pct
 
-    Accepts a complex array, or a real 2-component [eps', eps''] array
-    (trailing or leading axis of size 2), or a real eps' array (loss-free).
-    """
-    a = np.asarray(raw)
-    if np.iscomplexobj(a):
-        return np.atleast_1d(a).ravel()
-    a = np.atleast_1d(a.astype(float))
-    if a.ndim >= 2 and a.shape[-1] == 2:          # (..., 2) = [eps', eps'']
-        a = a.reshape(-1, 2)
-        return a[:, 0] + 1j * a[:, 1]
-    if a.ndim == 2 and a.shape[0] == 2:           # (2, N)
-        return a[0] + 1j * a[1]
-    return a.ravel().astype(complex)              # 1-D eps' only
 
-
-def _n_alpha(raw, f) -> tuple[np.ndarray, np.ndarray]:
-    """Return (n, alpha[Np/m]) from permittivity.
-
-    eps = eps' - i|eps''|,  n = Re sqrt(eps),  alpha = (2 pi f / c)|Im sqrt(eps)|.
-    """
-    eps = _eps_to_complex(raw)
-    eps = eps.real - 1j * np.abs(eps.imag)
-    sq = np.sqrt(eps)
-    alpha = (2.0 * np.pi * np.atleast_1d(np.asarray(f, float)) / C) * np.abs(sq.imag)
-    return sq.real, alpha
+def _index_from_eps(eps):
+    """Refractive index n = Re sqrt(eps' - i|eps''|) from an (eps', eps'') pair."""
+    er, ei = eps
+    er = np.atleast_1d(np.asarray(er, dtype=float))
+    ei = np.atleast_1d(np.asarray(ei, dtype=float))
+    return np.sqrt(er - 1j * np.abs(ei)).real
 
 
 @dataclass
 class MediumModel:
-    """Thin wrapper over ascan_spectrum. Adjust here if signatures differ."""
-    ice_vol: float
+    """Thin wrapper over ascan_spectrum. `ice_vol` selects the ice fraction for
+    the sweep; None uses the module default (the real-data fraction)."""
+    ice_vol: float | None = None
 
     def regolith_index(self, f):
-        return _n_alpha(level3_eps(np.atleast_1d(f)), f)[0]
+        return _index_from_eps(asp.level3_eps(np.atleast_1d(f)))
 
     def regolith_alpha(self, f):
-        return _n_alpha(level3_eps(np.atleast_1d(f)), f)[1]
+        return np.atleast_1d(asp.level3_alpha(np.atleast_1d(f)))
 
     def ice_index(self, f):
-        return _n_alpha(level4_eps(np.atleast_1d(f), self.ice_vol), f)[0]
+        with _ice_fraction(self.ice_vol):
+            return _index_from_eps(asp.level4_eps(np.atleast_1d(f), True))
 
     def ice_alpha(self, f):
-        f = np.atleast_1d(f)
-        if level4_alpha is not None:
-            a = np.asarray(level4_alpha(f, self.ice_vol), dtype=float)
-            return np.atleast_1d(np.squeeze(a)).ravel()
-        return _n_alpha(level4_eps(f, self.ice_vol), f)[1]
+        with _ice_fraction(self.ice_vol):
+            return np.atleast_1d(asp.level4_alpha(np.atleast_1d(f), True))
 
     def describe(self):
-        return describe_level4_medium()
+        return asp.describe_level4_medium()
 
 
 # ---------------------------------------------------------------------------
@@ -233,16 +226,18 @@ def build_interfaces(medium, f):
 
 
 def event_transfer(iface, f):
-    """Complex transfer function H(f) = G T R A exp(-2 pi i f P/c).
-    The phase uses the frequency-dependent optical path so dispersion is not
-    double-counted."""
+    """Complex transfer function H(f) = G T R A exp(-2 pi i f (P - R_ref)/c).
+
+    The phase uses the frequency-dependent optical path (so dispersion is not
+    double-counted) and subtracts the 1 m reference delay carried by far_1m, so
+    that irfft(E_ref * H) places the event at its true arrival time."""
     f = np.asarray(f, dtype=float)
     G = np.sqrt(R_REF_M / r_eff_round_trip(iface.depth_index, iface.layer_L, iface.layer_n))
     T = roundtrip_transmission(iface.shallower_pairs)
     R = reflection_coefficient(iface.n_above, iface.n_below)
     A = absorption_round_trip(iface.depth_index, iface.layer_L, iface.layer_alpha)
     P = optical_path_round_trip(iface.depth_index, iface.layer_L, iface.layer_n)
-    return G * T * R * A * np.exp(-2j * np.pi * f * P / C)
+    return G * T * R * A * np.exp(-2j * np.pi * f * (P - R_REF_M) / C)
 
 
 @dataclass
@@ -262,25 +257,27 @@ def _scalar(x):
     return float(np.ravel(np.asarray(x))[0])
 
 
-def theory_events(medium, freqs, E_ref, dt):
-    """Theory quantities per event. E_ref/freqs are the far_1m reference spectrum;
-    the envelope peak is the reference pulse convolved with H(f)."""
+def theory_events(medium, freqs, E_ref, dt, t0=0.0):
+    """Theory quantities per event. Arrival time = geometric two-way time + t0,
+    where t0 is the source emission delay (from far_1m); this stays valid even
+    when an interface reflection vanishes (R->0). The envelope peak amplitude
+    comes from the reference pulse convolved with H(f)."""
     ifaces = build_interfaces(medium, freqs)
-    ifc = build_interfaces(medium, CENTER_FREQ_HZ)   # single representative values
+    ifc = build_interfaces(medium, CENTER_FREQ_HZ)   # representative R/G/T/A
+    n_time = 2 * (len(freqs) - 1)
     out = []
     for iface, ic in zip(ifaces, ifc):
-        ev = EventTheory(
+        sig = irfft(E_ref * event_transfer(iface, freqs), n=n_time)
+        out.append(EventTheory(
             name=iface.name,
-            t=_scalar(travel_time(ic.depth_index, ic.layer_L, ic.layer_n)),
+            t=_scalar(travel_time(ic.depth_index, ic.layer_L, ic.layer_n)) + t0,
             R=_scalar(reflection_coefficient(ic.n_above, ic.n_below)),
             G=_scalar(np.sqrt(R_REF_M / r_eff_round_trip(ic.depth_index, ic.layer_L, ic.layer_n))),
             T=_scalar(roundtrip_transmission(ic.shallower_pairs)),
             A=_scalar(absorption_round_trip(ic.depth_index, ic.layer_L, ic.layer_alpha)),
             r_eff=_scalar(r_eff_round_trip(ic.depth_index, ic.layer_L, ic.layer_n)),
-        )
-        sig = irfft(E_ref * event_transfer(iface, freqs), n=2 * (len(freqs) - 1))
-        ev.peak = float(np.abs(hilbert(sig)).max())
-        out.append(ev)
+            peak=float(np.abs(hilbert(sig)).max()),
+        ))
     ref = out[0].peak
     for ev in out:
         ev.peak_db = 20.0 * np.log10(ev.peak / ref) if ref > 0 else np.nan
@@ -324,10 +321,10 @@ def load_paths(json_path):
 
 
 def resolve_output_dir(paths, level_key):
-    """Put outputs next to the data: .../<condition>/reflection/."""
+    """Put outputs next to the data: .../<condition>/analysis/reflection/."""
     at_tx = _resolve_leaf(paths[level_key], "at_tx")
     cond = os.path.dirname(os.path.dirname(os.path.dirname(at_tx)))
-    out = os.path.join(cond, "reflection")
+    out = os.path.join(cond, "analysis", "reflection")
     os.makedirs(out, exist_ok=True)
     return out
 
@@ -428,7 +425,7 @@ def channel_reflection(dets, events):
             R = np.nan
         else:
             corr = (ev0.G * ev0.T * ev0.A) / (ev.G * ev.T * ev.A)
-            pol = math.copysign(1.0, d.signed_peak * s0) if (s0 and d.signed_peak) else 1.0
+            pol = float(np.sign(d.signed_peak * s0)) if (s0 and d.signed_peak) else 1.0
             R = (d.peak / base) * corr * ev0.R * pol
         out[ev.name] = {"R_theory": ev.R, "R_measured": float(R),
                         "residual": float(R - ev.R) if np.isfinite(R) else np.nan}
@@ -500,7 +497,7 @@ def _cross(vols, snr):
     return np.nan
 
 
-def sweep_detection_limits(freqs, E_ref, dt, floor_db, traveltime_noise_ns,
+def sweep_detection_limits(freqs, E_ref, dt, t0, floor_db, traveltime_noise_ns,
                            alpha_noise, ice_vols=ICE_VOL_SWEEP):
     """SNR of each channel versus ice fraction, and the SNR=1 crossing.
     Signal/noise: reflection = ice-top peak / floor; traveltime = bottom-time
@@ -508,12 +505,12 @@ def sweep_detection_limits(freqs, E_ref, dt, floor_db, traveltime_noise_ns,
     alpha shift vs ice-free / LSR residual."""
     floor_lin = 10 ** (floor_db / 20.0)
     vols = np.asarray(ice_vols, dtype=float)
-    ev0 = theory_events(MediumModel(1e-6), freqs, E_ref, dt)
-    alpha0 = float(MediumModel(1e-6).ice_alpha(CENTER_FREQ_HZ)[0])
+    ev0 = theory_events(MediumModel(0.0), freqs, E_ref, dt, t0)
+    alpha0 = float(MediumModel(0.0).ice_alpha(CENTER_FREQ_HZ)[0])
     snr_refl, snr_time, snr_atten = [], [], []
     for v in vols:
         med = MediumModel(float(v))
-        evs = theory_events(med, freqs, E_ref, dt)
+        evs = theory_events(med, freqs, E_ref, dt, t0)
         snr_refl.append((evs[1].peak / evs[0].peak) / floor_lin)
         snr_time.append(abs((evs[2].t - ev0[2].t) * 1e9) / traveltime_noise_ns)
         alpha_v = float(med.ice_alpha(CENTER_FREQ_HZ)[0])
@@ -562,15 +559,18 @@ def fig2_events(out_dir, dets, events, dt):
     names = [e.name for e in events]
     t_th = np.array([e.t for e in events]) * 1e9
     t_ms = np.array([d.t_measured for d in dets]) * 1e9
-    a_th = np.array([e.peak for e in events])
-    a_ms = np.array([d.peak for d in dets])
+    # amplitudes relative to the surface event (absolute scales differ:
+    # theory is in far_1m units, measured in at_tx units)
+    a_th = np.array([e.peak for e in events]); a_th = a_th / a_th[0]
+    a_ms = np.array([d.peak for d in dets]); a_ms = a_ms / a_ms[0]
     fig, ax = plt.subplots(1, 3, figsize=(13, 4))
     ax[0].plot(t_th, t_ms, "o"); ax[0].plot(t_th, t_th, "k--", lw=0.8)
     ax[0].set_xlabel("t theory [ns]"); ax[0].set_ylabel("t measured [ns]")
     ax[0].set_title("(a) arrival time")
     ax[1].loglog(a_th, a_ms, "o"); ax[1].loglog(a_th, a_th, "k--", lw=0.8)
-    ax[1].set_xlabel("amplitude theory"); ax[1].set_ylabel("amplitude measured")
-    ax[1].set_title("(b) amplitude")
+    ax[1].set_xlabel("amplitude / surface (theory)")
+    ax[1].set_ylabel("amplitude / surface (measured)")
+    ax[1].set_title("(b) amplitude vs surface")
     ax[2].bar(range(len(names)), t_ms - t_th)
     ax[2].set_xticks(range(len(names))); ax[2].set_xticklabels(names, rotation=30)
     ax[2].set_ylabel("traveltime residual [ns]"); ax[2].set_title("(c) residual")
@@ -685,6 +685,8 @@ def run_analysis(paths, level_key, traces=None,
     """Run one condition. `traces` = {'at_tx':(t,a), 'far_1m':(t,a), 'noice':(t,a)}
     may be injected for testing; otherwise traces are read from `paths`."""
     out_dir = resolve_output_dir(paths, level_key)
+    out_dir = os.path.join(out_dir, "bg_sub" if use_bg_sub else "no_bg_sub")
+    os.makedirs(out_dir, exist_ok=True)
 
     if traces is None:
         p = resolve_input_paths(paths, level_key)
@@ -697,13 +699,19 @@ def run_analysis(paths, level_key, traces=None,
         t_ni, a_ni = traces.get("noice", (t_at, a_at))
 
     dt = t_at[1] - t_at[0]
-    freqs = rfftfreq(len(a_ref), dt)
+    # Put the reference on the same time grid as at_tx (same dt) so synthesized
+    # events up to the ice-bottom arrival cannot wrap around a short window.
+    n = len(a_at)
+    a_ref = np.pad(a_ref, (0, n - len(a_ref))) if len(a_ref) < n else a_ref[:n]
+    freqs = rfftfreq(n, dt)
     E_ref = rfft(a_ref)
 
     medium = MediumModel(ice_vol)
-    medium0 = MediumModel(1e-6)
-    events = theory_events(medium, freqs, E_ref, dt)
-    events_noice = theory_events(medium0, freqs, E_ref, dt)
+    medium0 = MediumModel(0.0)
+    # Source emission delay from far_1m: its envelope peaks at t0 + R_ref/c.
+    t0 = int(np.argmax(np.abs(hilbert(a_ref)))) * dt - R_REF_M / C
+    events = theory_events(medium, freqs, E_ref, dt, t0)
+    events_noice = theory_events(medium0, freqs, E_ref, dt, t0)
 
     surf = detect_event(t_ni, a_ni, events[0].t, floor_rms=1.0)
     floor = measure_noise_floor(t_ni, a_ni, surface_peak=surf.peak)
@@ -717,7 +725,7 @@ def run_analysis(paths, level_key, traces=None,
     atten = channel_attenuation(t_at, a_use, dets, events, medium)
 
     sweep = sweep_detection_limits(
-        freqs, E_ref, dt, floor_db=floor.db,
+        freqs, E_ref, dt, t0, floor_db=floor.db,
         traveltime_noise_ns=0.025,
         alpha_noise=max(atten["alpha_theory_at_center"] * 0.1, 1e-6))
 
@@ -728,7 +736,7 @@ def run_analysis(paths, level_key, traces=None,
         MediumModel(v).ice_index(CENTER_FREQ_HZ)[0]) for v in ICE_VOL_SWEEP])
     fig3_reflection(out_dir, ICE_VOL_SWEEP, R_curve,
                     [(ice_vol, refl.get("ice_top", {}).get("R_measured", np.nan))], floor)
-    dt_bot = [abs((theory_events(MediumModel(v), freqs, E_ref, dt)[2].t
+    dt_bot = [abs((theory_events(MediumModel(v), freqs, E_ref, dt, t0)[2].t
                    - events_noice[2].t) * 1e9) for v in ICE_VOL_SWEEP]
     fig4_traveltime(out_dir, ICE_VOL_SWEEP, dt_bot)
     fig5_attenuation(out_dir, atten)
