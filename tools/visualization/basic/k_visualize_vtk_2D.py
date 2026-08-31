@@ -153,16 +153,16 @@ def build_property_maps(freq):
     print("Property maps and depth profiles computed.")
 
     return permittivity_map_at_freq, conductivity_map_at_freq, losstangent_map_at_freq, \
-            permittivity_profile_at_freq, conductivity_map_at_freq, losstangent_profile_at_freq
+            permittivity_profile_at_freq, conductivity_profile_at_freq, losstangent_profile_at_freq
 
 
 # =============================================================================
 # Plot settings
 # =============================================================================
-colors       = ['jet', 'magma', 'viridis']
+colors       = ['viridis', 'magma', 'plasma']
 names        = ['Relative permittivity', 'Conductivity [S/m]', 'Loss tangent']
 output_names = ['Permittivity', 'Conductivity', 'Losstangent']
-disp_tag     = ' (dispersive)' if has_dispersion else ' (non-dispersive)'
+# disp_tag     = ' (dispersive)' if has_dispersion else ' (non-dispersive)'
 
 # imshow extent: [x_left, x_right, depth_bottom, depth_top]
 # imshow treats the 3rd value as "bottom" and 4th as "top", so placing
@@ -199,14 +199,14 @@ def plot_map_profile(freq, map_data, profile_data, idx):
         cmap=colors[idx],
     )
     if idx == 0:
-        imshow_kwargs.update(vmin=1, vmax=3.5)
+        imshow_kwargs.update(vmin=1, vmax=4.0)
     elif idx == 2:
         imshow_kwargs.update(vmin=0, vmax=0.020)
 
     im = ax[0].imshow(map_data, **imshow_kwargs)
     # _add_surface_line(ax[0])
 
-    ax[0].set_title(names[idx] + disp_tag + f'  @ {freq:.2e} Hz', size=14)
+    ax[0].set_title(names[idx] + f'  @ {freq:.2e} Hz', size=14)
     ax[0].set_xlabel('X [m]', size=18)
     ax[0].set_ylabel('Depth [m]', size=18)
     ax[0].set_ylim(depth_bottom, depth_top)   # deep at bottom (positive), vacuum at top (negative)
@@ -225,7 +225,7 @@ def plot_map_profile(freq, map_data, profile_data, idx):
     ax[1].set_xlabel(names[idx], size=18)
     ax[1].set_ylabel('Depth [m]', size=18)
     if idx == 0:
-        ax[1].set_xlim(0.95, 3.5)
+        ax[1].set_xlim(0.95, 4.0)
     elif idx == 2:
         ax[1].set_xlim(-0.0005, 0.006)
     ax[1].set_ylim(depth_bottom, depth_top)
@@ -248,7 +248,7 @@ def plot_profile(freq, profile_data, idx):
     # ax.axhline(0.0, color='gray', linewidth=1.0, linestyle='--', label='Surface')
     ax.set_xlabel(names[idx], size=18)
     if idx == 0:
-        ax.set_xlim(0.95, 3.5)
+        ax.set_xlim(0.95, 4.0)
     elif idx == 2:
         ax.set_xlim(-0.0005, 0.006)
     ax.set_ylabel('Depth [m]', size=18)
