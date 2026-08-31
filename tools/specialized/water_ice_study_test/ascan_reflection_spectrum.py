@@ -51,8 +51,9 @@ OUTPUT_SUBDIRNAME = 'ascan_reflection_spectrum'
 # --- 時間ゲート（本ツールで最も結果に効くパラメータ。README §5）--------------
 GATE_HALFWIDTH_NS = 2.0            # 半幅。パルス幅 約 0.7 ns、イベント間隔 11.6 ns
 GATE_TAPER = 0.2                   # Tukey。既存コードと同じ
-GATE_CENTER = 'theory'             # 'theory' … 理論走時を中心にする
-                                   # 'measured' … 窓内の包絡ピークに合わせ直す
+GATE_CENTER = 'theory'             # 'theory'   … 理論トレースの包絡ピークを中心にする
+                                   #              （波源遅延を自動で含む）
+                                   # 'measured' … さらに実測の窓内ピークに合わせ直す
 GATE_SWEEP_NS = []                 # 例 [1.0, 2.0, 3.0]。空なら感度確認をしない
 
 # --- ノイズフロア（README §4.3）---------------------------------------------
@@ -287,27 +288,45 @@ def analyze(at_tx_path, ref_path, level, background_path=''):
 
     events = build_events(level)
 
-    # 地表反射のピーク振幅（ノイズフロアの基準）
-    t_surf = event_arrival_ns(events[0], level)
-    g_surf, _ = gate_trace(trace, dt, t_surf)
+    # -------------------------------------------------------------------
+    # 各イベントの理論トレースを先に作り、その包絡ピークをゲート中心にする。
+    #
+    # 【なぜ幾何走時をそのまま使わないか】
+    # 励振ファイル（帯域制限波形）は自身に時間遅延を持つため、実測トレースの
+    # 到達時刻は「波源遅延 + 幾何走時」になる。event_arrival_ns() が返すのは
+    # 幾何走時だけなので、そのままゲート中心に使うと窓がイベントを外す。
+    # 理論トレースは参照トレース（波源遅延を含む）に伝達関数を掛けたものなので、
+    # その包絡ピークを使えば波源遅延を仮定なしで取り込める。
+    # ascan_spectrum.py が実測・理論の両方を同じ土俵で比べているのと同じ考え方。
+    # -------------------------------------------------------------------
+    prepared = []
+    for ev in events:
+        E_th_full, tm = synth_theory(E_ref, freq, ev, level)
+        th_trace = np.fft.irfft(E_th_full, n=len(trace))
+        t_geom = event_arrival_ns(ev, level)
+        t_th = measure_peak(th_trace, dt)['t_peak']
+        prepared.append({'ev': ev, 'terms': tm, 'th_trace': th_trace,
+                         't_geom': t_geom, 't_theory': t_th})
+    source_delay = prepared[0]['t_theory'] - prepared[0]['t_geom']
+
+    # 地表反射（at_tx では直達波を含む）のピーク振幅。ノイズフロアの基準。
+    g_surf, _ = gate_trace(trace, dt, prepared[0]['t_theory'])
     surf_amp = measure_peak(g_surf, dt)['amp_peak']
     nf_rms, nf_db = measure_noise_floor(
-        trace, dt, surf_amp,
-        exclude_ns=[event_arrival_ns(e, level) for e in events])
+        trace, dt, surf_amp, exclude_ns=[p['t_theory'] for p in prepared])
 
     work = trace if bg_trace is None else (trace - bg_trace)
 
     results = []
-    for i, ev in enumerate(events):
-        t_th = event_arrival_ns(ev, level)
+    for i, pr in enumerate(prepared):
+        ev, tm, th_trace = pr['ev'], pr['terms'], pr['th_trace']
+        t_th = pr['t_theory']
         t_center = (refine_center(work, dt, t_th) if GATE_CENTER == 'measured'
                     else t_th)
         gated, window = gate_trace(work, dt, t_center)
         _, E_meas = spectrum(gated, dt)
 
-        E_th_full, tm = synth_theory(E_ref, freq, ev, level)
         # 理論側にも同じゲートをかける（既存コードと同じ思想）
-        th_trace = np.fft.irfft(E_th_full, n=len(trace))
         th_gated, _ = gate_trace(th_trace, dt, t_center)
         _, E_th = spectrum(th_gated, dt)
 
@@ -326,7 +345,8 @@ def analyze(at_tx_path, ref_path, level, background_path=''):
             'name': ev['name'], 'depth_m': ev['depth_m'], 'event': ev,
             'freq': freq,
             'color': FIG_EVENT_COLORS[i % len(FIG_EVENT_COLORS)],
-            't_theory': t_th, 't_measured': pk['t_peak'],
+            't_geom': pr['t_geom'], 't_theory': t_th,
+            't_center': t_center, 't_measured': pk['t_peak'],
             'amp_peak': pk['amp_peak'], 'window': window,
             'E_meas': E_meas, 'E_theory': E_th, 'terms': tm, 'mask': mask,
             'L_abs_meas': L_abs_meas, 'L_abs_theory': L_abs_th,
@@ -351,7 +371,7 @@ def analyze(at_tx_path, ref_path, level, background_path=''):
     info = {'dt': dt, 'freq': freq, 'E_ref': E_ref, 'trace': trace,
             'work': work, 'background': bg_trace,
             'noise_rms': nf_rms, 'noise_db': nf_db, 'surface_amp': surf_amp,
-            'rel_ref': ref_name}
+            'rel_ref': ref_name, 'source_delay': source_delay}
     return results, info
 
 
@@ -387,7 +407,8 @@ def alpha_from_absolute(r, level):
     if d <= 0.0:
         return None
     a_th = _theory_path_alpha(r, level)
-    return a_th + (r['L_abs_theory'] - r['L_abs_meas']) / (2.0 * d)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        return a_th + (r['L_abs_theory'] - r['L_abs_meas']) / (2.0 * d)
 
 
 def alpha_from_relative(r, r0, level):
@@ -413,7 +434,8 @@ def alpha_from_relative(r, r0, level):
         acc = acc + _alpha_of(freq, level, in_ice) * length
     a_th = acc / abs(dd)
     # dd の符号が LSR の符号を打ち消すので、dd はそのまま（絶対値にしない）
-    return a_th + (r['L_rel_theory'] - r['L_rel_meas']) / (2.0 * dd)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        return a_th + (r['L_rel_theory'] - r['L_rel_meas']) / (2.0 * dd)
 
 
 def reflection_spectrum(r):
@@ -717,8 +739,8 @@ def write_outputs(results, info, level, kind, output_dir):
     path = os.path.join(output_dir, 'events.csv')
     with open(path, 'w', newline='', encoding='utf-8') as fh:
         w = csv.writer(fh)
-        w.writerow(['event', 'depth_m', 't_theory_ns', 't_measured_ns',
-                    'dt_ns', 'amp_peak', 'amp_rel_surface_dB',
+        w.writerow(['event', 'depth_m', 't_geom_ns', 't_theory_ns',
+                    't_measured_ns', 'dt_ns', 'amp_peak', 'amp_rel_surface_dB',
                     'R_theory', 'R_measured', 'alpha_abs_1.25GHz',
                     'alpha_rel_1.25GHz', 'f_c_GHz', 'sigma_f_GHz'])
         for r in results:
@@ -726,8 +748,9 @@ def write_outputs(results, info, level, kind, output_dir):
             a_rel = alpha_from_relative(r, r0, level)
             Rm = reflection_spectrum(r)[i_c]
             w.writerow([
-                r['name'], r['depth_m'], r['t_theory'], r['t_measured'],
-                r['t_measured'] - r['t_theory'], r['amp_peak'],
+                r['name'], r['depth_m'], r['t_geom'], r['t_theory'],
+                r['t_measured'], r['t_measured'] - r['t_theory'],
+                r['amp_peak'],
                 20 * np.log10(r['amp_peak'] / results[0]['amp_peak']),
                 float(np.abs(r['terms']['R'][i_c])), float(Rm),
                 '' if a_abs is None else float(a_abs[i_c]),
@@ -751,6 +774,8 @@ def write_outputs(results, info, level, kind, output_dir):
         fh.write('  background subtraction: {}\n'
                  .format(BACKGROUND_TRACE_PATH or 'off'))
         fh.write('  relative LSR reference event: {}\n'.format(info['rel_ref']))
+        fh.write('  source delay (from theory trace): {:.3f} ns\n'
+                 .format(info['source_delay']))
         fh.write('  noise floor: {:.2f} dB re. surface peak  -> {}\n'
                  .format(info['noise_db'], judge_floor(info['noise_db'])))
         if 'absorb_const' in LEVEL_EFFECTS[level]:
@@ -762,11 +787,11 @@ def write_outputs(results, info, level, kind, output_dir):
             fh.write('  medium: {}\n'.format(describe_level3b_medium()))
         if 'ice_layer' in LEVEL_EFFECTS[level]:
             fh.write('  ice layer: {}\n'.format(describe_level4_medium()))
-        fh.write('\n  event      d[m]   t_th[ns]  t_meas[ns]  amp[dB]\n')
+        fh.write('\n  event      d[m]  t_geom[ns] t_th[ns]  t_meas[ns]  amp[dB]\n')
         for r in results:
-            fh.write('  {:10s} {:5.2f}  {:8.3f}  {:9.3f}  {:+8.2f}\n'
-                     .format(r['name'], r['depth_m'], r['t_theory'],
-                             r['t_measured'],
+            fh.write('  {:10s} {:5.2f} {:9.3f} {:8.3f}  {:9.3f}  {:+8.2f}\n'
+                     .format(r['name'], r['depth_m'], r['t_geom'],
+                             r['t_theory'], r['t_measured'],
                              20 * np.log10(r['amp_peak']
                                            / results[0]['amp_peak'])))
     print('Saved:', path)
@@ -823,10 +848,13 @@ def main():
 
     print('\nノイズフロア: {:.2f} dB re. surface peak  -> {}'
           .format(info['noise_db'], judge_floor(info['noise_db'])))
-    print('\n  event      d[m]   t_th[ns]  t_meas[ns]   amp[dB]')
+    print('波源遅延（理論トレースの包絡ピークから）: {:.3f} ns'
+          .format(info['source_delay']))
+    print('\n  event      d[m]  t_geom[ns] t_th[ns]  t_meas[ns]   amp[dB]')
     for r in results:
-        print('  {:10s} {:5.2f}  {:8.3f}  {:9.3f}  {:+8.2f}'
-              .format(r['name'], r['depth_m'], r['t_theory'], r['t_measured'],
+        print('  {:10s} {:5.2f} {:9.3f} {:8.3f}  {:9.3f}  {:+8.2f}'
+              .format(r['name'], r['depth_m'], r['t_geom'], r['t_theory'],
+                      r['t_measured'],
                       20 * np.log10(r['amp_peak'] / results[0]['amp_peak'])))
 
     asp.OUTPUT_SUBDIRNAME = OUTPUT_SUBDIRNAME     # 出力先だけ差し替える
