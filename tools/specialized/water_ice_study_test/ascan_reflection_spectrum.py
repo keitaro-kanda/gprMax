@@ -494,6 +494,12 @@ def reflection_spectrum(r):
 # =============================================================================
 # 7. 作図
 # =============================================================================
+def theory_amp(r, i_c):
+    """帯域中心での理論振幅 |G T R A|（イベント間の比較に使う）。"""
+    tm = r['terms']
+    return float(abs(tm['G'][i_c] * tm['T'][i_c] * tm['R'][i_c] * tm['A'][i_c]))
+
+
 def _band(freq_hz):
     g = freq_hz * 1e-9
     return (g >= BAND_GHZ[0]) & (g <= BAND_GHZ[1])
@@ -539,13 +545,13 @@ def plot_trace(results, info, output_dir):
     with np.errstate(divide='ignore'):
         env_db = 20.0 * np.log10(env / info['surface_amp'])
     axes[1].plot(t, env_db, color='k', lw=0.9)
+    i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
     for r in results:
         axes[1].axvline(r['t_theory'], color=r['color'], ls='--', lw=1.2)
-        tm = r['terms']
-        i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
-        th_db = 20.0 * np.log10(
-            abs(tm['G'][i_c] * tm['T'][i_c] * tm['R'][i_c] * tm['A'][i_c])
-            / abs(results[0]['terms']['R'][i_c]))
+        # 理論振幅は「地表反射の理論振幅」で正規化する。
+        # 以前は分母が |R_surface| だけになっており、地表反射の幾何項
+        # G = sqrt(R_REF/2h) = 1.195 を落としていた（1.55 dB のずれ）。
+        th_db = 20.0 * np.log10(theory_amp(r, i_c) / theory_amp(results[0], i_c))
         axes[1].plot(r['t_theory'], th_db, marker='o', ms=7,
                      color=r['color'], mfc='none', mew=2)
     if np.isfinite(info['noise_db']):
@@ -813,6 +819,7 @@ def write_outputs(results, info, level, kind, output_dir):
         w = csv.writer(fh)
         w.writerow(['event', 'depth_m', 't_geom_ns', 't_theory_ns',
                     't_measured_ns', 'dt_ns', 'amp_peak', 'amp_rel_surface_dB',
+                    'amp_theory_rel_surface_dB',
                     'R_theory', 'R_measured', 'alpha_abs_1.25GHz',
                     'alpha_rel_1.25GHz', 'f_c_GHz', 'sigma_f_GHz'])
         for r in results:
@@ -824,6 +831,7 @@ def write_outputs(results, info, level, kind, output_dir):
                 r['t_measured'], r['t_measured'] - r['t_theory'],
                 r['amp_peak'],
                 20 * np.log10(r['amp_peak'] / results[0]['amp_peak']),
+                20 * np.log10(theory_amp(r, i_c) / theory_amp(results[0], i_c)),
                 float(np.abs(r['terms']['R'][i_c])), float(Rm),
                 '' if a_abs is None else float(a_abs[i_c]),
                 '' if a_rel is None else float(a_rel[i_c]),
@@ -908,12 +916,25 @@ def run_once(at_tx_path, ref_path, level, kind, output_dir,
           .format(info['noise_db'], judge_floor(info['noise_db'])))
     print('  波源遅延（理論トレースの包絡ピークから）: {:.3f} ns'
           .format(info['source_delay']))
-    print('  event      d[m]  t_geom[ns] t_th[ns]  t_meas[ns]   amp[dB]   SNR[dB]')
+    i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
+    print('  event      d[m]  t_th[ns]  t_meas[ns]  amp_meas  amp_th   diff   SNR')
+    print('                                          [dB]      [dB]     [dB]   [dB]')
     for r in results:
         amp_db = 20 * np.log10(r['amp_peak'] / results[0]['amp_peak'])
-        print('  {:10s} {:5.2f} {:9.3f} {:8.3f}  {:9.3f}  {:+8.2f}  {:+8.1f}'
-              .format(r['name'], r['depth_m'], r['t_geom'], r['t_theory'],
-                      r['t_measured'], amp_db, amp_db - info['noise_db']))
+        th_db = 20 * np.log10(theory_amp(r, i_c) / theory_amp(results[0], i_c))
+        print('  {:10s} {:5.2f} {:9.3f} {:11.3f} {:+9.2f} {:+8.2f} {:+7.2f} {:+6.1f}'
+              .format(r['name'], r['depth_m'], r['t_theory'], r['t_measured'],
+                      amp_db, th_db, amp_db - th_db, amp_db - info['noise_db']))
+    # ゲートによる損失を切り分けるため、理論トレースを同じゲートに通した値も出す。
+    print('  （参考）理論トレースを同じゲートに通したときの振幅:')
+    for r in results:
+        g_db = 20 * np.log10(
+            measure_peak(np.fft.irfft(r['E_theory'], n=len(info['work'])),
+                         info['dt'])['amp_peak']
+            / measure_peak(np.fft.irfft(results[0]['E_theory'],
+                                        n=len(info['work'])),
+                           info['dt'])['amp_peak'])
+        print('    {:10s} {:+8.2f} dB'.format(r['name'], g_db))
 
     plot_trace(results, info, output_dir)
     plot_spectra(results, info, output_dir)
