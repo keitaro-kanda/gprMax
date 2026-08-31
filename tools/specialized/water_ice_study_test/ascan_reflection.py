@@ -350,7 +350,7 @@ def resolve_output_dir(paths, level_key, ice_key=ICE_FRACTION_KEY):
     """Put outputs next to the data: .../<condition>/analysis/reflection/."""
     at_tx = _resolve_leaf(paths[level_key], "at_tx", (WAVEFORM_KEY, DX_KEY, FEO_KEY, ice_key))
     cond = os.path.dirname(os.path.dirname(os.path.dirname(at_tx)))
-    out = os.path.join(cond, "analysis", "reflection")
+    out = os.path.join(cond, "analysis", "ascan_reflection")
     os.makedirs(out, exist_ok=True)
     return out
 
