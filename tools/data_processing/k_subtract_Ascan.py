@@ -43,26 +43,52 @@ def align_lengths(target_data, surface_data):
     return target_data, surface_data, n_target
 
 
-def create_plots(time, target_data, surface_data, subtracted_data, output_dir, basename):
+def create_plots(time, target_data, surface_data, subtracted_data, output_dir, basename, is_db=False):
     plot_comps = ['Ex', 'Ey', 'Ez']
-    row_labels = ['Original', 'Free Space Test', 'Subtracted']
-    row_data = [target_data, surface_data, subtracted_data]
+    row_labels = ['Original', 'Free Space Test', 'Subtracted'] #[cite: 2]
     row_colors = ['k', 'r', 'b']
 
-    # Original と Surface Reflection 用の共通Y軸最大値を計算
-    ymax_orig_surf = max(
-        max(np.max(np.abs(target_data[comp]))*1.05 for comp in plot_comps),
-        max(np.max(np.abs(surface_data[comp]))*1.05 for comp in plot_comps),
-        1e-30
-    )
-
-    # Subtracted 用の共通Y軸最大値を計算（微小な振幅を拡大表示するため）
-    ymax_sub = max(
-        max(np.max(np.abs(subtracted_data[comp]))*1.05 for comp in plot_comps),
-        1e-30
-    )
-
-    y_limits = [ymax_orig_surf, ymax_orig_surf, ymax_sub]
+    if is_db:
+        # dB変換関数 (0や微小値でのlogエラーを防ぐため1e-30でクリップ)
+        def convert_to_db(d):
+            return {c: 20 * np.log10(np.clip(np.abs(d[c]), 1e-30, None)) for c in plot_comps}
+        
+        row_data = [convert_to_db(target_data), convert_to_db(surface_data), convert_to_db(subtracted_data)]
+        
+        # dB用のY軸範囲計算 (ピークから120dBのダイナミックレンジを持たせる)
+        db_max_orig_surf = max(
+            max(np.max(row_data[0][comp]) for comp in plot_comps),
+            max(np.max(row_data[1][comp]) for comp in plot_comps)
+        )
+        ylim_orig_surf = [db_max_orig_surf - 120, db_max_orig_surf + 5]
+        
+        # Subtractedパネル用の独立したY軸範囲
+        db_max_sub = max(np.max(row_data[2][comp]) for comp in plot_comps)
+        ylim_sub = [db_max_sub - 120, db_max_sub + 5]
+        
+        y_limits = [ylim_orig_surf, ylim_orig_surf, ylim_sub]
+        suffix = '_db'
+        ylabel = 'Amplitude [dB]'
+    else:
+        row_data = [target_data, surface_data, subtracted_data]
+        
+        # Original と Free Space Test 用の共通Y軸最大値を計算 (1.05倍のマージン)
+        ymax_orig_surf = max(
+            max(np.max(np.abs(target_data[comp])) * 1.05 for comp in plot_comps), #[cite: 2]
+            max(np.max(np.abs(surface_data[comp])) * 1.05 for comp in plot_comps), #[cite: 2]
+            1e-30
+        )
+        # Subtracted 用の共通Y軸最大値を計算
+        ymax_sub = max(
+            max(np.max(np.abs(subtracted_data[comp])) * 1.05 for comp in plot_comps), #[cite: 2]
+            1e-30
+        )
+        
+        y_limits = [[-ymax_orig_surf, ymax_orig_surf], 
+                    [-ymax_orig_surf, ymax_orig_surf], 
+                    [-ymax_sub, ymax_sub]]
+        suffix = ''
+        ylabel = 'Amplitude'
 
     # =========================================================
     # 1. 全成分をまとめた 3x3 プロットの作成
@@ -70,43 +96,43 @@ def create_plots(time, target_data, surface_data, subtracted_data, output_dir, b
     fig, axes = plt.subplots(3, 3, figsize=(18, 12),
                              facecolor='w', edgecolor='w', tight_layout=True)
 
-    for row, (label, data, color, ymax) in enumerate(zip(row_labels, row_data, row_colors, y_limits)):
+    for row, (label, data, color, ylim) in enumerate(zip(row_labels, row_data, row_colors, y_limits)):
         for col, comp in enumerate(plot_comps):
             ax = axes[row][col]
             ax.plot(time, data[comp], color=color, linewidth=0.8)
             ax.set_title(f'{label} - {comp}', fontsize=12)
             ax.set_xlabel('Time [ns]', fontsize=10)
-            ax.set_ylabel('Amplitude', fontsize=10)
+            ax.set_ylabel(ylabel, fontsize=10)
             ax.grid(True)
             ax.set_xlim([0, time[-1]])
-            ax.set_ylim([-ymax, ymax])
+            ax.set_ylim(ylim)
 
-    all_plot_path = os.path.join(output_dir, basename + '_subtracted_all.png')
+    all_plot_path = os.path.join(output_dir, f'{basename}_subtracted_all{suffix}.png')
     fig.savefig(all_plot_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.close(fig)  # メモリ解放
-    print(f'プロットを保存しました (All) : {all_plot_path}')
+    plt.close(fig)
+    print(f'プロットを保存しました (All{suffix}) : {all_plot_path}')
 
     # =========================================================
     # 2. 各成分 (Ex, Ey, Ez) 個別の 3x1 プロットの作成
     # =========================================================
     for comp in plot_comps:
-        fig, axes = plt.subplots(3, 1, figsize=(12, 8),
+        fig, axes = plt.subplots(3, 1, figsize=(12, 8), #[cite: 2]
                                  facecolor='w', edgecolor='w', tight_layout=True)
         
-        for row, (label, data, color, ymax) in enumerate(zip(row_labels, row_data, row_colors, y_limits)):
+        for row, (label, data, color, ylim) in enumerate(zip(row_labels, row_data, row_colors, y_limits)):
             ax = axes[row]
             ax.plot(time, data[comp], color=color, linewidth=0.8)
             ax.set_title(f'{label} - {comp}', fontsize=12)
             ax.set_xlabel('Time [ns]', fontsize=10)
-            ax.set_ylabel('Amplitude', fontsize=10)
+            ax.set_ylabel(ylabel, fontsize=10)
             ax.grid(True)
             ax.set_xlim([0, time[-1]])
-            ax.set_ylim([-ymax, ymax])
+            ax.set_ylim(ylim)
         
-        single_plot_path = os.path.join(output_dir, f'{basename}_subtracted_{comp}.png')
+        single_plot_path = os.path.join(output_dir, f'{basename}_subtracted_{comp}{suffix}.png')
         fig.savefig(single_plot_path, dpi=150, format='png', bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
-        print(f'プロットを保存しました ({comp}):  {single_plot_path}')
+        print(f'プロットを保存しました ({comp}{suffix}):  {single_plot_path}')
 
 
 def main():
@@ -156,8 +182,9 @@ def main():
 
     time = np.arange(n_target) * dt / 1e-9  # [ns]
     
-    # 画像描画・保存処理を呼び出し（合計4枚出力されます）
-    create_plots(time, target_data, surface_data, subtracted_data, output_dir, basename)
+    # 振幅プロットとdBプロットの両方を出力
+    create_plots(time, target_data, surface_data, subtracted_data, output_dir, basename, is_db=False)
+    create_plots(time, target_data, surface_data, subtracted_data, output_dir, basename, is_db=True)
 
     log_path = os.path.join(output_dir, basename + '_subtracted_info.txt')
     with open(log_path, 'w', encoding='utf-8') as f:
