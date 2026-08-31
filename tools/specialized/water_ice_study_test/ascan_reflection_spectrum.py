@@ -1,0 +1,847 @@
+"""at_tx（地表 tx/rx、モノスタティック）の A-scan スペクトル解析
+
+ascan_spectrum.py（埋設 rx・片道透過）の反射版。要件は
+README_ascan_reflection_spectrum.md を参照。
+
+--- 本ツール固有なもの ------------------------------------------------------
+  1. 反射の伝達関数（往復経路、反射係数、往復透過）
+  2. 反射イベントの定義と時間ゲート
+それ以外（JSON の読み取り、ネスト階層の選択、参照計算の校正、組成・水氷濃度
+の自動判定、スペクトルのモーメントと LSR の規約、作図の体裁）はすべて
+ascan_spectrum.py から import して使う。定数はコピーしない。
+
+--- 走査軸の違い ------------------------------------------------------------
+  ascan_spectrum.py : 1 深さ 1 トレース。深さ方向にイベントが並ぶ
+  本ツール          : 1 トレースに複数イベント。時間方向に反射が並ぶ
+したがって図の色分けは「rx 深さ」ではなく「反射イベント」になる。
+"""
+
+import os
+import numpy as np
+from scipy import signal
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+import ascan_spectrum as asp
+from ascan_spectrum import (
+    C, TX_HEIGHT, R_REF, BAND_GHZ, BAND_CENTRE_HZ, FLOHI_PRIMARY_DB,
+    LEVEL_EFFECTS, IMPLEMENTED_LEVELS,
+    load_paths, check_paths_exist, load_trace, spectrum, measure_peak,
+    _interp_complex_to_grid, save_figure,
+    set_level3_composition, set_level4_ice,
+    describe_level2_medium, describe_level3_medium, describe_level3b_medium,
+    describe_level4_medium,
+    refractive_index, level4_eps, level4_alpha, level3_eps, level3_alpha,
+    level2_alpha,
+    moments, lo_hi_freq, log_spectral_ratio, alpha_to_tandelta,
+    valid_mask, noise_floor, group_delay,
+    LEVEL4_ICE_TOP_M, LEVEL4_ICE_THICK_M,
+)
+from gprMax.exceptions import CmdInputError
+
+# =============================================================================
+# 設定  [EDIT HERE]
+# =============================================================================
+JSON_PATH = asp.JSON_PATH          # 既存ツールと同じ JSON を使う
+AT_TX_KEY = 'at_tx'                # 解析対象の rx キー
+REF_KEY = 'far_1m'                 # 参照計算の rx キー
+
+OUTPUT_SUBDIRNAME = 'ascan_reflection_spectrum'
+
+# --- 時間ゲート（本ツールで最も結果に効くパラメータ。README §5）--------------
+GATE_HALFWIDTH_NS = 2.0            # 半幅。パルス幅 約 0.7 ns、イベント間隔 11.6 ns
+GATE_TAPER = 0.2                   # Tukey。既存コードと同じ
+GATE_CENTER = 'theory'             # 'theory' … 理論走時を中心にする
+                                   # 'measured' … 窓内の包絡ピークに合わせ直す
+GATE_SWEEP_NS = []                 # 例 [1.0, 2.0, 3.0]。空なら感度確認をしない
+
+# --- ノイズフロア（README §4.3）---------------------------------------------
+NOISE_WINDOW_NS = (8.0, 40.0)      # 地表反射より後の、界面反射がない時間帯
+
+# --- 相対 LSR の基準イベント -------------------------------------------------
+# 既定は最も浅い地下界面。地表反射を基準にすると地表の往復透過が残るため、
+# 実測可能性の観点では地下界面どうしで取るほうが素直。
+REL_LSR_REF_EVENT = 'ice_top'
+
+# --- 背景差分（README §4.4）-------------------------------------------------
+# 実機では使えない（氷なしの観測が得られない）ので、理論上限としてのみ扱う。
+BACKGROUND_TRACE_PATH = ''         # 氷なし at_tx の .out。空なら差分しない
+
+FIG_EVENT_COLORS = ['k', 'tab:red', 'tab:blue', 'tab:green', 'tab:purple']
+
+
+# =============================================================================
+# 1. 反射イベントの定義
+# =============================================================================
+def build_events(level):
+    """レベルの構造から反射イベントの一覧を作る。
+
+    戻り値: [{'name', 'depth_m', 'above'}, ...]
+      depth_m : 界面の深さ [m]
+      above   : その界面より浅い層の [(厚さ, 氷層か), ...]（往復経路の計算用）
+    """
+    events = [{'name': 'surface', 'depth_m': 0.0, 'above': []}]
+    if 'ice_layer' in LEVEL_EFFECTS[level]:
+        top = float(LEVEL4_ICE_TOP_M)
+        bot = top + float(LEVEL4_ICE_THICK_M)
+        events.append({'name': 'ice_top', 'depth_m': top,
+                       'above': [(top, False)]})
+        events.append({'name': 'ice_bottom', 'depth_m': bot,
+                       'above': [(top, False), (bot - top, True)]})
+    return events
+
+
+def _n_of(f, level, in_ice):
+    """層の屈折率 n(f)。氷層かどうかで切り替える。"""
+    if 'ice_layer' in LEVEL_EFFECTS[level]:
+        return np.sqrt(level4_eps(f, in_ice)[0])
+    return refractive_index(f, level)
+
+
+def _alpha_of(f, level, in_ice):
+    """層の減衰係数 alpha(f) [Np/m]。"""
+    if 'ice_layer' in LEVEL_EFFECTS[level]:
+        return level4_alpha(f, in_ice)
+    if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
+        return level3_alpha(f)
+    if 'absorb_const' in LEVEL_EFFECTS[level]:
+        return level2_alpha(f, refractive_index(f, level))
+    return np.zeros_like(np.asarray(f, dtype=float))
+
+
+# =============================================================================
+# 2. 反射の伝達関数（README §3.1）
+# =============================================================================
+def event_terms(f, event, level):
+    """イベントの伝達関数の各項を個別に返す。
+
+    戻り値の辞書:
+      'G'     幾何      sqrt(R_REF / r_eff)
+      'T'     往復透過  Π 4 n_a n_b/(n_a+n_b)^2（界面より浅い界面すべて）
+      'R'     反射      (n_k - n_k+1)/(n_k + n_k+1)
+      'A'     吸収      exp(-2 Σ alpha_j L_j)
+      't_ns'  往復走時  2h/c + 2 Σ n_j L_j / c   （帯域中心での代表値）
+      'r_eff' 見かけ源距離
+    項を分けて返すのは、LSR から alpha を逆算するときに G・T・R を差し引く
+    必要があるため（README §3.3）。
+    """
+    f_arr = np.asarray(f, dtype=float)
+    n_vac = np.ones_like(f_arr)
+    n_reg = _n_of(f_arr, level, False)
+    n_ice = _n_of(f_arr, level, True)
+
+    def n_layer(in_ice):
+        return n_ice if in_ice else n_reg
+
+    # --- 見かけ源距離：r_eff = 2h + 2 Σ L_j / n_j -----------------------------
+    r_eff = 2.0 * TX_HEIGHT * np.ones_like(f_arr)
+    for length, in_ice in event['above']:
+        r_eff = r_eff + 2.0 * length / n_layer(in_ice)
+    G = np.sqrt(R_REF / r_eff)
+
+    # --- 往復透過：界面より浅い界面をすべて往復する ---------------------------
+    T = np.ones_like(f_arr)
+    n_prev = n_vac
+    for _, in_ice in event['above']:
+        n_cur = n_layer(in_ice)
+        T = T * (4.0 * n_prev * n_cur / (n_prev + n_cur) ** 2)
+        n_prev = n_cur
+
+    # --- 反射係数：界面の直上／直下の屈折率から ------------------------------
+    if event['name'] == 'surface':
+        n_a, n_b = n_vac, n_reg
+    elif event['name'] == 'ice_top':
+        n_a, n_b = n_reg, n_ice
+    elif event['name'] == 'ice_bottom':
+        n_a, n_b = n_ice, n_reg
+    else:
+        raise CmdInputError('未知のイベント: {}'.format(event['name']))
+    R = (n_a - n_b) / (n_a + n_b)
+
+    # --- 吸収と走時：往復なので 2 倍 -----------------------------------------
+    att = np.zeros_like(f_arr)
+    t_f = 2.0 * TX_HEIGHT / C * np.ones_like(f_arr)
+    for length, in_ice in event['above']:
+        att = att + _alpha_of(f_arr, level, in_ice) * length
+        t_f = t_f + 2.0 * n_layer(in_ice) * length / C
+    A = np.exp(-2.0 * att)
+
+    i_c = int(np.argmin(np.abs(f_arr - BAND_CENTRE_HZ)))
+    return {'G': G, 'T': T, 'R': R, 'A': A, 'r_eff': r_eff,
+            't_ns': float(t_f[i_c]), 't_f': t_f}
+
+
+def event_arrival_ns(event, level):
+    """包絡ピークに対応する群走時 [ns]（スカラー）。"""
+    fc = np.array([BAND_CENTRE_HZ])
+    t = 2.0 * TX_HEIGHT / C
+    for length, in_ice in event['above']:
+        ng = float(asp._group_index_from_eps(
+            lambda ff: (level4_eps(ff, in_ice)[0]
+                        if 'ice_layer' in LEVEL_EFFECTS[level]
+                        else level3_eps(ff)[0]), fc)[0])
+        t += 2.0 * ng * length / C
+    return t
+
+
+def synth_theory(E_ref_f, freq, event, level):
+    """イベントの理論スペクトル（参照に伝達関数を掛けたもの）。"""
+    tm = event_terms(freq, event, level)
+    H = tm['G'] * tm['T'] * tm['R'] * tm['A']
+    delay_s = (tm['t_f'] - R_REF / C) * 1e-9
+    return E_ref_f * H * np.exp(-2j * np.pi * freq * delay_s), tm
+
+
+# =============================================================================
+# 3. 時間ゲート
+# =============================================================================
+def gate_trace(trace, dt, t_center_ns, halfwidth_ns=None):
+    """イベント抽出用の時間ゲート。
+
+    ascan_spectrum.apply_gate と同じ Tukey 窓だが、幅と中心を引数で受け取る。
+    at_tx は 1 トレースに複数イベントが並ぶため、イベントごとに窓が要る。
+    """
+    hw = GATE_HALFWIDTH_NS if halfwidth_ns is None else halfwidth_ns
+    dt_ns = dt * 1e9
+    t_axis = np.arange(len(trace)) * dt_ns
+    idx = np.where((t_axis >= t_center_ns - hw) & (t_axis <= t_center_ns + hw))[0]
+    if len(idx) < 8:
+        raise CmdInputError(
+            'ゲート窓 [{:.2f}, {:.2f}] ns にサンプルがほとんどありません'
+            .format(t_center_ns - hw, t_center_ns + hw))
+    win = np.zeros(len(trace))
+    win[idx] = signal.windows.tukey(len(idx), alpha=GATE_TAPER)
+    return trace * win, (t_axis[idx[0]], t_axis[idx[-1]])
+
+
+def refine_center(trace, dt, t_center_ns, halfwidth_ns=None):
+    """窓内の包絡ピーク位置を返す（GATE_CENTER='measured' 用）。"""
+    hw = GATE_HALFWIDTH_NS if halfwidth_ns is None else halfwidth_ns
+    dt_ns = dt * 1e9
+    t_axis = np.arange(len(trace)) * dt_ns
+    idx = np.where((t_axis >= t_center_ns - hw) & (t_axis <= t_center_ns + hw))[0]
+    env = np.abs(signal.hilbert(trace))[idx]
+    return float(t_axis[idx[int(np.argmax(env))]])
+
+
+# =============================================================================
+# 4. ノイズフロア（README §4.3）
+# =============================================================================
+def measure_noise_floor(trace, dt, surface_amp, exclude_ns=()):
+    """地表反射より後の時間帯の RMS を、地表反射ピークに対する dB で返す。
+
+    exclude_ns に既知のイベント時刻を渡すと、その前後 ±(ゲート半幅 + 1 ns) を
+    窓から除く。氷ありのトレースでも「界面反射のない時間帯」を測れるように
+    するため。本来は氷なしトレースで測るべき量であり、氷ありで測った値は
+    参考にとどめること（README §4.3）。
+    """
+    dt_ns = dt * 1e9
+    t_axis = np.arange(len(trace)) * dt_ns
+    lo, hi = NOISE_WINDOW_NS
+    keep = (t_axis >= lo) & (t_axis <= hi)
+    for t0 in exclude_ns:
+        keep &= np.abs(t_axis - t0) > (GATE_HALFWIDTH_NS + 1.0)
+    idx = np.where(keep)[0]
+    if len(idx) == 0:
+        return np.nan, np.nan
+    rms = float(np.sqrt(np.mean(trace[idx] ** 2)))
+    return rms, 20.0 * np.log10(rms / surface_amp) if surface_amp > 0 else np.nan
+
+
+def judge_floor(floor_db):
+    """README §4.3 の 3 段階判定。"""
+    if not np.isfinite(floor_db):
+        return '判定不能'
+    if floor_db < -70.0:
+        return 'OK: 0.5 vol% まで解析可能'
+    if floor_db < -60.0:
+        return '注意: 1 vol% は可、0.5 vol% は厳しい'
+    if floor_db < -55.0:
+        return '警告: 1 vol% も余裕がない。PML を 20 セルにする等を検討'
+    return '不可: 反射チャネルが成立しない。対策が必要'
+
+
+# =============================================================================
+# 5. 解析本体
+# =============================================================================
+def analyze(at_tx_path, ref_path, level, background_path=''):
+    """at_tx トレースを読み、イベントごとのスペクトルと理論を突き合わせる。"""
+    trace, dt = load_trace(at_tx_path)
+    ref_trace, dt_ref = load_trace(ref_path)
+    if not np.isclose(dt, dt_ref, rtol=1e-9):
+        raise CmdInputError('at_tx と参照で dt が異なります: {} vs {}'
+                            .format(dt, dt_ref))
+
+    bg_trace = None
+    if background_path:
+        bg_trace, dt_bg = load_trace(background_path)
+        if not np.isclose(dt, dt_bg, rtol=1e-9):
+            raise CmdInputError('背景トレースの dt が一致しません')
+        if len(bg_trace) != len(trace):
+            n = min(len(bg_trace), len(trace))
+            bg_trace, trace = bg_trace[:n], trace[:n]
+
+    freq_ref, E_ref_full = spectrum(ref_trace, dt)
+    freq, _ = spectrum(trace, dt)
+    E_ref = _interp_complex_to_grid(freq_ref, E_ref_full, freq)
+
+    events = build_events(level)
+
+    # 地表反射のピーク振幅（ノイズフロアの基準）
+    t_surf = event_arrival_ns(events[0], level)
+    g_surf, _ = gate_trace(trace, dt, t_surf)
+    surf_amp = measure_peak(g_surf, dt)['amp_peak']
+    nf_rms, nf_db = measure_noise_floor(
+        trace, dt, surf_amp,
+        exclude_ns=[event_arrival_ns(e, level) for e in events])
+
+    work = trace if bg_trace is None else (trace - bg_trace)
+
+    results = []
+    for i, ev in enumerate(events):
+        t_th = event_arrival_ns(ev, level)
+        t_center = (refine_center(work, dt, t_th) if GATE_CENTER == 'measured'
+                    else t_th)
+        gated, window = gate_trace(work, dt, t_center)
+        _, E_meas = spectrum(gated, dt)
+
+        E_th_full, tm = synth_theory(E_ref, freq, ev, level)
+        # 理論側にも同じゲートをかける（既存コードと同じ思想）
+        th_trace = np.fft.irfft(E_th_full, n=len(trace))
+        th_gated, _ = gate_trace(th_trace, dt, t_center)
+        _, E_th = spectrum(th_gated, dt)
+
+        pk = measure_peak(gated, dt)
+        mask = valid_mask(freq, E_meas, E_ref)
+
+        L_abs_meas = log_spectral_ratio(E_meas, E_ref)
+        L_abs_th = log_spectral_ratio(E_th, E_ref)
+
+        mom_m = moments(freq, E_meas)
+        mom_t = moments(freq, E_th)
+        flohi_m = lo_hi_freq(freq, E_meas)
+        flohi_t = lo_hi_freq(freq, E_th)
+
+        results.append({
+            'name': ev['name'], 'depth_m': ev['depth_m'], 'event': ev,
+            'freq': freq,
+            'color': FIG_EVENT_COLORS[i % len(FIG_EVENT_COLORS)],
+            't_theory': t_th, 't_measured': pk['t_peak'],
+            'amp_peak': pk['amp_peak'], 'window': window,
+            'E_meas': E_meas, 'E_theory': E_th, 'terms': tm, 'mask': mask,
+            'L_abs_meas': L_abs_meas, 'L_abs_theory': L_abs_th,
+            'moments_meas': mom_m, 'moments_theory': mom_t,
+            'flohi_meas': flohi_m, 'flohi_theory': flohi_t,
+            'tau_g_meas': group_delay(freq, E_meas, E_ref),
+            'tau_g_theory': group_delay(freq, E_th, E_ref),
+        })
+
+    # --- 相対 LSR（基準イベントからの比）------------------------------------
+    ref_name = REL_LSR_REF_EVENT
+    names = [r['name'] for r in results]
+    if ref_name not in names:
+        ref_name = names[0]
+    r0 = results[names.index(ref_name)]
+    for r in results:
+        r['rel_ref'] = ref_name
+        r['L_rel_meas'] = log_spectral_ratio(r['E_meas'], r0['E_meas'])
+        r['L_rel_theory'] = log_spectral_ratio(r['E_theory'], r0['E_theory'])
+        r['d_rel'] = r['depth_m'] - r0['depth_m']
+
+    info = {'dt': dt, 'freq': freq, 'E_ref': E_ref, 'trace': trace,
+            'work': work, 'background': bg_trace,
+            'noise_rms': nf_rms, 'noise_db': nf_db, 'surface_amp': surf_amp,
+            'rel_ref': ref_name}
+    return results, info
+
+
+# =============================================================================
+# 6. 減衰率の逆算（README §3.3）
+# =============================================================================
+def _theory_path_alpha(r, level):
+    """イベントまでの往復経路の平均 alpha（片道換算）。theory 側の基準値。"""
+    d = r['depth_m']
+    if d <= 0.0:
+        return None
+    freq = r['freq']
+    acc = np.zeros_like(freq)
+    for length, in_ice in r['event']['above']:
+        acc = acc + _alpha_of(freq, level, in_ice) * length
+    return acc / d
+
+
+def alpha_from_absolute(r, level):
+    """絶対 LSR から往復経路平均の alpha を逆算する。
+
+        alpha = alpha_theory + (L_abs_theory - L_abs_meas) / (2 d)
+
+    理論との差分で書くのは、**時間ゲートによる振幅損失を打ち消すため**。
+    ゲートは実測と理論に同じものをかけているので、差分を取れば窓の効果が
+    消える。解析式 -[L - ln(G T |R|)]/(2d) を直接使うとゲート損失がそのまま
+    alpha の系統誤差になる（深さ 1 m で 20% 程度）。
+
+    なお R を既知として使う点は変わらないので、順方向モデルの照合用であって
+    実機での逆解析には使えない（README §3.3 の注意）。
+    """
+    d = r['depth_m']
+    if d <= 0.0:
+        return None
+    a_th = _theory_path_alpha(r, level)
+    return a_th + (r['L_abs_theory'] - r['L_abs_meas']) / (2.0 * d)
+
+
+def alpha_from_relative(r, r0, level):
+    """相対 LSR から層間の alpha を逆算する（実測可能な形）。
+
+        alpha = alpha_theory_layer + (L_rel_theory - L_rel_meas) / (2 (d_k - d_j))
+
+    絶対版と同じく理論との差分で書き、ゲートの効果を打ち消す。
+    氷層の上下面で取ると |R| の比がちょうど 1、往復透過の比も氷上面の
+    0.99943 だけになるので、実質的に幾何項の補正だけで層内 alpha が求まる。
+    こちらは参照計算を必要としないため、実機でも使える形になっている。
+    """
+    dd = r['depth_m'] - r0['depth_m']
+    if abs(dd) < 1e-9:
+        return None
+    freq = r['freq']
+    # 2 イベントの間にある層だけを取り出す。'above' は浅い順の前置リストなので、
+    # 浅いほうの長さ以降が「2 つの界面に挟まれた層」になる。
+    deep, shallow = ((r, r0) if r['depth_m'] > r0['depth_m'] else (r0, r))
+    layers = deep['event']['above'][len(shallow['event']['above']):]
+    acc = np.zeros_like(freq)
+    for length, in_ice in layers:
+        acc = acc + _alpha_of(freq, level, in_ice) * length
+    a_th = acc / abs(dd)
+    # dd の符号が LSR の符号を打ち消すので、dd はそのまま（絶対値にしない）
+    return a_th + (r['L_rel_theory'] - r['L_rel_meas']) / (2.0 * dd)
+
+
+def reflection_spectrum(r):
+    """絶対 LSR から幾何・透過・吸収を除いた |R(f)| を返す。"""
+    tm = r['terms']
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.exp(r['L_abs_meas']) / (tm['G'] * tm['T'] * tm['A'])
+
+
+# =============================================================================
+# 7. 作図
+# =============================================================================
+def _band(freq_hz):
+    g = freq_hz * 1e-9
+    return (g >= BAND_GHZ[0]) & (g <= BAND_GHZ[1])
+
+
+def _event_handles(results):
+    return [Line2D([0], [0], color=r['color'], lw=2, label=r['name'])
+            for r in results]
+
+
+def plot_trace(results, info, output_dir):
+    """fig0: (a) 全波形＋理論走時＋ゲート窓 (b) 包絡の dB とノイズフロア。"""
+    dt_ns = info['dt'] * 1e9
+    t = np.arange(len(info['work'])) * dt_ns
+    env = np.abs(signal.hilbert(info['work']))
+    fig, axes = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
+
+    axes[0].plot(t, info['work'], color='k', lw=0.8, label='at_tx')
+    if info['background'] is not None:
+        axes[0].plot(t, info['trace'], color='0.7', lw=0.6, zorder=0,
+                     label='差分前')
+    for r in results:
+        axes[0].axvline(r['t_theory'], color=r['color'], ls='--', lw=1.2)
+        axes[0].axvspan(r['window'][0], r['window'][1], color=r['color'],
+                        alpha=0.12)
+    axes[0].set_ylabel('Ez [linear]', fontsize=13)
+    axes[0].set_title('(a) Trace with theoretical arrivals and gates',
+                      fontsize=13)
+    axes[0].legend(fontsize=10)
+
+    with np.errstate(divide='ignore'):
+        env_db = 20.0 * np.log10(env / info['surface_amp'])
+    axes[1].plot(t, env_db, color='k', lw=0.9)
+    for r in results:
+        axes[1].axvline(r['t_theory'], color=r['color'], ls='--', lw=1.2)
+        tm = r['terms']
+        i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
+        th_db = 20.0 * np.log10(
+            abs(tm['G'][i_c] * tm['T'][i_c] * tm['R'][i_c] * tm['A'][i_c])
+            / abs(results[0]['terms']['R'][i_c]))
+        axes[1].plot(r['t_theory'], th_db, marker='o', ms=7,
+                     color=r['color'], mfc='none', mew=2)
+    if np.isfinite(info['noise_db']):
+        axes[1].axhline(info['noise_db'], color='m', ls=':', lw=1.5,
+                        label='noise floor {:.1f} dB'.format(info['noise_db']))
+        axes[1].axvspan(NOISE_WINDOW_NS[0], NOISE_WINDOW_NS[1],
+                        color='m', alpha=0.06)
+        axes[1].legend(fontsize=10)
+    axes[1].set_xlabel('Time [ns]', fontsize=13)
+    axes[1].set_ylabel('Envelope [dB re. surface peak]', fontsize=13)
+    axes[1].set_title('(b) Envelope, theory (circles) and noise floor',
+                      fontsize=13)
+    axes[1].set_ylim(-90, 5)
+    for ax in axes:
+        ax.grid(alpha=0.4)
+        ax.minorticks_on()
+    fig.legend(handles=_event_handles(results), loc='upper center', ncol=4,
+               fontsize=11, bbox_to_anchor=(0.5, 0.0), frameon=True)
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig0_trace')
+
+
+def plot_spectra(results, info, output_dir):
+    """fig1: (a) 生スペクトル (b) 帯域端 (c) 重心と幅。ascan_spectrum fig1 相当。"""
+    freq = info['freq']
+    fg = freq * 1e-9
+    band = _band(freq)
+    ref_max = np.max(np.abs(info['E_ref'][band]))
+
+    fig, axes = plt.subplots(3, 1, figsize=(10, 12))
+
+    ax = axes[0]
+    with np.errstate(divide='ignore'):
+        ax.plot(fg, 20 * np.log10(np.abs(info['E_ref']) / ref_max),
+                color='0.5', lw=1.5, label='E_ref (far_1m)')
+        for r in results:
+            ax.plot(fg, 20 * np.log10(np.abs(r['E_meas']) / ref_max),
+                    color=r['color'], lw=1.4, label=r['name'])
+            ax.plot(fg, 20 * np.log10(np.abs(r['E_theory']) / ref_max),
+                    color=r['color'], lw=1.0, ls='--', alpha=0.7)
+    if np.isfinite(info['noise_db']):
+        ax.axhline(info['noise_db'], color='m', ls=':', lw=1.2,
+                   label='noise floor')
+    for x in BAND_GHZ:
+        ax.axvline(x, color='k', ls=':', lw=1.0)
+    ax.set_xlim(0, 3.0)
+    ax.set_ylim(-100, 5)
+    ax.set_xlabel('Frequency [GHz]', fontsize=13)
+    ax.set_ylabel('|E(f)| [dB re. max(|E_ref|) in band]', fontsize=13)
+    ax.set_title('(a) Raw spectra (solid: measured, dashed: theory)',
+                 fontsize=13)
+    ax.legend(fontsize=10, ncol=2)
+
+    ax = axes[1]
+    for i, r in enumerate(results):
+        y = i
+        fm, ft = r['flohi_meas'], r['flohi_theory']
+        key = asp._th_suffix(FLOHI_PRIMARY_DB)
+        for src, marker, ms in ((fm, 'o', 7), (ft, 'x', 8)):
+            lo = src.get('f_lo' + key, np.nan) * 1e-9
+            hi = src.get('f_hi' + key, np.nan) * 1e-9
+            ax.plot([lo, hi], [y, y], color=r['color'], lw=1.2,
+                    marker=marker, ms=ms,
+                    ls='-' if marker == 'o' else '--')
+        ax.plot(r['moments_meas']['f_c'] * 1e-9, y, marker='D', ms=7,
+                color=r['color'])
+    ax.set_yticks(range(len(results)))
+    ax.set_yticklabels([r['name'] for r in results])
+    ax.set_xlabel('Frequency [GHz]', fontsize=13)
+    ax.set_title('(b) Band edges f_lo / f_c / f_hi ({:.0f} dB)  '
+                 '[o: measured, x: theory]'.format(FLOHI_PRIMARY_DB),
+                 fontsize=13)
+
+    ax = axes[2]
+    for i, r in enumerate(results):
+        for src, marker, ls in ((r['moments_meas'], 'o', '-'),
+                                (r['moments_theory'], 'x', '--')):
+            fc = src['f_c'] * 1e-9
+            sg = src['sigma_f'] * 1e-9
+            ax.plot([fc - sg, fc + sg], [i, i], color=r['color'], lw=1.4,
+                    ls=ls, marker=marker, ms=7)
+    ax.set_yticks(range(len(results)))
+    ax.set_yticklabels([r['name'] for r in results])
+    ax.set_xlabel('Frequency [GHz]', fontsize=13)
+    ax.set_title(r'(c) Centroid and spectral width $f_c \pm \sigma_f$',
+                 fontsize=13)
+
+    for ax in axes[1:]:
+        ax.grid(alpha=0.4)
+        ax.minorticks_on()
+    axes[0].grid(alpha=0.4)
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig1_spectra')
+
+
+def plot_lsr(results, info, output_dir):
+    """fig2: (a) 絶対 LSR (b) 残差 (c) 相対 LSR (d) 残差。"""
+    freq = info['freq']
+    fg = freq * 1e-9
+    fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+    for r in results:
+        m = r['mask']
+        for col, key_m, key_t, ttl in (
+                (0, 'L_abs_meas', 'L_abs_theory', 'Absolute LSR (ref = far_1m)'),
+                (1, 'L_rel_meas', 'L_rel_theory',
+                 'Relative LSR (ref = {})'.format(info['rel_ref']))):
+            a = axes[0, col]
+            a.plot(fg[m], 8.686 * r[key_m][m], color=r['color'], lw=1.4)
+            a.plot(fg[m], 8.686 * r[key_t][m], color=r['color'], lw=1.0,
+                   ls='--')
+            a.set_title('(a) ' + ttl if col == 0 else '(c) ' + ttl, fontsize=12)
+            b = axes[1, col]
+            b.plot(fg[m], 8.686 * (r[key_m][m] - r[key_t][m]),
+                   color=r['color'], lw=1.4)
+            b.set_title('(b) residual' if col == 0 else '(d) residual',
+                        fontsize=12)
+    for a in axes.ravel():
+        a.set_xlabel('Frequency [GHz]', fontsize=12)
+        a.set_ylabel('LSR [dB]', fontsize=12)
+        a.set_xlim(BAND_GHZ)
+        a.grid(alpha=0.4)
+        a.minorticks_on()
+    for a in axes[1]:
+        a.axhline(0, color='k', lw=0.8)
+    fig.legend(handles=_event_handles(results), loc='upper center', ncol=4,
+               fontsize=11, bbox_to_anchor=(0.5, 0.0), frameon=True)
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig2_lsr')
+
+
+def plot_attenuation(results, info, level, output_dir):
+    """fig3: 絶対／相対 LSR から逆算した alpha と tanδ。"""
+    freq = info['freq']
+    fg = freq * 1e-9
+    names = [r['name'] for r in results]
+    r0 = results[names.index(info['rel_ref'])]
+    n_reg = _n_of(freq, level, False)
+
+    fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+    for r in results:
+        m = r['mask']
+        a_abs = alpha_from_absolute(r, level)
+        if a_abs is not None:
+            axes[0, 0].plot(fg[m], a_abs[m], color=r['color'], lw=1.4)
+            axes[0, 1].plot(fg[m], alpha_to_tandelta(a_abs, freq, n_reg)[m],
+                            color=r['color'], lw=1.4)
+        a_rel = alpha_from_relative(r, r0, level)
+        if a_rel is not None:
+            axes[1, 0].plot(fg[m], a_rel[m], color=r['color'], lw=1.4)
+            axes[1, 1].plot(fg[m], alpha_to_tandelta(a_rel, freq, n_reg)[m],
+                            color=r['color'], lw=1.4)
+
+    # 理論曲線：背景レゴリスと（あれば）氷層
+    th = [(_alpha_of(freq, level, False), 'r', '--', 'Theory (regolith)')]
+    if 'ice_layer' in LEVEL_EFFECTS[level]:
+        th.append((_alpha_of(freq, level, True), 'm', ':', 'Theory (ice layer)'))
+    for a_th, col, ls, lab in th:
+        axes[0, 0].plot(fg, a_th, color=col, ls=ls, lw=1.5, label=lab)
+        axes[1, 0].plot(fg, a_th, color=col, ls=ls, lw=1.5, label=lab)
+        axes[0, 1].plot(fg, alpha_to_tandelta(a_th, freq, n_reg), color=col,
+                        ls=ls, lw=1.5, label=lab)
+        axes[1, 1].plot(fg, alpha_to_tandelta(a_th, freq, n_reg), color=col,
+                        ls=ls, lw=1.5, label=lab)
+
+    titles = [('(a) alpha from absolute LSR (round-trip average)',
+               r'$\alpha(f)$ [1/m]'),
+              ('(b) tan_delta from absolute LSR', r'tan$\delta(f)$'),
+              ('(c) alpha from relative LSR (field-measurable)',
+               r'$\alpha(f)$ [1/m]'),
+              ('(d) tan_delta from relative LSR', r'tan$\delta(f)$')]
+    for a, (ttl, ylab) in zip(axes.ravel(), titles):
+        a.set_title(ttl, fontsize=12)
+        a.set_xlabel('Frequency [GHz]', fontsize=12)
+        a.set_ylabel(ylab, fontsize=12)
+        a.set_xlim(BAND_GHZ)
+        a.grid(alpha=0.4)
+        a.minorticks_on()
+        a.legend(fontsize=9)
+    fig.legend(handles=_event_handles(results), loc='upper center', ncol=4,
+               fontsize=11, bbox_to_anchor=(0.5, 0.0), frameon=True)
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig3_attenuation')
+
+
+def plot_phase(results, info, output_dir):
+    """fig4: 群遅延と残差。"""
+    freq = info['freq']
+    fg = freq * 1e-9
+    fig, axes = plt.subplots(2, 1, figsize=(10, 9))
+    for r in results:
+        m = r['mask']
+        axes[0].plot(fg[m], r['tau_g_meas'][m], color=r['color'], lw=1.4)
+        axes[0].plot(fg[m], r['tau_g_theory'][m], color=r['color'], lw=1.0,
+                     ls='--')
+        axes[1].plot(fg[m], r['tau_g_meas'][m] - r['tau_g_theory'][m],
+                     color=r['color'], lw=1.4)
+    axes[0].set_title('(a) Group delay: measured (solid) vs theory (dashed)',
+                      fontsize=13)
+    axes[1].set_title('(b) Group delay residual (numerical dispersion '
+                      '+ multiples)', fontsize=13)
+    axes[1].axhline(0, color='k', lw=0.8)
+    for a in axes:
+        a.set_xlabel('Frequency [GHz]', fontsize=12)
+        a.set_ylabel('Group delay [ns]', fontsize=12)
+        a.set_xlim(BAND_GHZ)
+        a.grid(alpha=0.4)
+        a.minorticks_on()
+    fig.legend(handles=_event_handles(results), loc='upper center', ncol=4,
+               fontsize=11, bbox_to_anchor=(0.5, 0.0), frameon=True)
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig4_phase')
+
+
+def plot_reflection(results, info, output_dir):
+    """fig5: |R(f)| の実測と理論。"""
+    freq = info['freq']
+    fg = freq * 1e-9
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for r in results:
+        m = r['mask']
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ax.plot(fg[m], 20 * np.log10(reflection_spectrum(r)[m]),
+                    color=r['color'], lw=1.4)
+            ax.plot(fg, 20 * np.log10(np.abs(r['terms']['R'])),
+                    color=r['color'], lw=1.0, ls='--')
+    ax.set_xlabel('Frequency [GHz]', fontsize=13)
+    ax.set_ylabel(r'$|R(f)|$ [dB]', fontsize=13)
+    ax.set_title('Reflection coefficient (solid: measured, dashed: theory)',
+                 fontsize=13)
+    ax.set_xlim(BAND_GHZ)
+    ax.grid(alpha=0.4)
+    ax.minorticks_on()
+    fig.legend(handles=_event_handles(results), loc='upper center', ncol=4,
+               fontsize=11, bbox_to_anchor=(0.5, 0.0), frameon=True)
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig5_reflection')
+
+
+# =============================================================================
+# 8. 数値出力
+# =============================================================================
+def write_outputs(results, info, level, kind, output_dir):
+    import csv
+    freq = info['freq']
+    i_c = int(np.argmin(np.abs(freq - BAND_CENTRE_HZ)))
+    names = [r['name'] for r in results]
+    r0 = results[names.index(info['rel_ref'])]
+
+    path = os.path.join(output_dir, 'events.csv')
+    with open(path, 'w', newline='', encoding='utf-8') as fh:
+        w = csv.writer(fh)
+        w.writerow(['event', 'depth_m', 't_theory_ns', 't_measured_ns',
+                    'dt_ns', 'amp_peak', 'amp_rel_surface_dB',
+                    'R_theory', 'R_measured', 'alpha_abs_1.25GHz',
+                    'alpha_rel_1.25GHz', 'f_c_GHz', 'sigma_f_GHz'])
+        for r in results:
+            a_abs = alpha_from_absolute(r, level)
+            a_rel = alpha_from_relative(r, r0, level)
+            Rm = reflection_spectrum(r)[i_c]
+            w.writerow([
+                r['name'], r['depth_m'], r['t_theory'], r['t_measured'],
+                r['t_measured'] - r['t_theory'], r['amp_peak'],
+                20 * np.log10(r['amp_peak'] / results[0]['amp_peak']),
+                float(np.abs(r['terms']['R'][i_c])), float(Rm),
+                '' if a_abs is None else float(a_abs[i_c]),
+                '' if a_rel is None else float(a_rel[i_c]),
+                r['moments_meas']['f_c'] / 1e9,
+                r['moments_meas']['sigma_f'] / 1e9])
+    print('Saved:', path)
+
+    np.savez(os.path.join(output_dir, 'spectrum.npz'), freq_hz=freq,
+             E_ref=info['E_ref'],
+             **{'E_' + r['name']: r['E_meas'] for r in results},
+             **{'Eth_' + r['name']: r['E_theory'] for r in results})
+
+    path = os.path.join(output_dir, 'run_info.txt')
+    with open(path, 'w', encoding='utf-8') as fh:
+        fh.write('at_tx reflection spectrum analysis\n')
+        fh.write('  level: {}\n  kind: {}\n  json: {}\n'
+                 .format(level, kind, JSON_PATH))
+        fh.write('  gate: halfwidth {:.2f} ns, taper {}, center {}\n'
+                 .format(GATE_HALFWIDTH_NS, GATE_TAPER, GATE_CENTER))
+        fh.write('  background subtraction: {}\n'
+                 .format(BACKGROUND_TRACE_PATH or 'off'))
+        fh.write('  relative LSR reference event: {}\n'.format(info['rel_ref']))
+        fh.write('  noise floor: {:.2f} dB re. surface peak  -> {}\n'
+                 .format(info['noise_db'], judge_floor(info['noise_db'])))
+        if 'absorb_const' in LEVEL_EFFECTS[level]:
+            fh.write('  medium: {}\n'.format(
+                describe_level2_medium(refractive_index(freq, level))))
+        if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
+            fh.write('  medium: {}\n'.format(describe_level3_medium()))
+        if 'absorb_debye' in LEVEL_EFFECTS[level]:
+            fh.write('  medium: {}\n'.format(describe_level3b_medium()))
+        if 'ice_layer' in LEVEL_EFFECTS[level]:
+            fh.write('  ice layer: {}\n'.format(describe_level4_medium()))
+        fh.write('\n  event      d[m]   t_th[ns]  t_meas[ns]  amp[dB]\n')
+        for r in results:
+            fh.write('  {:10s} {:5.2f}  {:8.3f}  {:9.3f}  {:+8.2f}\n'
+                     .format(r['name'], r['depth_m'], r['t_theory'],
+                             r['t_measured'],
+                             20 * np.log10(r['amp_peak']
+                                           / results[0]['amp_peak'])))
+    print('Saved:', path)
+
+
+def gate_sensitivity(at_tx_path, ref_path, level, output_dir):
+    """ゲート幅を振って alpha がどれだけ動くかを確認する（README §4.4）。"""
+    if not GATE_SWEEP_NS:
+        return
+    global GATE_HALFWIDTH_NS
+    keep = GATE_HALFWIDTH_NS
+    print('\n--- ゲート幅の感度確認 ---')
+    print('  halfwidth[ns]  event        alpha@1.25GHz (relative LSR)')
+    for hw in GATE_SWEEP_NS:
+        GATE_HALFWIDTH_NS = hw
+        res, info = analyze(at_tx_path, ref_path, level, BACKGROUND_TRACE_PATH)
+        names = [r['name'] for r in res]
+        r0 = res[names.index(info['rel_ref'])]
+        i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
+        for r in res:
+            a = alpha_from_relative(r, r0, level)
+            if a is not None:
+                print('  {:12.2f}  {:12s} {:.6f}'
+                      .format(hw, r['name'], float(a[i_c])))
+    GATE_HALFWIDTH_NS = keep
+
+
+# =============================================================================
+# 9. main
+# =============================================================================
+def main():
+    level, kind, rx_paths, reference = load_paths(JSON_PATH)
+
+    if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
+        wt, key = set_level3_composition(kind)
+        print('背景レゴリスの組成: FeO+TiO2 = {:.1f} wt%  [{}]'.format(wt, key))
+    if 'ice_layer' in LEVEL_EFFECTS.get(level, []):
+        vol, ice_key = set_level4_ice(kind)
+        print('水氷濃度: {:.2f} vol%  [{}]'.format(vol, ice_key))
+
+    if level not in IMPLEMENTED_LEVELS:
+        raise NotImplementedError('{} は未実装です'.format(level))
+
+    if AT_TX_KEY not in rx_paths:
+        raise CmdInputError(
+            '選択した階層に "{}" がありません（本ツールは at_tx 専用です）。\n'
+            '利用可能な rx: {}'.format(AT_TX_KEY, ', '.join(sorted(rx_paths))))
+    check_paths_exist({AT_TX_KEY: rx_paths[AT_TX_KEY]}, reference)
+
+    at_tx_path = rx_paths[AT_TX_KEY]
+    ref_path = reference if isinstance(reference, str) else reference[REF_KEY]
+
+    results, info = analyze(at_tx_path, ref_path, level, BACKGROUND_TRACE_PATH)
+
+    print('\nノイズフロア: {:.2f} dB re. surface peak  -> {}'
+          .format(info['noise_db'], judge_floor(info['noise_db'])))
+    print('\n  event      d[m]   t_th[ns]  t_meas[ns]   amp[dB]')
+    for r in results:
+        print('  {:10s} {:5.2f}  {:8.3f}  {:9.3f}  {:+8.2f}'
+              .format(r['name'], r['depth_m'], r['t_theory'], r['t_measured'],
+                      20 * np.log10(r['amp_peak'] / results[0]['amp_peak'])))
+
+    asp.OUTPUT_SUBDIRNAME = OUTPUT_SUBDIRNAME     # 出力先だけ差し替える
+    output_dir = asp.resolve_output_dir(level, rx_paths)
+    os.makedirs(output_dir, exist_ok=True)
+
+    plot_trace(results, info, output_dir)
+    plot_spectra(results, info, output_dir)
+    plot_lsr(results, info, output_dir)
+    plot_attenuation(results, info, level, output_dir)
+    plot_phase(results, info, output_dir)
+    plot_reflection(results, info, output_dir)
+    write_outputs(results, info, level, kind, output_dir)
+    gate_sensitivity(at_tx_path, ref_path, level, output_dir)
+
+
+if __name__ == '__main__':
+    main()
