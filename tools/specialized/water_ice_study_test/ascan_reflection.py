@@ -59,17 +59,14 @@ ICE_VOL_SWEEP      = (0.005, 0.01, 0.05, 0.10)   # swept ice fractions
 CENTER_FREQ_HZ     = 1.25e9      # representative frequency [Hz]
 FIG_DPI            = 150
 
-# out_file_paths.json branch selectors (the JSON is deeply nested)
-WAVEFORM_KEY     = "excitation_waveform"
-DX_KEY           = "dx_00025"
-FEO_KEY          = "FeO_075"
-ICE_FRACTION_KEY = "f_ice_10"
-REFERENCE_KEY    = "_reference"
-NOICE_LEVEL_KEY  = "Level_3"                 # ice-free baseline (bg-sub / no-ice theory)
-_BRANCH_PREFS    = (WAVEFORM_KEY, DX_KEY, FEO_KEY, ICE_FRACTION_KEY)
+# JSON input/output settings based on ascan_reflection_spectrum.py
+JSON_PATH = asp.JSON_PATH
+AT_TX_KEY = 'at_tx'
+REF_KEY   = 'far_1m'
 
-DEFAULT_PATHS_JSON = ("/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/"
-                      "water_ice_study_test/out_file_paths.json")
+OUTPUT_SUBDIRNAME = 'ascan_reflection'
+
+BACKGROUND_TRACE_PATH = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/water_ice_study_test/free_space_test/excitation_LUPEX_dx00025/at_tx/result/Ascan.out'       # 氷なし at_tx の .out。空なら差分しない
 
 
 # ---------------------------------------------------------------------------
@@ -286,75 +283,8 @@ def theory_events(medium, freqs, E_ref, dt, t0=0.0):
 
 
 # ---------------------------------------------------------------------------
-# out_file_paths.json navigation and trace loading
+# Loading utilities
 # ---------------------------------------------------------------------------
-def _resolve_leaf(node, leaf, prefs=_BRANCH_PREFS):
-    """Descend the nested dict to the path string for `leaf` (at_tx / far_1m / ...).
-    Prefer the given branch keys; if a single child dict exists, descend it."""
-    cur = node
-    while isinstance(cur, dict):
-        if isinstance(cur.get(leaf), str):
-            return cur[leaf]
-        nxt = next((cur[k] for k in prefs if isinstance(cur.get(k), dict)), None)
-        if nxt is None:
-            children = [v for v in cur.values() if isinstance(v, dict)]
-            if len(children) != 1:
-                raise KeyError(f"'{leaf}' not found; set the branch selectors.")
-            nxt = children[0]
-        cur = nxt
-    raise KeyError(f"'{leaf}' not found.")
-
-
-def _ice_vol_from_key(ice_key):
-    """'f_ice_10' -> 0.10 (volume fraction)."""
-    digits = "".join(ch for ch in str(ice_key) if ch.isdigit())
-    return int(digits) / 100.0 if digits else None
-
-
-def available_ice_keys(paths, level_key, prefs=(WAVEFORM_KEY, DX_KEY, FEO_KEY)):
-    """List the f_ice_* branches present under a level (e.g. ['f_ice_10','f_ice_20'])."""
-    cur = paths[level_key]
-    for _ in range(12):
-        keys = sorted(k for k in cur if isinstance(k, str) and k.startswith("f_ice"))
-        if keys:
-            return keys
-        nxt = next((cur[k] for k in prefs if isinstance(cur.get(k), dict)), None)
-        if nxt is None:
-            children = [v for v in cur.values() if isinstance(v, dict)]
-            if len(children) != 1:
-                break
-            nxt = children[0]
-        cur = nxt
-    return []
-
-
-def resolve_input_paths(paths, level_key, ice_key=ICE_FRACTION_KEY):
-    """Resolve at_tx (target level + ice_key), far_1m (_reference tree) and the
-    ice-free baseline at_tx (NOICE_LEVEL_KEY). ice_key selects the ice fraction
-    when a level holds several (e.g. f_ice_10 / f_ice_20)."""
-    prefs = (WAVEFORM_KEY, DX_KEY, FEO_KEY, ice_key)
-    at_tx = _resolve_leaf(paths[level_key], "at_tx", prefs)
-    far_1m = _resolve_leaf(paths[REFERENCE_KEY], "far_1m")
-    noice = None
-    if NOICE_LEVEL_KEY in paths:
-        noice = _resolve_leaf(paths[NOICE_LEVEL_KEY], "at_tx")
-    return {"at_tx": at_tx, "far_1m": far_1m, "noice_at_tx": noice}
-
-
-def load_paths(json_path):
-    with open(json_path, "r", encoding="utf-8") as fh:
-        return json.load(fh)
-
-
-def resolve_output_dir(paths, level_key, ice_key=ICE_FRACTION_KEY):
-    """Put outputs next to the data: .../<condition>/analysis/reflection/."""
-    at_tx = _resolve_leaf(paths[level_key], "at_tx", (WAVEFORM_KEY, DX_KEY, FEO_KEY, ice_key))
-    cond = os.path.dirname(os.path.dirname(os.path.dirname(at_tx)))
-    out = os.path.join(cond, "analysis", "ascan_reflection")
-    os.makedirs(out, exist_ok=True)
-    return out
-
-
 def load_trace(path, component="Ez"):
     """Load a gprMax .out (HDF5) trace -> (time [s], amplitude)."""
     import h5py
@@ -585,8 +515,6 @@ def fig2_events(out_dir, dets, events, dt):
     names = [e.name for e in events]
     t_th = np.array([e.t for e in events]) * 1e9
     t_ms = np.array([d.t_measured for d in dets]) * 1e9
-    # amplitudes relative to the surface event (absolute scales differ:
-    # theory is in far_1m units, measured in at_tx units)
     a_th = np.array([e.peak for e in events]); a_th = a_th / a_th[0]
     a_ms = np.array([d.peak for d in dets]); a_ms = a_ms / a_ms[0]
     fig, ax = plt.subplots(1, 3, figsize=(13, 4))
@@ -706,34 +634,17 @@ def write_run_info(path, medium, floor, tt, atten):
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
-def run_analysis(paths, level_key, ice_key=ICE_FRACTION_KEY, traces=None,
-                 ice_vol=None, use_bg_sub=False):
-    """Run one condition. `ice_key` selects the ice fraction branch in the JSON
-    (e.g. 'f_ice_10' / 'f_ice_20') and, unless `ice_vol` is given, the medium
-    fraction too. `traces` may be injected for testing; otherwise traces are
-    read from `paths`."""
-    if ice_vol is None:
-        ice_vol = _ice_vol_from_key(ice_key)
-        if ice_vol is None:
-            ice_vol = DETECTED_ICE_VOL
-
-    out_dir = resolve_output_dir(paths, level_key, ice_key)
-    out_dir = os.path.join(out_dir, "bg_sub" if use_bg_sub else "no_bg_sub")
-    os.makedirs(out_dir, exist_ok=True)
-
-    if traces is None:
-        p = resolve_input_paths(paths, level_key, ice_key)
-        t_at, a_at = load_trace(p["at_tx"])
-        t_ref, a_ref = load_trace(p["far_1m"])
-        t_ni, a_ni = load_trace(p["noice_at_tx"]) if p["noice_at_tx"] else (t_at, a_at)
+def run_analysis(at_tx_path, ref_path, ice_vol, bg_path="", use_bg_sub=False, out_dir=""):
+    """Run one condition."""
+    t_at, a_at = load_trace(at_tx_path)
+    t_ref, a_ref = load_trace(ref_path)
+    
+    if bg_path and use_bg_sub:
+        t_ni, a_ni = load_trace(bg_path)
     else:
-        t_at, a_at = traces["at_tx"]
-        t_ref, a_ref = traces["far_1m"]
-        t_ni, a_ni = traces.get("noice", (t_at, a_at))
+        t_ni, a_ni = t_at, a_at
 
     dt = t_at[1] - t_at[0]
-    # Put the reference on the same time grid as at_tx (same dt) so synthesized
-    # events up to the ice-bottom arrival cannot wrap around a short window.
     n = len(a_at)
     a_ref = np.pad(a_ref, (0, n - len(a_ref))) if len(a_ref) < n else a_ref[:n]
     freqs = rfftfreq(n, dt)
@@ -785,24 +696,46 @@ def run_analysis(paths, level_key, ice_key=ICE_FRACTION_KEY, traces=None,
 
 
 def main(argv=None):
-    argv = argv if argv is not None else sys.argv[1:]
-    json_path = argv[0] if argv else DEFAULT_PATHS_JSON
-    level_key = argv[1] if len(argv) > 1 else "Level_4"
-
     print("=== ascan_reflection ===")
-    paths = load_paths(json_path)
-    # Process every ice concentration present under the level (e.g. f_ice_10,
-    # f_ice_20); fall back to the default branch if the level has none.
-    ice_keys = available_ice_keys(paths, level_key) or [ICE_FRACTION_KEY]
-    if len(argv) > 2:
-        ice_keys = [argv[2]]
-    for ice_key in ice_keys:
-        print(f"\n# {level_key} / {ice_key} "
-              f"(ice = {_ice_vol_from_key(ice_key) * 100:.0f} vol%)")
-        for bg in (False, True):
-            res = run_analysis(paths, level_key, ice_key, use_bg_sub=bg)
-            print(f"  [bg_sub={bg}] out_dir = {res['out_dir']}  "
-                  f"floor = {res['floor'].db:.1f} dB ({res['floor'].verdict})")
+    
+    # ascan_spectrum の load_paths を用いて対話的に解析対象を決定する
+    level, kind, rx_paths, reference = asp.load_paths(JSON_PATH)
+    
+    if AT_TX_KEY not in rx_paths:
+        print(f"Error: 選択した階層に '{AT_TX_KEY}' がありません。\n利用可能な rx: {', '.join(sorted(rx_paths))}")
+        return 1
+        
+    at_tx_path = rx_paths[AT_TX_KEY]
+    ref_path = reference if isinstance(reference, str) else reference.get(REF_KEY, "")
+    
+    if not ref_path:
+        print(f"Error: 参照パス '{REF_KEY}' が見つかりません。")
+        return 1
+
+    ice_vol = DETECTED_ICE_VOL
+    
+    if 'ice_layer' in asp.LEVEL_EFFECTS.get(level, []):
+        vol_pct, ice_key = asp.set_level4_ice(kind)
+        ice_vol = vol_pct / 100.0
+        print(f"\n# {level} / {ice_key} (ice = {ice_vol * 100:.0f} vol%)")
+    else:
+        print(f"\n# {level}")
+        
+    asp.OUTPUT_SUBDIRNAME = OUTPUT_SUBDIRNAME
+    out_dir_base = asp.resolve_output_dir(level, rx_paths)
+
+    for bg in (False, True):
+        if bg and not BACKGROUND_TRACE_PATH:
+            print("  [bg_sub=True] Skipped (BACKGROUND_TRACE_PATH が設定されていません)")
+            continue
+            
+        out_dir = os.path.join(out_dir_base, "bg_sub" if bg else "no_bg_sub")
+        os.makedirs(out_dir, exist_ok=True)
+        
+        res = run_analysis(at_tx_path, ref_path, ice_vol, BACKGROUND_TRACE_PATH, bg, out_dir)
+        print(f"  [bg_sub={bg}] out_dir = {res['out_dir']}  "
+              f"floor = {res['floor'].db:.1f} dB ({res['floor'].verdict})")
+
     return 0
 
 
