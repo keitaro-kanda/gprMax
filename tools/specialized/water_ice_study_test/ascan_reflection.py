@@ -121,7 +121,8 @@ class MediumModel:
             return np.atleast_1d(asp.level4_alpha(np.atleast_1d(f), True))
 
     def describe(self):
-        return asp.describe_level4_medium()
+        with _ice_fraction(self.ice_vol):
+            return asp.describe_level4_medium()
 
 
 # ---------------------------------------------------------------------------
@@ -287,14 +288,14 @@ def theory_events(medium, freqs, E_ref, dt, t0=0.0):
 # ---------------------------------------------------------------------------
 # out_file_paths.json navigation and trace loading
 # ---------------------------------------------------------------------------
-def _resolve_leaf(node, leaf):
+def _resolve_leaf(node, leaf, prefs=_BRANCH_PREFS):
     """Descend the nested dict to the path string for `leaf` (at_tx / far_1m / ...).
-    Prefer the configured branch keys; if a single child dict exists, descend it."""
+    Prefer the given branch keys; if a single child dict exists, descend it."""
     cur = node
     while isinstance(cur, dict):
         if isinstance(cur.get(leaf), str):
             return cur[leaf]
-        nxt = next((cur[k] for k in _BRANCH_PREFS if isinstance(cur.get(k), dict)), None)
+        nxt = next((cur[k] for k in prefs if isinstance(cur.get(k), dict)), None)
         if nxt is None:
             children = [v for v in cur.values() if isinstance(v, dict)]
             if len(children) != 1:
@@ -304,10 +305,35 @@ def _resolve_leaf(node, leaf):
     raise KeyError(f"'{leaf}' not found.")
 
 
-def resolve_input_paths(paths, level_key):
-    """Resolve at_tx (target level), far_1m (_reference tree) and the ice-free
-    baseline at_tx (NOICE_LEVEL_KEY)."""
-    at_tx = _resolve_leaf(paths[level_key], "at_tx")
+def _ice_vol_from_key(ice_key):
+    """'f_ice_10' -> 0.10 (volume fraction)."""
+    digits = "".join(ch for ch in str(ice_key) if ch.isdigit())
+    return int(digits) / 100.0 if digits else None
+
+
+def available_ice_keys(paths, level_key, prefs=(WAVEFORM_KEY, DX_KEY, FEO_KEY)):
+    """List the f_ice_* branches present under a level (e.g. ['f_ice_10','f_ice_20'])."""
+    cur = paths[level_key]
+    for _ in range(12):
+        keys = sorted(k for k in cur if isinstance(k, str) and k.startswith("f_ice"))
+        if keys:
+            return keys
+        nxt = next((cur[k] for k in prefs if isinstance(cur.get(k), dict)), None)
+        if nxt is None:
+            children = [v for v in cur.values() if isinstance(v, dict)]
+            if len(children) != 1:
+                break
+            nxt = children[0]
+        cur = nxt
+    return []
+
+
+def resolve_input_paths(paths, level_key, ice_key=ICE_FRACTION_KEY):
+    """Resolve at_tx (target level + ice_key), far_1m (_reference tree) and the
+    ice-free baseline at_tx (NOICE_LEVEL_KEY). ice_key selects the ice fraction
+    when a level holds several (e.g. f_ice_10 / f_ice_20)."""
+    prefs = (WAVEFORM_KEY, DX_KEY, FEO_KEY, ice_key)
+    at_tx = _resolve_leaf(paths[level_key], "at_tx", prefs)
     far_1m = _resolve_leaf(paths[REFERENCE_KEY], "far_1m")
     noice = None
     if NOICE_LEVEL_KEY in paths:
@@ -320,9 +346,9 @@ def load_paths(json_path):
         return json.load(fh)
 
 
-def resolve_output_dir(paths, level_key):
+def resolve_output_dir(paths, level_key, ice_key=ICE_FRACTION_KEY):
     """Put outputs next to the data: .../<condition>/analysis/reflection/."""
-    at_tx = _resolve_leaf(paths[level_key], "at_tx")
+    at_tx = _resolve_leaf(paths[level_key], "at_tx", (WAVEFORM_KEY, DX_KEY, FEO_KEY, ice_key))
     cond = os.path.dirname(os.path.dirname(os.path.dirname(at_tx)))
     out = os.path.join(cond, "analysis", "reflection")
     os.makedirs(out, exist_ok=True)
@@ -680,16 +706,23 @@ def write_run_info(path, medium, floor, tt, atten):
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
-def run_analysis(paths, level_key, traces=None,
-                 ice_vol=DETECTED_ICE_VOL, use_bg_sub=False):
-    """Run one condition. `traces` = {'at_tx':(t,a), 'far_1m':(t,a), 'noice':(t,a)}
-    may be injected for testing; otherwise traces are read from `paths`."""
-    out_dir = resolve_output_dir(paths, level_key)
+def run_analysis(paths, level_key, ice_key=ICE_FRACTION_KEY, traces=None,
+                 ice_vol=None, use_bg_sub=False):
+    """Run one condition. `ice_key` selects the ice fraction branch in the JSON
+    (e.g. 'f_ice_10' / 'f_ice_20') and, unless `ice_vol` is given, the medium
+    fraction too. `traces` may be injected for testing; otherwise traces are
+    read from `paths`."""
+    if ice_vol is None:
+        ice_vol = _ice_vol_from_key(ice_key)
+        if ice_vol is None:
+            ice_vol = DETECTED_ICE_VOL
+
+    out_dir = resolve_output_dir(paths, level_key, ice_key)
     out_dir = os.path.join(out_dir, "bg_sub" if use_bg_sub else "no_bg_sub")
     os.makedirs(out_dir, exist_ok=True)
 
     if traces is None:
-        p = resolve_input_paths(paths, level_key)
+        p = resolve_input_paths(paths, level_key, ice_key)
         t_at, a_at = load_trace(p["at_tx"])
         t_ref, a_ref = load_trace(p["far_1m"])
         t_ni, a_ni = load_trace(p["noice_at_tx"]) if p["noice_at_tx"] else (t_at, a_at)
@@ -757,12 +790,19 @@ def main(argv=None):
     level_key = argv[1] if len(argv) > 1 else "Level_4"
 
     print("=== ascan_reflection ===")
-    print(MediumModel(DETECTED_ICE_VOL).describe())
     paths = load_paths(json_path)
-    for bg in (False, True):
-        res = run_analysis(paths, level_key, use_bg_sub=bg)
-        print(f"[bg_sub={bg}] out_dir = {res['out_dir']}  "
-              f"floor = {res['floor'].db:.1f} dB ({res['floor'].verdict})")
+    # Process every ice concentration present under the level (e.g. f_ice_10,
+    # f_ice_20); fall back to the default branch if the level has none.
+    ice_keys = available_ice_keys(paths, level_key) or [ICE_FRACTION_KEY]
+    if len(argv) > 2:
+        ice_keys = [argv[2]]
+    for ice_key in ice_keys:
+        print(f"\n# {level_key} / {ice_key} "
+              f"(ice = {_ice_vol_from_key(ice_key) * 100:.0f} vol%)")
+        for bg in (False, True):
+            res = run_analysis(paths, level_key, ice_key, use_bg_sub=bg)
+            print(f"  [bg_sub={bg}] out_dir = {res['out_dir']}  "
+                  f"floor = {res['floor'].db:.1f} dB ({res['floor'].verdict})")
     return 0
 
 
