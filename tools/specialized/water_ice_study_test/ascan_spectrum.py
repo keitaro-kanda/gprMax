@@ -435,6 +435,8 @@ def _descend(node, labels):
         # （階層の深さは枝ごとに違いうるので、位置ではなく内容で判定する）
         if _is_composition_layer(nested):
             label = '組成 (FeO+TiO2)'
+        elif _is_ice_layer(nested):
+            label = '水氷濃度 (vol%)'
         else:
             label = labels[len(chosen)] if len(chosen) < len(labels) else labels[-1]
         key = _select(sorted(nested), label)
@@ -794,6 +796,87 @@ def set_level3_composition(kind):
     return _LEVEL3_ACTIVE_WT, _LEVEL3_ACTIVE_KEY
 
 
+# -----------------------------------------------------------------------------
+# 水氷濃度の自動判定（組成の仕組みと同じ構造）
+# -----------------------------------------------------------------------------
+# JSON のサブ階層キー（例 'f_ice_10', 'f_ice_20'）から氷の体積パーセントを
+# 読み取り、LEVEL4_ICE_VOL_PCT に反映する。
+#
+# 【単位の規約】キーの数字は体積パーセント。分率ではない。
+#   f_ice_10   -> 10.0 vol%      （f_ice = 0.10 に対応）
+#   f_ice_20   -> 20.0 vol%
+#   f_ice_005  -> 0.5  vol%      （3 桁以上はゼロ詰めの 10 倍表記とみなす。
+#                                  FeO_050 -> 5.0 と同じ規約）
+#   f_ice_0p5  -> 0.5  vol%
+#   f_ice_0    -> 0.0  vol%      （氷なし参照。Level 3 と同一になる）
+# 明示的に指定したいキーは LEVEL4_ICE_KEYS に書けば優先される。
+LEVEL4_ICE_KEYS = {}      # 例: {'f_ice_lowest': 0.5}
+
+
+def _parse_ice_key(key):
+    """キー名から氷の体積パーセントを読み取る。読めなければ None。"""
+    if key in LEVEL4_ICE_KEYS:
+        return float(LEVEL4_ICE_KEYS[key])
+
+    m = re.fullmatch(r'(?i)(?:f[_-]?)?ice[_-]?(\d+)(?:[p.](\d+))?(?:[_-]?vol)?',
+                     str(key))
+    if not m:
+        return None
+    intpart, frac = m.group(1), m.group(2)
+    if frac is not None:                       # f_ice_0p5 形式
+        return float('{}.{}'.format(intpart, frac))
+    if len(intpart) >= 3:                      # f_ice_005 形式（3 桁 = 10 倍表記）
+        return int(intpart) / 10.0
+    return float(intpart)                      # f_ice_10, f_ice_20 形式
+
+
+def _is_ice_layer(keys):
+    """その階層が氷濃度の階層かどうかを判定する（ラベル表示用）。"""
+    return bool(keys) and all(_parse_ice_key(k) is not None for k in keys)
+
+
+def level4_ice_volpct(kind):
+    """選択されたサブ階層キーから氷の体積パーセントを取り出す。
+
+    kind は load_paths が返す ' / ' 区切りのキー列
+    （例 'excitation_waveform / dx_00025 / FeO_075 / f_ice_10'）。
+
+    氷キーが 1 つも見つからない場合は、既定値に落とさずエラーにする。
+    黙って既定値を使うと、誤った氷濃度の理論曲線のまま解析が完走してしまう
+    ため（組成の判定と同じ方針）。
+    """
+    if kind:
+        for token in str(kind).replace('/', ' ').split():
+            vol = _parse_ice_key(token)
+            if vol is not None:
+                return vol, token
+    raise CmdInputError(
+        'Level 4 の水氷濃度を JSON のキーから判定できませんでした（選択: {}）。\n'
+        'キー名を f_ice_10 / f_ice_20 / f_ice_005 の形式にするか、'
+        'LEVEL4_ICE_KEYS に追加してください。\n'
+        '（既定値に落とすと誤った氷濃度で解析が完走してしまうため、'
+        'あえてエラーにしています）'.format(kind))
+
+
+# 解析対象の氷濃度キー。main() が JSON の選択結果から設定する。
+_LEVEL4_ACTIVE_ICE_KEY = None
+
+
+def set_level4_ice(kind):
+    """JSON の選択結果から Level 4 の水氷濃度を設定する（main から呼ぶ）。
+
+    LEVEL4_ICE_VOL_PCT を上書きし、指定方法を 'vol' に固定する。
+    ファイル冒頭で LEVEL4_ICE_SPEC='wt' にしていても、JSON のキーが
+    体積パーセントである以上そちらを優先する。
+    """
+    global LEVEL4_ICE_VOL_PCT, LEVEL4_ICE_SPEC, _LEVEL4_ACTIVE_ICE_KEY
+    vol, key = level4_ice_volpct(kind)
+    LEVEL4_ICE_VOL_PCT = vol
+    LEVEL4_ICE_SPEC = 'vol'
+    _LEVEL4_ACTIVE_ICE_KEY = key
+    return vol, key
+
+
 def level3_targets(feotio2_wt=None):
     """Level 3 の設計目標値 (eps'_target, eps''_target) を返す。
 
@@ -1032,11 +1115,13 @@ def describe_level4_medium():
     R = (n0 - n1) / (n0 + n1)
     a_d = float(level4_alpha(np.array([BAND_CENTRE_HZ]), False)[0])
     a_i = float(level4_alpha(np.array([BAND_CENTRE_HZ]), True)[0])
-    return ('ice layer {:.3f} vol% ({:.3f} wt%) at {:.2f}-{:.2f} m, '
+    key_note = ('' if _LEVEL4_ACTIVE_ICE_KEY is None
+                else ' [{}]'.format(_LEVEL4_ACTIVE_ICE_KEY))
+    return ('ice layer {:.3f} vol%{} ({:.3f} wt%) at {:.2f}-{:.2f} m, '
             'LLL mixing (pore filling), '
             "eps' {:.6f} -> {:.6f} ({:+.2f}%), eps'' {:.6f} -> {:.6f} ({:+.3f}%), "
             'alpha {:+.2f}% @{:.2f} GHz, interface R = {:.1f} dB'
-            .format(100.0 * v, wt_pct, LEVEL4_ICE_TOP_M,
+            .format(100.0 * v, key_note, wt_pct, LEVEL4_ICE_TOP_M,
                     LEVEL4_ICE_TOP_M + LEVEL4_ICE_THICK_M,
                     er_d, er_i, 100.0 * (er_i / er_d - 1.0),
                     ei_d, ei_i, 100.0 * (ei_i / ei_d - 1.0),
@@ -2069,6 +2154,11 @@ def main():
     if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
         wt, key = set_level3_composition(kind)
         print('背景レゴリスの組成: FeO+TiO2 = {:.1f} wt%  [{}]'.format(wt, key))
+
+    # 水氷濃度もサブ階層キーから設定する（氷層を持つレベルのみ）。
+    if 'ice_layer' in LEVEL_EFFECTS.get(level, []):
+        vol, ice_key = set_level4_ice(kind)
+        print('水氷濃度: {:.2f} vol%  [{}]'.format(vol, ice_key))
 
     if level not in IMPLEMENTED_LEVELS:
         raise NotImplementedError(
