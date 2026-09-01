@@ -56,8 +56,39 @@ GATE_CENTER = 'theory'             # 'theory'   … 理論トレースの包絡�
                                    # 'measured' … さらに実測の窓内ピークに合わせ直す
 GATE_SWEEP_NS = []                 # 例 [1.0, 2.0, 3.0]。空なら感度確認をしない
 
-# --- ノイズフロア（README §4.3）---------------------------------------------
+# --- ノイズフロア（README §4.3。修正 6 で全面的に見直した）------------------
+# 【なぜ RMS をやめたか】
+# 励振波形は平坦帯域＋Tukey テーパなので時間領域では sinc に近く、サイドローブが
+# 長く尾を引く。実測では surface が 2-12 ns、ice_top が 14-24 ns、ice_bottom が
+# 27-36 ns に広がっており、8-40 ns のほぼ全域がどれかのイベントのローブで埋まる。
+# そこで RMS を取ると「数値ノイズ」ではなく「励振波形のサイドローブレベル」を
+# 測ってしまう（実測で -45 dB。静かな区間の実際の値は -80 dB 前後）。
+#
+# 対策は 3 つ。
+#   (1) 推定量を分位点にする。ローブの山に引きずられない。
+#   (2) 界面のないトレース（Level 3 の at_tx など）で測れるようにする。
+#   (3) 時間分解したフロアを fig0(b) に重ね、どの時間帯が何に支配されているかを
+#       目で見えるようにする。
 NOISE_WINDOW_NS = (8.0, 40.0)      # 地表反射より後の、界面反射がない時間帯
+NOISE_ESTIMATOR = 'percentile'     # 'percentile'（推奨）/ 'rms'（旧挙動）
+NOISE_PERCENTILE = 10.0            # 分位点 [%]。包絡の下側を拾う
+NOISE_PERCENTILE_TO_RMS = True     # 分位点を RMS 相当に換算するか（下記）
+# 純雑音の包絡は Rayleigh 分布に従うので、p 分位点は sigma*sqrt(-2 ln(1-p)) に
+# なる（p=10% で 0.459 sigma）。一方 RMS は sigma。換算しないと分位点のほうが
+# 6.8 dB 低く出て、2 つの推定量を並べたときに比較できない。換算すると
+# 「純雑音なら RMS と一致し、イベントのローブがあるときだけ低く出る」
+# という素直な量になる。
+NOISE_ROLL_NS = 2.0                # 時間分解フロアの移動窓幅 [ns]
+NOISE_TRACE_PATH = ''              # 界面のないトレース（Level 3 の at_tx など）の
+                                   # .out。指定するとこちらでフロアを測る。
+                                   # 空なら解析対象トレース自身で測る（参考値）。
+
+# --- 検出判定（修正 6）------------------------------------------------------
+# 旧版はフロアの絶対値（-70/-60/-55 dB）で判定していたが、これは「地表反射比」
+# という基準量に依存するため、直達波を差し引くと基準が 22 dB 変わって判定が
+# ひっくり返った。判定は基準量に依らない SNR で行う。
+SNR_DETECT_DB = 12.0               # これ以上なら検出可
+SNR_MARGINAL_DB = 6.0              # これ以上なら限界
 
 # --- 相対 LSR の基準イベント -------------------------------------------------
 # 既定は最も浅い地下界面。地表反射を基準にすると地表の往復透過が残るため、
@@ -253,13 +284,37 @@ def refine_center(trace, dt, t_center_ns, halfwidth_ns=None):
 # =============================================================================
 # 4. ノイズフロア（README §4.3）
 # =============================================================================
+def rolling_floor(trace, dt, width_ns=None):
+    """包絡の移動分位点。時間分解したノイズフロアを返す（fig0(b) 用）。
+
+    どの時間帯が数値ノイズに支配され、どこがイベントのサイドローブに
+    支配されているかを目で見られるようにするための量。
+    """
+    w = NOISE_ROLL_NS if width_ns is None else width_ns
+    env = np.abs(signal.hilbert(trace))
+    n = max(3, int(round(w * 1e-9 / dt)))
+    if len(env) <= n:
+        return env
+    from numpy.lib.stride_tricks import sliding_window_view
+    val = np.percentile(sliding_window_view(env, n), NOISE_PERCENTILE, axis=1)
+    if NOISE_PERCENTILE_TO_RMS:
+        val = val / np.sqrt(-2.0 * np.log(1.0 - NOISE_PERCENTILE / 100.0))
+    pad = len(env) - len(val)
+    return np.pad(val, (pad // 2, pad - pad // 2), mode='edge')
+
+
 def measure_noise_floor(trace, dt, surface_amp, exclude_ns=()):
-    """地表反射より後の時間帯の RMS を、地表反射ピークに対する dB で返す。
+    """ノイズフロアを (絶対値, 地表反射ピークに対する dB) で返す。
+
+    NOISE_ESTIMATOR = 'percentile'（既定）
+        窓内の包絡の下側分位点。イベントのサイドローブの山に引きずられない。
+    NOISE_ESTIMATOR = 'rms'
+        窓内の波形 RMS（旧挙動）。サイドローブを拾うので過大評価になる。
 
     exclude_ns に既知のイベント時刻を渡すと、その前後 ±(ゲート半幅 + 1 ns) を
-    窓から除く。氷ありのトレースでも「界面反射のない時間帯」を測れるように
-    するため。本来は氷なしトレースで測るべき量であり、氷ありで測った値は
-    参考にとどめること（README §4.3）。
+    窓から除く。ただしサイドローブはこれよりずっと遠くまで伸びるので、
+    除外だけでは足りない。正しくは界面のないトレース（NOISE_TRACE_PATH）で
+    測ること（README §4.3）。
     """
     dt_ns = dt * 1e9
     t_axis = np.arange(len(trace)) * dt_ns
@@ -268,23 +323,32 @@ def measure_noise_floor(trace, dt, surface_amp, exclude_ns=()):
     for t0 in exclude_ns:
         keep &= np.abs(t_axis - t0) > (GATE_HALFWIDTH_NS + 1.0)
     idx = np.where(keep)[0]
-    if len(idx) == 0:
+    if len(idx) == 0 or not surface_amp > 0:
         return np.nan, np.nan
-    rms = float(np.sqrt(np.mean(trace[idx] ** 2)))
-    return rms, 20.0 * np.log10(rms / surface_amp) if surface_amp > 0 else np.nan
+    if NOISE_ESTIMATOR == 'rms':
+        val = float(np.sqrt(np.mean(trace[idx] ** 2)))
+    else:
+        env = np.abs(signal.hilbert(trace))
+        val = float(np.percentile(env[idx], NOISE_PERCENTILE))
+        if NOISE_PERCENTILE_TO_RMS:
+            val /= np.sqrt(-2.0 * np.log(1.0 - NOISE_PERCENTILE / 100.0))
+    return val, 20.0 * np.log10(val / surface_amp)
 
 
-def judge_floor(floor_db):
-    """README §4.3 の 3 段階判定。"""
-    if not np.isfinite(floor_db):
+def judge_snr(snr_db):
+    """イベントごとの検出判定（修正 6）。
+
+    フロアの絶対値ではなく SNR で判定する。フロアを「地表反射比」で表すと、
+    直達波を差し引いたかどうかで基準が 22 dB 変わり、同じデータなのに判定が
+    ひっくり返ってしまうため（SNR は基準量に依らない）。
+    """
+    if not np.isfinite(snr_db):
         return '判定不能'
-    if floor_db < -70.0:
-        return 'OK: 0.5 vol% まで解析可能'
-    if floor_db < -60.0:
-        return '注意: 1 vol% は可、0.5 vol% は厳しい'
-    if floor_db < -55.0:
-        return '警告: 1 vol% も余裕がない。PML を 20 セルにする等を検討'
-    return '不可: 反射チャネルが成立しない。対策が必要'
+    if snr_db >= SNR_DETECT_DB:
+        return '検出可'
+    if snr_db >= SNR_MARGINAL_DB:
+        return '限界'
+    return '不可'
 
 
 # =============================================================================
@@ -302,11 +366,14 @@ def _load_and_align(path, dt_ref, n_ref, what):
 
 
 def analyze(at_tx_path, ref_path, level, freespace_path='',
-            background_path=''):
+            background_path='', noise_path=''):
     """at_tx トレースを読み、イベントごとのスペクトルと理論を突き合わせる。
 
     freespace_path : 自由空間 at_tx。指定すると直達波を差し引く（修正 2）。
     background_path: 氷なし at_tx。指定すると背景差分を行う（実機では不可）。
+    noise_path     : 界面のない at_tx（Level 3 など）。指定するとフロアを
+                     こちらで測る。イベントのサイドローブに汚染されないため、
+                     こちらが正式な測り方（修正 6）。
     """
     trace, dt = load_trace(at_tx_path)
     ref_trace, dt_ref = load_trace(ref_path)
@@ -356,8 +423,21 @@ def analyze(at_tx_path, ref_path, level, freespace_path='',
     # 地表反射（at_tx では直達波を含む）のピーク振幅。ノイズフロアの基準。
     g_surf, _ = gate_trace(trace, dt, prepared[0]['t_theory'])
     surf_amp = measure_peak(g_surf, dt)['amp_peak']
-    nf_rms, nf_db = measure_noise_floor(
-        trace, dt, surf_amp, exclude_ns=[p['t_theory'] for p in prepared])
+    # フロアは界面のないトレースで測るのが正式（修正 6）。
+    # 指定がなければ解析対象自身で測るが、その場合はイベントのサイドローブが
+    # 混じるため過大評価になる（参考値）。
+    if noise_path:
+        nz = _load_and_align(noise_path, dt, len(raw_trace), 'ノイズ測定用 at_tx')
+        if fs_trace is not None:
+            nz = nz - fs_trace
+        nf_val, nf_db = measure_noise_floor(nz, dt, surf_amp)
+        nf_src = noise_path
+        nf_trace = nz
+    else:
+        nf_val, nf_db = measure_noise_floor(
+            trace, dt, surf_amp, exclude_ns=[p['t_theory'] for p in prepared])
+        nf_src = '(解析対象自身。イベントのサイドローブを含む参考値)'
+        nf_trace = trace
 
     work = trace if bg_trace is None else (trace - bg_trace)
 
@@ -415,7 +495,8 @@ def analyze(at_tx_path, ref_path, level, freespace_path='',
     info = {'dt': dt, 'freq': freq, 'E_ref': E_ref, 'trace': trace,
             'raw_trace': raw_trace, 'freespace': fs_trace,
             'work': work, 'background': bg_trace,
-            'noise_rms': nf_rms, 'noise_db': nf_db, 'surface_amp': surf_amp,
+            'noise_val': nf_val, 'noise_db': nf_db, 'noise_src': nf_src,
+            'noise_trace': nf_trace, 'surface_amp': surf_amp,
             'rel_ref': ref_name, 'source_delay': source_delay,
             'subtracted': fs_trace is not None}
     return results, info
@@ -554,12 +635,20 @@ def plot_trace(results, info, output_dir):
         th_db = 20.0 * np.log10(theory_amp(r, i_c) / theory_amp(results[0], i_c))
         axes[1].plot(r['t_theory'], th_db, marker='o', ms=7,
                      color=r['color'], mfc='none', mew=2)
+    # 時間分解したフロア（包絡の移動分位点）。どの時間帯が数値ノイズに支配され、
+    # どこがイベントのサイドローブに支配されているかが読み取れる（修正 6）。
+    with np.errstate(divide='ignore'):
+        roll_db = 20.0 * np.log10(
+            rolling_floor(info['noise_trace'], info['dt']) / info['surface_amp'])
+    axes[1].plot(t[:len(roll_db)], roll_db, color='m', lw=1.0, alpha=0.8,
+                 label='rolling floor ({:.0f}th pct, {:.1f} ns)'
+                 .format(NOISE_PERCENTILE, NOISE_ROLL_NS))
     if np.isfinite(info['noise_db']):
         axes[1].axhline(info['noise_db'], color='m', ls=':', lw=1.5,
                         label='noise floor {:.1f} dB'.format(info['noise_db']))
         axes[1].axvspan(NOISE_WINDOW_NS[0], NOISE_WINDOW_NS[1],
                         color='m', alpha=0.06)
-        axes[1].legend(fontsize=10)
+    axes[1].legend(fontsize=9, loc='upper right')
     axes[1].set_xlabel('Time [ns]', fontsize=13)
     axes[1].set_ylabel('Envelope [dB re. surface peak]', fontsize=13)
     axes[1].set_title('(b) Envelope, theory (circles) and noise floor',
@@ -575,22 +664,30 @@ def plot_trace(results, info, output_dir):
 
 
 def plot_spectra(results, info, output_dir):
-    """fig1: (a) 生スペクトル (b) 帯域端 (c) 重心と幅。ascan_spectrum fig1 相当。
+    """fig1: (a) 生スペクトル (b) 重心と幅 f_c ± sigma_f。
 
-    修正 3 で 3 点直した。
-      * dB 正規化を far_1m から「実測スペクトルの帯域内最大」に変更した。
-        far_1m は伝達関数の基準としては必須だが、表示の基準としては
-        at_tx の反射振幅と桁が違いすぎて読めなかった。
-      * (b) が空になっていたのを修正。lo_hi_freq() の戻り値はしきい値(float)を
-        キーにした入れ子辞書なのに、文字列キーで引いていて全て NaN だった。
-      * (b) と (c) のマーカーを o = 実測 / x = 理論 に統一した。
+    【修正 7：帯域端パネルを廃止した理由】
+    旧 (b) は各イベントの帯域内最大に対する -10 dB 交差（f_lo / f_hi）を
+    描いていたが、この量は媒質に反応しない。吸収による帯域内の傾きは
+        surface 0.00 dB / ice_top 1.99 dB / ice_bottom 3.90 dB
+    しかなく、-10 dB のしきい値に原理的に届かない。したがって交差点は
+    媒質ではなく励振波形の Tukey ロールオフの位置で決まってしまい、
+    帯域端に張り付くか一点に潰れる。しきい値を下げても平坦部に入るだけで
+    改善しない。
+
+    一方 (b)（旧 (c)）の f_c ± sigma_f は帯域内の全パワーを積分した量なので、
+    わずかな傾きでも確実に反映される。実測でも surface 1.25 -> ice_top 1.21
+    -> ice_bottom 1.17 GHz と単調に下がり、alpha ∝ f による重心シフトが
+    そのまま見える。
+
+    f_lo / f_hi は events.csv には残してあるので、必要なら参照できる。
     """
     freq = info['freq']
     fg = freq * 1e-9
     band = _band(freq)
     norm = max(float(np.max(np.abs(r['E_meas'][band]))) for r in results)
 
-    fig, axes = plt.subplots(3, 1, figsize=(10, 12))
+    fig, axes = plt.subplots(2, 1, figsize=(10, 9))
 
     ax = axes[0]
     with np.errstate(divide='ignore'):
@@ -616,20 +713,6 @@ def plot_spectra(results, info, output_dir):
 
     ax = axes[1]
     for i, r in enumerate(results):
-        for src, st in ((r['flohi_meas'], STYLE_MEAS),
-                        (r['flohi_theory'], STYLE_TH)):
-            d = src.get(FLOHI_PRIMARY_DB, {})
-            lo = d.get('f_lo', np.nan) * 1e-9
-            hi = d.get('f_hi', np.nan) * 1e-9
-            ax.plot([lo, hi], [i, i], color=r['color'], lw=1.3, **st)
-    ax.set_yticks(range(len(results)))
-    ax.set_yticklabels([r['name'] for r in results])
-    ax.set_xlabel('Frequency [GHz]', fontsize=13)
-    ax.set_title('(b) Band edges f_lo / f_hi at {:.0f} dB'
-                 .format(FLOHI_PRIMARY_DB), fontsize=13)
-
-    ax = axes[2]
-    for i, r in enumerate(results):
         for src, st in ((r['moments_meas'], STYLE_MEAS),
                         (r['moments_theory'], STYLE_TH)):
             fc = src['f_c'] * 1e-9
@@ -639,7 +722,7 @@ def plot_spectra(results, info, output_dir):
     ax.set_yticks(range(len(results)))
     ax.set_yticklabels([r['name'] for r in results])
     ax.set_xlabel('Frequency [GHz]', fontsize=13)
-    ax.set_title(r'(c) Centroid and spectral width $f_c \pm \sigma_f$'
+    ax.set_title(r'(b) Centroid and spectral width $f_c \pm \sigma_f$'
                  '   (middle marker = $f_c$)', fontsize=13)
 
     for ax in axes:
@@ -856,8 +939,8 @@ def write_outputs(results, info, level, kind, output_dir):
         fh.write('  relative LSR reference event: {}\n'.format(info['rel_ref']))
         fh.write('  source delay (from theory trace): {:.3f} ns\n'
                  .format(info['source_delay']))
-        fh.write('  noise floor: {:.2f} dB re. surface peak  -> {}\n'
-                 .format(info['noise_db'], judge_floor(info['noise_db'])))
+        fh.write('  noise floor: {:.2f} dB re. surface peak ({}, {})\n'
+                 .format(info['noise_db'], NOISE_ESTIMATOR, info['noise_src']))
         if 'absorb_const' in LEVEL_EFFECTS[level]:
             fh.write('  medium: {}\n'.format(
                 describe_level2_medium(refractive_index(freq, level))))
@@ -888,7 +971,7 @@ def gate_sensitivity(at_tx_path, ref_path, level, freespace_path=''):
     for hw in GATE_SWEEP_NS:
         GATE_HALFWIDTH_NS = hw
         res, info = analyze(at_tx_path, ref_path, level, freespace_path,
-                            BACKGROUND_TRACE_PATH)
+                            BACKGROUND_TRACE_PATH, NOISE_TRACE_PATH)
         names = [r['name'] for r in res]
         r0 = res[names.index(info['rel_ref'])]
         i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
@@ -908,23 +991,24 @@ def run_once(at_tx_path, ref_path, level, kind, output_dir,
     """1 条件ぶんの解析と作図。差分あり／なしで 2 回呼ぶ。"""
     os.makedirs(output_dir, exist_ok=True)
     results, info = analyze(at_tx_path, ref_path, level, freespace_path,
-                            BACKGROUND_TRACE_PATH)
+                            BACKGROUND_TRACE_PATH, NOISE_TRACE_PATH)
 
     tag = '直達波の差分あり' if info['subtracted'] else '直達波の差分なし（生データ）'
     print('\n=== {} -> {}'.format(tag, output_dir))
-    print('  ノイズフロア: {:.2f} dB re. surface peak  -> {}'
-          .format(info['noise_db'], judge_floor(info['noise_db'])))
+    print('  ノイズフロア: {:.2f} dB re. surface peak  ({}, {})'
+          .format(info['noise_db'], NOISE_ESTIMATOR, info['noise_src']))
     print('  波源遅延（理論トレースの包絡ピークから）: {:.3f} ns'
           .format(info['source_delay']))
     i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
-    print('  event      d[m]  t_th[ns]  t_meas[ns]  amp_meas  amp_th   diff   SNR')
+    print('  event      d[m]  t_th[ns]  t_meas[ns]  amp_meas  amp_th   diff   SNR   判定')
     print('                                          [dB]      [dB]     [dB]   [dB]')
     for r in results:
         amp_db = 20 * np.log10(r['amp_peak'] / results[0]['amp_peak'])
         th_db = 20 * np.log10(theory_amp(r, i_c) / theory_amp(results[0], i_c))
-        print('  {:10s} {:5.2f} {:9.3f} {:11.3f} {:+9.2f} {:+8.2f} {:+7.2f} {:+6.1f}'
+        snr = amp_db - info['noise_db']
+        print('  {:10s} {:5.2f} {:9.3f} {:11.3f} {:+9.2f} {:+8.2f} {:+7.2f} {:+6.1f}  {}'
               .format(r['name'], r['depth_m'], r['t_theory'], r['t_measured'],
-                      amp_db, th_db, amp_db - th_db, amp_db - info['noise_db']))
+                      amp_db, th_db, amp_db - th_db, snr, judge_snr(snr)))
     # ゲートによる損失を切り分けるため、理論トレースを同じゲートに通した値も出す。
     print('  （参考）理論トレースを同じゲートに通したときの振幅:')
     for r in results:
