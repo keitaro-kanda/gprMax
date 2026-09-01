@@ -207,7 +207,13 @@ def dry_eps_complex(depth_m, freq_hz, feotio2_wt=None):
 # だけを加える。虚部に混合則を適用してはならない（損失源が増えていないのに
 # 減衰が増えるという非物理的な結果になる）。
 # =============================================================================
-_ICE_INCREMENT = EPS_ICE ** (1.0 / 3.0) - 1.0     # = 0.46573
+_ICE_INCREMENT = EPS_ICE ** (1.0 / 3.0) - 1.0     # = 0.46590
+
+# 混合則の名前。対照実験（calc_MG_mixing_profile.py）から差し替えられる
+# ようにするため、図のタイトルと検算文で共通に使う。
+MIXING_LABEL = 'LLL'
+MIXING_DESC = ('LLL 増分形  eps_wet^(1/3) = eps_dry^(1/3) + '
+               'v_ice*{:.5f}'.format(_ICE_INCREMENT))
 
 
 def mix_ice(eps_re_dry, eps_im_dry, ice_volpct):
@@ -768,8 +774,7 @@ def run_checks():
     add(f'  伝搬            : {PROPAGATION_MODE}')
     add(f'  Debye 実現      : {USE_DEBYE_REALIZATION}')
     add(f'  入射スペクトル  : {src}')
-    add(f'  混合則          : LLL 増分形  eps_wet^(1/3) = eps_dry^(1/3) '
-        f'+ v_ice*{_ICE_INCREMENT:.5f}')
+    add(f'  混合則          : {MIXING_DESC}')
     add(f'  系統A 周波数    : {[l for l in PROFILE_FREQ_LABELS]} '
         f'(組成 {FEOTIO2_WT} wt% 固定)')
     add(f'  系統B 組成      : {[l for l in PROFILE_WT_LABELS]} '
@@ -965,12 +970,14 @@ def main():
     print('--- 系統 A: 周波数を振ったプロファイル ---')
     made += make_profile_family(
         SET_FREQ, REF_FREQ, PROFILE_FREQ_LABELS, DIR_FREQ,
-        f'Frequency comparison (FeO+TiO2 = {FEOTIO2_WT} wt%)')
+        f'Frequency comparison (FeO+TiO2 = {FEOTIO2_WT} wt%)'
+        f'  [{MIXING_LABEL}]')
 
     print('--- 系統 B: FeO+TiO2 を振ったプロファイル ---')
     made += make_profile_family(
         SET_COMP, REF_COMP, PROFILE_WT_LABELS, DIR_COMP,
-        f'Composition comparison ({PROFILE_FIXED_FREQ/1e9:.2f} GHz)')
+        f'Composition comparison ({PROFILE_FIXED_FREQ/1e9:.2f} GHz)'
+        f'  [{MIXING_LABEL}]')
     made.append(make_centroid_by_composition())
 
     print('--- 共通プロファイル ---')
