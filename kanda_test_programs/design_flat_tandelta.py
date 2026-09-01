@@ -1,44 +1,51 @@
 """
-Flat tan_delta design: multi-pole Debye parameters for a non-dispersive medium
-==============================================================================
-月南極のレゴリス（イルメナイト <1 wt%）は非分散である。すなわち帯域内で
+Flat eps'' design: analytic two-pole Debye parameters
+=====================================================
+月南極のレゴリス（イルメナイト <1 wt%）は、GPR 帯域内で **eps'' が一定**である。
 
-    eps'  = 一定
-    eps'' = 一定      ->      tan_delta = eps''/eps' = 一定
+    eps'' = 一定      ->      alpha ∝ f
 
 これを gprMax で実現したいが、gprMax の材料モデルは
 
     #material: eps_r sigma mu_r sigma*     ->  eps'' = sigma/(w eps0)  ∝ 1/f
 
-しか与えず、sigma 一定では tan_delta が 1/f で落ちてしまう（これは Level 2）。
+しか与えず、sigma 一定では eps'' が 1/f で落ちてしまう（これは Level 2）。
 Debye/Lorentz/Drude しか使えないため、**複数の Debye 極を重ね合わせて
 eps'' を帯域内で平坦にする**しかない。
 
     Debye 1 極の eps''(w) = De * (w tau) / (1 + (w tau)^2)
         -> w = 1/tau にピークを持つ山型
 
-    tau を帯域の上下に振り分けて複数重ねると、山どうしが重なって平坦部ができる
+    tau を帯域の上下に振り分けて 2 つ重ねると、山どうしが重なって平坦部ができる
 
-このスクリプトは
-  (1) 極数 1-4 について「eps'' が目標値一定」となる (De_i, tau_i) を最小二乗で決定
-  (2) 極数ごとの平坦度・gprMax の tau > dt 制約・alpha の周波数依存を評価
-  (3) 選んだ極数で tan_delta 一定が達成できていることを図で説明
-を行う。
+--- 用語について ------------------------------------------------------------
+本スクリプトでは「非分散」という語を使わない。eps'' != 0 の媒質は
+Kramers-Kronig 則により eps' が必ず対数的に変化するため、厳密な意味で
+非分散な損失媒質は存在しない。正しい記述は
+    eps'' = 一定（帯域内）、eps' は KK により約 0.4% 変化
+である。
 
-なぜ tan_delta 一定が重要か
----------------------------
-減衰係数は低損失極限で
+--- このスクリプトの位置づけ ------------------------------------------------
+実際の Debye パラメータ設定は Level_N.in の中で完結している。本スクリプトは
+**その設計ロジックの理論的な説明と図の生成**のために存在する。したがって
+.in と同一の式・同一の定数を使うこと（値を 2 か所で持たない）。
 
-    alpha ≈ pi f n tan_delta / c
+    f0      = sqrt(f_lo * f_hi)                  帯域の幾何平均 = 1.0 GHz
+    s       = arcsinh(1) = ln(1 + sqrt(2))       最大平坦条件
+    tau_1,2 = 1/(2 pi f0 (1+sqrt2)), (1+sqrt2)/(2 pi f0)
+    De      = sqrt(2) * eps''_target             （各極）
+    eps_inf = eps_r - De                         （f0 で eps' = eps_r）
 
-なので、tan_delta 一定なら alpha ∝ f（帯域 0.5-2.0 GHz で 4.0 倍）。
-一方 sigma 一定なら alpha は周波数に依存しない（帯域内比 1.0）。
+--- 数値最適化を使わない理由 ------------------------------------------------
+旧版は least_squares で等リップル解を求めていた（eps'' 誤差 RMS 0.19%、
+解析解 0.89%）。精度は高いが
+  * 論文で式を一行で書けない
+  * ソルバの初期値・収束条件が結果に影響する
+  * .in の中で scipy を使うことになる
+ため採用しない。解析解の誤差が振幅に与える影響は深さ 2.75 m で約 -0.06 dB
+であり、合否判定幅 ±0.5 dB に対して十分小さい。
 
-alpha が周波数依存を持つことは、重心周波数シフト法が機能するための必要条件
-である（df_c/dt = -2 pi tan_delta sigma_f^2 は alpha ∝ f を前提とする）。
-したがって「非分散」を正しく実装できるかどうかが、手法の成立可否を分ける。
-
-Requirements: numpy, scipy, matplotlib
+Requirements: numpy, matplotlib（scipy は使わない）
 """
 
 import os
@@ -46,35 +53,49 @@ import io
 import datetime
 
 import numpy as np
-from scipy.optimize import least_squares
+import matplotlib.pyplot as plt
 
 # NumPy 2.0 で np.trapz が np.trapezoid に改名された。どちらの版でも動くようにする。
-# （数値計算の中身は同一。ascan_amplitude.py / ascan_spectrum.py と同じ方針。）
 _TRAPZ = getattr(np, 'trapezoid', None) or np.trapz
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
+
 
 # ---------------------------------------------------------------------------
-# [EDIT HERE] 設計条件
+# [EDIT HERE] 設計条件   ※ Level_N.in と一致させること
 # ---------------------------------------------------------------------------
-EPS_R = 3.0                    # 比誘電率実部（帯域内で一定にしたい値）
+EPS_R = 3.0                    # 比誘電率実部（帯域の幾何平均で一定にしたい値）
 
-# Heiken/Carrier 経験式（450 MHz 版）で tan_delta を決める
-#   tan_delta = 10^(0.033*(FeO+TiO2) + 0.231*rho - 3.061)
-HEIKEN_EPS_BASE = 1.843
-HEIKEN_TAND_A, HEIKEN_TAND_B, HEIKEN_TAND_C = 0.033, 0.231, 3.061
+# --- Carrier 経験式 --------------------------------------------------------
+# 出典: Carrier, Olhoeft & Mendell (1991), "Physical Properties of the Lunar
+#       Surface", in Lunar Sourcebook, Cambridge Univ. Press, pp.475-594.
+#       Fig. 9.53 (SOILS = 土壌試料のみの回帰) の図中式:
+#           eps'      = 1.871^rho
+#           tan_delta = 10^(0.027*(%TiO2 + %FeO) + 0.273*rho - 3.058)
+#
+# Fig. 9.53 を選ぶ理由:
+#   (a) 本研究の対象はレゴリス（土壌）であり、岩石片を含む Fig. 9.52
+#       (ALL DATA) や Fig. 9.54 (450 MHz DATA) より母集団が適切。
+#   (b) tan_delta の周波数依存を無視する立場をとる以上、周波数で切った
+#       サブセット（Fig. 9.54 = 450 MHz）を選ぶのは仮定と矛盾する。
+#       選ぶべき軸は周波数ではなく試料種別。
+#   (c) 土壌データは rho ~ 1.0-2.1 に分布し、rho = 1.753647 はその中心付近。
+#
+# 【重要】eps' の式と tan_delta の式は同一図・同一サブセットから取ること。
+# 参考（本スクリプトでは使わない）:
+#   Fig. 9.52 ALL DATA     : 1.919^rho, 10^(0.038 S + 0.312 rho - 3.260)
+#   Fig. 9.54 450 MHz DATA : 1.843^rho, 10^(0.033 S + 0.231 rho - 3.061)
+#   Fig. 9.55 APOLLO 15-17 : 1.908^rho, 10^(0.028 S + 0.167 rho - 2.975)
+CARRIER_EPS_BASE = 1.871
+CARRIER_TAND_A, CARRIER_TAND_B, CARRIER_TAND_C = 0.027, 0.273, 3.058
 
 # 設計対象の組成 [wt%]。月南極域は 5-11 wt% に収束するため 3 点、
 # 高Tiバサルト（月の海）の参考値として 20 wt% を併記する。
 COMPOSITIONS = {'feo5': 5.0, 'feo7p5': 7.5, 'feo10': 10.0, 'feo20': 20.0}
-PRIMARY_KEY = 'feo7p5'         # テキストで解析解との詳細比較を出す組成
-                               # （図は全組成について出力する）
+PRIMARY_KEY = 'feo7p5'         # テキストで詳細を出す組成（図は全組成で出力）
 
 BAND_LO, BAND_HI = 0.5e9, 2.0e9    # 平坦化する帯域（LUPEX GPR）
-BAND_CENTRE = 1.25e9
-
-N_POLES_LIST = [1, 2, 3, 4]    # 比較する極数
-N_POLES_CHOSEN = 2             # 採用する極数（結果を見て決める）
+BAND_F0 = np.sqrt(BAND_LO * BAND_HI)      # 帯域の幾何平均 = 1.0 GHz
+                                          # 解析解の対称中心かつ eps_r の基準
+BAND_CENTRE_ARITH = 1.25e9     # 算術中心。報告時の参考値としてのみ使う
 
 # gprMax の時間刻み制約
 DX = 0.0025                    # [m] グリッドサイズ
@@ -82,7 +103,7 @@ C0 = 299792458.0               # [m/s]
 DT_GPRMAX = DX / (np.sqrt(2.0) * C0)      # 2D クーラン条件
 TAU_MIN_SAFE = 5.0             # tau/dt がこれを下回ったら警告
 
-N_FIT = 300                    # フィットに使う帯域内の周波数点数
+N_EVAL = 601                   # 評価・作図に使う帯域内の周波数点数
 F_PLOT_LO, F_PLOT_HI = 1e8, 1e10          # 図の周波数範囲
 
 OUTPUT_DIR = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/flat_tandelta_design'
@@ -94,18 +115,24 @@ RESULTS_FILENAME = 'flat_tandelta_design.txt'
 # ---------------------------------------------------------------------------
 
 def density_for_eps(eps_r):
-    """eps' = 1.843^rho を eps_r について解いた密度 [g/cm^3]。
+    """eps' = 1.871^rho を rho について解いた密度 [g/cm^3]。
 
-    非分散なので eps' は全周波数で同じ値になり、「どの周波数で」という
-    但し書きが不要になる。分散性モデル（Level 3b）では eps' 自体が
-    周波数依存になるため、基準周波数を決める必要があった。
+    eps_r = 3.0 とすると rho = 1.753647。これは Carrier の密度プロファイル
+    rho(z) = 1.92 (z+12.2)/(z+18) [z: cm] の深さ約 49 cm に相当するので、
+    「深さ 50 cm 付近のレゴリスを一様に敷き詰めた媒質」と解釈できる。
     """
-    return np.log(eps_r) / np.log(HEIKEN_EPS_BASE)
+    return np.log(eps_r) / np.log(CARRIER_EPS_BASE)
 
 
-def heiken_tandelta(feotio2_wt, rho):
-    """Heiken/Carrier 経験式の tan_delta。周波数に依存しない。"""
-    return 10.0 ** (HEIKEN_TAND_A * feotio2_wt + HEIKEN_TAND_B * rho - HEIKEN_TAND_C)
+def carrier_tandelta(feotio2_wt, rho):
+    """Carrier 経験式（Fig. 9.53, SOILS）の tan_delta。
+
+    この式は周波数を説明変数に持たないため、周波数に依らない量として扱う。
+    その扱いの根拠は Boivin et al. (2022)：単一装置で P/L/S/X 帯を通して
+    測定した純バイトウナイト（イルメナイトなし）で eps'' が完全に一定。
+    """
+    return 10.0 ** (CARRIER_TAND_A * feotio2_wt
+                    + CARRIER_TAND_B * rho - CARRIER_TAND_C)
 
 
 # ---------------------------------------------------------------------------
@@ -118,50 +145,83 @@ def debye_eps_imag(f, poles):
     return sum(de * (w * tau) / (1.0 + (w * tau) ** 2) for de, tau in poles)
 
 
-def debye_eps_real_drop(f, poles):
-    """静的値からの eps' の低下量 sum_i De_i (w tau_i)^2 / (1 + (w tau_i)^2)。"""
-    w = 2.0 * np.pi * np.asarray(f, dtype=float)
-    return sum(de * (w * tau) ** 2 / (1.0 + (w * tau) ** 2) for de, tau in poles)
-
-
 def debye_eps_real(f, eps_inf, poles):
     """eps'(f) = eps_inf + sum_i De_i / (1 + (w tau_i)^2)。"""
     w = 2.0 * np.pi * np.asarray(f, dtype=float)
     return eps_inf + sum(de / (1.0 + (w * tau) ** 2) for de, tau in poles)
 
 
-# ---------------------------------------------------------------------------
-# 3a. 解析解（2 極・最大平坦）
-# ---------------------------------------------------------------------------
+def attenuation(f, eps_re, tand):
+    """減衰係数 alpha [Np/m]（厳密式）。
 
-def analytic_two_pole(target_eps_imag):
-    """2 極の場合の解析解（帯域中心で最大平坦）。導出は README 4.2 節。
+        alpha = (w/c) sqrt(eps'/2) sqrt( sqrt(1 + tan_delta^2) - 1 )
 
-    u = ln(w/w_c) と置き、緩和周波数を w_c e^{±s} に対称配置して振幅を
+    低損失極限では alpha -> pi f sqrt(eps') tan_delta / c となり、
+    eps'' 一定なら alpha ∝ f になる（帯域 0.5-2.0 GHz で 4.0 倍）。
+    これが重心周波数シフト法が機能するための必要条件である
+    （df_c/dt = -2 pi tan_delta sigma_f^2 は alpha ∝ f を前提とする）。
+    """
+    w = 2.0 * np.pi * np.asarray(f, dtype=float)
+    return (w / C0) * np.sqrt(eps_re / 2.0) * np.sqrt(np.sqrt(1.0 + tand ** 2) - 1.0)
+
+
+# ---------------------------------------------------------------------------
+# 3. 解析解
+# ---------------------------------------------------------------------------
+# Level_N.in の debye_flat_eps_imag() と同一の式。値を 2 か所で持たないため、
+# .in を変更したらここも必ず合わせること。
+# ---------------------------------------------------------------------------
+S_FLAT = float(np.arcsinh(1.0))        # = ln(1 + sqrt(2)) = 0.881374
+TAU_RATIO = float(np.exp(S_FLAT))      # = 1 + sqrt(2) = 2.414214
+
+
+def two_pole_analytic(eps_r, eps_imag_target):
+    """最大平坦 2 極 Debye の解析解（採用する設計）。
+
+    u = ln(w/w0) と置き、緩和周波数を w0 e^{±s} に対称配置して振幅を
     等しく De とすると、Debye の和が双曲線関数で書ける:
 
         eps''(u) / De = (1/2) [ sech(u - s) + sech(u + s) ]
 
     中心 u=0 での 2 階微分をゼロにする（最大平坦条件）と
 
-        sech(s) [ tanh^2 s - sech^2 s ] = 0   ->   sinh s = 1
-        s = arcsinh(1) = ln(1 + sqrt(2)) = 0.881374
+        sinh s = 1   ->   s = arcsinh(1) = ln(1 + sqrt(2)) = 0.881374
 
     となり、緩和周波数比は e^{2s} = 3 + 2 sqrt(2) = 5.828427 に決まる。
     中心での値は sech(s) = 1/sqrt(2) なので、目標に合わせるには
-    De = sqrt(2) * eps''_target とすればよい。
 
-    数値解はこれを出発点に、有限帯域全体で等リップルになるよう精密化したもの。
+        De = sqrt(2) * eps''_target
+
+    さらに、対称中心を帯域の幾何平均 f0 に取ると
+
+        1/(1 + (w0 tau_1)^2) + 1/(1 + (w0 tau_2)^2) = 1     （厳密に 1）
+
+    が成り立つ。実際 w0 tau_1 = sqrt(2) - 1、w0 tau_2 = sqrt(2) + 1 なので
+    1/(4 - 2 sqrt2) + 1/(4 + 2 sqrt2) = 1。したがって f0 で eps' = eps_r に
+    するための eps_inf も閉形式になる:
+
+        eps_inf = eps_r - De
+
+    数値最適化は不要。
     """
-    s_opt = np.arcsinh(1.0)                     # = ln(1 + sqrt(2))
-    f_c = np.sqrt(BAND_LO * BAND_HI)            # 帯域の幾何中心
-    tau = sorted([1.0 / (2 * np.pi * f_c * np.exp(s_opt)),
-                  1.0 / (2 * np.pi * f_c * np.exp(-s_opt))])
-    de = np.sqrt(2.0) * target_eps_imag
+    w0 = 2.0 * np.pi * BAND_F0
+    tau = [1.0 / (w0 * TAU_RATIO), TAU_RATIO / w0]
+    de = np.sqrt(2.0) * eps_imag_target
     poles = [(de, t) for t in tau]
-    f = np.geomspace(BAND_LO, BAND_HI, N_FIT)
-    eps_inf = EPS_R - float(np.interp(BAND_CENTRE, f, debye_eps_real_drop(f, poles)))
-    return eps_inf, poles, s_opt
+    eps_inf = eps_r - de
+    return eps_inf, poles
+
+
+def one_pole_analytic(eps_r, eps_imag_target):
+    """1 極を帯域中心に置いた場合（比較用。平坦にはならない）。
+
+    ピーク（w tau = 1）で eps'' = De/2 なので De = 2 * eps''_target。
+    このとき eps'(f0) = eps_inf + De/2 なので eps_inf = eps_r - eps''_target。
+    """
+    w0 = 2.0 * np.pi * BAND_F0
+    de = 2.0 * eps_imag_target
+    poles = [(de, 1.0 / w0)]
+    return eps_r - eps_imag_target, poles
 
 
 def continuum_flatness():
@@ -177,321 +237,242 @@ def continuum_flatness():
     return float(_TRAPZ(0.5 / np.cosh(u), u)), np.pi / 2
 
 
-# ---------------------------------------------------------------------------
-# 3. eps'' を平坦にする極の決定（数値解）
-# ---------------------------------------------------------------------------
+def ripple_for_s(s):
+    """対称配置の 2 極を u = ±s に置いたときの帯域内リップル p-p [%]。
 
-def design_flat_poles(target_eps_imag, n_poles):
-    """eps'' が帯域内で target_eps_imag 一定になる n 極 Debye を決める。
-
-    最適化変数は [De_1..De_n, log(tau_1)..log(tau_n)]。
-    tau を対数で扱うのは、桁をまたぐ探索を安定させるため。
-    下限は gprMax の制約 tau > dt に余裕を持たせて 2*dt とする。
-
-    初期値の tau は帯域の少し外側（0.35-3 GHz 相当）に対数等間隔で置く。
-    帯域端まで平坦にするには、ピークを帯域の外に出す必要があるため。
+    最大平坦条件 s = arcsinh(1) が有限帯域でも良い選択であることを示すため、
+    s を振ってリップルを評価する（作図に使う）。
+    振幅は中心で 1 になるよう規格化するので、リップルは s だけで決まる。
     """
-    f = np.geomspace(BAND_LO, BAND_HI, N_FIT)
-
-    def unpack(x):
-        return list(zip(x[:n_poles], np.exp(x[n_poles:])))
-
-    tau_seed = np.geomspace(1.0 / (2 * np.pi * 3e9),
-                            1.0 / (2 * np.pi * 0.35e9), n_poles)
-    if n_poles == 1:
-        tau_seed = np.array([1.0 / (2 * np.pi * 1e9)])
-
-    x0 = np.concatenate([np.full(n_poles, target_eps_imag * 1.5), np.log(tau_seed)])
-    lo = np.concatenate([np.zeros(n_poles), np.full(n_poles, np.log(2 * DT_GPRMAX))])
-    hi = np.concatenate([np.full(n_poles, 1.0), np.full(n_poles, np.log(1e-8))])
-
-    history = []
-
-    def residual(x):
-        res = debye_eps_imag(f, unpack(x)) / target_eps_imag - 1.0
-        history.append((np.array(x, copy=True), 100 * np.sqrt(np.mean(res ** 2))))
-        return res
-
-    r = least_squares(residual, x0, bounds=(lo, hi),
-                      xtol=1e-15, ftol=1e-15, max_nfev=20000)
-
-    poles = sorted(unpack(r.x), key=lambda p: p[1])
-    design_flat_poles.history = history        # 収束過程の作図用（4.2 節）
-    # eps' が帯域中心で EPS_R になるよう eps_inf を決める
-    eps_inf = EPS_R - float(np.interp(BAND_CENTRE, f,
-                                      debye_eps_real_drop(f, poles)))
-    return eps_inf, poles
+    u_band = np.log(np.array([BAND_LO, BAND_HI]) / BAND_F0)
+    u = np.linspace(u_band[0], u_band[1], N_EVAL)
+    g = 0.5 * (1.0 / np.cosh(u - s) + 1.0 / np.cosh(u + s))
+    g0 = 1.0 / np.cosh(s)                     # u = 0 の値
+    r = g / g0
+    return 100.0 * (r.max() - r.min())
 
 
 def evaluate(eps_inf, poles, target_eps_imag):
     """設計した極の性能を評価する。"""
-    f = np.geomspace(BAND_LO, BAND_HI, N_FIT)
+    f = np.geomspace(BAND_LO, BAND_HI, N_EVAL)
     ei = debye_eps_imag(f, poles)
     er = debye_eps_real(f, eps_inf, poles)
     td = ei / er
     alpha = attenuation(f, er, td)
+    dev = ei / target_eps_imag - 1.0
     return dict(
-        rms_eps_imag=100 * np.sqrt(np.mean((ei / target_eps_imag - 1.0) ** 2)),
+        rms_eps_imag=100 * np.sqrt(np.mean(dev ** 2)),
+        ptp_eps_imag=100 * (dev.max() - dev.min()),
+        edge_eps_imag=100 * dev[0],
         ptp_tand=100 * (td.max() - td.min()) / td.mean(),
         ptp_eps_real=100 * (er.max() - er.min()) / er.mean(),
         alpha_ratio=alpha[-1] / alpha[0],
         tau_min_ratio=min(t for _, t in poles) / DT_GPRMAX,
         f=f, eps_re=er, eps_im=ei, tand=td, alpha=alpha,
+        eps_inf=eps_inf, poles=poles,
     )
 
 
-def attenuation(f, eps_re, tand):
-    """減衰係数 alpha [Np/m]（厳密式）。
+def kk_limit(eps_imag):
+    """eps'' 一定の媒質が Kramers-Kronig で必ず持つ eps' の変化量。
 
-        alpha = (w/c) sqrt(eps'/2) sqrt( sqrt(1 + tan_delta^2) - 1 )
+        Delta eps' = -(2/pi) * eps'' * ln(f_hi/f_lo)
 
-    低損失極限では alpha -> pi f sqrt(eps') tan_delta / c となり、
-    tan_delta 一定なら alpha ∝ f になる。
+    2 極解析解の eps' 変動がこの極限に近いことを確認するために使う。
+    「eps' が完全に一定にならないのは近似の粗さではなく物理」という説明の根拠。
     """
-    w = 2.0 * np.pi * np.asarray(f, dtype=float)
-    return (w / C0) * np.sqrt(eps_re / 2.0) * np.sqrt(np.sqrt(1.0 + tand ** 2) - 1.0)
+    return -(2.0 / np.pi) * eps_imag * np.log(BAND_HI / BAND_LO)
 
 
 # ---------------------------------------------------------------------------
 # 4. 作図
 # ---------------------------------------------------------------------------
 
-def plot_design(key, feotio2_wt, target, eps_inf, poles, ev, all_ev):
-    """設計結果を 4 パネルで説明する図。
+def _band_span(ax):
+    ax.axvspan(BAND_LO / 1e9, BAND_HI / 1e9, color='0.9', zorder=0)
+    ax.axvline(BAND_F0 / 1e9, color='0.5', ls=':', lw=1.0, zorder=1)
 
-    (a) 各極の eps'' と、その和が帯域内で平坦になる様子
-    (b) tan_delta が一定になっていること（sigma 一定の場合と対比）
-    (c) alpha が f に比例すること（sigma 一定の場合と対比）
-    (d) 極数ごとの平坦度と gprMax 制約のトレードオフ
+
+def save_fig(fig, name):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    base = os.path.join(OUTPUT_DIR, name)
+    fig.savefig(base + '.png', dpi=200, bbox_inches='tight')
+    fig.savefig(base + '.pdf', bbox_inches='tight')
+    plt.close(fig)
+    print('  Saved:', base + '.{png,pdf}')
+
+
+def plot_design(key, wt, target, ev, ev1):
+    """設計結果を 4 パネルで説明する図（組成ごと）。
+
+    (a) 2 極の重ね合わせで eps'' が平坦になる様子（1 極との対比つき）
+    (b) tan_delta の帯域内変動と、その内訳
+    (c) alpha ∝ f の確認
+    (d) eps' の KK 変化と、その理論極限
     """
-    f = np.geomspace(F_PLOT_LO, F_PLOT_HI, 800)
-    fg = f / 1e9
-
+    f = ev['f'] / 1e9
     fig, axes = plt.subplots(2, 2, figsize=(13, 9))
-    fig.suptitle(
-        f'Flat tan$\\delta$ design — FeO+TiO$_2$ = {feotio2_wt} wt% [{key}], '
-        f'{len(poles)}-pole Debye\n'
-        rf'target: $\varepsilon_r$ = {EPS_R}, $\tan\delta$ = {target / EPS_R:.6f} '
-        rf'($\varepsilon_r^{{\prime\prime}}$ = {target:.6f})', fontsize=12)
     ax_a, ax_b, ax_c, ax_d = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
+    fig.suptitle("Flat eps'' design  |  FeO+TiO2 = {:.1f} wt%  [{}]  |  "
+                 "target eps'' = {:.6f}".format(wt, key, target),
+                 fontsize=14, y=1.00)
 
-    def deco(ax, logx=True):
-        if logx:
-            ax.set_xscale('log')
-            ax.set_xlim(F_PLOT_LO / 1e9, F_PLOT_HI / 1e9)
-            ax.xaxis.set_major_formatter(ticker.FuncFormatter(
-                lambda x, _: f'{x:.1g}' if x < 1 else f'{int(x)}'))
-        ax.axvspan(BAND_LO / 1e9, BAND_HI / 1e9, alpha=0.12, color='gray',
-                   label='LUPEX GPR band')
-        ax.axvline(BAND_CENTRE / 1e9, color='gray', lw=0.8, ls='-.', alpha=0.6)
-        ax.set_xlabel('Frequency (GHz)')
-        ax.grid(True, which='both', alpha=0.2)
-
-    # --- (a) 極の重ね合わせ ---
-    for i, (de, tau) in enumerate(poles):
-        ax_a.plot(fg, debye_eps_imag(f, [(de, tau)]), ls='--', lw=1.4,
-                  label=rf'pole {i + 1}: $\Delta\varepsilon$={de:.5f}, '
-                        rf'$\tau$={tau * 1e12:.1f} ps')
-        ax_a.axvline(1.0 / (2 * np.pi * tau) / 1e9, color='C%d' % i,
-                     lw=0.7, ls=':', alpha=0.7)
-    ax_a.plot(fg, debye_eps_imag(f, poles), 'k-', lw=2.5, label='sum (total)', zorder=5)
-    ax_a.axhline(target, color='r', lw=1.5, ls='--', label=f'target = {target:.6f}')
-    deco(ax_a)
+    # (a) 極の重ね合わせ
+    f_wide = np.geomspace(F_PLOT_LO, F_PLOT_HI, 2000)
+    for i, (de, tau) in enumerate(ev['poles']):
+        ax_a.semilogx(f_wide / 1e9, debye_eps_imag(f_wide, [(de, tau)]),
+                      ls='--', lw=1.2,
+                      label='pole {} ({:.3f} GHz)'.format(
+                          i + 1, 1.0 / (2 * np.pi * tau) / 1e9))
+    ax_a.semilogx(f_wide / 1e9, debye_eps_imag(f_wide, ev['poles']),
+                  color='k', lw=2.0, label='2 poles (adopted)')
+    ax_a.semilogx(f_wide / 1e9, debye_eps_imag(f_wide, ev1['poles']),
+                  color='tab:red', lw=1.2, ls='-.', label='1 pole (for contrast)')
+    ax_a.axhline(target, color='b', ls=':', lw=1.5, label='target')
+    _band_span(ax_a)
+    ax_a.set_xlabel('Frequency [GHz]')
     ax_a.set_ylabel(r"$\varepsilon_r''$")
-    ax_a.set_title("(a) Superposition of Debye poles flattens $\\varepsilon_r''$")
-    ax_a.set_ylim(0, target * 2.2)
-    ax_a.legend(fontsize=8, loc='upper right')
+    ax_a.set_title(r"(a) Superposition of Debye poles flattens $\varepsilon_r''$")
+    ax_a.legend(fontsize=9)
 
-    # --- (b) tan_delta ---
-    er = debye_eps_real(f, eps_inf, poles)
-    td = debye_eps_imag(f, poles) / er
-    sigma_eq = 2 * np.pi * BAND_CENTRE * 8.8541878128e-12 * target   # 同じ eps'' を与える sigma
-    td_sigma = sigma_eq / (2 * np.pi * f * 8.8541878128e-12 * EPS_R)
-    ax_b.plot(fg, td, 'k-', lw=2.5, label=f'{len(poles)}-pole Debye (this design)')
-    ax_b.axhline(target / EPS_R, color='r', lw=1.5, ls='--', label='target (constant)')
-    ax_b.plot(fg, td_sigma, color='steelblue', lw=1.6, ls=':',
-              label=r'constant $\sigma$ (Level 2) $\propto 1/f$')
-    deco(ax_b)
-    ax_b.set_yscale('log')
+    # (b) tan_delta の内訳
+    ax_b.plot(f, ev['tand'], color='k', lw=1.8, label='2 poles (adopted)')
+    ax_b.plot(f, ev1['tand'], color='tab:red', lw=1.2, ls='-.', label='1 pole')
+    ax_b.axhline(target / EPS_R, color='b', ls=':', lw=1.5,
+                 label='target {:.6f}'.format(target / EPS_R))
+    ax_b.set_xlim(BAND_LO / 1e9, BAND_HI / 1e9)
+    ax_b.set_xlabel('Frequency [GHz]')
     ax_b.set_ylabel(r'$\tan\delta$')
-    ax_b.set_title(r'(b) $\tan\delta$ stays constant in band')
-    ax_b.legend(fontsize=8, loc='upper right')
+    ax_b.set_title(r'(b) $\tan\delta$ in band  (p-p {:.2f}% = '
+                   r"$\varepsilon''$ {:.2f}% + $\varepsilon'$ {:.2f}%)"
+                   .format(ev['ptp_tand'], ev['ptp_eps_imag'],
+                           ev['ptp_eps_real']))
+    ax_b.legend(fontsize=9)
 
-    # --- (c) alpha ---
-    al = attenuation(f, er, td)
-    al_sigma = attenuation(f, np.full_like(f, EPS_R), td_sigma)
-    ax_c.plot(fg, al, 'k-', lw=2.5, label=f'{len(poles)}-pole Debye ($\\propto f$)')
-    ax_c.plot(fg, al_sigma, color='steelblue', lw=1.6, ls=':',
-              label=r'constant $\sigma$ (flat)')
-    ideal = al[np.argmin(abs(f - BAND_CENTRE))] * (f / BAND_CENTRE)
-    ax_c.plot(fg, ideal, color='r', lw=1.2, ls='--', label=r'ideal $\alpha \propto f$')
-    deco(ax_c)
-    ax_c.set_xscale('log'); ax_c.set_yscale('log')
-    ax_c.set_ylabel(r'$\alpha$ (Np/m)')
-    ax_c.set_title(rf'(c) $\alpha \propto f$  (in-band ratio {ev["alpha_ratio"]:.3f}, ideal 4.000)')
-    ax_c.legend(fontsize=8, loc='upper left')
+    # (c) alpha ∝ f
+    ideal = ev['alpha'][0] * (ev['f'] / ev['f'][0])
+    ax_c.plot(f, ev['alpha'], color='k', lw=1.8, label='2 poles (adopted)')
+    ax_c.plot(f, ideal, color='b', ls=':', lw=1.5, label=r'ideal $\alpha \propto f$')
+    ax_c.plot(f, ev1['alpha'], color='tab:red', lw=1.2, ls='-.', label='1 pole')
+    ax_c.set_xlim(BAND_LO / 1e9, BAND_HI / 1e9)
+    ax_c.set_xlabel('Frequency [GHz]')
+    ax_c.set_ylabel(r'$\alpha$ [Np/m]')
+    ax_c.set_title(r'(c) $\alpha \propto f$  (in-band ratio {:.3f}, ideal 4.000)'
+                   .format(ev['alpha_ratio']))
+    ax_c.legend(fontsize=9)
 
-    # --- (d) 極数のトレードオフ ---
-    ns = sorted(all_ev)
-    rms = [all_ev[n]['rms_eps_imag'] for n in ns]
-    tau_r = [all_ev[n]['tau_min_ratio'] for n in ns]
-    ax_d.set_xscale('linear')
-    ln1 = ax_d.plot(ns, rms, 'o-', color='crimson', label=r"$\varepsilon_r''$ RMS error")
-    ax_d.set_yscale('log')
-    ax_d.set_xlabel('Number of Debye poles')
-    ax_d.set_ylabel(r"$\varepsilon_r''$ RMS error (%)", color='crimson')
-    ax_d.set_xticks(ns)
-    ax_d.grid(True, alpha=0.2)
-    ax2 = ax_d.twinx()
-    ln2 = ax2.plot(ns, tau_r, 's--', color='navy', label=r'min $\tau/\Delta t$')
-    ax2.axhline(TAU_MIN_SAFE, color='navy', lw=0.8, ls=':', alpha=0.7)
-    ax2.set_ylabel(r'min $\tau / \Delta t$  (gprMax constraint)', color='navy')
-    ax_d.axvline(N_POLES_CHOSEN, color='gray', lw=1.2, ls='-.', alpha=0.7)
-    ax_d.set_title(f'(d) Trade-off: accuracy vs gprMax constraint '
-                   f'(chosen: {N_POLES_CHOSEN} poles)')
-    lns = ln1 + ln2
-    ax_d.legend(lns, [l.get_label() for l in lns], fontsize=8, loc='center right')
+    # (d) eps' の KK 変化
+    ax_d.plot(f, ev['eps_re'], color='k', lw=1.8,
+              label="2 poles: $\\varepsilon'(f)$")
+    ax_d.axhline(EPS_R, color='b', ls=':', lw=1.5,
+                 label=r"target $\varepsilon'$ = {:.1f} at $f_0$".format(EPS_R))
+    d_kk = abs(kk_limit(target))
+    ax_d.plot([BAND_LO / 1e9, BAND_HI / 1e9], [EPS_R + d_kk / 2, EPS_R - d_kk / 2],
+              color='tab:green', ls='--', lw=1.2,
+              label='KK limit ({:.5f} over band)'.format(d_kk))
+    ax_d.set_xlim(BAND_LO / 1e9, BAND_HI / 1e9)
+    ax_d.set_xlabel('Frequency [GHz]')
+    ax_d.set_ylabel(r"$\varepsilon_r'$")
+    ax_d.set_title(r"(d) $\varepsilon'$ must vary (Kramers-Kronig): "
+                   'p-p {:.3f}%'.format(ev['ptp_eps_real']))
+    ax_d.legend(fontsize=9)
 
+    for ax in axes.ravel():
+        ax.grid(alpha=0.4)
+        ax.minorticks_on()
     plt.tight_layout()
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    name = f'flat_tandelta_{key}'
-    for ext in ('png', 'pdf'):
-        plt.savefig(os.path.join(OUTPUT_DIR, f'{name}.{ext}'),
-                    dpi=150 if ext == 'png' else 300, bbox_inches='tight')
-    print(f'プロット保存: {OUTPUT_DIR}/{name}.png/.pdf')
-    plt.close(fig)
+    save_fig(fig, 'design_{}'.format(key))
 
 
+def plot_theory():
+    """解析解そのものを説明する図（組成に依らないので 1 枚だけ）。
 
-def plot_parameter_search(key, feotio2_wt, target, poles_num, eps_inf_num):
-    """パラメータ絞り込み過程を説明する図（4 パネル）。
-
-    (a) 極の間隔 s だけを振ったときの eps'' の形状変化
-        -> なぜ特定の s でだけ平坦になるかが見える
-    (b) (s, De) 平面上の誤差ランドスケープと、解析解・数値解の位置
-    (c) 最小二乗の収束履歴（残差 RMS の推移）
-    (d) 解析解（最大平坦）と数値解（等リップル）の帯域内リップル比較
+    (a) sech の重ね合わせ（対数周波数 u 軸）
+    (b) 極間隔 s を振ったときの帯域内リップル -> arcsinh(1) の位置
+        （最大平坦条件はリップル最小とは一致しないことも示す）
+    (c) 連続極限（対数一様分布なら厳密に平坦）
+    (d) gprMax の制約 tau > dt に対する余裕
     """
-    f = np.geomspace(BAND_LO, BAND_HI, N_FIT)
-    f_c = np.sqrt(BAND_LO * BAND_HI)
-    s_analytic = np.arcsinh(1.0)
-
-    def poles_from(s_val, de):
-        return [(de, 1.0 / (2 * np.pi * f_c * np.exp(+s_val))),
-                (de, 1.0 / (2 * np.pi * f_c * np.exp(-s_val)))]
-
-    def rms_of(s_val, de):
-        return 100 * np.sqrt(np.mean(
-            (debye_eps_imag(f, poles_from(s_val, de)) / target - 1.0) ** 2))
-
-    # 数値解を (s, De) に読み替える
-    tau_n = sorted(t for _, t in poles_num)
-    s_num = 0.5 * np.log((1.0 / tau_n[0]) / (1.0 / tau_n[1]))
-    de_num = poles_num[0][0]
-
     fig, axes = plt.subplots(2, 2, figsize=(13, 9))
-    fig.suptitle(
-        f'Parameter search for flat $\\varepsilon_r\'\'$ — '
-        f'FeO+TiO$_2$ = {feotio2_wt} wt% [{key}], 2-pole Debye',
-        fontsize=12)
     ax_a, ax_b, ax_c, ax_d = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
+    fig.suptitle('Analytic maximally-flat two-pole design '
+                 '(composition-independent)', fontsize=14, y=1.00)
 
-    # --- (a) 間隔 s のスキャン ---
-    fp = np.geomspace(BAND_LO / 3, BAND_HI * 3, 500)
-    for s_val, col in [(0.3, 'C0'), (0.6, 'C1'), (s_analytic, 'C2'),
-                       (1.2, 'C3'), (1.8, 'C4')]:
-        de = target / (1.0 / np.cosh(s_val))     # 中心値が target になるよう規格化
-        lab = (rf'$s$={s_val:.3f} (analytic)' if abs(s_val - s_analytic) < 1e-6
-               else rf'$s$={s_val:.2f}')
-        ax_a.plot(fp / 1e9, debye_eps_imag(fp, poles_from(s_val, de)),
-                  color=col, lw=1.8 if abs(s_val - s_analytic) < 1e-6 else 1.2,
-                  label=lab)
-    ax_a.axhline(target, color='r', ls='--', lw=1.5, label='target')
-    ax_a.axvspan(BAND_LO / 1e9, BAND_HI / 1e9, alpha=0.12, color='gray',
-                 label='LUPEX GPR band')
-    ax_a.set_xscale('log')
-    ax_a.set_xlabel('Frequency (GHz)')
-    ax_a.set_ylabel(r"$\varepsilon_r''$")
-    ax_a.set_title(r'(a) Effect of pole spacing $s$ (amplitude renormalised)')
-    ax_a.set_ylim(0, target * 1.6)
-    ax_a.grid(alpha=0.2, which='both')
-    ax_a.legend(fontsize=8)
+    u_band = np.log(np.array([BAND_LO, BAND_HI]) / BAND_F0)
 
-    # --- (b) 誤差ランドスケープ ---
-    s_grid = np.linspace(0.3, 1.8, 160)
-    de_grid = np.linspace(de_num * 0.75, de_num * 1.30, 160)
-    S, D = np.meshgrid(s_grid, de_grid)
-    Z = np.empty_like(S)
-    for i in range(S.shape[0]):
-        for j in range(S.shape[1]):
-            Z[i, j] = rms_of(S[i, j], D[i, j])
-    cs = ax_b.contourf(S, D, np.log10(np.maximum(Z, 1e-3)), levels=30, cmap='viridis')
-    fig.colorbar(cs, ax=ax_b, label=r'$\log_{10}$ (RMS error %)')
-    ax_b.contour(S, D, np.log10(np.maximum(Z, 1e-3)), levels=12,
-                 colors='w', linewidths=0.4, alpha=0.5)
-    ax_b.plot(s_analytic, np.sqrt(2) * target, 'w*', ms=16, mec='k', mew=1.0,
-              label=r'analytic (max-flat): $s=\mathrm{arcsinh}\,1$')
-    ax_b.plot(s_num, de_num, 'r o', ms=9, mec='k', mew=1.0,
-              label='numerical (equiripple)')
-    hist = getattr(design_flat_poles, 'history', None)
-    if hist:
-        path_s, path_d = [], []
-        for x, _ in hist:
-            t = np.sort(np.exp(x[2:]))
-            path_s.append(0.5 * np.log((1 / t[0]) / (1 / t[1])))
-            path_d.append(x[0])
-        ax_b.plot(path_s, path_d, 'w.-', lw=0.8, ms=3, alpha=0.8,
-                  label='optimiser path')
-    ax_b.set_xlabel(r'pole spacing $s$  (relaxation freqs at $f_c e^{\pm s}$)')
-    ax_b.set_ylabel(r'$\Delta\varepsilon$ per pole')
-    ax_b.set_title('(b) RMS error landscape')
-    ax_b.legend(fontsize=8, loc='upper left')
+    # (a) sech の重ね合わせ
+    u = np.linspace(-4, 4, 2000)
+    for s, ls, lab in ((0.0, ':', 's = 0 (single peak)'),
+                       (S_FLAT, '-', 's = arcsinh(1) (max flat)'),
+                       (1.6, '--', 's = 1.6 (too wide)')):
+        g = 0.5 * (1.0 / np.cosh(u - s) + 1.0 / np.cosh(u + s))
+        ax_a.plot(u, g / (1.0 / np.cosh(s)), ls=ls,
+                  lw=1.8 if ls == '-' else 1.2, label=lab)
+    ax_a.axvspan(u_band[0], u_band[1], color='0.9', zorder=0)
+    ax_a.axhline(1.0, color='0.5', ls=':', lw=1.0)
+    ax_a.set_xlabel(r'$u = \ln(f/f_0)$')
+    ax_a.set_ylabel(r"$\varepsilon''(u)$ (normalised at $u=0$)")
+    ax_a.set_title(r'(a) Two sech peaks at $u = \pm s$  (shaded = band)')
+    ax_a.legend(fontsize=9)
 
-    # --- (c) 収束履歴 ---
-    if hist:
-        costs = [c for _, c in hist]
-        ax_c.plot(range(len(costs)), costs, 'k-', lw=1.4)
-        ax_c.axhline(rms_of(s_analytic, np.sqrt(2) * target), color='C2',
-                     ls='--', lw=1.4, label='analytic (max-flat) start')
-        ax_c.axhline(costs[-1], color='r', ls=':', lw=1.4,
-                     label=f'converged: {costs[-1]:.3f}%')
-        ax_c.set_yscale('log')
-        ax_c.set_xlabel('least-squares function evaluation')
-        ax_c.set_ylabel(r"$\varepsilon_r''$ RMS error (%)")
-        ax_c.set_title('(c) Convergence of the numerical refinement')
-        ax_c.grid(alpha=0.2, which='both')
-        ax_c.legend(fontsize=8)
+    # (b) s を振ったときのリップル
+    s_grid = np.linspace(0.0, 2.0, 401)
+    rip = np.array([ripple_for_s(s) for s in s_grid])
+    ax_b.plot(s_grid, rip, color='k', lw=1.8)
+    ax_b.axvline(S_FLAT, color='tab:red', ls='--', lw=1.5,
+                 label='arcsinh(1) = {:.6f}'.format(S_FLAT))
+    ax_b.plot([S_FLAT], [ripple_for_s(S_FLAT)], 'o', color='tab:red', ms=8)
+    i_min = int(np.argmin(rip))
+    ax_b.plot([s_grid[i_min]], [rip[i_min]], 'x', color='tab:blue', ms=10,
+              mew=2, label='numerical minimum s = {:.4f}'.format(s_grid[i_min]))
+    ax_b.set_xlabel('pole spacing $s$')
+    ax_b.set_ylabel('in-band ripple p-p [%]')
+    ax_b.set_title('(b) Max-flat is a closed form, not the ripple minimum')
+    ax_b.legend(fontsize=9)
 
-    # --- (d) 解析解 vs 数値解のリップル ---
-    de_a = np.sqrt(2) * target
-    ripple_a = 100 * (debye_eps_imag(f, poles_from(s_analytic, de_a)) / target - 1)
-    ripple_n = 100 * (debye_eps_imag(f, poles_num) / target - 1)
-    ax_d.plot(f / 1e9, ripple_a, color='C2', lw=1.8,
-              label=f'analytic (max-flat): RMS {rms_of(s_analytic, de_a):.3f}%')
-    ax_d.plot(f / 1e9, ripple_n, 'r-', lw=1.8,
-              label=f'numerical (equiripple): RMS {rms_of(s_num, de_num):.3f}%')
-    ax_d.axhline(0, color='k', lw=0.8)
-    ax_d.set_xscale('log')
-    ax_d.set_xlabel('Frequency (GHz)')
-    ax_d.set_ylabel(r"$\varepsilon_r''$ deviation from target (%)")
-    ax_d.set_title('(d) Max-flat vs equiripple over the finite band')
-    ax_d.grid(alpha=0.2, which='both')
-    ax_d.legend(fontsize=8)
-    ax_d.xaxis.set_major_formatter(ticker.FuncFormatter(
-        lambda x, _: f'{x:.1g}' if x < 1 else f'{int(x)}'))
+    # (c) 連続極限への収束
+    u2 = np.linspace(-6, 6, 2000)
+    for n in (1, 2, 3, 5, 9):
+        if n == 1:
+            s_i = np.array([0.0])
+        else:
+            s_i = np.linspace(-(n - 1) / 2, (n - 1) / 2, n) * (2 * S_FLAT)
+        g = sum(0.5 / np.cosh(u2 - si) for si in s_i)
+        ax_c.plot(u2, g / g[len(u2) // 2], lw=1.2, label='{} poles'.format(n))
+    ax_c.axhline(1.0, color='0.5', ls=':', lw=1.0)
+    ax_c.axvspan(u_band[0], u_band[1], color='0.9', zorder=0)
+    ax_c.set_xlabel(r'$u = \ln(f/f_0)$')
+    ax_c.set_ylabel(r"$\varepsilon''(u)$ (normalised at $u=0$)")
+    ax_c.set_title(r'(c) Continuum limit: uniform in $\ln\tau$ is exactly flat')
+    ax_c.legend(fontsize=9)
 
+    # (d) gprMax の制約
+    rho = density_for_eps(EPS_R)
+    keys, ratios = [], []
+    for key, wt in COMPOSITIONS.items():
+        target = EPS_R * carrier_tandelta(wt, rho)
+        _, poles = two_pole_analytic(EPS_R, target)
+        keys.append('{}\n{:.1f} wt%'.format(key, wt))
+        ratios.append(min(t for _, t in poles) / DT_GPRMAX)
+    ax_d.bar(keys, ratios, color='tab:blue', alpha=0.8)
+    ax_d.axhline(TAU_MIN_SAFE, color='tab:red', ls='--', lw=1.5,
+                 label='safe limit {:.0f}'.format(TAU_MIN_SAFE))
+    ax_d.axhline(1.0, color='k', ls=':', lw=1.0,
+                 label=r'gprMax limit $\tau > dt$')
+    ax_d.set_ylabel(r'min $\tau$ / $dt$')
+    ax_d.set_title(r'(d) gprMax constraint: $\tau$ is set by the band only'
+                   '\n(identical for every composition)')
+    ax_d.legend(fontsize=9)
+
+    for ax in (ax_a, ax_b, ax_c, ax_d):
+        ax.grid(alpha=0.4)
+        ax.minorticks_on()
     plt.tight_layout()
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    name = f'flat_tandelta_search_{key}'
-    for ext in ('png', 'pdf'):
-        plt.savefig(os.path.join(OUTPUT_DIR, f'{name}.{ext}'),
-                    dpi=150 if ext == 'png' else 300, bbox_inches='tight')
-    print(f'プロット保存: {OUTPUT_DIR}/{name}.png/.pdf')
-    plt.close(fig)
+    save_fig(fig, 'design_theory')
 
 
 # ---------------------------------------------------------------------------
-# 5. main
+# 5. 実行
 # ---------------------------------------------------------------------------
 
 def main():
@@ -503,116 +484,131 @@ def main():
 
     rho = density_for_eps(EPS_R)
     _p('=' * 78)
-    _p('帯域内で tan_delta を一定に保つ多極 Debye パラメータの設計')
+    _p("帯域内で eps'' を一定に保つ 2 極 Debye パラメータの設計（解析解）")
     _p('=' * 78)
     _p(f'帯域          : {BAND_LO / 1e9:.2f} - {BAND_HI / 1e9:.2f} GHz')
-    _p(f'eps_r         : {EPS_R}  (非分散なので全周波数で一定)')
-    _p(f'密度          : rho = {rho:.6f} g/cm^3   (eps_r = 1.843^rho の解)')
-    _p(f'gprMax dt     : {DT_GPRMAX * 1e12:.3f} ps  (dx = {DX} m, 2D クーラン条件)')
+    _p(f'幾何平均 f0   : {BAND_F0 / 1e9:.4f} GHz  '
+       f'(解析解の対称中心。eps_r の基準周波数)')
+    _p(f'eps_r         : {EPS_R}  (f0 における値)')
+    _p(f'密度          : rho = {rho:.6f} g/cm^3   '
+       f'(eps_r = {CARRIER_EPS_BASE}^rho の解)')
+    _p(f'経験式        : Carrier+1991 Lunar Sourcebook Fig. 9.53 (SOILS)')
+    _p(f'                tan_delta = 10^({CARRIER_TAND_A}*S '
+       f'+ {CARRIER_TAND_B}*rho - {CARRIER_TAND_C})')
+    _p(f'gprMax dt     : {DT_GPRMAX * 1e12:.3f} ps  '
+       f'(dx = {DX} m, 2D クーラン条件)')
     _p('')
     _p('注: eps_r は組成に依らないので、全組成で密度・走時・幾何減衰が共通になる。')
     _p('    違いは吸収だけなので、組成の効果だけを切り出して比較できる。')
 
-    all_results = {}
-    for key, wt in COMPOSITIONS.items():
-        tand_target = heiken_tandelta(wt, rho)
-        target = EPS_R * tand_target
-
-        _p('\n' + '=' * 78)
-        _p(f'FeO+TiO2 = {wt} wt%  [{key}]')
-        _p('=' * 78)
-        _p(f'  Heiken 経験式 tan_delta = {tand_target:.6f}   '
-           f'-> 目標 eps_imag = {target:.6f}')
-
-        evs = {}
-        for n in N_POLES_LIST:
-            eps_inf, poles = design_flat_poles(target, n)
-            ev = evaluate(eps_inf, poles, target)
-            ev['eps_inf'], ev['poles'] = eps_inf, poles
-            evs[n] = ev
-
-        _p(f"\n  {'極数':>4}{'eps_imag RMS':>15}{'tand p-p':>11}"
-           f"{'eps_re p-p':>13}{'alpha 比':>10}{'min tau/dt':>13}{'判定':>8}")
-        for n in N_POLES_LIST:
-            ev = evs[n]
-            ok = 'OK' if ev['tau_min_ratio'] >= TAU_MIN_SAFE else 'tau 小'
-            _p(f"  {n:>4}{ev['rms_eps_imag']:>14.3f}%{ev['ptp_tand']:>10.3f}%"
-               f"{ev['ptp_eps_real']:>12.3f}%{ev['alpha_ratio']:>10.3f}"
-               f"{ev['tau_min_ratio']:>13.1f}{ok:>8}")
-
-        ev = evs[N_POLES_CHOSEN]
-        eps_inf, poles = ev['eps_inf'], ev['poles']
-        _p(f'\n  --- 採用: {N_POLES_CHOSEN} 極 ---')
-        for i, (de, tau) in enumerate(poles):
-            _p(f'    極{i + 1}: De = {de:.6f}, tau = {tau * 1e12:.2f} ps  '
-               f'(緩和ピーク {1.0 / (2 * np.pi * tau) / 1e9:.3f} GHz, '
-               f'tau/dt = {tau / DT_GPRMAX:.1f})')
-        _p(f'\n  gprMax 記述:')
-        _p(f'    #material: {eps_inf:.6f} 0 1 0 regolith')
-        _p('    #add_dispersion_debye: {}{} regolith'.format(
-            len(poles), ''.join(f' {de:.6f} {tau:.6e}' for de, tau in poles)))
-
-        _p(f'\n  帯域内の検算:')
-        for f0 in (BAND_LO, BAND_CENTRE, BAND_HI):
-            i = np.argmin(abs(ev['f'] - f0))
-            _p(f"    f = {f0 / 1e9:>4.2f} GHz: eps_re = {ev['eps_re'][i]:.5f}, "
-               f"eps_imag = {ev['eps_im'][i]:.6f}, tand = {ev['tand'][i]:.6f}, "
-               f"alpha = {ev['alpha'][i]:.4f} Np/m")
-
-        all_results[key] = (wt, target, eps_inf, poles, ev, evs)
-
-    # --- 解析解との比較（主対象のみ）---
-    wt, target, eps_inf, poles, ev, evs = all_results[PRIMARY_KEY]
     _p('\n' + '=' * 78)
-    _p(f'解析解との比較  [{PRIMARY_KEY}]')
+    _p('解析解')
     _p('=' * 78)
     num_int, exact = continuum_flatness()
     _p(f'  連続極限の確認: int (1/2) sech(u) du = {num_int:.9f}  '
        f'(= pi/2 = {exact:.9f})')
     _p('    -> ln(tau) に一様分布させると eps_imag は厳密に一定になる。')
     _p('       これが対数等間隔で平坦化できることの原理。')
-    eps_inf_a, poles_a, s_a = analytic_two_pole(target)
-    f_c = np.sqrt(BAND_LO * BAND_HI)
-    _p(f'\n  解析解（最大平坦）: s = arcsinh(1) = {s_a:.6f}')
-    _p(f'    緩和周波数比 = e^(2s) = {np.exp(2 * s_a):.6f}  '
+    _p(f'\n  最大平坦条件: s = arcsinh(1) = ln(1+sqrt2) = {S_FLAT:.6f}')
+    _p(f'    緩和周波数比 = e^(2s) = {np.exp(2 * S_FLAT):.6f}  '
        f'(= 3 + 2*sqrt(2) = {3 + 2 * np.sqrt(2):.6f})')
-    _p(f'    f_c = {f_c / 1e9:.4f} GHz -> 緩和周波数 '
-       f'{f_c * np.exp(-s_a) / 1e9:.4f}, {f_c * np.exp(s_a) / 1e9:.4f} GHz')
-    for i, (de, tau) in enumerate(poles_a):
-        _p(f'    極{i + 1}: De = {de:.6f}, tau = {tau * 1e12:.2f} ps')
-    ev_a = evaluate(eps_inf_a, poles_a, target)
-    _p(f'\n  {"":>22}{"eps_imag RMS":>15}{"tand p-p":>11}{"alpha 比":>10}')
-    _p(f'  {"解析解 (最大平坦)":>22}{ev_a["rms_eps_imag"]:>14.3f}%'
-       f'{ev_a["ptp_tand"]:>10.3f}%{ev_a["alpha_ratio"]:>10.3f}')
-    _p(f'  {"数値解 (等リップル)":>22}{ev["rms_eps_imag"]:>14.3f}%'
-       f'{ev["ptp_tand"]:>10.3f}%{ev["alpha_ratio"]:>10.3f}')
-    _p('\n  解析解は「中心で最大平坦」、数値解は「帯域全体で等リップル」。')
-    _p('  有限帯域では等リップル解のほうが RMS が小さくなる（Chebyshev 的）。')
-    _p('  解析解は出発点と検算に使い、実装には数値解を採用する。')
+    _p(f'    緩和周波数 = f0/(1+sqrt2), f0*(1+sqrt2) = '
+       f'{BAND_F0 / TAU_RATIO / 1e9:.4f}, {BAND_F0 * TAU_RATIO / 1e9:.4f} GHz')
+    _p('    De      = sqrt(2) * eps_imag_target   （各極）')
+    _p('    eps_inf = eps_r - De                  （f0 で eps_r になる）')
+    _p('')
+    _p('  恒等式の確認（f0 における実部の寄与の和が厳密に 1 になること）:')
+    w0 = 2.0 * np.pi * BAND_F0
+    tau_a = [1.0 / (w0 * TAU_RATIO), TAU_RATIO / w0]
+    ssum = sum(1.0 / (1.0 + (w0 * t) ** 2) for t in tau_a)
+    _p(f'    sum 1/(1+(w0 tau_i)^2) = {ssum:.15f}')
+    s_grid = np.linspace(0.0, 2.0, 2001)
+    rip = np.array([ripple_for_s(s) for s in s_grid])
+    _p(f'\n  有限帯域でのリップル: s = arcsinh(1) で {ripple_for_s(S_FLAT):.3f}%, '
+       f'数値的な最小は s = {s_grid[int(np.argmin(rip))]:.4f} で {rip.min():.3f}%')
+    _p('    -> 最大平坦条件は「中心で最も平ら」であって「帯域全体のリップル最小」')
+    _p('       ではないので、リップルは約 4 倍になる。ただし振幅への影響は深さ')
+    _p('       2.75 m で -0.06 dB 対 -0.015 dB であり、合否判定幅 ±0.5 dB に')
+    _p('       対してどちらも十分小さい。閉形式で書けることを優先して')
+    _p('       s = arcsinh(1) を採用する。')
+    _p('       （精度を優先するなら s を上の数値に置き換えればよいが、')
+    _p('         その値は帯域幅に依存し閉形式では書けない。）')
 
-    # --- 図は全組成について出力する ---
-    # tau は全組成で共通、De だけが tan_delta に比例するため図の形状は相似だが、
-    # 縦軸の絶対値（eps'' と alpha）は組成ごとに異なるので個別に出す。
+    all_results = {}
+    for key, wt in COMPOSITIONS.items():
+        tand_target = carrier_tandelta(wt, rho)
+        target = EPS_R * tand_target
+
+        eps_inf, poles = two_pole_analytic(EPS_R, target)
+        ev = evaluate(eps_inf, poles, target)
+        eps_inf1, poles1 = one_pole_analytic(EPS_R, target)
+        ev1 = evaluate(eps_inf1, poles1, target)
+
+        _p('\n' + '=' * 78)
+        _p(f'FeO+TiO2 = {wt} wt%  [{key}]')
+        _p('=' * 78)
+        _p(f'  Carrier 経験式 tan_delta = {tand_target:.6f}   '
+           f'-> 目標 eps_imag = {target:.6f}')
+        # 注: alpha 比は 1 極でも 4.0 になるため判別に使えない。帯域端が f0 に
+        # 対して対称なので、対称配置なら eps'' は両端で必ず等しくなるため。
+        # 平坦さの判定には p-p を見ること。
+        _p(f'\n  {"":>16}{"eps_imag RMS":>15}{"eps_imag p-p":>15}'
+           f'{"tand p-p":>11}{"alpha 比":>10}{"min tau/dt":>13}')
+        for lab, e in (('1 極 (比較用)', ev1), ('2 極 (採用)', ev)):
+            _p(f'  {lab:>16}{e["rms_eps_imag"]:>14.3f}%{e["ptp_eps_imag"]:>14.3f}%'
+               f'{e["ptp_tand"]:>10.3f}%{e["alpha_ratio"]:>10.3f}'
+               f'{e["tau_min_ratio"]:>13.1f}')
+
+        _p('\n  --- 採用: 2 極（解析解）---')
+        for i, (de, tau) in enumerate(poles):
+            _p(f'    極{i + 1}: De = {de:.6f}, tau = {tau * 1e12:.4f} ps  '
+               f'(緩和ピーク {1.0 / (2 * np.pi * tau) / 1e9:.4f} GHz, '
+               f'tau/dt = {tau / DT_GPRMAX:.1f})')
+        if ev['tau_min_ratio'] < TAU_MIN_SAFE:
+            _p(f'    ** WARNING: tau/dt = {ev["tau_min_ratio"]:.1f} は目安 '
+               f'{TAU_MIN_SAFE} を下回る **')
+        _p('\n  gprMax 記述:')
+        _p(f'    #material: {eps_inf:.6f} 0 1 0 regolith')
+        _p('    #add_dispersion_debye: {}{} regolith'.format(
+            len(poles), ''.join(f' {de:.6f} {tau:.6e}' for de, tau in poles)))
+
+        _p('\n  帯域内の検算:')
+        for f0 in (BAND_LO, BAND_F0, BAND_CENTRE_ARITH, BAND_HI):
+            i = int(np.argmin(abs(ev['f'] - f0)))
+            note = '  <- f0' if abs(f0 - BAND_F0) < 1 else ''
+            _p(f"    f = {f0 / 1e9:>4.2f} GHz: eps_re = {ev['eps_re'][i]:.6f}, "
+               f"eps_imag = {ev['eps_im'][i]:.6f}, tand = {ev['tand'][i]:.6f}, "
+               f"alpha = {ev['alpha'][i]:.4f} Np/m{note}")
+
+        d_kk = abs(kk_limit(target))
+        d_act = ev['eps_re'][0] - ev['eps_re'][-1]
+        _p(f"\n  eps' の帯域内変化: 実測 {d_act:.6f} / KK 極限 {d_kk:.6f}  "
+           f"(比 {d_act / d_kk:.3f})")
+        _p("    -> eps' が一定にならないのは近似の粗さではなく Kramers-Kronig")
+        _p('       が要求する物理。極数を増やしてもこの量は消えない。')
+
+        all_results[key] = (wt, target, ev, ev1)
+
     _p('\n' + '=' * 78)
     _p('作図')
     _p('=' * 78)
-    for key, (wt_i, target_i, eps_inf_i, poles_i, ev_i, evs_i) in all_results.items():
-        # plot_parameter_search が参照する収束履歴を、その組成で取り直す
-        design_flat_poles(target_i, N_POLES_CHOSEN)
-        plot_design(key, wt_i, target_i, eps_inf_i, poles_i, ev_i, evs_i)
-        plot_parameter_search(key, wt_i, target_i, poles_i, eps_inf_i)
+    for key, (wt, target, ev, ev1) in all_results.items():
+        plot_design(key, wt, target, ev, ev1)
+    plot_theory()
 
     _p('\n' + '=' * 78)
-    _p('組成間の比較（採用した極数）')
+    _p('組成間の比較')
     _p('=' * 78)
     _p(f"  {'組成':>8}{'wt%':>7}{'tan_delta':>12}{'eps_inf':>11}"
-       f"{'De (各極)':>12}{'alpha@1.25':>12}{'alpha 比':>10}")
-    for key, (wt, target, eps_inf, poles, ev, _) in all_results.items():
-        i = np.argmin(abs(ev['f'] - BAND_CENTRE))
-        _p(f"  {key:>8}{wt:>7.1f}{target / EPS_R:>12.6f}{eps_inf:>11.6f}"
-           f"{poles[0][0]:>12.6f}{ev['alpha'][i]:>12.4f}{ev['alpha_ratio']:>10.3f}")
+       f"{'De (各極)':>12}{'alpha@f0':>11}{'alpha 比':>10}")
+    for key, (wt, target, ev, _) in all_results.items():
+        i = int(np.argmin(abs(ev['f'] - BAND_F0)))
+        _p(f"  {key:>8}{wt:>7.1f}{target / EPS_R:>12.6f}{ev['eps_inf']:>11.6f}"
+           f"{ev['poles'][0][0]:>12.6f}{ev['alpha'][i]:>11.4f}"
+           f"{ev['alpha_ratio']:>10.3f}")
     _p('\n  tau は全組成で共通、De だけが tan_delta に比例する。')
     _p('  -> 組成を変えても緩和の「形」は同じで、振幅だけが変わる。')
+    _p('     tau は帯域だけで決まるので、gprMax の制約 tau/dt も組成に依らない。')
 
     buf.write(f'\n[Generated: {datetime.datetime.now():%Y-%m-%d %H:%M:%S}]\n')
     os.makedirs(OUTPUT_DIR, exist_ok=True)
