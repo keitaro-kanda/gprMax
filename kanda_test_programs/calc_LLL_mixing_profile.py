@@ -89,7 +89,40 @@ EPS_ICE   = 3.15          # [5] GHz 帯の氷の eps'。低温での温度依存
 TAND_ICE  = 2.0e-4        # [要文献確認] 低温ほど小さくなるので保守側（検出しにくい側）
 RHO_ICE   = 0.94          # [6] [g/cm^3] 82-110 K での氷の密度。wt% 換算に使う。
 RHO_GRAIN = 2.645         # [g/cm^3] 斜長岩の粒子密度 [4]。
-                          # 【用途は空隙率チェックのみ】混合則の式には現れない。
+                          # 吸着水描像では空隙率チェックにのみ使う（式には現れない）。
+
+# --- 氷の存在形態（描像）-----------------------------------------------------
+# 月の水氷がどんな形態で存在するかはまだ分かっていないので、両極端を並行して
+# 計算し、観測量がどう変わるかを見る。既存の解析はすべて 'pore' で行ってきた。
+#
+#   'pore'   吸着水描像（空隙充填）
+#            氷は粒子間の空隙（真空）だけを埋める。粒子の体積分率は変わらない。
+#              v_grain = rho/rho_grain             （氷量に依らない）
+#              v_void  = 1 - v_grain - v_ice
+#            -> 損失源（粒子）が減らないので eps'' は保存し、減衰はほぼ緩和
+#               されない。一方 eps' は真空(1.0)が氷(3.15)に置き換わるので
+#               大きく増え、界面反射が立つ。
+#            LLL 増分形:
+#              eps_wet^(1/3) = eps_dry^(1/3) + v_ice*(eps_ice^(1/3) - 1)
+#
+#   'excess' 過剰氷描像（バルク置換）
+#            氷がレゴリス（粒子＋空隙）をまるごと押しのける。永久凍土でいう
+#            excess ice / massive ice に相当する。
+#              v_grain = (1 - v_ice) * rho/rho_grain
+#              v_void  = (1 - v_ice) * (1 - rho/rho_grain)
+#            -> 粒子が減るので eps'' が (1-v_ice) 倍に希釈され、減衰が緩和
+#               される。一方 eps_dry(~3.19) と eps_ice(3.15) が近いので
+#               eps' はほとんど変わらず、界面反射はほぼ立たない。
+#            LLL 増分形（eps^(1/3) 上での線形内挿になる）:
+#              eps_wet^(1/3) = (1-v_ice)*eps_dry^(1/3) + v_ice*eps_ice^(1/3)
+#
+# 2 つの描像は減衰チャネルと反射チャネルで有利・不利がちょうど入れ替わるので、
+# 両方を測れば描像そのものを判別できる可能性がある。
+ICE_MODELS = ['pore', 'excess']        # 実行する描像（両方出す）
+ICE_MODEL = 'pore'                     # 現在計算中の描像。main() が切り替える
+ICE_MODEL_DIRS = {'pore': 'pore_ice', 'excess': 'excess_ice'}
+ICE_MODEL_LABELS = {'pore': 'pore-filling (adsorbed water)',
+                    'excess': 'excess ice (bulk replacement)'}
 
 # --- モデルの切替 -----------------------------------------------------------
 USE_DEBYE_REALIZATION = True
@@ -208,6 +241,45 @@ def dry_eps_complex(depth_m, freq_hz, feotio2_wt=None):
 # 減衰が増えるという非物理的な結果になる）。
 # =============================================================================
 _ICE_INCREMENT = EPS_ICE ** (1.0 / 3.0) - 1.0     # = 0.46590
+_EPS_ICE_CBRT = EPS_ICE ** (1.0 / 3.0)            # = 1.46590
+
+
+def volume_fractions(depth_m, ice_volpct):
+    """描像に応じた (v_grain, v_void, v_ice) を返す。
+
+    'pore'   : 氷は空隙だけを置き換える。v_grain は氷量に依らない。
+    'excess' : 氷がレゴリス（粒子＋空隙）をまるごと押しのける。
+               v_grain も v_void も (1 - v_ice) 倍になる。
+    """
+    v = float(ice_volpct) / 100.0
+    vg_dry = np.asarray(density_profile(depth_m), dtype=float) / RHO_GRAIN
+    if ICE_MODEL == 'excess':
+        return (1.0 - v) * vg_dry, (1.0 - v) * (1.0 - vg_dry), v
+    return vg_dry, 1.0 - vg_dry - v, v
+
+
+def ice_wt_percent(depth_m, ice_volpct):
+    """氷の質量パーセント。描像でかさ密度の作られ方が違う。
+
+    'pore'   : かさ密度 = rho + v_ice*rho_ice   （粒子はそのまま）
+    'excess' : かさ密度 = (1-v_ice)*rho + v_ice*rho_ice
+    """
+    v = float(ice_volpct) / 100.0
+    rho_d = np.asarray(density_profile(depth_m), dtype=float)
+    m_ice = v * RHO_ICE
+    m_reg = (1.0 - v) * rho_d if ICE_MODEL == 'excess' else rho_d
+    return 100.0 * m_ice / (m_reg + m_ice)
+
+
+def max_ice_volpct(depth_m):
+    """その描像で許される氷の体積分率の上限 [vol%]。
+
+    'pore'   : 空隙率まで（空隙を埋めきったら終わり）
+    'excess' : 100%（すべてが氷になるまで可）
+    """
+    if ICE_MODEL == 'excess':
+        return np.full_like(np.asarray(depth_m, dtype=float), 100.0)
+    return 100.0 * porosity(density_profile(depth_m))
 
 # 混合則の名前。対照実験（calc_MG_mixing_profile.py）から差し替えられる
 # ようにするため、図のタイトルと検算文で共通に使う。
@@ -217,10 +289,29 @@ MIXING_DESC = ('LLL 増分形  eps_wet^(1/3) = eps_dry^(1/3) + '
 
 
 def mix_ice(eps_re_dry, eps_im_dry, ice_volpct):
-    """乾燥レゴリスに氷を加えた (eps', eps'') を返す。"""
+    """乾燥レゴリスに氷を加えた (eps', eps'') を返す（LLL）。
+
+    どちらの描像でも粒子誘電率 eps_grain は式から消える。
+
+    'pore'（吸着水描像）
+        氷は真空(1.0)を置き換えるので
+            eps_wet^(1/3) = eps_dry^(1/3) + v_ice*(eps_ice^(1/3) - 1)
+        粒子は減らないので eps'' は保存（氷自身の微小な損失だけ加える）。
+
+    'excess'（過剰氷描像）
+        氷はレゴリス全体(eps_dry)を置き換えるので、eps^(1/3) 上の線形内挿
+            eps_wet^(1/3) = (1-v_ice)*eps_dry^(1/3) + v_ice*eps_ice^(1/3)
+        粒子が (1-v_ice) 倍に減るので eps'' も同じ割合で希釈される。
+        **これが減衰チャネルに有利な描像。**
+    """
     v = float(ice_volpct) / 100.0
     if v == 0.0:
         return eps_re_dry, eps_im_dry
+    if ICE_MODEL == 'excess':
+        eps_re = ((1.0 - v) * eps_re_dry ** (1.0 / 3.0)
+                  + v * _EPS_ICE_CBRT) ** 3
+        eps_im = (1.0 - v) * eps_im_dry + v * EPS_ICE * TAND_ICE
+        return eps_re, eps_im
     eps_re = (eps_re_dry ** (1.0 / 3.0) + v * _ICE_INCREMENT) ** 3
     eps_im = eps_im_dry + v * EPS_ICE * TAND_ICE
     return eps_re, eps_im
@@ -445,9 +536,18 @@ REF_COMP = {
 # =============================================================================
 # 8. 作図ヘルパ
 # =============================================================================
+def out_dir(*parts):
+    """出力先のパス。描像ごとにサブディレクトリを分ける。
+
+        <OUTPUT_BASE>/pore_ice/...      吸着水描像
+        <OUTPUT_BASE>/excess_ice/...    過剰氷描像
+    """
+    return os.path.join(OUTPUT_BASE, ICE_MODEL_DIRS[ICE_MODEL], *parts)
+
+
 def _ensure_dirs():
     for sub in (DIR_FREQ, DIR_COMP, DIR_SPEC):
-        os.makedirs(os.path.join(OUTPUT_BASE, sub), exist_ok=True)
+        os.makedirs(out_dir(sub), exist_ok=True)
 
 
 def save_fig(fig, base_path):
@@ -525,7 +625,7 @@ def make_summary_2x2(dataset, ref, labels, subdir, title):
     fig.suptitle(title, fontsize=15, y=1.0)
     add_legend(fig, labels)
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, subdir, 'summary_2x2'))
+    return save_fig(fig, out_dir(subdir, 'summary_2x2'))
 
 
 def make_profile_and_delta(data, label, fname, labels, subdir, title,
@@ -549,7 +649,7 @@ def make_profile_and_delta(data, label, fname, labels, subdir, title,
     fig.suptitle(title, fontsize=15, y=1.02)
     add_legend(fig, labels, with_ref=ref is not None)
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, subdir, fname))
+    return save_fig(fig, out_dir(subdir, fname))
 
 
 def make_profile_family(dataset, ref, labels, subdir, title):
@@ -580,7 +680,7 @@ def make_density_profile():
                    fontsize=14, color='tab:orange')
     ax2.tick_params(axis='x', colors='tab:orange', labelsize=12)
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, 'density_profile'))
+    return save_fig(fig, out_dir('density_profile'))
 
 
 def make_ice_wtpct_profile():
@@ -589,13 +689,12 @@ def make_ice_wtpct_profile():
     for ii, c in enumerate(ice_contents):
         if c == 0:
             continue
-        v = c / 100.0
-        wtpct = 100.0 * v * RHO_ICE / (v * RHO_ICE + rho)
+        wtpct = ice_wt_percent(z, c)
         ax.plot(wtpct, z, color=ice_colors[ii], lw=2, label=f'{c} vol% ice')
     style_depth_axis(ax, 'Ice content [wt%]')
     ax.legend(loc='center right', fontsize=12)
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, 'ice_wtpct_profile'))
+    return save_fig(fig, out_dir('ice_wtpct_profile'))
 
 
 # =============================================================================
@@ -626,7 +725,7 @@ def make_spectrum_evolution(ice_volpct):
     ax.grid(True, alpha=0.4)
     ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5), fontsize=11)
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, DIR_SPEC,
+    return save_fig(fig, out_dir(DIR_SPEC,
                                      f'spectrum_evolution_{ice_volpct}vol'))
 
 
@@ -649,7 +748,7 @@ def make_band_edges_profile():
     fig.legend(handles=handles, loc='lower center', ncol=4, fontsize=12,
                frameon=True, bbox_to_anchor=(0.5, 1.0))
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, DIR_SPEC,
+    return save_fig(fig, out_dir(DIR_SPEC,
                                      'band_edges_profile'))
 
 
@@ -668,7 +767,7 @@ def make_centroid_width_profile():
     fig.legend(handles=ice_handles, loc='lower center', ncol=5, fontsize=12,
                frameon=True, bbox_to_anchor=(0.5, 1.0))
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, DIR_SPEC,
+    return save_fig(fig, out_dir(DIR_SPEC,
                                      'centroid_width_profile'))
 
 
@@ -698,7 +797,7 @@ def make_centroid_by_composition():
                loc='lower center', ncol=4, fontsize=12, frameon=True,
                bbox_to_anchor=(0.5, 1.0))
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, DIR_COMP,
+    return save_fig(fig, out_dir(DIR_COMP,
                                      'centroid_width_profile'))
 
 
@@ -726,7 +825,7 @@ def make_lsr(ice_volpct):
     axes[0].legend(loc='lower left', fontsize=11,
                    title=f'{ice_volpct} vol% ice, {FEOTIO2_WT} wt%')
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, DIR_SPEC,
+    return save_fig(fig, out_dir(DIR_SPEC,
                                      f'lsr_{ice_volpct}vol'))
 
 
@@ -752,7 +851,7 @@ def make_lsr_slope_profile():
     fig.legend(handles=handles, loc='lower center', ncol=4, fontsize=12,
                frameon=True, bbox_to_anchor=(0.5, 1.0))
     plt.tight_layout()
-    return save_fig(fig, os.path.join(OUTPUT_BASE, DIR_SPEC,
+    return save_fig(fig, out_dir(DIR_SPEC,
                                      'lsr_slope_profile'))
 
 
@@ -768,7 +867,8 @@ def run_checks():
     add('設定')
     add('=' * 74)
     _, _, src = get_incident_spectrum()
-    add(f'  出力先          : {OUTPUT_BASE}')
+    add(f'  出力先          : {out_dir()}')
+    add(f'  氷の描像        : {ICE_MODEL}  （{ICE_MODEL_LABELS[ICE_MODEL]}）')
     add(f'  帯域            : {BAND_LO/1e9:.2f} - {BAND_HI/1e9:.2f} GHz '
         f'(幾何平均 {BAND_F0/1e9:.3f} GHz)')
     add(f'  伝搬            : {PROPAGATION_MODE}')
@@ -862,14 +962,19 @@ def run_checks():
     por = porosity(rho)
     add(f'  空隙率         : {por.min()*100:.1f} - {por.max()*100:.1f} % '
         f'(rho_grain = {RHO_GRAIN})')
-    bad_any = False
-    for c in ice_contents:
-        bad = np.where(c / 100.0 > por)[0]
-        if bad.size:
-            bad_any = True
-            add(f'    ** {c} vol% は深さ {z[bad[0]]:.2f} m 以深で空隙率超過 **')
-    if not bad_any:
-        add('    すべての氷量が全深さで空隙率以内 -> OK')
+    if ICE_MODEL == 'excess':
+        add('    過剰氷描像では氷がレゴリスごと置き換わるので、空隙率は')
+        add('    上限にならない（上限は 100 vol%）。')
+    else:
+        lim = max_ice_volpct(z)
+        bad_any = False
+        for c in ice_contents:
+            bad = np.where(c > lim)[0]
+            if bad.size:
+                bad_any = True
+                add(f'    ** {c} vol% は深さ {z[bad[0]]:.2f} m 以深で空隙率超過 **')
+        if not bad_any:
+            add('    すべての氷量が全深さで空隙率以内 -> OK')
 
     lsr = lsr_profile(0, None)
     k = 2.0 if PROPAGATION_MODE == 'two_way' else 1.0
@@ -884,8 +989,8 @@ def run_checks():
 
     # -----------------------------------------------------------------
     add('=' * 74)
-    add('氷 1 vol% あたりの変化（深さ 1.5 m, {:.2f} GHz, {} wt%）'
-        .format(PROFILE_FIXED_FREQ / 1e9, FEOTIO2_WT))
+    add('氷 1 vol% あたりの変化（深さ 1.5 m, {:.2f} GHz, {} wt%, 描像 {}）'
+        .format(PROFILE_FIXED_FREQ / 1e9, FEOTIO2_WT, ICE_MODEL))
     add('=' * 74)
     si = PROFILE_WTS.index(FEOTIO2_WT) if FEOTIO2_WT in PROFILE_WTS else 1
     for ii, c in enumerate(ice_contents):
@@ -903,7 +1008,7 @@ def run_checks():
 
     text = '\n'.join(lines)
     print(text)
-    with open(os.path.join(OUTPUT_BASE, 'summary.txt'), 'w',
+    with open(out_dir('summary.txt'), 'w',
               encoding='utf-8') as fh:
         fh.write(text + '\n')
 
@@ -915,7 +1020,7 @@ def write_csv():
     for tag, dataset, labels, subdir in (
             ('freq', SET_FREQ, PROFILE_FREQ_LABELS, DIR_FREQ),
             ('comp', SET_COMP, PROFILE_WT_LABELS, DIR_COMP)):
-        path = os.path.join(OUTPUT_BASE, subdir, f'profile_{tag}.csv')
+        path = out_dir(subdir, f'profile_{tag}.csv')
         with open(path, 'w', newline='', encoding='utf-8') as fh:
             w = csv.writer(fh)
             head = ['depth_m', 'rho', 'porosity']
@@ -939,7 +1044,7 @@ def write_csv():
         paths.append(path)
 
     # スペクトル量
-    path = os.path.join(OUTPUT_BASE, DIR_SPEC, 'spectrum.csv')
+    path = out_dir(DIR_SPEC, 'spectrum.csv')
     with open(path, 'w', newline='', encoding='utf-8') as fh:
         w = csv.writer(fh)
         head = ['depth_m']
@@ -963,21 +1068,39 @@ def write_csv():
 # =============================================================================
 # 12. 実行
 # =============================================================================
-def main():
+def rebuild_profiles():
+    """描像を切り替えたあとにプロファイル配列とキャッシュを作り直す。"""
+    global SET_FREQ, SET_COMP, _prop_cache, _moments_cache
+    _prop_cache.clear()
+    _moments_cache.clear()
+    SET_FREQ = build_profile_set(PAIRS_FREQ)
+    SET_COMP = build_profile_set(PAIRS_COMP)
+
+
+def run_for_model(model):
+    """1 つの描像について、図・CSV・検算を一式出す。"""
+    global ICE_MODEL
+    ICE_MODEL = model
+    rebuild_profiles()
     _ensure_dirs()
     made = []
+
+    print('=' * 74)
+    print('氷の描像: {}  ({})'.format(model, ICE_MODEL_LABELS[model]))
+    print('  出力先: {}'.format(out_dir()))
+    print('=' * 74)
 
     print('--- 系統 A: 周波数を振ったプロファイル ---')
     made += make_profile_family(
         SET_FREQ, REF_FREQ, PROFILE_FREQ_LABELS, DIR_FREQ,
         f'Frequency comparison (FeO+TiO2 = {FEOTIO2_WT} wt%)'
-        f'  [{MIXING_LABEL}]')
+        f'  [{MIXING_LABEL} / {model}]')
 
     print('--- 系統 B: FeO+TiO2 を振ったプロファイル ---')
     made += make_profile_family(
         SET_COMP, REF_COMP, PROFILE_WT_LABELS, DIR_COMP,
         f'Composition comparison ({PROFILE_FIXED_FREQ/1e9:.2f} GHz)'
-        f'  [{MIXING_LABEL}]')
+        f'  [{MIXING_LABEL} / {model}]')
     made.append(make_centroid_by_composition())
 
     print('--- 共通プロファイル ---')
@@ -998,6 +1121,67 @@ def main():
     print()
     run_checks()
     print(f'\n生成したファイル: {len(made)} 件（図は png / pdf 各 1）')
+    return made
+
+
+def compare_models(results):
+    """描像どうしの比較表を出す（両方走らせたときだけ）。"""
+    if len(results) < 2:
+        return
+    i15 = int(1.5 / DZ)
+    fa = np.array([PROFILE_FIXED_FREQ])
+    lines = ['=' * 74,
+             '描像の比較（深さ 1.5 m, {:.2f} GHz, {} wt%, 混合則 {}）'
+             .format(PROFILE_FIXED_FREQ / 1e9, FEOTIO2_WT, MIXING_LABEL),
+             '=' * 74,
+             '  2 つの描像は減衰と反射で有利・不利がちょうど入れ替わる。',
+             '  両方を測れば描像そのものを判別できる可能性がある。',
+             '']
+    hdr = ('  氷[vol%]  wt%     ' + ''.join(
+        '{:>26}'.format(m) for m in results))
+    lines.append(hdr)
+    lines.append('  ' + ' ' * 16
+                 + ''.join("{:>13}{:>13}".format("d(a)/vol%[%]", "R [dB]")
+                           for _ in results))
+    global ICE_MODEL
+    keep = ICE_MODEL
+    for c in ice_contents:
+        if c == 0:
+            continue
+        row = ''
+        wt = None
+        for m in results:
+            ICE_MODEL = m
+            er0, ei0 = medium_eps(z, fa, 0)
+            er1, ei1 = medium_eps(z, fa, c)
+            a0, _ = alpha_velocity(z, fa, 0)
+            a1, _ = alpha_velocity(z, fa, c)
+            n0, n1 = np.sqrt(er0[i15, 0]), np.sqrt(er1[i15, 0])
+            R = (n0 - n1) / (n0 + n1)
+            d_a = 100 * (a1[i15, 0] / a0[i15, 0] - 1) / c
+            row += '{:>13.3f}{:>13.1f}'.format(
+                d_a, 20 * np.log10(max(abs(R), 1e-12)))
+            if wt is None:
+                wt = float(np.atleast_1d(ice_wt_percent(1.5, c))[0])
+        lines.append('  {:>6}  {:5.3f}  '.format(c, wt) + row)
+    ICE_MODEL = keep
+    lines += ['',
+              '  d(a)/vol% = 氷 1 vol% あたりの alpha の変化率（減衰チャネル）',
+              '  R         = 急峻界面の反射係数（反射チャネル）',
+              '']
+    text = '\n'.join(lines)
+    print(text)
+    os.makedirs(OUTPUT_BASE, exist_ok=True)
+    with open(os.path.join(OUTPUT_BASE, 'model_comparison.txt'), 'w',
+              encoding='utf-8') as fh:
+        fh.write(text + '\n')
+
+
+def main():
+    for model in ICE_MODELS:
+        run_for_model(model)
+        print()
+    compare_models(ICE_MODELS)
 
 
 if __name__ == '__main__':

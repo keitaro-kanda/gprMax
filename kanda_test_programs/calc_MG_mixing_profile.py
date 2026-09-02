@@ -80,6 +80,9 @@ from calc_LLL_mixing_profile import (
     density_profile, carrier_eps_real, porosity, dry_eps_complex,
 )
 
+# 氷の描像（'pore' / 'excess'）は LLL 版の ICE_MODEL をそのまま参照する。
+# main() が切り替えるので、ここでは import せずに base.ICE_MODEL を都度読む。
+
 # =============================================================================
 # 0. 設定  [EDIT HERE]
 # =============================================================================
@@ -132,14 +135,31 @@ def mg_dry(eps_grain, v_grain):
     raise ValueError("MG_HOST は 'void' か 'grain'")
 
 
-def mg_wet(eps_grain, v_grain, v_ice, eps_ice=None):
-    """粒子・真空・氷の 3 相 MG。"""
+def mg_wet(eps_grain, v_grain_dry, v_ice, eps_ice=None):
+    """粒子・真空・氷の 3 相 MG。氷の描像で体積分率の作り方が変わる。
+
+    v_grain_dry は乾燥時の粒子体積分率 rho/rho_grain。
+
+    'pore'（吸着水描像）
+        氷は空隙だけを埋める。粒子は減らない。
+            v_grain = v_grain_dry
+            v_void  = 1 - v_grain_dry - v_ice
+    'excess'（過剰氷描像）
+        氷がレゴリスごと押しのける。粒子も空隙も (1-v_ice) 倍になる。
+            v_grain = (1 - v_ice) * v_grain_dry
+            v_void  = (1 - v_ice) * (1 - v_grain_dry)
+    """
     ei = EPS_ICE if eps_ice is None else eps_ice
+    if base.ICE_MODEL == 'excess':
+        v_g = (1.0 - v_ice) * v_grain_dry
+        v_v = (1.0 - v_ice) * (1.0 - v_grain_dry)
+    else:
+        v_g = v_grain_dry
+        v_v = 1.0 - v_grain_dry - v_ice
     if MG_HOST == 'void':
-        return mg_effective(1.0, [(v_grain, eps_grain), (v_ice, ei)])
+        return mg_effective(1.0, [(v_g, eps_grain), (v_ice, ei)])
     if MG_HOST == 'grain':
-        return mg_effective(eps_grain,
-                            [(1.0 - v_grain - v_ice, 1.0), (v_ice, ei)])
+        return mg_effective(eps_grain, [(v_v, 1.0), (v_ice, ei)])
     raise ValueError("MG_HOST は 'void' か 'grain'")
 
 
@@ -217,7 +237,10 @@ def medium_eps_mg(depth_m, freq_hz, ice_volpct, feotio2_wt=None):
         「氷による増分」だけを表す。
 
     虚部:
-        既定は保存（LLL 版と同じ）。'complex_mg' なら複素 MG で計算する。
+        既定は LLL 版と同じ扱い。
+          'pore'   … 粒子が減らないので eps'' は保存（氷の微小な損失だけ加算）
+          'excess' … 粒子が (1-v_ice) 倍に減るので eps'' も同じ割合で希釈
+        'complex_mg' なら複素 MG で計算する（比較用）。
     """
     er_dry, ei_dry = dry_eps_complex(depth_m, freq_hz, feotio2_wt)
     v = float(ice_volpct) / 100.0
@@ -244,7 +267,10 @@ def medium_eps_mg(depth_m, freq_hz, ice_volpct, feotio2_wt=None):
 
     ratio = mg_wet(eg, vg, v) / mg_dry(eg, vg)
     eps_re = er_dry * ratio
-    eps_im = ei_dry + v * EPS_ICE * TAND_ICE
+    if base.ICE_MODEL == 'excess':
+        eps_im = (1.0 - v) * ei_dry + v * EPS_ICE * TAND_ICE
+    else:
+        eps_im = ei_dry + v * EPS_ICE * TAND_ICE
     return eps_re, eps_im
 
 
@@ -282,6 +308,8 @@ def run_mg_checks():
         + (f'（較正深さ {MG_GRAIN_REF_DEPTH_M} m）'
            if MG_GRAIN_MODE == 'fixed' else ''))
     add(f'  虚部の扱い      : {MG_EPS_IMAG_MODE}')
+    add(f'  氷の描像        : {base.ICE_MODEL} '
+        f'（{base.ICE_MODEL_LABELS[base.ICE_MODEL]}）')
     add(f'  粒子密度        : {RHO_GRAIN} g/cm^3（空隙率の計算にのみ使う '
         'LLL 版と共通）')
     add('')
@@ -312,8 +340,9 @@ def run_mg_checks():
     add('')
 
     add('=' * 74)
-    add('LLL 版との比較（深さ 1.5 m, {:.2f} GHz, {} wt%）'
-        .format(base.PROFILE_FIXED_FREQ / 1e9, base.FEOTIO2_WT))
+    add('LLL 版との比較（深さ 1.5 m, {:.2f} GHz, {} wt%, 描像 {}）'
+        .format(base.PROFILE_FIXED_FREQ / 1e9, base.FEOTIO2_WT,
+                base.ICE_MODEL))
     add('=' * 74)
     fa = np.array([base.PROFILE_FIXED_FREQ])
     add('  氷[vol%]   eps_prime            d(eps_prime)/vol%      界面R [dB]')
@@ -350,20 +379,20 @@ def run_mg_checks():
 
     text = '\n'.join(lines)
     print(text)
-    os.makedirs(OUTPUT_BASE, exist_ok=True)
-    with open(os.path.join(OUTPUT_BASE, 'mg_summary.txt'), 'w',
+    os.makedirs(base.out_dir(), exist_ok=True)
+    with open(base.out_dir('mg_summary.txt'), 'w',
               encoding='utf-8') as fh:
         fh.write(text + '\n')
 
 
 def _lll_medium_eps(depth_m, freq_hz, ice_volpct, feotio2_wt=None):
-    """比較用に LLL 版の混合をその場で計算する（差し替え前の式）。"""
+    """比較用に LLL 版の混合をその場で計算する。
+
+    base.mix_ice() をそのまま呼ぶので、描像（pore / excess）の分岐を
+    2 か所に書かずに済む。
+    """
     er, ei = dry_eps_complex(depth_m, freq_hz, feotio2_wt)
-    v = float(ice_volpct) / 100.0
-    if v == 0.0:
-        return er, ei
-    return ((er ** (1.0 / 3.0) + v * base._ICE_INCREMENT) ** 3,
-            ei + v * EPS_ICE * TAND_ICE)
+    return base.mix_ice(er, ei, ice_volpct)
 
 
 # =============================================================================
@@ -375,10 +404,18 @@ def main():
     print('  （LLL 版 calc_LLL_mixing_profile.py の対照実験。'
           '混合則だけが違う）')
     print('=' * 74)
-    print()
-    run_mg_checks()
-    print()
-    base.main()          # 作図・CSV・共通の検算は LLL 版のものをそのまま使う
+
+    # 描像ごとに「MG 固有の検算 -> 図と CSV」を回す。
+    # 作図・CSV・共通の検算は LLL 版のものをそのまま使う。
+    for model in base.ICE_MODELS:
+        base.ICE_MODEL = model
+        base.rebuild_profiles()
+        print()
+        run_mg_checks()
+        print()
+        base.run_for_model(model)
+        print()
+    base.compare_models(base.ICE_MODELS)
 
 
 if __name__ == '__main__':
