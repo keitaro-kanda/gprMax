@@ -90,7 +90,7 @@ from calc_LLL_mixing_profile import (
 OUTPUT_BASE = ('/Volumes/SSD_Kanda_BUFFALO/test_programs_output/'
                'MG_mixing_profile')
 
-MG_HOST = 'void'              # 'void'（真空が母材、既定）/ 'grain'（粒子が母材）
+MG_HOST = 'grain'              # 'void'（真空が母材、既定）/ 'grain'（粒子が母材）
 
 MG_GRAIN_MODE = 'per_depth'   # 'per_depth'（既定。各深さで Carrier に一致させる）
                               # 'fixed'（基準密度で一度だけ較正）
