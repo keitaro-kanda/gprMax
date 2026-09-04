@@ -9,8 +9,10 @@ first:
   2. traveltime  : two-way time -> layer thickness / index -> ice
   3. attenuation : interface amplitude ratio -> layer attenuation alpha
 
-The medium model (permittivity / attenuation) is imported from ascan_spectrum;
-no constant is duplicated here.
+The medium model (permittivity / attenuation) lives in subsurface_model.py and
+is imported from there; no constant is duplicated here.  JSON/plot utilities
+still come from ascan_spectrum.  The ice picture (pore-filling vs excess ice)
+is taken from the JSON sub-layer key (pore_ice / excess_ice).
 
 Known limitations: multiple reflections are not modelled (they appear in the
 fig2 residual); monostatic normal incidence is assumed; background subtraction
@@ -35,6 +37,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# 地下構造モデル（.in が定める物理）。レベル更新時はここだけを触る。
+import subsurface_model as sm
+# 解析の手順（JSON の読み込みなど）はこれまでどおり ascan_spectrum から。
 import ascan_spectrum as asp
 
 
@@ -43,11 +48,16 @@ import ascan_spectrum as asp
 # ---------------------------------------------------------------------------
 # Geometry / placement and the real-data ice fraction come from ascan_spectrum
 # (single source of truth, kept in sync with the .in files; no duplication).
-TX_HEIGHT_M = asp.TX_HEIGHT              # tx/rx height above surface [m]
-ICE_TOP_M   = asp.LEVEL4_ICE_TOP_M       # depth of ice-layer top [m]
-ICE_THICK_M = asp.LEVEL4_ICE_THICK_M     # ice-layer thickness [m]
-R_REF_M     = asp.R_REF                  # far_1m reference distance [m]
-DETECTED_ICE_VOL = asp.level4_ice_volume_fraction()   # real-data ice fraction
+TX_HEIGHT_M = sm.TX_HEIGHT               # tx/rx height above surface [m]
+ICE_TOP_M   = sm.LEVEL4_ICE_TOP_M        # depth of ice-layer top [m]
+ICE_THICK_M = sm.LEVEL4_ICE_THICK_M      # ice-layer thickness [m]
+R_REF_M     = sm.R_REF                   # far_1m reference distance [m]
+# 実データの氷量は JSON のキーから設定されたあとに読む必要があるので、
+# ここでは定数にせず関数で取る（描像 pore/excess でも値が変わるため）。
+
+
+def detected_ice_vol():
+    return sm.level4_ice_volume_fraction()
 
 C = 299_792_458.0                # speed of light [m/s] (traveltime/geometry only)
 
@@ -74,19 +84,21 @@ BACKGROUND_TRACE_PATH = '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/water_ice_
 # ---------------------------------------------------------------------------
 @contextmanager
 def _ice_fraction(v):
-    """Temporarily set ascan_spectrum's ice volume fraction so its own mixing
+    """Temporarily set subsurface_model's ice volume fraction so its mixing
     model is evaluated at `v` (used for the detection-limit sweep). v=None keeps
-    the module default (the real-data fraction). No constants are duplicated."""
+    the module default (the real-data fraction). No constants are duplicated.
+    The ice picture (pore / excess) is not touched here, so the sweep always
+    uses the picture selected from the JSON key."""
     if v is None:
         yield
         return
-    spec, pct = asp.LEVEL4_ICE_SPEC, asp.LEVEL4_ICE_VOL_PCT
-    asp.LEVEL4_ICE_SPEC = "vol"
-    asp.LEVEL4_ICE_VOL_PCT = v * 100.0
+    spec, pct = sm.LEVEL4_ICE_SPEC, sm.LEVEL4_ICE_VOL_PCT
+    sm.LEVEL4_ICE_SPEC = "vol"
+    sm.LEVEL4_ICE_VOL_PCT = v * 100.0
     try:
         yield
     finally:
-        asp.LEVEL4_ICE_SPEC, asp.LEVEL4_ICE_VOL_PCT = spec, pct
+        sm.LEVEL4_ICE_SPEC, sm.LEVEL4_ICE_VOL_PCT = spec, pct
 
 
 def _index_from_eps(eps):
@@ -104,22 +116,22 @@ class MediumModel:
     ice_vol: float | None = None
 
     def regolith_index(self, f):
-        return _index_from_eps(asp.level3_eps(np.atleast_1d(f)))
+        return _index_from_eps(sm.level3_eps(np.atleast_1d(f)))
 
     def regolith_alpha(self, f):
-        return np.atleast_1d(asp.level3_alpha(np.atleast_1d(f)))
+        return np.atleast_1d(sm.level3_alpha(np.atleast_1d(f)))
 
     def ice_index(self, f):
         with _ice_fraction(self.ice_vol):
-            return _index_from_eps(asp.level4_eps(np.atleast_1d(f), True))
+            return _index_from_eps(sm.level4_eps(np.atleast_1d(f), True))
 
     def ice_alpha(self, f):
         with _ice_fraction(self.ice_vol):
-            return np.atleast_1d(asp.level4_alpha(np.atleast_1d(f), True))
+            return np.atleast_1d(sm.level4_alpha(np.atleast_1d(f), True))
 
     def describe(self):
         with _ice_fraction(self.ice_vol):
-            return asp.describe_level4_medium()
+            return sm.describe_level4_medium()
 
 
 # ---------------------------------------------------------------------------
@@ -615,9 +627,10 @@ def write_run_info(path, medium, floor, tt, atten):
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("=== ascan_reflection run_info ===\n\n[config]\n")
         for k in ("TX_HEIGHT_M", "ICE_TOP_M", "ICE_THICK_M", "R_REF_M",
-                  "NOISE_BAND_NS", "EVENT_WINDOW_NS", "CENTER_FREQ_HZ",
-                  "DETECTED_ICE_VOL"):
+                  "NOISE_BAND_NS", "EVENT_WINDOW_NS", "CENTER_FREQ_HZ"):
             fh.write(f"  {k} = {globals()[k]}\n")
+        fh.write(f"  ICE_MODEL = {sm.LEVEL4_ICE_MODEL}\n")
+        fh.write(f"  ICE_VOL = {sm.LEVEL4_ICE_VOL_PCT / 100.0:.4f}\n")
         fh.write("\n[medium]\n  " + medium.describe().replace("\n", "\n  ") + "\n")
         fh.write("\n[noise floor]\n")
         fh.write(f"  band = {floor.band_ns} ns\n  rms = {floor.rms:.6e}\n")
@@ -712,15 +725,21 @@ def main(argv=None):
         print(f"Error: 参照パス '{REF_KEY}' が見つかりません。")
         return 1
 
-    ice_vol = DETECTED_ICE_VOL
-    
-    if 'ice_layer' in asp.LEVEL_EFFECTS.get(level, []):
-        vol_pct, ice_key = asp.set_level4_ice(kind)
-        ice_vol = vol_pct / 100.0
-        print(f"\n# {level} / {ice_key} (ice = {ice_vol * 100:.0f} vol%)")
+    # 組成・水氷濃度・水氷の描像（pore / excess）をまとめて設定する。
+    # サブ階層キーから自動判定し、判定できなければエラーで止まる。
+    for _note in sm.configure_from_kind(kind, level):
+        print("  " + _note)
+
+    if 'ice_layer' in sm.LEVEL_EFFECTS.get(level, []):
+        ice_vol = detected_ice_vol()
+        print(f"\n# {level} / {sm.LEVEL4_ICE_MODEL} "
+              f"(ice = {ice_vol * 100:.2f} vol%)")
     else:
+        ice_vol = 0.0
         print(f"\n# {level}")
         
+    # JSON の階層に pore_ice / excess_ice が入っているので、出力先も
+    # 自動的に描像ごとに分かれる（resolve_output_dir が .out のパスを使うため）。
     asp.OUTPUT_SUBDIRNAME = OUTPUT_SUBDIRNAME
     out_dir_base = asp.resolve_output_dir(level, rx_paths)
 

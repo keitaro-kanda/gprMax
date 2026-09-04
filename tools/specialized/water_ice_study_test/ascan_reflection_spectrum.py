@@ -22,22 +22,34 @@ from scipy import signal
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-import ascan_spectrum as asp
-from ascan_spectrum import (
-    C, TX_HEIGHT, R_REF, BAND_GHZ, BAND_CENTRE_HZ, FLOHI_PRIMARY_DB,
+# --- 地下構造モデル（.in が定める物理）--------------------------------------
+# レベルを増やすときに触るのは原則 subsurface_model.py だけ。
+import subsurface_model as sm
+from subsurface_model import (
+    C, TX_HEIGHT, R_REF, BAND_GHZ, BAND_CENTRE_HZ,
     LEVEL_EFFECTS, IMPLEMENTED_LEVELS,
-    load_paths, check_paths_exist, load_trace, spectrum, measure_peak,
-    _interp_complex_to_grid, save_figure,
-    set_level3_composition, set_level4_ice,
+    LEVEL4_ICE_TOP_M, LEVEL4_ICE_THICK_M,
+    configure_from_kind, _is_ice_model_layer,
     describe_level2_medium, describe_level3_medium, describe_level3b_medium,
     describe_level4_medium,
     refractive_index, level4_eps, level4_alpha, level3_eps, level3_alpha,
-    level2_alpha,
+    level2_alpha, _group_index_from_eps,
+)
+
+# --- 解析の手順（JSON の読み込み・スペクトル量・作図）-----------------------
+import ascan_spectrum as asp
+from ascan_spectrum import (
+    FLOHI_PRIMARY_DB,
+    load_paths, check_paths_exist, load_trace, spectrum, measure_peak,
+    _interp_complex_to_grid, save_figure,
     moments, lo_hi_freq, log_spectral_ratio, alpha_to_tandelta,
     valid_mask, noise_floor, group_delay,
-    LEVEL4_ICE_TOP_M, LEVEL4_ICE_THICK_M,
 )
 from gprMax.exceptions import CmdInputError
+
+# 階層選択で「水氷の描像」のラベルを出せるようにする（ascan_spectrum のフック）。
+if not any(lab == '水氷の描像' for _, lab in asp._EXTRA_LAYER_LABELS):
+    asp._EXTRA_LAYER_LABELS.append((_is_ice_model_layer, '水氷の描像'))
 
 # =============================================================================
 # 設定  [EDIT HERE]
@@ -233,7 +245,7 @@ def event_arrival_ns(event, level):
     fc = np.array([BAND_CENTRE_HZ])
     t = 2.0 * TX_HEIGHT / C
     for length, in_ice in event['above']:
-        ng = float(asp._group_index_from_eps(
+        ng = float(_group_index_from_eps(
             lambda ff: (level4_eps(ff, in_ice)[0]
                         if 'ice_layer' in LEVEL_EFFECTS[level]
                         else level3_eps(ff)[0]), fc)[0])
@@ -937,6 +949,8 @@ def write_outputs(results, info, level, kind, output_dir):
         fh.write('  background subtraction: {}\n'
                  .format(BACKGROUND_TRACE_PATH or 'off'))
         fh.write('  relative LSR reference event: {}\n'.format(info['rel_ref']))
+        if 'ice_layer' in LEVEL_EFFECTS[level]:
+            fh.write('  ice model: {}\n'.format(sm.LEVEL4_ICE_MODEL))
         fh.write('  source delay (from theory trace): {:.3f} ns\n'
                  .format(info['source_delay']))
         fh.write('  noise floor: {:.2f} dB re. surface peak ({}, {})\n'
@@ -1034,12 +1048,10 @@ def run_once(at_tx_path, ref_path, level, kind, output_dir,
 def main():
     level, kind, rx_paths, reference = load_paths(JSON_PATH)
 
-    if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
-        wt, key = set_level3_composition(kind)
-        print('背景レゴリスの組成: FeO+TiO2 = {:.1f} wt%  [{}]'.format(wt, key))
-    if 'ice_layer' in LEVEL_EFFECTS.get(level, []):
-        vol, ice_key = set_level4_ice(kind)
-        print('水氷濃度: {:.2f} vol%  [{}]'.format(vol, ice_key))
+    # 組成・水氷濃度・水氷の描像（pore / excess）をまとめて設定する。
+    # サブ階層キーから自動判定し、判定できなければエラーで止まる。
+    for _note in configure_from_kind(kind, level):
+        print(_note)
 
     if level not in IMPLEMENTED_LEVELS:
         raise NotImplementedError('{} は未実装です'.format(level))
