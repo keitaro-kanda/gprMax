@@ -238,7 +238,10 @@ def plot_map_profile(freq, map_data, profile_data, idx):
     plt.savefig(os.path.join(output_dir, base + f'_{freq:.2e}' + '_map.png'), dpi=300, bbox_inches='tight')
     plt.savefig(os.path.join(output_dir, base + f'_{freq:.2e}' + '_map.pdf'), dpi=300, bbox_inches='tight')
     print(f"Saved: {base}_map.png / .pdf")
-    plt.show()
+    if freq == freqs[1]:  # Show the last frequency's plots interactively 
+        plt.show()
+    else:
+        plt.close()
 
 
 def plot_profile(freq, profile_data, idx):
