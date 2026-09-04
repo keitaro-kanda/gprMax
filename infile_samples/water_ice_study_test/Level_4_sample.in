@@ -93,6 +93,32 @@ LLL を 3 相（粒子・真空・氷）に適用すると
 描像 A/B の差（約 26 dB）に比べて桁違いに小さいので、規則の選択は
 結論を変えない。重要なのは規則ではなく描像。
 
+--- ICE_MODEL='excess'（過剰氷描像）---------------------------------------
+上の「描像 A（誤り）」は、氷がレゴリスを置き換えても粒子の量は減らない、と
+いう前提のもとで誤りだった。しかし「レゴリスの一部の領域がまるごと純氷に
+置き換わる」なら話が変わり、その領域の粒子は本当に消えるので損失も減る。
+これは地球の永久凍土のアイスレンズや火星の excess ice に相当する形態で、
+月では彗星衝突による氷塊の残留や、火山起源の一時大気からの厚い霜の埋没が
+作りうる。
+
+このとき体積分率は
+    v_grain = (1 - v_ice) * rho/rho_grain
+    v_void  = (1 - v_ice) * (1 - rho/rho_grain)
+となり、LLL は
+    eps_wet^(1/3) = v_grain*eps_grain^(1/3) + v_void*1 + v_ice*eps_ice^(1/3)
+                  = (1 - v_ice)*eps_dry^(1/3) + v_ice*eps_ice^(1/3)
+と、eps^(1/3) 上の単純な線形内挿になる。ここでも粒子誘電率は式から消える。
+pore が「真空(1.0)を置き換える」のに対し、excess は「乾燥レゴリス(eps_dry)を
+置き換える」という対比になっている。
+
+損失は粒子の量に比例するので
+    eps''_wet = (1 - v_ice)*eps''_dry + v_ice*eps_ice*tan_delta_ice
+と希釈される。**これが減衰チャネルに有利な描像である。**
+
+なお有効媒質として扱う以上、氷の塊は波長より十分小さいことを仮定している
+（媒質中の波長は 1 GHz で約 17 cm）。塊がそれより大きい場合は離散的な
+散乱体になるので、混合則ではなく個別の #box として置くべきである。
+
 --- 損失（eps''）について -------------------------------------------------
 電波の損失はレゴリス粒子の中で起きる。氷が空隙に入っても粒子の量は
 変わらないので eps'' は変わらない（氷自身の微小な損失だけを足す）。
@@ -150,10 +176,39 @@ ICE_THICK_M = 2.00        # [m] 氷層の厚さ
 #       ただし厚 0.10 m だと上下面の往復走時差が約 1.2 ns しかなく、
 #       帯域 1.5 GHz のパルス幅（約 0.7 ns）に対して分離が厳しい。
 
-ICE_SPEC = 'wt'           # 'wt' : 質量分率で指定（ミッション要求に対応）
+ICE_SPEC = 'vol'           # 'wt' : 質量分率で指定（ミッション要求に対応）
                           # 'vol': 体積分率で直接指定
 ICE_WT_FRAC  = 0.005      # [-] 0.005 = 0.5 wt%（LUPEX 想定の保守側）
-ICE_VOL_FRAC = 0.010      # [-] ICE_SPEC='vol' のときに使う
+ICE_VOL_FRAC = 0.10      # [-] ICE_SPEC='vol' のときに使う
+
+# --- 氷の存在形態（描像）[EDIT HERE] ------------------------------------------
+# 月の水氷がどんな形態で存在するかはまだ分かっていないので、両極端を切り替えて
+# 計算できるようにしてある。各レベルで pore / excess / 氷なし の 3 通りを回す。
+#
+#   'pore'   空隙充填型（吸着水描像）。これまでの既定。
+#            氷は粒子間の空隙（真空）だけを埋める。粒子の体積分率は不変。
+#              v_grain = rho/rho_grain（氷量に依らない）
+#              v_void  = 1 - v_grain - v_ice
+#            気相拡散でコールドトラップに凝結する過程が作る形態。
+#            上限は空隙率（本設定で 33.7 vol% = 14.9 wt%）。
+#
+#   'excess' 過剰氷型（バルク置換描像）。今回の追加。
+#            レゴリス（粒子＋空隙）の一部が、まるごと純氷に置き換わる。
+#            全体の v_ice の割合の領域が純氷になり、残りは乾燥レゴリスのまま。
+#              v_grain = (1 - v_ice) * rho/rho_grain
+#              v_void  = (1 - v_ice) * (1 - rho/rho_grain)
+#            彗星衝突による氷塊の残留や、一時大気からの厚い霜の埋没が
+#            作りうる形態。空隙率の上限がない（上限は 100 vol%）。
+#
+# 2 つは検出チャネルで有利・不利がちょうど入れ替わる。
+#   pore   : eps' が大きく増えるので界面反射が立つが、粒子が減らないので
+#            eps'' が保存され、減衰はほとんど緩和されない。
+#   excess : 粒子が (1-v_ice) 倍に減るので eps'' が希釈され減衰が緩和されるが、
+#            eps_ice(3.15) と eps_dry(3.0) が近いので eps' がほとんど変わらず、
+#            界面反射がほぼ立たない。
+# したがって両方を回して減衰と反射の両チャネルを見れば、描像そのものを
+# 判別できる可能性がある。
+ICE_MODEL = 'pore'        # 'pore' / 'excess'
 
 # =============================================================================
 # 1. 誘電モデル（乾燥レゴリス）
@@ -226,15 +281,18 @@ def emit_material(name, eps_r, eps_imag_target):
 
 # =============================================================================
 # 3. 水氷の混合則（LLL、3 相：粒子・真空・氷）  [5] Takekura+2025 Eq.(6)-(9)
+#    ICE_MODEL で 'pore'（空隙充填）と 'excess'（バルク置換）を切り替える。
 # =============================================================================
 EPS_ICE  = 3.15           # [6] GHz 帯の氷の eps'。低温での温度依存は小さい。
-TAND_ICE = 2.0e-4         # [要文献確認] 氷の tan_delta。低温ほど小さくなるので
+TAND_ICE = 2.0e-5         # [要文献確認] 氷の tan_delta。低温ほど小さくなるので
                           # この値は保守側（検出しにくい側）。永久影の
                           # 40-100 K における値を文献で確認すること。
 RHO_ICE  = 0.94           # [7] [g/cm^3] 82-110 K での氷の密度。wt%->vol% 変換用。
 
 RHO_GRAIN = 2.645         # [g/cm^3] 斜長岩の粒子密度 [5]。
                           # 【用途は空隙率チェックのみ】混合則の式には現れない。
+                          # excess 描像では空隙率が上限にならないので、
+                          # そちらでは検算表示にしか使わない。
                           # Lunar Sourcebook Table 9.3 の推奨値 3.1 は海の
                           # 玄武岩片を含む全土壌の平均なので、斜長岩質を仮定
                           # する南極には 2.645 のほうが適する。
@@ -243,25 +301,55 @@ RHO_GRAIN = 2.645         # [g/cm^3] 斜長岩の粒子密度 [5]。
 def ice_volume_fraction():
     """氷の体積分率を返す。ICE_SPEC に応じて wt% から換算する。
 
-    v_ice = (rho_bulk / rho_ice) * w / (1 - w)      [5] Eq.(8)
+    かさ密度の作られ方が描像で違うので、wt% -> vol% の式も描像で変わる。
+      'pore'   : かさ密度 = rho + v*rho_ice        （粒子はそのまま残る）
+                 -> v = (rho/rho_ice) * w/(1-w)    [5] Eq.(8)
+      'excess' : かさ密度 = (1-v)*rho + v*rho_ice  （レゴリスごと置き換わる）
+                 -> v = w*rho / (rho_ice*(1-w) + w*rho)
+    ICE_SPEC='vol' なら描像に依らず ICE_VOL_FRAC をそのまま使う。
     """
     if ICE_SPEC == 'vol':
         return ICE_VOL_FRAC
     if ICE_SPEC == 'wt':
         w = ICE_WT_FRAC
+        if ICE_MODEL == 'excess':
+            return w * RHO_UNIFORM / (RHO_ICE * (1.0 - w) + w * RHO_UNIFORM)
         return (RHO_UNIFORM / RHO_ICE) * w / (1.0 - w)
     raise ValueError("ICE_SPEC は 'wt' か 'vol'")
+
+
+def ice_weight_fraction(v_ice):
+    """体積分率 -> 質量分率。ice_volume_fraction() の逆。検算表示に使う。"""
+    m_ice = v_ice * RHO_ICE
+    m_reg = (1.0 - v_ice) * RHO_UNIFORM if ICE_MODEL == 'excess' else RHO_UNIFORM
+    return m_ice / (m_reg + m_ice)
 
 
 def mix_ice(eps_re_dry, eps_im_dry, v_ice):
     """乾燥レゴリスに氷を加えたときの (eps', eps'') を返す。
 
-    実部: LLL の 3 相形から粒子の項が相殺して
-              eps_wet^(1/3) = eps_dry^(1/3) + v_ice*(eps_ice^(1/3) - 1)
-          となる。rho_grain も eps_grain も不要。
-    虚部: 損失は粒子にあり氷は空隙を埋めるだけなので eps'' は保存し、
-          氷自身の微小な損失だけを加える。
+    どちらの描像でも粒子誘電率 eps_grain は式から消える（LLL の 3 相形で
+    粒子の項が相殺するため）。rho_grain も不要。
+
+    'pore'（空隙充填）
+        氷は真空(1.0)を置き換えるので
+            eps_wet^(1/3) = eps_dry^(1/3) + v_ice*(eps_ice^(1/3) - 1)
+        粒子が減らないので eps'' は保存し、氷自身の微小な損失だけ加える。
+            eps''_wet = eps''_dry + v_ice*eps_ice*tan_delta_ice
+
+    'excess'（バルク置換）
+        氷は乾燥レゴリス(eps_dry)を置き換えるので、eps^(1/3) 上の線形内挿
+            eps_wet^(1/3) = (1-v_ice)*eps_dry^(1/3) + v_ice*eps_ice^(1/3)
+        粒子が (1-v_ice) 倍に減るので eps'' も同じ割合で希釈される。
+            eps''_wet = (1-v_ice)*eps''_dry + v_ice*eps_ice*tan_delta_ice
     """
+    if ICE_MODEL == 'excess':
+        eps_re = ((1.0 - v_ice) * eps_re_dry ** (1.0 / 3.0)
+                  + v_ice * EPS_ICE ** (1.0 / 3.0)) ** 3
+        eps_im = (1.0 - v_ice) * eps_im_dry + v_ice * EPS_ICE * TAND_ICE
+        return eps_re, eps_im
+    if ICE_MODEL != 'pore':
+        raise ValueError("ICE_MODEL は 'pore' か 'excess'")
     eps_re = (eps_re_dry ** (1.0 / 3.0)
               + v_ice * (EPS_ICE ** (1.0 / 3.0) - 1.0)) ** 3
     eps_im = eps_im_dry + v_ice * EPS_ICE * TAND_ICE
@@ -283,9 +371,14 @@ print('#box: 0 0 0 {:.6f} {:.6f} {:.6f} regolith n'.format(
 if ENABLE_ICE:
     V_ICE = ice_volume_fraction()
     porosity = 1.0 - RHO_UNIFORM / RHO_GRAIN
-    if V_ICE > porosity:
+    if not 0.0 < V_ICE < 1.0:
+        raise ValueError('氷の体積分率が範囲外です: {:.4f}'.format(V_ICE))
+    # 上限は描像で違う。pore は空隙を埋めきったら終わりだが、excess は
+    # レゴリスごと置き換わるので空隙率は上限にならない。
+    if ICE_MODEL == 'pore' and V_ICE > porosity:
         raise ValueError(
-            '氷の体積分率 {:.4f} が空隙率 {:.4f} を超えています'.format(
+            '氷の体積分率 {:.4f} が空隙率 {:.4f} を超えています。'
+            "空隙充填では不可能な量です（ICE_MODEL='excess' なら可能）".format(
                 V_ICE, porosity))
     if ICE_TOP_M + ICE_THICK_M > SURFACE_Y:
         raise ValueError('氷層が計算領域の下端を突き抜けています')
@@ -328,8 +421,9 @@ n_wet = np.sqrt(EPS_R_ICE)
 
 lines = ['Level 4 | FeO+TiO2={:.1f} wt% | rho={:.6f} | tan_delta={:.6f} | '
          'ice={}'.format(FEOTIO2_WT, RHO_UNIFORM, TAND,
-                         'ON' if ENABLE_ICE else 'OFF (= Level 3 参照トレース)')]
-lines.append('  背景: eps_r={:.6f}, eps_imag={:.6f}, eps_inf={:.6f}, '
+                         '{} {:.3f} vol%'.format(ICE_MODEL, 100 * V_ICE)
+                         if ENABLE_ICE else 'OFF (= Level 3 参照トレース)')]
+lines.append('  背景 eps_r={:.6f}, eps_imag={:.6f}, eps_inf={:.6f}, '
              'tau/dt={:.1f}, {:.1f}'.format(
                  EPS_R, EPS_IMAG, EPS_INF, TAU[0] / dt, TAU[1] / dt))
 
@@ -344,24 +438,78 @@ if ENABLE_ICE:
     a_dry = np.pi * BAND_F0 * n_dry * TAND / c0
     a_wet = np.pi * BAND_F0 * n_wet * (EPS_IMAG_ICE / EPS_R_ICE) / c0
 
-    lines.append('  氷: {:.4f} vol% ({:.3f} wt%), 空隙率={:.4f}, 深さ {:.2f}-{:.2f} m'.format(
-        100 * V_ICE, 100 * V_ICE * RHO_ICE / (RHO_UNIFORM + V_ICE * RHO_ICE),
-        1.0 - RHO_UNIFORM / RHO_GRAIN, ICE_TOP_M, ICE_TOP_M + ICE_THICK_M))
-    lines.append("  氷層: eps_r={:.6f} ({:+.2f}%), eps_imag={:.6f} ({:+.3f}%), "
+    lines.append('  氷 {} 描像 {:.4f} vol% = {:.4f} wt%, 空隙率 {:.4f}, '
+                 '深さ {:.2f}-{:.2f} m'.format(
+                     ICE_MODEL, 100 * V_ICE, 100 * ice_weight_fraction(V_ICE),
+                     1.0 - RHO_UNIFORM / RHO_GRAIN,
+                     ICE_TOP_M, ICE_TOP_M + ICE_THICK_M))
+    if ICE_MODEL == 'excess':
+        lines.append('    excess 描像なので空隙率は上限にならない '
+                     '（レゴリスごと置き換わるため）')
+    lines.append("  氷層 eps_r={:.6f} ({:+.2f}%), eps_imag={:.6f} ({:+.3f}%), "
                  "tan_delta={:.6f} ({:+.2f}%)".format(
                      EPS_R_ICE, 100 * (EPS_R_ICE / EPS_R - 1),
                      EPS_IMAG_ICE, 100 * (EPS_IMAG_ICE / EPS_IMAG - 1),
                      EPS_IMAG_ICE / EPS_R_ICE,
                      100 * (EPS_IMAG_ICE / EPS_R_ICE / TAND - 1)))
     lines.append('  界面反射 R={:+.6f} ({:.1f} dB), alpha 変化 {:+.2f}%'.format(
-        R, 20 * np.log10(abs(R)), 100 * (a_wet / a_dry - 1)))
-    lines.append('  往復走時(at_tx): 地表 {:.2f} ns / 上面 {:.2f} ns / '
+        R, 20 * np.log10(max(abs(R), 1e-12)), 100 * (a_wet / a_dry - 1)))
+    lines.append('  往復走時(at_tx) 地表 {:.2f} ns / 上面 {:.2f} ns / '
                  '下面 {:.2f} ns'.format(t_surf, t_top, t_bot))
 
-lines.append('  rx: mode={} at ({:.3f}, {:.3f})'.format(RX_MODE, rx_x, rx_y))
+lines.append('  rx mode={} at ({:.3f}, {:.3f})'.format(RX_MODE, rx_x, rx_y))
 if min(TAU) / dt < 5.0:
     lines.append('  ** WARNING: tau/dt が小さい。dx を細かくすること **')
-print('#title: ' + ' | '.join(lines))
+
+# gprMax は #title の行を ':' で分割して 2 番目の要素だけを採用するため、
+# タイトル本文にコロンが含まれるとそれ以降がログに出ない。必ず除去する。
+# あわせて全文をサイドカーファイルにも書き出し、切り詰めの影響を受けない
+# ようにする。
+_payload = ' | '.join(lines).replace(':', ' =')
+print('#title: ' + _payload)
+
+# --- サイドカーの書き出し先 ---------------------------------------------------
+# 単に open('model_checks.txt') とすると CWD（gprMax を起動したディレクトリ）
+# に出てしまい、.in ファイルと離れてしまう。.in のあるディレクトリに置く。
+#
+# gprMax が Python ブロックに渡す inputfile の型は版によって違う
+# （文字列だったりファイルオブジェクトだったり）ので、順に試して吸収する。
+# それでも取れない場合は起動引数の .in を探し、最後は CWD に落とす。
+import os as _os
+import sys as _sys
+
+
+def _input_dir():
+    _cand = globals().get('inputfile', None)
+    if _cand is not None and not isinstance(_cand, (str, bytes, _os.PathLike)):
+        for _attr in ('name', 'filename', 'path'):
+            if hasattr(_cand, _attr):
+                _cand = getattr(_cand, _attr)
+                break
+    if isinstance(_cand, (str, bytes, _os.PathLike)):
+        _d = _os.path.dirname(_os.path.abspath(_os.fspath(_cand)))
+        if _d and _os.path.isdir(_d):
+            return _d
+    for _a in _sys.argv[1:]:
+        if isinstance(_a, str) and _a.lower().endswith('.in'):
+            _d = _os.path.dirname(_os.path.abspath(_a))
+            if _d and _os.path.isdir(_d):
+                return _d
+    return _os.getcwd()
+
+try:
+    _stem = 'model'
+    _cand = globals().get('inputfile', None)
+    if _cand is not None and not isinstance(_cand, (str, bytes, _os.PathLike)):
+        _cand = getattr(_cand, 'name', None)
+    if isinstance(_cand, (str, bytes, _os.PathLike)):
+        _stem = _os.path.splitext(_os.path.basename(_os.fspath(_cand)))[0]
+    _name = '{}_checks_{}.txt'.format(
+        _stem, ICE_MODEL if ENABLE_ICE else 'noice')
+    with open(_os.path.join(_input_dir(), _name), 'w', encoding='utf-8') as _fh:
+        _fh.write('\n'.join(lines) + '\n')
+except Exception:
+    pass
 #end_python:
 
 地形モデル書き出し（不要ならコメントアウト）
