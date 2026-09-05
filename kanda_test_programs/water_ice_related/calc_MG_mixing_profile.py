@@ -74,8 +74,8 @@ import os
 import numpy as np
 from scipy.optimize import brentq
 
-import calc_LLL_mixing_profile as base
-from calc_LLL_mixing_profile import (
+import kanda_test_programs.water_ice_related.calc_LLL_mixing_profile as base
+from kanda_test_programs.water_ice_related.calc_LLL_mixing_profile import (
     z, ice_contents, EPS_ICE, TAND_ICE, RHO_GRAIN,
     density_profile, carrier_eps_real, porosity, dry_eps_complex,
 )
