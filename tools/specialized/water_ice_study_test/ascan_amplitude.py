@@ -25,6 +25,55 @@ from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+# =============================================================================
+# 地下構造モデル（subsurface_model.py に集約）
+# =============================================================================
+# .in ファイルが定める物理（Carrier 経験式、最大平坦 2 極 Debye、水氷の混合、
+# 減衰係数、屈折率、レベルごとの効果の定義、取得ジオメトリの定数）は
+# すべて subsurface_model.py が持つ。このファイルには「解析の手順」だけを置く。
+#
+# レベルを増やすときに触るのは原則 subsurface_model.py だけになる。
+# 以前は同じ物理が ascan_spectrum / ascan_amplitude / ascan_reflection* の
+# 各所に散在していたが、修正項目 A-1 と同じ事故（定数の二重定義）を防ぐため
+# 一本化した。
+#
+# 水氷の描像（pore = 空隙充填 / excess = バルク置換）も subsurface_model が
+# 持ち、JSON のサブ階層キー（pore_ice / excess_ice）から自動判定する。
+# 他のモジュールが階層選択のラベルを追加するためのフック。
+# 例: _EXTRA_LAYER_LABELS.append((判定関数, 'ラベル'))
+_EXTRA_LAYER_LABELS = []
+
+import subsurface_model as sm
+from subsurface_model import (  # noqa: F401  （再エクスポートを兼ねる）
+    C, TX_HEIGHT, R_REF, EPS_R_REGOLITH, N_REGOLITH, BAND_GHZ,
+    BAND_CENTRE_HZ, LEVEL_EFFECTS, IMPLEMENTED_LEVELS, LEVEL2_LOSS_MODEL,
+    LEVEL2_SIGMA, LEVEL2_TAN_DELTA, ETA0, EPS0, LEVEL3_EPS_R, LEVEL3_RHO,
+    LEVEL3_CARRIER_EPS_BASE, LEVEL3_CARRIER_TAND_A, LEVEL3_CARRIER_TAND_B,
+    LEVEL3_CARRIER_TAND_C, LEVEL3_COMPOSITIONS, LEVEL3_DEFAULT_COMPOSITION,
+    LEVEL3_EPS_REAL_MODE, LEVEL3_EPS_IMAG_MODE, LEVEL3_DEBYE_BAND_HZ,
+    LEVEL3_DEBYE_F0, LEVEL3_DEBYE_TAU, LEVEL4_ICE_TOP_M, LEVEL4_ICE_THICK_M,
+    LEVEL4_ICE_SPEC, LEVEL4_ICE_VOL_PCT, LEVEL4_ICE_WT_PCT, LEVEL4_EPS_ICE,
+    LEVEL4_TAND_ICE, LEVEL4_RHO_ICE, LEVEL4_RHO_GRAIN, LEVEL4_ICE_KEYS,
+    LEVEL4_ICE_MODEL, LEVEL4_ICE_MODELS, LEVEL4_ICE_MODEL_KEYS, LEVEL3B_RHO,
+    LEVEL3B_FEOTIO2, LEVEL3B_ANCHOR_FREQ, LEVEL3B_CARRIER_EPS_BASE,
+    LEVEL3B_CARRIER_TAND_A, LEVEL3B_CARRIER_TAND_B, LEVEL3B_CARRIER_TAND_C,
+    LEVEL3B_DEBYE_DE1, LEVEL3B_DEBYE_TAU1, LEVEL3B_DEBYE_DE2,
+    LEVEL3B_DEBYE_TAU2, debye_flat_eps, apply_eps_modes, level2_tandelta,
+    level2_alpha, describe_level2_medium, level3_carrier_tandelta,
+    _parse_composition_key, _is_composition_layer, level3_feotio2,
+    set_level3_composition, _parse_ice_key, _is_ice_layer,
+    level4_ice_volpct, set_level4_ice, _parse_ice_model_key,
+    _is_ice_model_layer, level4_ice_model_from_kind, set_level4_ice_model,
+    configure_from_kind, level3_targets, level3_eps, level3_tandelta,
+    level3_alpha, _group_index_from_eps, level3_group_index,
+    level4_porosity, level4_ice_weight_fraction, level4_ice_volume_fraction,
+    level4_targets, level4_eps, level4_tandelta, level4_alpha,
+    level4_segments, level4_interfaces_crossed, level4_alpha_path_avg,
+    describe_level4_medium, refractive_index, level3b_carrier,
+    level3b_debye_scale, level3b_eps, level3b_tandelta, level3b_alpha,
+    level3b_group_index, describe_level3b_medium, describe_level3_medium,
+)
 from scipy import signal
 
 from gprMax.exceptions import CmdInputError
@@ -36,13 +85,8 @@ from tools.core.outputfiles_merge import get_output_data
 # [EDIT HERE] パス JSON のハードコード（利用例は design_ascan_amplitude.md §2 参照）
 JSON_PATH = "/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/water_ice_study_test/out_file_paths.json"
 
-C = 0.29979          # [m/ns] 光速
-TX_HEIGHT = 0.35      # [m] 送信機高さ h
-R_REF = 1.0           # [m] 参照計算（ref_freespace_1m）の距離
 
 # Level_1 のレゴリス物性
-EPS_R_REGOLITH = 3.0
-N_REGOLITH = np.sqrt(EPS_R_REGOLITH)
 
 # 測定関数パラメータ
 SEARCH_HALFWIDTH_NS = 2.0     # [ns] 理論到達時刻からの探索窓半幅
@@ -55,15 +99,6 @@ NOISE_FLOOR_DB = -60.0     # 直達波の -60 dB 以下
 T_TOL_FRAC = 0.01          # 透過係数 ±1%
 
 # レベル定義 (design_ascan_amplitude.md §4.3)
-LEVEL_EFFECTS = {
-    'Level_1': ['geom', 'surface_T'],
-    'Level_2': ['geom', 'surface_T', 'absorb_const'],
-    'Level_3': ['geom', 'surface_T', 'absorb_tandelta'],
-    'Level_3b': ['geom', 'surface_T', 'absorb_debye'],
-    'Level_4': ['geom', 'surface_T', 'absorb_tandelta', 'ice_layer'],
-    'Level_5': ['geom', 'surface_T', 'absorb_tandelta', 'ice_layer',
-                'density_profile'],
-}
 
 # 【はしごの順序変更について】
 # 本研究の主眼が水氷であることから、Level 4 と Level 5 の中身を入れ替えた。
@@ -79,8 +114,6 @@ LEVEL_EFFECTS = {
 # したがって Level 4 の理論は、氷層を「透過して」深さ d に届く波の
 # 振幅・走時であり、氷層からの反射そのものは扱わない。
 # 現時点で実装済みのレベル（それ以外は未実装のため実行不可）
-IMPLEMENTED_LEVELS = {'Level_1', 'Level_2', 'Level_3', 'Level_3b',
-                      'Level_4'}
 
 # fig3_waveforms.png で重ね描きする代表深さ
 REPRESENTATIVE_DEPTHS_M = [0.50, 1.50, 2.75]
@@ -106,15 +139,10 @@ SUBLEVEL_LABELS = ['波形種別', 'サブ条件', '組成 (FeO+TiO2)', 'サブ�
 # したがって「tan_delta 一定」は Level 3 の領域であり、Level 2 で eps' を
 # 厳密に一定に保てるのは sigma 一定のときだけである（DC 導電率の KK 対応項は
 # eps' に寄与しないため、sigma 一定は eps' 一定と両立する数少ない損失モデル）。
-LEVEL2_LOSS_MODEL = 'conductivity'   # 'conductivity' … gprMax の #material に対応（既定）
                                      # 'tan_delta'    … 参考用。Level 3 相当の理想化
-LEVEL2_SIGMA = 0.0035                # [S/m] #material の第 2 引数と一致させること。
                                      #   プロファイル計算の 0 vol% ice / 1.25 GHz の値。
                                      #   tan_delta = 0.01678 @ 1.25 GHz に相当。
-LEVEL2_TAN_DELTA = 0.0155            # LEVEL2_LOSS_MODEL='tan_delta' のときのみ使う
 
-ETA0 = 376.730313668                 # [Ohm] 真空の波動インピーダンス
-EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
 
 # =============================================================================
 # [EDIT HERE] Level 3 の媒質パラメータ（eps'' 一定）
@@ -169,26 +197,13 @@ EPS0 = 8.8541878128e-12              # [F/m] 真空の誘電率
 # 違いは吸収だけという比較しやすい構成になる。
 # 参考: rho = 1.753647 は Carrier の密度プロファイル
 #       rho(z) = 1.92(z+12.2)/(z+18) [z:cm] の深さ約 49 cm に相当する。
-LEVEL3_EPS_R = 3.0                # 全組成共通。基準周波数は帯域の幾何平均
                                   # f0 = sqrt(0.5*2.0) = 1.0 GHz（.in と共通）。
                                   # 帯域中心 1.25 GHz では 2.998（-0.07%）。
-LEVEL3_RHO   = 1.753647           # [g/cm^3] eps' = 1.871^rho = 3.0 の逆算値
 
-LEVEL3_CARRIER_EPS_BASE = 1.871   # Fig. 9.53 図中: eps' = 1.871^rho
-LEVEL3_CARRIER_TAND_A   = 0.027   # Fig. 9.53 図中の 3 次元回帰
-LEVEL3_CARRIER_TAND_B   = 0.273
-LEVEL3_CARRIER_TAND_C   = 3.058
 
 # FeO+TiO2 [wt%] ごとの設定。JSON のサブ階層キーと対応させる。
 #   月南極域   : 5 / 7.5 / 10 wt%（先行研究の収束域 6-11 wt% を挟む）
 #   高Tiバサルト: 20 wt%（月の海。参考ケース。既存計算がこれに相当）
-LEVEL3_COMPOSITIONS = {
-    'feo5':    5.0,
-    'feo7p5':  7.5,
-    'feo10':  10.0,
-    'feo20':  20.0,
-}
-LEVEL3_DEFAULT_COMPOSITION = 'feo7p5'   # サブ階層で指定がないときの既定値
 
 
 # =============================================================================
@@ -218,48 +233,12 @@ LEVEL3_DEFAULT_COMPOSITION = 'feo7p5'   # サブ階層で指定がないとき�
 #   物理ではない。理論は設計目標値（一定）のままにして、fig3(a) の alpha(f)
 #   に -2.5% のずれが見えるようにしておく。解析コードがその大きさの系統誤差を
 #   検出できていることの確認になる。'debye' にすると実装値に合わせられる。
-LEVEL3_EPS_REAL_MODE = 'debye'    # 'debye' … KK 由来の eps'(f) を理論に入れる
                                   # 'ideal' … eps' = LEVEL3_EPS_R 一定（旧挙動）
-LEVEL3_EPS_IMAG_MODE = 'ideal'    # 'ideal' … eps'' = 設計目標値 一定（既定）
                                   # 'debye' … 2 極 Debye の実装値に合わせる
 
-LEVEL3_DEBYE_BAND_HZ = (0.5e9, 2.0e9)   # Level_3.in の BAND_LO / BAND_HI と一致させる
-LEVEL3_DEBYE_F0 = float(np.sqrt(LEVEL3_DEBYE_BAND_HZ[0] * LEVEL3_DEBYE_BAND_HZ[1]))
 _L3_S_FLAT = float(np.arcsinh(1.0))          # = ln(1+sqrt2) = 0.881374
 _L3_TAU_RATIO = float(np.exp(_L3_S_FLAT))    # = 1+sqrt2 = 2.414214
 _L3_W0 = 2.0 * np.pi * LEVEL3_DEBYE_F0
-LEVEL3_DEBYE_TAU = (1.0 / (_L3_W0 * _L3_TAU_RATIO), _L3_TAU_RATIO / _L3_W0)
-
-
-def debye_flat_eps(eps_r_target, eps_imag_target, f):
-    """最大平坦 2 極 Debye の (eps'(f), eps''(f))。Level_3.in と同一の式。
-
-    eps_r_target / eps_imag_target は帯域の幾何平均 f0 での目標値。
-    氷層のように背景と eps' が違う材料にもそのまま使える。
-    """
-    f_arr = np.asarray(f, dtype=float)
-    de = np.sqrt(2.0) * eps_imag_target
-    eps_inf = eps_r_target - de
-    w = 2.0 * np.pi * f_arr
-    x1 = w * LEVEL3_DEBYE_TAU[0]
-    x2 = w * LEVEL3_DEBYE_TAU[1]
-    er = eps_inf + de / (1.0 + x1 ** 2) + de / (1.0 + x2 ** 2)
-    ei = de * x1 / (1.0 + x1 ** 2) + de * x2 / (1.0 + x2 ** 2)
-    return er, ei
-
-
-def apply_eps_modes(eps_r_target, eps_imag_target, f):
-    """モード設定に従って (eps', eps'') を返す共通ヘルパ。
-
-    Level 3（背景レゴリス）と Level 4（氷層）の両方から使う。
-    """
-    f_arr = np.asarray(f, dtype=float)
-    er_d, ei_d = debye_flat_eps(eps_r_target, eps_imag_target, f_arr)
-    er = er_d if LEVEL3_EPS_REAL_MODE == 'debye' \
-        else np.full_like(f_arr, float(eps_r_target))
-    ei = ei_d if LEVEL3_EPS_IMAG_MODE == 'debye' \
-        else np.full_like(f_arr, float(eps_imag_target))
-    return er, ei
 
 
 # =============================================================================
@@ -285,19 +264,10 @@ def apply_eps_modes(eps_r_target, eps_imag_target, f):
 # 参考: 混合則の選択（LLL か対数混合か）による差は 1 vol% の界面反射で約
 # 1.5 dB。「氷が空隙を埋める」か「レゴリスを置き換える」かの差（約 26 dB）に
 # 比べて桁違いに小さい。重要なのは規則ではなく描像。
-LEVEL4_ICE_TOP_M   = 1.00     # [m] 地表面から氷層上面までの深さ
-LEVEL4_ICE_THICK_M = 1.00     # [m] 氷層の厚さ
 
-LEVEL4_ICE_SPEC = 'vol'       # 'vol' … 体積パーセントで指定
                               # 'wt'  … 質量パーセントで指定
 # 【単位に注意】どちらもパーセント。分率ではない（10 vol% なら 10.0）。
-LEVEL4_ICE_VOL_PCT = 10.0     # [vol%]
-LEVEL4_ICE_WT_PCT  = 0.5      # [wt%]
 
-LEVEL4_EPS_ICE  = 3.15        # 氷の eps'（GHz 帯。低温での温度依存は小さい）
-LEVEL4_TAND_ICE = 2.0e-4      # [要文献確認] 氷の tan_delta。低温ほど小さいので保守側
-LEVEL4_RHO_ICE  = 0.94        # [g/cm^3] 82-110 K での氷の密度（wt% 換算用）
-LEVEL4_RHO_GRAIN = 2.645      # [g/cm^3] 斜長岩の粒子密度。空隙率チェックにのみ使う
 
 _L4_ICE_INC = LEVEL4_EPS_ICE ** (1.0 / 3.0) - 1.0      # = 0.46590
 
@@ -323,19 +293,11 @@ _L4_ICE_INC = LEVEL4_EPS_ICE ** (1.0 / 3.0) - 1.0      # = 0.46590
 #   Level 3 は eps'' 一定を仮定するのでアンカーが不要であり、試料種別で切った
 #   Fig. 9.53 (SOILS) を使う。両者で eps' の底も tan_delta の係数も異なる。
 #   この不統一は意図的なもので、モデルの性質の違いに由来する。
-LEVEL3B_RHO      = 1.820224       # [g/cm^3] 1.25 GHz で eps' = 3.0 になる密度
-LEVEL3B_FEOTIO2  = 20.0           # [wt%] 高Tiバサルト想定
-LEVEL3B_ANCHOR_FREQ = 450e6       # [Hz] Carrier+1991 Fig. 9.54 の 450 MHz 計測
 
-LEVEL3B_CARRIER_EPS_BASE = 1.843  # Fig. 9.54 図中: eps' = 1.843^rho
-LEVEL3B_CARRIER_TAND_A   = 0.033  # Fig. 9.54 図中の 3 次元回帰
-LEVEL3B_CARRIER_TAND_B   = 0.231
-LEVEL3B_CARRIER_TAND_C   = 3.061
 LEVEL3B_DEBYE_DE1, LEVEL3B_DEBYE_TAU1 = 0.261, 4.6212e-11    # [s]
 LEVEL3B_DEBYE_DE2, LEVEL3B_DEBYE_TAU2 = 0.088, 2.82195e-10   # [s]
 
 # 走時・探索窓の基準に使う周波数（帯域中心）
-BAND_CENTRE_HZ = 1.25e9
 
 # 解析対象から除外する rx キー (design_ascan_amplitude.md §3)
 #   depth_300 は y=0.0 で PML（gprMax デフォルト 10 層 = 0.05 m）の中にあるため、
@@ -413,6 +375,11 @@ def _descend(node, labels):
             label = '組成 (FeO+TiO2)'
         elif _is_ice_layer(nested):
             label = '水氷濃度 (vol%)'
+        elif _is_ice_model_layer(nested):
+            label = '水氷の描像 (pore / excess)'
+        elif _EXTRA_LAYER_LABELS and any(
+                fn(nested) for fn, _ in _EXTRA_LAYER_LABELS):
+            label = next(lab for fn, lab in _EXTRA_LAYER_LABELS if fn(nested))
         else:
             label = labels[len(chosen)] if len(chosen) < len(labels) else labels[-1]
         key = _select(sorted(nested), label)
@@ -599,390 +566,23 @@ def transfer_phase(f, d, n):
     return phase, t_arr_f
 
 
-def level2_tandelta(f, n):
-    """Level 2 の tan_delta(f)。
-
-    conductivity モデル : tan_delta = sigma / (omega eps0 eps_r)  ∝ 1/f
-    tan_delta モデル     : 定数
-    """
-    f_arr = np.asarray(f, dtype=float)
-    if LEVEL2_LOSS_MODEL == 'conductivity':
-        eps_r = n ** 2
-        with np.errstate(divide='ignore', invalid='ignore'):
-            return np.where(f_arr > 0,
-                            LEVEL2_SIGMA / (2.0 * np.pi * np.maximum(f_arr, 1e-30)
-                                            * EPS0 * eps_r),
-                            np.nan)
-    if LEVEL2_LOSS_MODEL == 'tan_delta':
-        return np.full_like(f_arr, LEVEL2_TAN_DELTA)
-    raise CmdInputError(
-        "LEVEL2_LOSS_MODEL は 'conductivity' か 'tan_delta' にしてください: {}".format(
-            LEVEL2_LOSS_MODEL))
-
-
-def level2_alpha(f, n):
-    """Level 2 の減衰係数 alpha(f) [Np/m]（厳密式）。
-
-        alpha = (omega/c) * sqrt(eps_r / 2) * sqrt( sqrt(1 + tan_delta^2) - 1 )
-
-    低損失極限 (tan_delta << 1) では
-        conductivity モデル : alpha -> sigma * eta0 / (2 n)   ← 周波数に依存しない
-        tan_delta モデル     : alpha -> pi f n tan_delta / c   ← f に比例
-    に一致する。sigma=0.0035 S/m では両者の差は 0.02% 以下だが、
-    近似を持ち込まないよう厳密式で実装している。
-    """
-    f_arr = np.asarray(f, dtype=float)
-    td = level2_tandelta(f_arr, n)
-    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)          # C は m/ns なので秒系に直す
-    with np.errstate(invalid='ignore'):
-        alpha = w_over_c * np.sqrt(n ** 2 / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
-    return np.nan_to_num(alpha, nan=0.0)
-
-
-def describe_level2_medium(n):
-    """Level 2 の損失設定を人が読める形で返す（ログと run_info 用）。"""
-    f0 = 1.25e9
-    td0 = float(level2_tandelta(np.array([f0]), n)[0])
-    a0 = float(level2_alpha(np.array([f0]), n)[0])
-    if LEVEL2_LOSS_MODEL == 'conductivity':
-        return ('loss model = conductivity, sigma = {:.6g} S/m  '
-                '(tan_delta = {:.5f} @1.25 GHz, alpha = {:.4f} Np/m, '
-                'alpha は帯域内でほぼ一定)'.format(LEVEL2_SIGMA, td0, a0))
-    sigma_eq = 2.0 * np.pi * f0 * EPS0 * (n ** 2) * LEVEL2_TAN_DELTA
-    return ('loss model = tan_delta, tan_delta = {:.5f}  '
-            '(sigma = {:.6g} S/m @1.25 GHz 相当, alpha = {:.4f} Np/m @1.25 GHz, '
-            'alpha は f に比例)'.format(LEVEL2_TAN_DELTA, sigma_eq, a0))
-
-
 def transfer_absorb(f, d, n):
     """媒質の吸収項 exp(-alpha(f) * d)（片道透過）。Level 2 以降で使う。"""
     return np.exp(-level2_alpha(f, n) * d)
 
 
-def level3_carrier_tandelta(feotio2_wt, rho=None):
-    """Carrier 経験式（Lunar Sourcebook Fig. 9.53, SOILS）の tan_delta。
-
-        tan_delta = 10^(0.027*(%TiO2 + %FeO) + 0.273*rho - 3.058)
-
-    この式は周波数を説明変数に持たないため、周波数に依らない量として扱う。
-    その扱いの根拠は Boivin+2022（section 冒頭のコメントを参照）。
-    """
-    rho = LEVEL3_RHO if rho is None else rho
-    return 10.0 ** (LEVEL3_CARRIER_TAND_A * feotio2_wt
-                    + LEVEL3_CARRIER_TAND_B * rho - LEVEL3_CARRIER_TAND_C)
-
-
-def _parse_composition_key(key):
-    """組成キーから FeO+TiO2 [wt%] を読み取る。表記ゆれに強くする。
-
-    JSON のキー名とコードの定数名が食い違うと、既定値に落ちたまま
-    気づかず誤った理論曲線で解析してしまう（実際に起きた）。
-    そこで LEVEL3_COMPOSITIONS の完全一致に加えて、
-    'FeO_100' / 'feo10' / 'FEO_7P5' のような表記からも数値を読み取る。
-
-      FeO_050 -> 5.0     （3 桁ゼロ詰め = 10 倍表記とみなす）
-      FeO_075 -> 7.5
-      FeO_100 -> 10.0
-      feo5    -> 5.0
-      feo7p5  -> 7.5
-
-    読み取れなければ None を返す（呼び出し側でエラーにする）。
-    """
-    if key in LEVEL3_COMPOSITIONS:
-        return LEVEL3_COMPOSITIONS[key]
-
-    m = re.fullmatch(r'(?i)feo[_-]?(\d+)(?:[p.](\d+))?', str(key))
-    if not m:
-        return None
-    intpart, frac = m.group(1), m.group(2)
-    if frac is not None:                       # feo7p5 形式
-        return float('{}.{}'.format(intpart, frac))
-    if len(intpart) >= 3:                      # FeO_050 形式（3 桁 = 10 倍表記）
-        return int(intpart) / 10.0
-    return float(intpart)                      # feo5, feo10 形式
-
-
-def _is_composition_layer(keys):
-    """その階層が組成の階層かどうかを判定する（ラベル表示用）。"""
-    return bool(keys) and all(_parse_composition_key(k) is not None for k in keys)
-
-
-def level3_feotio2(kind):
-    """選択されたサブ階層キーから FeO+TiO2 [wt%] を取り出す。
-
-    kind は load_paths が返す ' / ' 区切りのキー列
-    （例 'excitation_waveform / dx_00025 / FeO_100'）。
-
-    組成キーが 1 つも見つからない場合は、既定値に落とさずエラーにする。
-    黙って既定値を使うと、誤った理論曲線のまま解析が完走してしまうため。
-    """
-    if kind:
-        for token in str(kind).replace('/', ' ').split():
-            wt = _parse_composition_key(token)
-            if wt is not None:
-                return wt, token
-    raise CmdInputError(
-        'Level 3 の組成を JSON のキーから判定できませんでした（選択: {}）。\n'
-        'キー名を FeO_050 / FeO_075 / FeO_100 や feo5 / feo7p5 / feo10 の形式に'
-        'するか、LEVEL3_COMPOSITIONS に追加してください。\n'
-        '（既定値に落とすと誤った tan_delta で解析が完走してしまうため、'
-        'あえてエラーにしています）'.format(kind))
-
-
-# 解析対象の FeO+TiO2。main() が JSON の選択結果から設定する。
 _LEVEL3_ACTIVE_WT = LEVEL3_COMPOSITIONS[LEVEL3_DEFAULT_COMPOSITION]
 _LEVEL3_ACTIVE_KEY = LEVEL3_DEFAULT_COMPOSITION
 
 
-def set_level3_composition(kind):
-    """JSON の選択結果から Level 3 の組成を設定する（main から呼ぶ）。"""
-    global _LEVEL3_ACTIVE_WT, _LEVEL3_ACTIVE_KEY
-    _LEVEL3_ACTIVE_WT, _LEVEL3_ACTIVE_KEY = level3_feotio2(kind)
-    return _LEVEL3_ACTIVE_WT, _LEVEL3_ACTIVE_KEY
 
 
-# -----------------------------------------------------------------------------
-# 水氷濃度の自動判定（組成の仕組みと同じ構造）
-# -----------------------------------------------------------------------------
-# JSON のサブ階層キー（例 'f_ice_10', 'f_ice_20'）から氷の体積パーセントを
-# 読み取り、LEVEL4_ICE_VOL_PCT に反映する。
-#
-# 【単位の規約】キーの数字は体積パーセント。分率ではない。
-#   f_ice_10   -> 10.0 vol%      （f_ice = 0.10 に対応）
-#   f_ice_20   -> 20.0 vol%
-#   f_ice_005  -> 0.5  vol%      （3 桁以上はゼロ詰めの 10 倍表記とみなす。
-#                                  FeO_050 -> 5.0 と同じ規約）
-#   f_ice_0p5  -> 0.5  vol%
-#   f_ice_0    -> 0.0  vol%      （氷なし参照。Level 3 と同一になる）
-# 明示的に指定したいキーは LEVEL4_ICE_KEYS に書けば優先される。
-LEVEL4_ICE_KEYS = {}      # 例: {'f_ice_lowest': 0.5}
-
-
-def _parse_ice_key(key):
-    """キー名から氷の体積パーセントを読み取る。読めなければ None。"""
-    if key in LEVEL4_ICE_KEYS:
-        return float(LEVEL4_ICE_KEYS[key])
-
-    m = re.fullmatch(r'(?i)(?:f[_-]?)?ice[_-]?(\d+)(?:[p.](\d+))?(?:[_-]?vol)?',
-                     str(key))
-    if not m:
-        return None
-    intpart, frac = m.group(1), m.group(2)
-    if frac is not None:                       # f_ice_0p5 形式
-        return float('{}.{}'.format(intpart, frac))
-    if len(intpart) >= 3:                      # f_ice_005 形式（3 桁 = 10 倍表記）
-        return int(intpart) / 10.0
-    return float(intpart)                      # f_ice_10, f_ice_20 形式
-
-
-def _is_ice_layer(keys):
-    """その階層が氷濃度の階層かどうかを判定する（ラベル表示用）。"""
-    return bool(keys) and all(_parse_ice_key(k) is not None for k in keys)
-
-
-def level4_ice_volpct(kind):
-    """選択されたサブ階層キーから氷の体積パーセントを取り出す。
-
-    kind は load_paths が返す ' / ' 区切りのキー列
-    （例 'excitation_waveform / dx_00025 / FeO_075 / f_ice_10'）。
-
-    氷キーが 1 つも見つからない場合は、既定値に落とさずエラーにする。
-    黙って既定値を使うと、誤った氷濃度の理論曲線のまま解析が完走してしまう
-    ため（組成の判定と同じ方針）。
-    """
-    if kind:
-        for token in str(kind).replace('/', ' ').split():
-            vol = _parse_ice_key(token)
-            if vol is not None:
-                return vol, token
-    raise CmdInputError(
-        'Level 4 の水氷濃度を JSON のキーから判定できませんでした（選択: {}）。\n'
-        'キー名を f_ice_10 / f_ice_20 / f_ice_005 の形式にするか、'
-        'LEVEL4_ICE_KEYS に追加してください。\n'
-        '（既定値に落とすと誤った氷濃度で解析が完走してしまうため、'
-        'あえてエラーにしています）'.format(kind))
-
-
-# 解析対象の氷濃度キー。main() が JSON の選択結果から設定する。
 _LEVEL4_ACTIVE_ICE_KEY = None
-
-
-def set_level4_ice(kind):
-    """JSON の選択結果から Level 4 の水氷濃度を設定する（main から呼ぶ）。
-
-    LEVEL4_ICE_VOL_PCT を上書きし、指定方法を 'vol' に固定する。
-    ファイル冒頭で LEVEL4_ICE_SPEC='wt' にしていても、JSON のキーが
-    体積パーセントである以上そちらを優先する。
-    """
-    global LEVEL4_ICE_VOL_PCT, LEVEL4_ICE_SPEC, _LEVEL4_ACTIVE_ICE_KEY
-    vol, key = level4_ice_volpct(kind)
-    LEVEL4_ICE_VOL_PCT = vol
-    LEVEL4_ICE_SPEC = 'vol'
-    _LEVEL4_ACTIVE_ICE_KEY = key
-    return vol, key
-
-
-def level3_targets(feotio2_wt=None):
-    """Level 3 の設計目標値 (eps'_target, eps''_target) を返す。
-
-    帯域の幾何平均 f0 = 1.0 GHz における値であり、Level_3.in が
-    debye_flat_eps_imag() に渡す 2 つの数そのもの。
-    """
-    wt = _LEVEL3_ACTIVE_WT if feotio2_wt is None else feotio2_wt
-    er_t = LEVEL3_EPS_R
-    return er_t, er_t * level3_carrier_tandelta(wt)
-
-
-def level3_eps(f, feotio2_wt=None):
-    """Level 3 の複素比誘電率 (eps', eps'')。
-
-    LEVEL3_EPS_REAL_MODE / LEVEL3_EPS_IMAG_MODE の設定に従う。
-    既定では eps' は実装した 2 極 Debye の値（KK 由来の 0.43% の変化を含む。
-    修正項目 A-3）、eps'' は設計目標値の一定値。
-
-    f と同じ形の配列で返す（呼び出し側の一貫性のため）。
-    """
-    er_t, ei_t = level3_targets(feotio2_wt)
-    return apply_eps_modes(er_t, ei_t, f)
-
-
-def level3_tandelta(f, feotio2_wt=None):
-    """Level 3 の tan_delta(f)。eps'' 一定なのでほぼ定数。"""
-    er, ei = level3_eps(f, feotio2_wt)
-    return ei / er
-
-
-def level3_alpha(f, feotio2_wt=None):
-    """Level 3 の減衰係数 alpha(f) [Np/m]（厳密式）。
-
-        alpha = (omega/c) * sqrt(eps'/2) * sqrt( sqrt(1 + tan_delta^2) - 1 )
-
-    tan_delta が一定なので alpha は f にほぼ比例する（帯域内で 4.0 倍）。
-    Level 2（sigma 一定, alpha ∝ f^0）との違いがここに現れる。
-    """
-    f_arr = np.asarray(f, dtype=float)
-    er, ei = level3_eps(f_arr, feotio2_wt)
-    td = ei / er
-    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)
-    with np.errstate(invalid='ignore'):
-        alpha = w_over_c * np.sqrt(er / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
-    return np.nan_to_num(alpha, nan=0.0)
-
-
-def _group_index_from_eps(eps_fn, f, rel_df=1e-3):
-    """eps'(f) を返す関数から群屈折率 n_g = n + f dn/df を数値微分で求める。"""
-    f_arr = np.atleast_1d(np.asarray(f, dtype=float))
-    df = np.maximum(np.abs(f_arr) * rel_df, 1.0e3)
-    n0 = np.sqrt(eps_fn(f_arr))
-    np1 = np.sqrt(eps_fn(f_arr + df))
-    nm1 = np.sqrt(eps_fn(f_arr - df))
-    return n0 + f_arr * (np1 - nm1) / (2.0 * df)
-
-
-def level3_group_index(f, feotio2_wt=None):
-    """Level 3 の群屈折率。LEVEL3_EPS_REAL_MODE='ideal' なら n と一致する。"""
-    return _group_index_from_eps(
-        lambda ff: level3_eps(ff, feotio2_wt)[0], f)
 
 
 # =============================================================================
 # 理論：Level 4（水氷層を透過して深さ d に届く波）
 # =============================================================================
-def level4_ice_volume_fraction():
-    """氷の体積分率（0-1 の分率）。入力はパーセントで受け取る。
-
-        v_ice = (rho_bulk / rho_ice) * w / (1 - w)     Takekura+2025 Eq.(8)
-    """
-    if LEVEL4_ICE_SPEC == 'vol':
-        v = LEVEL4_ICE_VOL_PCT / 100.0
-    elif LEVEL4_ICE_SPEC == 'wt':
-        w = LEVEL4_ICE_WT_PCT / 100.0
-        v = (LEVEL3_RHO / LEVEL4_RHO_ICE) * w / (1.0 - w)
-    else:
-        raise CmdInputError("LEVEL4_ICE_SPEC は 'wt' か 'vol'")
-    if v < 0.0:
-        raise CmdInputError('氷の体積分率が負です')
-    porosity = 1.0 - LEVEL3_RHO / LEVEL4_RHO_GRAIN
-    if v > porosity:
-        raise CmdInputError(
-            '氷の体積分率 {:.4f} が空隙率 {:.4f} を超えています'.format(v, porosity))
-    return v
-
-
-def level4_targets(feotio2_wt=None):
-    """(背景の目標値, 氷層の目標値) をそれぞれ (eps', eps'') の組で返す。
-
-    Level_4.in の mix_ice() と同じ順序（目標値を混合してから Debye 化）。
-    """
-    er_dry, ei_dry = level3_targets(feotio2_wt)
-    v = level4_ice_volume_fraction()
-    er_ice = (er_dry ** (1.0 / 3.0) + v * _L4_ICE_INC) ** 3
-    ei_ice = ei_dry + v * LEVEL4_EPS_ICE * LEVEL4_TAND_ICE
-    return (er_dry, ei_dry), (er_ice, ei_ice)
-
-
-def level4_eps(f, in_ice, feotio2_wt=None):
-    """Level 4 の複素比誘電率。in_ice=True で氷層、False で背景レゴリス。"""
-    dry, ice = level4_targets(feotio2_wt)
-    er_t, ei_t = ice if in_ice else dry
-    return apply_eps_modes(er_t, ei_t, f)
-
-
-def level4_tandelta(f, in_ice=False, feotio2_wt=None):
-    """Level 4 の tan_delta(f)。既定は背景レゴリス。"""
-    er, ei = level4_eps(f, in_ice, feotio2_wt)
-    return ei / er
-
-
-def level4_alpha(f, in_ice=False, feotio2_wt=None):
-    """Level 4 の減衰係数 alpha(f) [Np/m]（厳密式）。既定は背景レゴリス。"""
-    f_arr = np.asarray(f, dtype=float)
-    er, ei = level4_eps(f_arr, in_ice, feotio2_wt)
-    td = ei / er
-    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)
-    with np.errstate(invalid='ignore'):
-        alpha = w_over_c * np.sqrt(er / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
-    return np.nan_to_num(alpha, nan=0.0)
-
-
-def level4_segments(depth_m):
-    """地表 (0) から深さ d までの経路を [(区間長, 氷層か), ...] に分ける。"""
-    top = float(LEVEL4_ICE_TOP_M)
-    bot = top + float(LEVEL4_ICE_THICK_M)
-    d = float(depth_m)
-    edges = sorted({0.0, d, min(max(top, 0.0), d), min(max(bot, 0.0), d)})
-    segs = []
-    for a, b in zip(edges[:-1], edges[1:]):
-        if b - a <= 0.0:
-            continue
-        mid = 0.5 * (a + b)
-        segs.append((b - a, top <= mid < bot))
-    return segs
-
-
-def level4_interfaces_crossed(depth_m):
-    """深さ d までに横切る氷層界面の数（0, 1, 2）を返す。"""
-    top = float(LEVEL4_ICE_TOP_M)
-    bot = top + float(LEVEL4_ICE_THICK_M)
-    d = float(depth_m)
-    return int(d > top) + int(d > bot)
-
-
-def level4_alpha_path_avg(f, depth_m, feotio2_wt=None):
-    """経路平均の減衰係数 (1/d) * ∫alpha dz。
-
-    fig3 で LSR から逆算される alpha はこの量に対応する（単層なら
-    level4_alpha と一致する）。
-    """
-    d = float(depth_m)
-    if d <= 0.0:
-        return level4_alpha(f, False, feotio2_wt)
-    acc = np.zeros_like(np.asarray(f, dtype=float))
-    for length, in_ice in level4_segments(d):
-        acc = acc + level4_alpha(f, in_ice, feotio2_wt) * length
-    return acc / d
-
-
 def transfer_absorb_layered(f, d, n=None):
     """Level 4 の吸収項 exp(-∫alpha dz)（片道透過、層ごとに積分）。"""
     acc = np.zeros_like(np.asarray(f, dtype=float))
@@ -1051,151 +651,9 @@ def level4_group_arrival(d, f0=None):
     return t
 
 
-def describe_level4_medium():
-    """Level 4 の氷層設定を人が読める形で返す（ログと run_info 用）。"""
-    v = level4_ice_volume_fraction()
-    (er_d, ei_d), (er_i, ei_i) = level4_targets()
-    wt_pct = 100.0 * v * LEVEL4_RHO_ICE / (LEVEL3_RHO + v * LEVEL4_RHO_ICE)
-    n0, n1 = np.sqrt(er_d), np.sqrt(er_i)
-    R = (n0 - n1) / (n0 + n1)
-    a_d = float(level4_alpha(np.array([BAND_CENTRE_HZ]), False)[0])
-    a_i = float(level4_alpha(np.array([BAND_CENTRE_HZ]), True)[0])
-    key_note = ('' if _LEVEL4_ACTIVE_ICE_KEY is None
-                else ' [{}]'.format(_LEVEL4_ACTIVE_ICE_KEY))
-    return ('ice layer {:.3f} vol%{} ({:.3f} wt%) at {:.2f}-{:.2f} m, '
-            'LLL mixing (pore filling), '
-            "eps' {:.6f} -> {:.6f} ({:+.2f}%), eps'' {:.6f} -> {:.6f} ({:+.3f}%), "
-            'alpha {:+.2f}% @{:.2f} GHz, interface R = {:.1f} dB'
-            .format(100.0 * v, key_note, wt_pct, LEVEL4_ICE_TOP_M,
-                    LEVEL4_ICE_TOP_M + LEVEL4_ICE_THICK_M,
-                    er_d, er_i, 100.0 * (er_i / er_d - 1.0),
-                    ei_d, ei_i, 100.0 * (ei_i / ei_d - 1.0),
-                    100.0 * (a_i / a_d - 1.0), BAND_CENTRE_HZ / 1e9,
-                    20.0 * np.log10(abs(R))))
-
-
-def refractive_index(f, level):
-    """レベルに応じた屈折率 n を返す。
-
-    Level 1（無損失）と Level 2（sigma 一定）は eps' が厳密に定数。
-    Level 3・4 は eps'' 一定なので KK により eps' が約 0.43% 変化する。
-    LEVEL3_EPS_REAL_MODE='debye'（既定, 修正項目 A-3）ならその変化を含めた
-    n(f) を返し、'ideal' なら従来どおり定数を返す。
-    Level 4 でここが返すのは背景レゴリスの n（地表透過係数などに使う）で、
-    氷層を含む経路の計算は transfer_*_layered が別途行う。
-    f と同じ形の配列で返す。
-    """
-    f_arr = np.asarray(f, dtype=float)
-    if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
-        er, _ = level3_eps(f_arr)
-        return np.sqrt(er)
-    if 'absorb_debye' in LEVEL_EFFECTS[level]:
-        er, _ = level3b_eps(f_arr)
-        return np.sqrt(er)
-    return np.full_like(f_arr, N_REGOLITH)
-
-
-def describe_level3_medium():
-    """Level 3 の媒質設定を人が読める形で返す（ログと run_info 用）。"""
-    wt = _LEVEL3_ACTIVE_WT
-    td = level3_carrier_tandelta(wt)
-    a_lo = float(level3_alpha(np.array([0.5e9]))[0])
-    a_hi = float(level3_alpha(np.array([2.0e9]))[0])
-    return ('constant eps_imag (tan_delta ~ const), FeO+TiO2 = {:.1f} wt% [{}], '
-            'rho = {:.6f}, eps_r = {:.3f}, tan_delta = {:.6f}  '
-            '(alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz, ratio {:.3f}) '
-            "[eps' mode = {}, eps'' mode = {}]"
-            .format(wt, _LEVEL3_ACTIVE_KEY, LEVEL3_RHO, LEVEL3_EPS_R, td,
-                    a_lo, a_hi, a_hi / a_lo,
-                    LEVEL3_EPS_REAL_MODE, LEVEL3_EPS_IMAG_MODE))
-
-
 def transfer_absorb_tandelta(f, d, n=None):
     """Level 3 の吸収項 exp(-alpha(f) * d)（片道透過、eps'' 一定）。"""
     return np.exp(-level3_alpha(f) * d)
-
-
-def level3b_carrier(rho=None):
-    """密度 -> Carrier 経験式の (eps', eps'')。Level 3b 専用。
-
-    Level 3 と違い Fig. 9.54 (450 MHz DATA) の式を使う。分散モデルでは
-    「経験式の値がどの周波数の値か」を決める必要があり、周波数が特定できる
-    サブセットはこれだけであるため。返す値は 450 MHz における値として扱い、
-    level3b_debye_scale() で 2 極 Debye をこの値に合わせる。
-    """
-    rho = LEVEL3B_RHO if rho is None else rho
-    eps_re = LEVEL3B_CARRIER_EPS_BASE ** rho
-    tan_d = 10.0 ** (LEVEL3B_CARRIER_TAND_A * LEVEL3B_FEOTIO2
-                     + LEVEL3B_CARRIER_TAND_B * rho - LEVEL3B_CARRIER_TAND_C)
-    return eps_re, eps_re * tan_d
-
-
-def level3b_debye_scale(rho=None):
-    """eps''(450 MHz) が Heiken に一致するよう 2 極 Debye をスケールする係数。"""
-    _, eps_im_h = level3b_carrier(rho)
-    w = 2.0 * np.pi * LEVEL3B_ANCHOR_FREQ
-    unit = (LEVEL3B_DEBYE_DE1 * w * LEVEL3B_DEBYE_TAU1 / (1.0 + (w * LEVEL3B_DEBYE_TAU1) ** 2)
-            + LEVEL3B_DEBYE_DE2 * w * LEVEL3B_DEBYE_TAU2 / (1.0 + (w * LEVEL3B_DEBYE_TAU2) ** 2))
-    return eps_im_h / unit
-
-
-def level3b_eps(f):
-    """Level 3b の複素比誘電率 (eps', eps'')。2 極 Debye により分散する。"""
-    f_arr = np.asarray(f, dtype=float)
-    eps_s, _ = level3b_carrier()
-    s = level3b_debye_scale()
-    w = 2.0 * np.pi * f_arr
-    x1, x2 = w * LEVEL3B_DEBYE_TAU1, w * LEVEL3B_DEBYE_TAU2
-    drop = (LEVEL3B_DEBYE_DE1 * s * x1 ** 2 / (1.0 + x1 ** 2)
-            + LEVEL3B_DEBYE_DE2 * s * x2 ** 2 / (1.0 + x2 ** 2))
-    imag = (LEVEL3B_DEBYE_DE1 * s * x1 / (1.0 + x1 ** 2)
-            + LEVEL3B_DEBYE_DE2 * s * x2 / (1.0 + x2 ** 2))
-    return eps_s - drop, imag
-
-
-def level3b_tandelta(f):
-    """Level 3b の tan_delta(f)。f とともに増加する。"""
-    er, ei = level3b_eps(f)
-    return ei / er
-
-
-def level3b_alpha(f):
-    """Level 3b の減衰係数 alpha(f) [Np/m]（厳密式）。alpha ∝ f^1.38 程度。"""
-    f_arr = np.asarray(f, dtype=float)
-    er, ei = level3b_eps(f_arr)
-    td = ei / er
-    w_over_c = 2.0 * np.pi * f_arr / (C * 1e9)
-    with np.errstate(invalid='ignore'):
-        alpha = w_over_c * np.sqrt(er / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
-    return np.nan_to_num(alpha, nan=0.0)
-
-
-def level3b_group_index(f):
-    """Level 3b の群屈折率 n_g = n + f dn/df。包絡ピークの到達時刻を決める。
-
-    分散性媒質では位相速度と群速度が分かれるため、走時位相に使う n(f) と
-    包絡ピークが伝わる速さを決める n_g(f) は別物になる。
-    """
-    f_arr = np.atleast_1d(np.asarray(f, dtype=float))
-    fs = np.linspace(0.5e9, 2.0e9, 601)
-    er, _ = level3b_eps(fs)
-    n_fs = np.sqrt(er)
-    ng_fs = n_fs + fs * np.gradient(n_fs, fs)
-    return np.interp(f_arr, fs, ng_fs)
-
-
-def describe_level3b_medium():
-    """Level 3b の媒質設定を人が読める形で返す。"""
-    eps_s, _ = level3b_carrier()
-    s = level3b_debye_scale()
-    de1, de2 = s * LEVEL3B_DEBYE_DE1, s * LEVEL3B_DEBYE_DE2
-    a_lo = float(level3b_alpha(np.array([0.5e9]))[0])
-    a_hi = float(level3b_alpha(np.array([2.0e9]))[0])
-    return ('2-pole Debye (high-Ti basalt case), FeO+TiO2 = {:.1f} wt%, '
-            'rho = {:.6f}, eps_s = {:.6f}, eps_inf = {:.6f}, De1 = {:.6f}, De2 = {:.6f}  '
-            '(alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz, ratio {:.3f})'
-            .format(LEVEL3B_FEOTIO2, LEVEL3B_RHO, eps_s, eps_s - de1 - de2, de1, de2,
-                    a_lo, a_hi, a_hi / a_lo))
 
 
 def transfer_absorb_debye(f, d, n=None):
@@ -1728,6 +1186,7 @@ def write_run_info(level, kind, json_path, results, t_check, output_dir):
         if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
             f.write('  Level 3 medium: {}\n'.format(describe_level3_medium()))
         if 'ice_layer' in LEVEL_EFFECTS[level]:
+            f.write('  Level 4 ice model: {}\n'.format(sm.LEVEL4_ICE_MODEL))
             f.write('  Level 4 ice layer: {}\n'.format(describe_level4_medium()))
         if 'absorb_debye' in LEVEL_EFFECTS.get(level, []):
             f.write('  Level 3b medium: {}\n'.format(describe_level3b_medium()))
@@ -1760,16 +1219,11 @@ def main():
 
     level, kind, rx_paths, reference = load_paths(JSON_PATH)
 
-    # 背景レゴリスの組成をサブ階層キーから設定する。
-    # Level 3 と Level 4 は背景が同一なので同じ経路を通る（他レベルでは無視）。
-    if 'absorb_tandelta' in LEVEL_EFFECTS.get(level, []):
-        wt, key = set_level3_composition(kind)
-        print('背景レゴリスの組成: FeO+TiO2 = {:.1f} wt%  [{}]'.format(wt, key))
-
-    # 水氷濃度もサブ階層キーから設定する（氷層を持つレベルのみ）。
-    if 'ice_layer' in LEVEL_EFFECTS.get(level, []):
-        vol, ice_key = set_level4_ice(kind)
-        print('水氷濃度: {:.2f} vol%  [{}]'.format(vol, ice_key))
+    # 背景レゴリスの組成・水氷濃度・水氷の描像を、サブ階層キーから設定する。
+    # 判定と設定は subsurface_model が持ち、見つからなければエラーで止まる
+    # （既定値に落とすと誤ったモデルのまま解析が完走してしまうため）。
+    for _note in configure_from_kind(kind, level):
+        print(_note)
 
     if level not in IMPLEMENTED_LEVELS:
         raise NotImplementedError(
