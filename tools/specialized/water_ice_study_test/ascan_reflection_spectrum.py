@@ -734,6 +734,7 @@ def plot_spectra(results, info, output_dir):
     ax.set_xlabel('Frequency [GHz]', fontsize=13)
     ax.set_title(r'(b) Centroid and spectral width $f_c \pm \sigma_f$'
                  '   (middle marker = $f_c$)', fontsize=13)
+    ax.invert_yaxis()
 
     for ax in axes:
         ax.grid(alpha=0.4)
