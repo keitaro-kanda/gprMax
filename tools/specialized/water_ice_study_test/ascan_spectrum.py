@@ -322,6 +322,20 @@ EXCLUDE_KEYS = {'depth_300'}
 ATTEN_YLIM_PCT = (2.0, 98.0)
 
 FIGURE_FORMATS = ('png', 'pdf')   # すべての図をこの形式すべてで保存する
+# --- fig5: 区間プロファイル（深さ方向の alpha / tan_delta / n）----------------
+# 隣接する rx 深さの差分から、その区間の局所量を出す。埋設 rx 配列は
+# 「ボーリング孔にアンテナを並べた」のと同じ構成なので、深さ方向の
+# プロファイルが直接得られる。
+# 【位置づけ】月面では rx を埋設できないので、この配置は実機の構成ではない。
+# 「真値を知るための較正用配置」であり、論文では理論上限として扱うこと。
+# 実機で使える at_tx（反射法）は単一オフセットだと自由度が 1 つ足りず、
+# 層構造を一意に決められない。プロファイルを作るには CMP が要る。
+PROFILE_STACK = 1             # 何区間をまとめるか。1 なら 0.25 m 分解能。
+                              # 2 にすると 0.50 m 分解能になり精度が上がる。
+PROFILE_FIT_BAND = True       # True  … 帯域全体の傾きから alpha を出す（ロバスト）
+                              # False … 各周波数で独立に出す（ノイズに弱い）
+PROFILE_FREQS_GHZ = (0.5, 1.25, 2.0)   # False のときに描く周波数
+
 FIGURE_DPI = 300
 
 # 出力先 (レベル親ディレクトリ配下)
@@ -1522,6 +1536,253 @@ CSV_FIELDNAMES = [
 ]
 
 
+# =============================================================================
+# 区間プロファイル（深さ方向の alpha / tan_delta / n）
+# =============================================================================
+# 埋設 rx 配列は「ボーリング孔にアンテナを並べた」のと同じ構成なので、
+# 隣接する深さの差分を取れば、その区間の局所量が直接得られる。
+#
+#     区間 alpha : d(LSR)/dz = -alpha
+#     区間 n     : d(群遅延)/dz = n_g / c
+#
+# 既存の相対 LSR と群遅延はこの情報をすでに持っており、周波数軸で描いて
+# いただけだった。深さ軸に描き直すとプロファイルになる。
+#
+# 【逆算の書き方】理論との差分で書く。区間 LSR は 0.25 m で 0.08-0.33 dB と
+# 小さく、幾何項・地表透過・ゲートの系統誤差がそのまま乗ると使い物にならない。
+# 実測と理論に同じ処理が入っているので、差分を取ればそれらが打ち消える。
+#
+#     alpha_int = alpha_theory_int + [L_theory(i+1) - L_theory(i)
+#                                     - L_meas(i+1) + L_meas(i)] / (2 * dz)
+#         ※ 片道透過なので分母は dz（往復なら 2*dz）
+#
+# 【精度】区間 LSR の帯域内の傾きは 0.25 m で 0.249 dB。残差のゆらぎを
+# 0.05 dB とすると alpha は約 20% の精度。1 区間では氷 10 vol% の
+# 変化（pore -4.2% / excess -9.7%）に届かないので、氷層の厚み分
+# （PROFILE_STACK でまとめる）で見ること。
+# =============================================================================
+
+def _stack_depths(results):
+    """PROFILE_STACK に従って深さを間引き、区間の組を返す。
+
+    戻り値: [(浅い側の result, 深い側の result, 区間中心深さ, 区間長), ...]
+    """
+    rs = sorted((r for r in results if np.isfinite(r['depth_m'])),
+                key=lambda r: r['depth_m'])
+    step = max(1, int(PROFILE_STACK))
+    out = []
+    for i in range(0, len(rs) - step, step):
+        a, b = rs[i], rs[i + step]
+        dz = b['depth_m'] - a['depth_m']
+        if dz <= 0:
+            continue
+        out.append((a, b, 0.5 * (a['depth_m'] + b['depth_m']), dz))
+    return out
+
+
+def interval_alpha(a, b, dz, level):
+    """区間 [a, b] の alpha(f) を理論との差分から逆算する。
+
+    理論側の区間 alpha は、その区間が氷層かどうかで切り替える
+    （Level 4 では level4_segments が層構造を持っている）。
+    """
+    freq = a['freq_hz']
+    if 'ice_layer' in LEVEL_EFFECTS[level]:
+        # 区間の中で氷層とレゴリスが混ざる場合は長さで重み付けする
+        segs_b = level4_segments(b['depth_m'])
+        segs_a = level4_segments(a['depth_m'])
+        acc = np.zeros_like(freq)
+        used = 0.0
+        for length, in_ice in segs_b[len(segs_a):] or segs_b:
+            pass
+        # 区間 [a, b] に含まれる層をあらためて取り出す
+        acc = np.zeros_like(freq)
+        z0, z1 = a['depth_m'], b['depth_m']
+        top = float(LEVEL4_ICE_TOP_M)
+        bot = top + float(LEVEL4_ICE_THICK_M)
+        edges = sorted({z0, z1, min(max(top, z0), z1), min(max(bot, z0), z1)})
+        for p, q in zip(edges[:-1], edges[1:]):
+            if q <= p:
+                continue
+            mid = 0.5 * (p + q)
+            acc = acc + level4_alpha(freq, top <= mid < bot) * (q - p)
+        a_th = acc / dz
+    elif 'absorb_tandelta' in LEVEL_EFFECTS[level]:
+        a_th = level3_alpha(freq)
+    elif 'absorb_debye' in LEVEL_EFFECTS[level]:
+        a_th = level3b_alpha(freq)
+    elif 'absorb_const' in LEVEL_EFFECTS[level]:
+        a_th = level2_alpha(freq, refractive_index(freq, level))
+    else:
+        a_th = np.zeros_like(freq)
+
+    dl_meas = b['L_abs_meas'] - a['L_abs_meas']
+    dl_th = b['L_abs_theory'] - a['L_abs_theory']
+    with np.errstate(invalid='ignore', divide='ignore'):
+        return a_th + (dl_th - dl_meas) / dz, a_th
+
+
+def interval_group_index(a, b, dz):
+    """区間 [a, b] の群屈折率 n_g(f) を群遅延の差分から出す。"""
+    with np.errstate(invalid='ignore', divide='ignore'):
+        return C * (b['tau_g'] - a['tau_g']) / dz
+
+
+def _band_fit_alpha(freq, alpha, mask):
+    """alpha(f) を alpha = k*f に最小二乗で当てはめ、k を返す。
+
+    eps'' 一定なら alpha は f に比例するので、帯域全体の傾きを使うほうが
+    1 周波数を読むよりノイズに強い（区間 LSR が 0.1 dB 級のため重要）。
+    """
+    x, y = freq[mask], alpha[mask]
+    good = np.isfinite(y)
+    if good.sum() < 5:
+        return np.nan
+    x, y = x[good], y[good]
+    return float(np.sum(x * y) / np.sum(x * x))
+
+
+def plot_interval_profile(results, level, output_dir):
+    """fig5: 区間プロファイル。
+
+    (a) 区間 alpha(z)   (b) 区間 tan_delta(z)
+    (c) 区間 n_g(z)     (d) 区間 LSR の帯域内の傾き（生の観測量）
+    """
+    pairs = _stack_depths(results)
+    if len(pairs) < 2:
+        print('  [skip] fig5: 深さが足りません')
+        return
+
+    zc = np.array([p[2] for p in pairs])
+    dz = np.array([p[3] for p in pairs])
+    freq = results[0]['freq_hz']
+    mask = results[0]['mask']
+    fc_i = int(np.argmin(np.abs(freq - BAND_CENTRE_HZ)))
+
+    a_meas, a_th, ng_meas, slope = [], [], [], []
+    for a, b, _, d in pairs:
+        am, at = interval_alpha(a, b, d, level)
+        a_meas.append(am)
+        a_th.append(at)
+        ng_meas.append(interval_group_index(a, b, d))
+        slope.append((b['L_abs_meas'] - a['L_abs_meas']) * LN_TO_DB20)
+    a_meas = np.array(a_meas)
+    a_th = np.array(a_th)
+    ng_meas = np.array(ng_meas)
+    slope = np.array(slope)
+
+    fig, axes = plt.subplots(2, 2, figsize=(13, 10))
+    ax_a, ax_b, ax_c, ax_d = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
+    fig.suptitle('Interval profiles from adjacent buried-rx depths  '
+                 '({:.2f} m intervals{})'.format(
+                     float(np.mean(dz)),
+                     ', band fit' if PROFILE_FIT_BAND else ''),
+                 fontsize=14, y=1.00)
+
+    if PROFILE_FIT_BAND:
+        # alpha = k*f に当てはめ、帯域中心の値に直して描く
+        k_m = np.array([_band_fit_alpha(freq, am, mask) for am in a_meas])
+        k_t = np.array([_band_fit_alpha(freq, at, mask) for at in a_th])
+        am_plot = k_m * BAND_CENTRE_HZ
+        at_plot = k_t * BAND_CENTRE_HZ
+        ax_a.plot(am_plot, zc, 'o-', color='k', lw=1.6, ms=5, label='measured')
+        ax_a.plot(at_plot, zc, '--', color='r', lw=1.5, label='theory')
+        lab_a = r'$\alpha$ at {:.2f} GHz (band fit) [Np/m]'.format(
+            BAND_CENTRE_HZ / 1e9)
+        n_for_td = np.sqrt(level3_eps(np.array([BAND_CENTRE_HZ]))[0])[0]
+        td_m = alpha_to_tandelta(am_plot, BAND_CENTRE_HZ, n_for_td)
+        td_t = alpha_to_tandelta(at_plot, BAND_CENTRE_HZ, n_for_td)
+        ax_b.plot(td_m, zc, 'o-', color='k', lw=1.6, ms=5, label='measured')
+        ax_b.plot(td_t, zc, '--', color='r', lw=1.5, label='theory')
+    else:
+        colors = plt.cm.viridis(np.linspace(0, 0.85, len(PROFILE_FREQS_GHZ)))
+        n_for_td = np.sqrt(level3_eps(np.array([BAND_CENTRE_HZ]))[0])[0]
+        for col, fg in zip(colors, PROFILE_FREQS_GHZ):
+            i = int(np.argmin(np.abs(freq - fg * 1e9)))
+            ax_a.plot(a_meas[:, i], zc, 'o-', color=col, lw=1.4, ms=4,
+                      label='{:.2f} GHz'.format(fg))
+            ax_a.plot(a_th[:, i], zc, '--', color=col, lw=1.2, alpha=0.7)
+            ax_b.plot(alpha_to_tandelta(a_meas[:, i], fg * 1e9, n_for_td), zc,
+                      'o-', color=col, lw=1.4, ms=4, label='{:.2f} GHz'.format(fg))
+            ax_b.plot(alpha_to_tandelta(a_th[:, i], fg * 1e9, n_for_td), zc,
+                      '--', color=col, lw=1.2, alpha=0.7)
+        lab_a = r'$\alpha$ [Np/m]'
+
+    ax_c.plot(ng_meas[:, fc_i], zc, 'o-', color='k', lw=1.6, ms=5,
+              label='measured')
+    ng_th = float(_group_index_from_eps(
+        lambda ff: (level4_eps(ff, False)[0]
+                    if 'ice_layer' in LEVEL_EFFECTS[level]
+                    else refractive_index(ff, level) ** 2),
+        np.array([BAND_CENTRE_HZ]))[0])
+    ax_c.axvline(ng_th, color='r', ls='--', lw=1.5, label='theory (regolith)')
+    if 'ice_layer' in LEVEL_EFFECTS[level]:
+        ng_ice = float(_group_index_from_eps(
+            lambda ff: level4_eps(ff, True)[0], np.array([BAND_CENTRE_HZ]))[0])
+        ax_c.axvline(ng_ice, color='m', ls=':', lw=1.5, label='theory (ice)')
+
+    ax_d.plot(slope[:, mask][:, -1] - slope[:, mask][:, 0], zc, 'o-',
+              color='k', lw=1.6, ms=5, label='measured')
+    ax_d.axvline(0.0, color='0.5', lw=0.8)
+
+    for ax, xlab, ttl in (
+            (ax_a, lab_a, '(a) Interval attenuation'),
+            (ax_b, r'tan$\delta$', '(b) Interval loss tangent'),
+            (ax_c, r'group index $n_g$ at {:.2f} GHz'.format(
+                BAND_CENTRE_HZ / 1e9), '(c) Interval refractive index'),
+            (ax_d, r'$\Delta$(interval LSR) over band [dB]',
+             '(d) Raw observable: band slope of interval LSR')):
+        ax.set_xlabel(xlab, fontsize=12)
+        ax.set_ylabel('Depth [m]', fontsize=12)
+        ax.set_title(ttl, fontsize=13)
+        ax.grid(alpha=0.4)
+        ax.minorticks_on()
+        ax.invert_yaxis()
+        ax.legend(fontsize=9)
+
+    # 氷層の位置を全パネルに示す
+    if 'ice_layer' in LEVEL_EFFECTS[level]:
+        top = float(LEVEL4_ICE_TOP_M)
+        bot = top + float(LEVEL4_ICE_THICK_M)
+        for ax in axes.ravel():
+            ax.axhspan(top, bot, color='tab:cyan', alpha=0.12, zorder=0)
+
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig5_interval_profile')
+
+
+def write_interval_csv(results, level, output_dir):
+    """区間プロファイルの数値を CSV に出す。"""
+    import csv
+    pairs = _stack_depths(results)
+    if len(pairs) < 2:
+        return
+    freq = results[0]['freq_hz']
+    mask = results[0]['mask']
+    path = os.path.join(output_dir, 'interval_profile.csv')
+    with open(path, 'w', newline='', encoding='utf-8') as fh:
+        w = csv.writer(fh)
+        w.writerow(['z_center_m', 'dz_m', 'alpha_meas_bandfit',
+                    'alpha_theory_bandfit', 'ratio',
+                    'tandelta_meas', 'n_g_meas', 'n_g_theory'])
+        ng_th = float(_group_index_from_eps(
+            lambda ff: (level4_eps(ff, False)[0]
+                        if 'ice_layer' in LEVEL_EFFECTS[level]
+                        else refractive_index(ff, level) ** 2),
+            np.array([BAND_CENTRE_HZ]))[0])
+        n_for_td = np.sqrt(level3_eps(np.array([BAND_CENTRE_HZ]))[0])[0]
+        fc_i = int(np.argmin(np.abs(freq - BAND_CENTRE_HZ)))
+        for a, b, zc, dz in pairs:
+            am, at = interval_alpha(a, b, dz, level)
+            km = _band_fit_alpha(freq, am, mask) * BAND_CENTRE_HZ
+            kt = _band_fit_alpha(freq, at, mask) * BAND_CENTRE_HZ
+            ng = interval_group_index(a, b, dz)[fc_i]
+            w.writerow([zc, dz, km, kt, km / kt if kt else np.nan,
+                        alpha_to_tandelta(km, BAND_CENTRE_HZ, n_for_td),
+                        ng, ng_th])
+    print('Saved:', path)
+
+
 def write_csv(results, output_dir):
     path = os.path.join(output_dir, 'results_spectrum.csv')
     with open(path, 'w', newline='') as f:
@@ -1629,7 +1890,9 @@ def main():
     plot_lsr(results, freq_hz, d0, output_dir)
     plot_attenuation(results, freq_hz, level, N_REGOLITH, output_dir)
     plot_phase(results, freq_hz, output_dir)
+    plot_interval_profile(results, level, output_dir)
     write_csv(results, output_dir)
+    write_interval_csv(results, level, output_dir)
     write_npz(results, freq_hz, E_ref, output_dir)
     write_run_info(level, kind, JSON_PATH, results, output_dir)
 
