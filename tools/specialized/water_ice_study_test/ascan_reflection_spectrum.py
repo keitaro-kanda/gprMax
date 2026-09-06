@@ -733,6 +733,9 @@ def plot_spectra(results, info, output_dir):
                     lw=1.4, **st)
     ax.set_yticks(range(len(results)))
     ax.set_yticklabels([r['name'] for r in results])
+    
+    ax.invert_yaxis()  # <--- この1行を追加します
+    
     ax.set_xlabel('Frequency [GHz]', fontsize=13)
     ax.set_title(r'(b) Centroid and spectral width $f_c \pm \sigma_f$'
                  '   (middle marker = $f_c$)', fontsize=13)
