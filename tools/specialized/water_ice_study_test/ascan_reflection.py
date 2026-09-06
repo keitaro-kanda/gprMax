@@ -115,18 +115,42 @@ class MediumModel:
     the sweep; None uses the module default (the real-data fraction)."""
     ice_vol: float | None = None
 
+    # Level 5（密度プロファイル）では n も alpha も深さで変わるので、
+    # 「どの深さの値か」を決める必要がある。反射係数に効くのは界面の
+    # 直上・直下なので、レゴリス側は氷層上面の直上、氷側は氷層の中央を使う。
+    # 経路の吸収・走時は path_integrals が別に扱うため、ここは界面用でよい。
+    level: str = 'Level_4'
+
+    def _z_dry(self):
+        return max(0.0, float(sm.LEVEL4_ICE_TOP_M) - 1e-6)
+
+    def _z_ice(self):
+        return float(sm.LEVEL4_ICE_TOP_M) + 0.5 * float(sm.LEVEL4_ICE_THICK_M)
+
     def regolith_index(self, f):
+        if sm.has_density_profile(self.level):
+            return _index_from_eps(sm.eps_at_depth(
+                np.atleast_1d(f), self._z_dry(), self.level))
         return _index_from_eps(sm.level3_eps(np.atleast_1d(f)))
 
     def regolith_alpha(self, f):
+        if sm.has_density_profile(self.level):
+            return np.atleast_1d(sm.alpha_at_depth(
+                np.atleast_1d(f), self._z_dry(), self.level))
         return np.atleast_1d(sm.level3_alpha(np.atleast_1d(f)))
 
     def ice_index(self, f):
         with _ice_fraction(self.ice_vol):
+            if sm.has_density_profile(self.level):
+                return _index_from_eps(sm.eps_at_depth(
+                    np.atleast_1d(f), self._z_ice(), self.level))
             return _index_from_eps(sm.level4_eps(np.atleast_1d(f), True))
 
     def ice_alpha(self, f):
         with _ice_fraction(self.ice_vol):
+            if sm.has_density_profile(self.level):
+                return np.atleast_1d(sm.alpha_at_depth(
+                    np.atleast_1d(f), self._z_ice(), self.level))
             return np.atleast_1d(sm.level4_alpha(np.atleast_1d(f), True))
 
     def describe(self):

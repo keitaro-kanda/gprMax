@@ -30,6 +30,9 @@ from subsurface_model import (
     LEVEL_EFFECTS, IMPLEMENTED_LEVELS,
     LEVEL4_ICE_TOP_M, LEVEL4_ICE_THICK_M,
     configure_from_kind, _is_ice_model_layer,
+    path_integrals, r_eff_roundtrip, transmission_product,
+    interface_reflection, surface_index, eps_at_depth,
+    has_density_profile, has_ice_layer, describe_level5_medium,
     describe_level2_medium, describe_level3_medium, describe_level3b_medium,
     describe_level4_medium,
     refractive_index, level4_eps, level4_alpha, level3_eps, level3_alpha,
@@ -151,8 +154,8 @@ def build_events(level):
     """
     events = [{'name': 'surface', 'depth_m': 0.0, 'above': []}]
     if 'ice_layer' in LEVEL_EFFECTS[level]:
-        top = float(LEVEL4_ICE_TOP_M)
-        bot = top + float(LEVEL4_ICE_THICK_M)
+        top = float(sm.LEVEL4_ICE_TOP_M)
+        bot = top + float(sm.LEVEL4_ICE_THICK_M)
         events.append({'name': 'ice_top', 'depth_m': top,
                        'above': [(top, False)]})
         events.append({'name': 'ice_bottom', 'depth_m': bot,
@@ -160,15 +163,34 @@ def build_events(level):
     return events
 
 
-def _n_of(f, level, in_ice):
-    """層の屈折率 n(f)。氷層かどうかで切り替える。"""
+def _n_of(f, level, in_ice, depth_m=None):
+    """層の屈折率 n(f)。氷層かどうかで切り替える。
+
+    Level 5 では深さでも変わるので、depth_m を渡せばその深さの値を返す。
+    省略時は氷層の中央（in_ice=True）または氷層上面の直上（False）を使う。
+    """
+    if has_density_profile(level):
+        z = depth_m
+        if z is None:
+            top = float(sm.LEVEL4_ICE_TOP_M)
+            z = (top + 0.5 * float(sm.LEVEL4_ICE_THICK_M)) if in_ice else max(
+                0.0, top - 1e-6)
+        return np.sqrt(eps_at_depth(f, float(z), level)[0])
     if 'ice_layer' in LEVEL_EFFECTS[level]:
         return np.sqrt(level4_eps(f, in_ice)[0])
     return refractive_index(f, level)
 
 
-def _alpha_of(f, level, in_ice):
-    """層の減衰係数 alpha(f) [Np/m]。"""
+def _alpha_of(f, level, in_ice, depth_m=None):
+    """層の減衰係数 alpha(f) [Np/m]。Level 5 では深さ依存。"""
+    if has_density_profile(level):
+        z = depth_m
+        if z is None:
+            top = float(sm.LEVEL4_ICE_TOP_M)
+            z = (top + 0.5 * float(sm.LEVEL4_ICE_THICK_M)) if in_ice else max(
+                0.0, top - 1e-6)
+        from subsurface_model import alpha_at_depth
+        return np.atleast_1d(alpha_at_depth(f, float(z), level))
     if 'ice_layer' in LEVEL_EFFECTS[level]:
         return level4_alpha(f, in_ice)
     if 'absorb_tandelta' in LEVEL_EFFECTS[level]:
@@ -184,56 +206,38 @@ def _alpha_of(f, level, in_ice):
 def event_terms(f, event, level):
     """イベントの伝達関数の各項を個別に返す。
 
+    Level 5（密度プロファイル）では n も alpha も深さで変わるので、
+    閉形式では書けない。subsurface_model の経路積分に委ねる。
+    Level 3/4（均質）は密度一定の特殊ケースとして同じ関数で扱え、
+    従来の閉形式と厳密に一致する。
+
     戻り値の辞書:
-      'G'     幾何      sqrt(R_REF / r_eff)
-      'T'     往復透過  Π 4 n_a n_b/(n_a+n_b)^2（界面より浅い界面すべて）
-      'R'     反射      (n_k - n_k+1)/(n_k + n_k+1)
-      'A'     吸収      exp(-2 Σ alpha_j L_j)
-      't_ns'  往復走時  2h/c + 2 Σ n_j L_j / c   （帯域中心での代表値）
+      'G'     幾何      sqrt(R_REF / r_eff)、r_eff = 2h + 2∫dz/n
+      'T'     往復透過  地表と、界面より浅い界面すべて
+      'R'     反射      その界面の (n_above - n_below)/(n_above + n_below)
+      'A'     吸収      exp(-2 ∫alpha dz)
+      't_ns'  往復走時  2h/c + 2∫n dz / c（帯域中心での代表値）
       'r_eff' 見かけ源距離
-    項を分けて返すのは、LSR から alpha を逆算するときに G・T・R を差し引く
-    必要があるため（README §3.3）。
     """
     f_arr = np.asarray(f, dtype=float)
-    n_vac = np.ones_like(f_arr)
-    n_reg = _n_of(f_arr, level, False)
-    n_ice = _n_of(f_arr, level, True)
+    d = float(event['depth_m'])
 
-    def n_layer(in_ice):
-        return n_ice if in_ice else n_reg
-
-    # --- 見かけ源距離：r_eff = 2h + 2 Σ L_j / n_j -----------------------------
-    r_eff = 2.0 * TX_HEIGHT * np.ones_like(f_arr)
-    for length, in_ice in event['above']:
-        r_eff = r_eff + 2.0 * length / n_layer(in_ice)
+    r_eff = r_eff_roundtrip(f_arr, d, level)
     G = np.sqrt(R_REF / r_eff)
 
-    # --- 往復透過：界面より浅い界面をすべて往復する ---------------------------
-    T = np.ones_like(f_arr)
-    n_prev = n_vac
-    for _, in_ice in event['above']:
-        n_cur = n_layer(in_ice)
-        T = T * (4.0 * n_prev * n_cur / (n_prev + n_cur) ** 2)
-        n_prev = n_cur
-
-    # --- 反射係数：界面の直上／直下の屈折率から ------------------------------
-    if event['name'] == 'surface':
-        n_a, n_b = n_vac, n_reg
-    elif event['name'] == 'ice_top':
-        n_a, n_b = n_reg, n_ice
-    elif event['name'] == 'ice_bottom':
-        n_a, n_b = n_ice, n_reg
+    if d <= 0.0:
+        # 地表反射そのもの。地表を透過しないので T = 1。
+        n_s = surface_index(f_arr, level)
+        T = np.ones_like(f_arr)
+        R = (np.ones_like(f_arr) - n_s) / (np.ones_like(f_arr) + n_s)
     else:
-        raise CmdInputError('未知のイベント: {}'.format(event['name']))
-    R = (n_a - n_b) / (n_a + n_b)
+        T = transmission_product(f_arr, d, level, two_way=True,
+                                 include_surface=True)
+        R = interface_reflection(f_arr, d, level)
 
-    # --- 吸収と走時：往復なので 2 倍 -----------------------------------------
-    att = np.zeros_like(f_arr)
-    t_f = 2.0 * TX_HEIGHT / C * np.ones_like(f_arr)
-    for length, in_ice in event['above']:
-        att = att + _alpha_of(f_arr, level, in_ice) * length
-        t_f = t_f + 2.0 * n_layer(in_ice) * length / C
+    att, opt, _ = path_integrals(f_arr, d, level)
     A = np.exp(-2.0 * att)
+    t_f = 2.0 * TX_HEIGHT / C + 2.0 * opt / C
 
     i_c = int(np.argmin(np.abs(f_arr - BAND_CENTRE_HZ)))
     return {'G': G, 'T': T, 'R': R, 'A': A, 'r_eff': r_eff,
@@ -241,16 +245,10 @@ def event_terms(f, event, level):
 
 
 def event_arrival_ns(event, level):
-    """包絡ピークに対応する群走時 [ns]（スカラー）。"""
-    fc = np.array([BAND_CENTRE_HZ])
-    t = 2.0 * TX_HEIGHT / C
-    for length, in_ice in event['above']:
-        ng = float(_group_index_from_eps(
-            lambda ff: (level4_eps(ff, in_ice)[0]
-                        if 'ice_layer' in LEVEL_EFFECTS[level]
-                        else level3_eps(ff)[0]), fc)[0])
-        t += 2.0 * ng * length / C
-    return t
+    """包絡ピークに対応する往復の群走時 [ns]（スカラー）。"""
+    _, opt_g, _ = path_integrals(np.array([BAND_CENTRE_HZ]),
+                                 float(event['depth_m']), level, group=True)
+    return float(2.0 * TX_HEIGHT / C + 2.0 * opt_g[0] / C)
 
 
 def synth_theory(E_ref_f, freq, event, level):
@@ -733,9 +731,6 @@ def plot_spectra(results, info, output_dir):
                     lw=1.4, **st)
     ax.set_yticks(range(len(results)))
     ax.set_yticklabels([r['name'] for r in results])
-    
-    ax.invert_yaxis()  # <--- この1行を追加します
-    
     ax.set_xlabel('Frequency [GHz]', fontsize=13)
     ax.set_title(r'(b) Centroid and spectral width $f_c \pm \sigma_f$'
                  '   (middle marker = $f_c$)', fontsize=13)

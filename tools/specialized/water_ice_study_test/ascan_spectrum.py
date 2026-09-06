@@ -66,6 +66,10 @@ from subsurface_model import (  # noqa: F401  （再エクスポートを兼ね�
     level4_ice_volpct, set_level4_ice, _parse_ice_model_key,
     _is_ice_model_layer, level4_ice_model_from_kind, set_level4_ice_model,
     configure_from_kind, level3_targets, level3_eps, level3_tandelta,
+    has_density_profile, has_ice_layer, eps_at_depth, alpha_at_depth,
+    path_integrals, interface_depths, surface_index, r_eff_oneway,
+    interface_reflection, transmission_product, describe_level5_medium,
+    level5_in_ice,
     level3_alpha, _group_index_from_eps, level3_group_index,
     level4_porosity, level4_ice_weight_fraction, level4_ice_volume_fraction,
     level4_targets, level4_eps, level4_tandelta, level4_alpha,
@@ -651,72 +655,50 @@ _LEVEL4_ACTIVE_ICE_KEY = None
 # =============================================================================
 # 理論：Level 4（水氷層を透過して深さ d に届く波）
 # =============================================================================
-def transfer_absorb_layered(f, d, n=None):
-    """Level 4 の吸収項 exp(-∫alpha dz)（片道透過、層ごとに積分）。"""
-    acc = np.zeros_like(np.asarray(f, dtype=float))
-    for length, in_ice in level4_segments(d):
-        acc = acc + level4_alpha(f, in_ice) * length
-    return np.exp(-acc)
 
 
-def transfer_ice_T(f, d, n=None):
-    """氷層界面の透過係数の積（Ez は界面に接線なので T = 2 n1/(n1+n2)）。
+def transfer_geom_layered(f, d, level):
+    """層構造・深さ不均質での幾何減衰項。
 
-    上面（レゴリス -> 氷）と下面（氷 -> レゴリス）を横切った分だけ掛ける。
-    両方を横切ると積は 4 n1 n2/(n1+n2)^2 となりほぼ 1（10 vol% で -0.005 dB）
-    だが、氷層の内部に rx がある場合は上面の 1 回分だけが効く（-0.21 dB）。
+    界面ごとの近軸屈折則 r -> r*(n_new/n_old) を連続極限に取ると
+        r_eff(d) = n(d) * [ h + ∫_0^d dz/n(z) ]
+    となる。均質なら n*h + d に戻り、これまでの式と一致する。
+    密度プロファイル（Level 5）でも氷層（Level 4）でも同じ式で扱える。
+    """
+    n_d = np.sqrt(eps_at_depth(f, float(d), level)[0])
+    return np.sqrt(n_d / r_eff_oneway(f, d, level)) * np.sqrt(R_REF)
+
+
+def transfer_absorb_layered(f, d, level):
+    """深さ不均質での吸収項 exp(-∫alpha dz)（片道透過）。"""
+    att, _, _ = path_integrals(f, d, level)
+    return np.exp(-att)
+
+
+def transfer_ice_T(f, d, level):
+    """地表より下の界面（氷層の上下面）の透過係数の積。
+
+    地表透過は transfer_surface_T が別に扱うので、ここでは除く。
     多重反射は R^2 のオーダー（10 vol% で -64 dB）なので無視する。
     """
-    n_reg = np.sqrt(level4_eps(f, False)[0])
-    n_ice = np.sqrt(level4_eps(f, True)[0])
-    crossed = level4_interfaces_crossed(d)
-    T = np.ones_like(n_reg)
-    if crossed >= 1:
-        T = T * (2.0 * n_reg / (n_reg + n_ice))      # レゴリス -> 氷
-    if crossed >= 2:
-        T = T * (2.0 * n_ice / (n_reg + n_ice))      # 氷 -> レゴリス
-    return T
+    return transmission_product(f, d, level, two_way=False,
+                                include_surface=False)
 
 
-def transfer_geom_layered(f, d):
-    """層構造での幾何減衰項。
-
-    見かけ源距離を界面ごとに更新する（近軸の屈折則 r -> r * n_new/n_old）。
-    界面がなければ r_eff = n*TX_HEIGHT + d となり transfer_geom と一致する。
-    """
-    n_reg = np.sqrt(level4_eps(f, False)[0])
-    n_ice = np.sqrt(level4_eps(f, True)[0])
-    r = n_reg * TX_HEIGHT           # 真空 -> レゴリスの見かけ源距離
-    n_prev = n_reg
-    for length, in_ice in level4_segments(d):
-        n_cur = n_ice if in_ice else n_reg
-        r = r * (n_cur / n_prev) + length
-        n_prev = n_cur
-    return np.sqrt(n_prev / r) * np.sqrt(R_REF)
-
-
-def transfer_phase_layered(f, d):
-    """層構造での走時位相項。t_arr = h/c + Σ n_i L_i / c。"""
-    n_reg = np.sqrt(level4_eps(f, False)[0])
-    n_ice = np.sqrt(level4_eps(f, True)[0])
-    t_arr_f = np.full_like(n_reg, TX_HEIGHT / C)
-    for length, in_ice in level4_segments(d):
-        t_arr_f = t_arr_f + (n_ice if in_ice else n_reg) * length / C
+def transfer_phase_layered(f, d, level):
+    """深さ不均質での走時位相項。t_arr = h/c + ∫ n dz / c。"""
+    _, opt, _ = path_integrals(f, d, level)
+    t_arr_f = TX_HEIGHT / C + opt / C
     delay_s = (t_arr_f - R_REF / C) * 1e-9
     return np.exp(-2j * np.pi * f * delay_s), t_arr_f
 
 
-def level4_group_arrival(d, f0=None):
-    """包絡ピークの位置に対応する群走時 [ns]（スカラー）。"""
-    fc = BAND_CENTRE_HZ if f0 is None else f0
-    ng_reg = float(_group_index_from_eps(
-        lambda ff: level4_eps(ff, False)[0], np.array([fc]))[0])
-    ng_ice = float(_group_index_from_eps(
-        lambda ff: level4_eps(ff, True)[0], np.array([fc]))[0])
-    t = TX_HEIGHT / C
-    for length, in_ice in level4_segments(d):
-        t += (ng_ice if in_ice else ng_reg) * length / C
-    return t
+def group_arrival_layered(d, level):
+    """包絡ピークに対応する群走時 [ns]（スカラー）。"""
+    _, opt_g, _ = path_integrals(np.array([BAND_CENTRE_HZ]), d, level,
+                                 group=True)
+    return float(TX_HEIGHT / C + opt_g[0] / C)
+
 
 
 def transfer_absorb_tandelta(f, d, n=None):
@@ -746,30 +728,36 @@ def build_transfer(f, d, level, n=None):
     n = refractive_index(f, level)
     # 'ice_layer' があるレベル（Level 4 以降）は経路が層構造になるので、
     # 幾何項・吸収項・走時位相を層ごとに積む版に差し替える。
-    layered = 'ice_layer' in effects
+    # 氷層（Level 4）でも密度プロファイル（Level 5）でも、経路が
+    # 深さ方向に一様でなくなるので経路積分版に切り替える。
+    layered = has_ice_layer(level) or has_density_profile(level)
     H = np.ones_like(f, dtype=complex)
     for effect in effects:
         if effect == 'geom':
-            H = H * (transfer_geom_layered(f, d) if layered
+            H = H * (transfer_geom_layered(f, d, level) if layered
                      else transfer_geom(d, n))
         elif effect == 'surface_T':
-            H = H * transfer_surface_T(n)
+            # Level 5 では地表直下の eps' が 3.0 ではないので、
+            # 深さ 0 の n を使う（均質なら従来と同じ値になる）。
+            H = H * transfer_surface_T(surface_index(f, level) if layered else n)
         elif effect == 'absorb_const':
             H = H * transfer_absorb(f, d, n)
         elif effect == 'absorb_tandelta':
-            H = H * (transfer_absorb_layered(f, d, n) if layered
+            H = H * (transfer_absorb_layered(f, d, level) if layered
                      else transfer_absorb_tandelta(f, d, n))
         elif effect == 'absorb_debye':
             H = H * transfer_absorb_debye(f, d, n)
         elif effect == 'ice_layer':
-            H = H * transfer_ice_T(f, d, n)
+            H = H * transfer_ice_T(f, d, level)
         elif effect == 'density_profile':
-            H = H * transfer_density_profile(f, d, None)
+            # 密度プロファイルは経路積分（transfer_*_layered）に織り込まれて
+            # いるので、ここでは何も掛けない。
+            pass
         else:
             raise CmdInputError('Unknown effect: {}'.format(effect))
 
     if layered:
-        phase, t_arr_f = transfer_phase_layered(f, d)
+        phase, t_arr_f = transfer_phase_layered(f, d, level)
     else:
         phase, t_arr_f = transfer_phase(f, d, n)
     H = H * phase
@@ -786,7 +774,7 @@ def build_transfer(f, d, level, n=None):
         ng = float(level3b_group_index(BAND_CENTRE_HZ)[0])
         t_arr = TX_HEIGHT / C + ng * d / C
     elif layered:
-        t_arr = level4_group_arrival(d)
+        t_arr = group_arrival_layered(d, level)
     elif 'absorb_tandelta' in effects:
         ng = float(level3_group_index(BAND_CENTRE_HZ)[0])
         t_arr = TX_HEIGHT / C + ng * d / C
@@ -1598,8 +1586,8 @@ def interval_alpha(a, b, dz, level):
         # 区間 [a, b] に含まれる層をあらためて取り出す
         acc = np.zeros_like(freq)
         z0, z1 = a['depth_m'], b['depth_m']
-        top = float(LEVEL4_ICE_TOP_M)
-        bot = top + float(LEVEL4_ICE_THICK_M)
+        top = float(sm.LEVEL4_ICE_TOP_M)
+        bot = top + float(sm.LEVEL4_ICE_THICK_M)
         edges = sorted({z0, z1, min(max(top, z0), z1), min(max(bot, z0), z1)})
         for p, q in zip(edges[:-1], edges[1:]):
             if q <= p:
@@ -1742,8 +1730,8 @@ def plot_interval_profile(results, level, output_dir):
 
     # 氷層の位置を全パネルに示す
     if 'ice_layer' in LEVEL_EFFECTS[level]:
-        top = float(LEVEL4_ICE_TOP_M)
-        bot = top + float(LEVEL4_ICE_THICK_M)
+        top = float(sm.LEVEL4_ICE_TOP_M)
+        bot = top + float(sm.LEVEL4_ICE_THICK_M)
         for ax in axes.ravel():
             ax.axhspan(top, bot, color='tab:cyan', alpha=0.12, zorder=0)
 
