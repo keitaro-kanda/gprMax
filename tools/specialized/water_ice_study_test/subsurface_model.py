@@ -215,7 +215,7 @@ LEVEL4_ICE_VOL_PCT = 10.0     # [vol%]
 LEVEL4_ICE_WT_PCT  = 0.5      # [wt%]
 
 LEVEL4_EPS_ICE  = 3.15        # 氷の eps'（GHz 帯。低温での温度依存は小さい）
-LEVEL4_TAND_ICE = 2.0e-4      # [要文献確認] 氷の tan_delta。低温ほど小さいので保守側
+LEVEL4_TAND_ICE = 2.0e-5      # [要文献確認] 氷の tan_delta。低温ほど小さいので保守側
 LEVEL4_RHO_ICE  = 0.94        # [g/cm^3] 82-110 K での氷の密度（wt% 換算用）
 LEVEL4_RHO_GRAIN = 2.645      # [g/cm^3] 斜長岩の粒子密度。空隙率チェックにのみ使う
 
