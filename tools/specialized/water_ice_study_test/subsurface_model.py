@@ -123,7 +123,7 @@ LEVEL_EFFECTS = {
 # したがって Level 4 の理論は、氷層を「透過して」深さ d に届く波の
 # 振幅・走時であり、氷層からの反射そのものは扱わない。
 IMPLEMENTED_LEVELS = {'Level_1', 'Level_2', 'Level_3', 'Level_3b',
-                      'Level_4'}
+                      'Level_4', 'Level_5'}
 
 # JSON の下位選択階層につけるラベル（階層が深いほうまで使う）
 SUBLEVEL_LABELS = ['波形種別', 'サブ条件', '組成 (FeO+TiO2)', 'サブ条件']
@@ -252,6 +252,171 @@ LEVEL4_ICE_MODEL_KEYS = {
     'pore_ice': 'pore', 'pore': 'pore', 'adsorbed': 'pore',
     'excess_ice': 'excess', 'excess': 'excess', 'bulk_ice': 'excess',
 }
+
+
+# =============================================================================
+# Level 5：密度プロファイル（深さ不均質）
+# =============================================================================
+# Level 4 までは密度を一定（eps_r = 3.0 に対応する rho = 1.753647）としていた。
+# Level 5 では Carrier の密度プロファイルを入れ、深さ不均質を導入する。
+#
+#     rho(z) = 1.92 * (z_cm + 12.2) / (z_cm + 18.0)      [g/cm^3]
+#
+# 地表 1.301（eps' = 2.27）から深さ 3 m で 1.885（eps' = 3.26）まで連続的に
+# 増える。Level 4 の均質モデル（rho = 1.753647）は深さ約 0.49 m に相当して
+# いたので、Level 5 では地表付近が Level 4 より薄く、深部が濃くなる。
+#
+# 【Level 4 との違いで効くところ】
+#   * 地表反射が弱くなる  R = -0.268 -> -0.202（-11.4 dB -> -13.9 dB）
+#     地表直下の eps' が 3.0 から 2.27 に下がるため。
+#   * 走時が短くなる      n が浅部で小さいので、同じ深さでも早く着く。
+#   * 減衰が深さ依存      alpha が深いほど大きい。
+#   * 氷層の反射係数は深さで変わる（背景 eps' が深さ依存になるため）。
+#
+# 【.in との対応】Level_5.in は密度プロファイルを薄い層に刻んで実装する。
+# 刻み方（LAYER_DN_STEP / LAYER_DZ_MAX_M）で階段の人工反射が決まるので、
+# .in の #title に出る「階段化による最大の段反射」を必ず確認すること
+# （既定設定で -57.7 dB。氷 10 vol% の界面反射 -32.4 dB より十分小さい）。
+LEVEL5_DENSITY_A = 1.92       # rho(z) = A * (z_cm + B) / (z_cm + C)
+LEVEL5_DENSITY_B = 12.2
+LEVEL5_DENSITY_C = 18.0
+
+# 経路積分の刻み。走時・減衰の深さ積分に使う（.in の層分割とは独立）。
+LEVEL5_INTEGRATION_DZ = 0.0025    # [m]
+
+
+def density_profile(depth_m):
+    """深さ [m] -> バルク密度 [g/cm^3]。Carrier et al. 1991, p493。"""
+    z_cm = np.asarray(depth_m, dtype=float) * 100.0
+    return (LEVEL5_DENSITY_A * (z_cm + LEVEL5_DENSITY_B)
+            / (z_cm + LEVEL5_DENSITY_C))
+
+
+def carrier_eps_real(rho):
+    """Carrier 経験式（Fig. 9.53, SOILS）の eps'。eps' = 1.871^rho。"""
+    return LEVEL3_CARRIER_EPS_BASE ** np.asarray(rho, dtype=float)
+
+
+def level5_targets(depth_m, feotio2_wt=None, in_ice=False):
+    """深さ z における設計目標値 (eps'_target, eps''_target)。
+
+    帯域の幾何平均 f0 における値。Level 3/4 の level3_targets() の
+    深さ依存版にあたる。in_ice=True なら氷を混ぜた値を返す。
+    """
+    wt = _LEVEL3_ACTIVE_WT if feotio2_wt is None else feotio2_wt
+    rho = density_profile(depth_m)
+    er = carrier_eps_real(rho)
+    ei = er * level3_carrier_tandelta(wt, rho)
+    if not in_ice:
+        return er, ei
+    v = level4_ice_volume_fraction()
+    if LEVEL4_ICE_MODEL == 'excess':
+        er_w = ((1.0 - v) * er ** (1.0 / 3.0) + v * _L4_EPS_ICE_CBRT) ** 3
+        ei_w = (1.0 - v) * ei + v * LEVEL4_EPS_ICE * LEVEL4_TAND_ICE
+    else:
+        er_w = (er ** (1.0 / 3.0) + v * _L4_ICE_INC) ** 3
+        ei_w = ei + v * LEVEL4_EPS_ICE * LEVEL4_TAND_ICE
+    return er_w, ei_w
+
+
+def level5_eps(f, depth_m, in_ice=False, feotio2_wt=None):
+    """深さ z・周波数 f における (eps', eps'')。
+
+    f はスカラーか (Nf,)、depth_m はスカラーか (Nz,)。
+    両方が配列なら (Nz, Nf) を返す。
+    """
+    er_t, ei_t = level5_targets(depth_m, feotio2_wt, in_ice)
+    er_t = np.atleast_1d(er_t)[:, None]
+    ei_t = np.atleast_1d(ei_t)[:, None]
+    f_arr = np.atleast_1d(np.asarray(f, dtype=float))[None, :]
+    er_d, ei_d = debye_flat_eps(er_t, ei_t, f_arr)
+    er = er_d if LEVEL3_EPS_REAL_MODE == 'debye' else np.broadcast_to(
+        er_t, er_d.shape).copy()
+    ei = ei_d if LEVEL3_EPS_IMAG_MODE == 'debye' else np.broadcast_to(
+        ei_t, ei_d.shape).copy()
+    return np.squeeze(er), np.squeeze(ei)
+
+
+def level5_alpha(f, depth_m, in_ice=False, feotio2_wt=None):
+    """深さ z・周波数 f における減衰係数 alpha [Np/m]（厳密式）。"""
+    er, ei = level5_eps(f, depth_m, in_ice, feotio2_wt)
+    td = ei / er
+    w_over_c = 2.0 * np.pi * np.asarray(f, dtype=float) / (C * 1e9)
+    with np.errstate(invalid='ignore'):
+        a = w_over_c * np.sqrt(er / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
+    return np.nan_to_num(a, nan=0.0)
+
+
+def level5_index(f, depth_m, in_ice=False, feotio2_wt=None):
+    """深さ z・周波数 f における屈折率 n = sqrt(eps')。"""
+    return np.sqrt(level5_eps(f, depth_m, in_ice, feotio2_wt)[0])
+
+
+def level5_in_ice(depth_m):
+    """その深さが氷層の中かどうか。氷層を持たない設定なら常に False。"""
+    top = float(LEVEL4_ICE_TOP_M)
+    bot = top + float(LEVEL4_ICE_THICK_M)
+    z = np.asarray(depth_m, dtype=float)
+    return (z >= top) & (z < bot)
+
+
+def level5_path_integrals(f, depth_m, with_ice=True, feotio2_wt=None,
+                          dz=None):
+    """地表から深さ d までの片道の経路積分を返す。
+
+        att(f) = ∫ alpha(f, z) dz        [Np]（片道）
+        opt(f) = ∫ n(f, z) dz            [m]（光学的距離。走時は opt/c）
+
+    深さ方向に n も alpha も変わるので、閉形式では書けず数値積分になる。
+    刻みは LEVEL5_INTEGRATION_DZ（既定 2.5 mm = セル幅）。
+    往復にするときは呼び出し側で 2 倍すること。
+    """
+    d = float(depth_m)
+    if d <= 0.0:
+        z0 = np.zeros(1)
+        return (np.zeros_like(np.atleast_1d(np.asarray(f, dtype=float))),
+                np.zeros_like(np.atleast_1d(np.asarray(f, dtype=float))))
+    step = LEVEL5_INTEGRATION_DZ if dz is None else float(dz)
+    nz = max(2, int(np.ceil(d / step)))
+    edges = np.linspace(0.0, d, nz + 1)
+    mid = 0.5 * (edges[:-1] + edges[1:])
+    w = np.diff(edges)
+    ice = level5_in_ice(mid) if with_ice else np.zeros(len(mid), dtype=bool)
+
+    f_arr = np.atleast_1d(np.asarray(f, dtype=float))
+    att = np.zeros_like(f_arr)
+    opt = np.zeros_like(f_arr)
+    for flag in (False, True):
+        sel = ice == flag
+        if not np.any(sel):
+            continue
+        nz_sel = int(np.count_nonzero(sel))
+        shp = (nz_sel, f_arr.size)
+        # level5_eps は squeeze して返すので、ここで (Nz, Nf) に戻す
+        a = np.asarray(level5_alpha(f_arr, mid[sel], flag, feotio2_wt)
+                       ).reshape(shp)
+        n = np.asarray(level5_index(f_arr, mid[sel], flag, feotio2_wt)
+                       ).reshape(shp)
+        att = att + np.sum(a * w[sel][:, None], axis=0)
+        opt = opt + np.sum(n * w[sel][:, None], axis=0)
+    return att, opt
+
+
+def describe_level5_medium(feotio2_wt=None):
+    """Level 5 の密度プロファイル設定を人が読める形で返す。"""
+    zs = (0.0, 0.5, 1.0, 2.0, 3.0)
+    parts = []
+    for z in zs:
+        er, ei = level5_targets(z, feotio2_wt, False)
+        parts.append('z={:.1f}m rho={:.4f} eps={:.4f} tand={:.6f}'.format(
+            z, float(density_profile(z)), float(er), float(ei / er)))
+    n_s = float(np.sqrt(level5_targets(0.0, feotio2_wt, False)[0]))
+    return ('Carrier density profile rho(z)={}*(z+{})/(z+{}) [z:cm]; '
+            'surface reflection R = {:.4f} ({:.1f} dB); '.format(
+                LEVEL5_DENSITY_A, LEVEL5_DENSITY_B, LEVEL5_DENSITY_C,
+                (1 - n_s) / (1 + n_s),
+                20 * np.log10(abs((1 - n_s) / (1 + n_s))))
+            + ' | '.join(parts))
 
 LEVEL3B_RHO      = 1.820224       # [g/cm^3] 1.25 GHz で eps' = 3.0 になる密度
 LEVEL3B_FEOTIO2  = 20.0           # [wt%] 高Tiバサルト想定
@@ -533,6 +698,8 @@ def configure_from_kind(kind, level):
         wt, key = set_level3_composition(kind)
         notes.append('背景レゴリスの組成: FeO+TiO2 = {:.1f} wt%  [{}]'
                      .format(wt, key))
+    if 'density_profile' in effects:
+        notes.append('密度プロファイル: {}'.format(describe_level5_medium()))
     if 'ice_layer' in effects:
         model, mkey = set_level4_ice_model(kind)
         vol, vkey = set_level4_ice(kind)
@@ -940,3 +1107,197 @@ if __name__ == '__main__':
     for _m in LEVEL4_ICE_MODELS:
         globals()['LEVEL4_ICE_MODEL'] = _m
         print(' ', describe_level4_medium())
+
+
+# =============================================================================
+# 経路積分（Level 3/4/5 を統一して扱う）
+# =============================================================================
+# Level 5 では n も alpha も深さで変わるので、伝達関数を閉形式で書けない。
+# そこで「深さ 0 から d までの経路積分」を返す関数をここに集約し、
+# 各解析コードはそれを呼ぶだけにする。
+#
+# Level 3（均質）と Level 4（均質＋氷層）は、密度が一定な特殊ケースとして
+# 同じ関数で扱える。実際 Level 4 の結果は従来の閉形式と一致する。
+#
+# --- 見かけ源距離（幾何減衰）------------------------------------------------
+# 界面ごとの近軸屈折則 r -> r*(n_new/n_old) を連続極限に取ると
+#     dr/dz = 1 + r * d(ln n)/dz
+# となり、解は
+#     片道: r_eff(d) = n(d) * [ h + ∫_0^d dz/n(z) ]
+#     往復: r_eff(d) = 2h + 2 ∫_0^d dz/n(z)
+# 均質なら順に n*h + d、2h + 2d/n となり、これまでの式と一致する。
+# =============================================================================
+
+def has_density_profile(level):
+    return 'density_profile' in LEVEL_EFFECTS.get(level, [])
+
+
+def has_ice_layer(level):
+    return 'ice_layer' in LEVEL_EFFECTS.get(level, [])
+
+
+def eps_at_depth(f, depth_m, level, feotio2_wt=None):
+    """レベルに応じた深さ z・周波数 f の (eps', eps'')。
+
+    depth_m がスカラーなら (Nf,)、配列なら (Nz, Nf) を返す。
+    氷層の内外、密度プロファイルの有無をここで吸収する。
+    """
+    z = np.atleast_1d(np.asarray(depth_m, dtype=float))
+    f_arr = np.atleast_1d(np.asarray(f, dtype=float))
+    in_ice = (level5_in_ice(z) if has_ice_layer(level)
+              else np.zeros(z.shape, dtype=bool))
+    er = np.empty((z.size, f_arr.size))
+    ei = np.empty_like(er)
+    for flag in (False, True):
+        sel = in_ice == flag
+        if not np.any(sel):
+            continue
+        if has_density_profile(level):
+            a, b = level5_eps(f_arr, z[sel], flag, feotio2_wt)
+        elif has_ice_layer(level):
+            a, b = level4_eps(f_arr, flag, feotio2_wt)
+            a = np.broadcast_to(a, (int(sel.sum()), f_arr.size))
+            b = np.broadcast_to(b, (int(sel.sum()), f_arr.size))
+        else:
+            n = refractive_index(f_arr, level)
+            a = np.broadcast_to(n ** 2, (int(sel.sum()), f_arr.size))
+            td = (level2_tandelta(f_arr, n)
+                  if 'absorb_const' in LEVEL_EFFECTS[level]
+                  else np.zeros_like(f_arr))
+            b = a * td
+        er[sel] = np.asarray(a).reshape(int(sel.sum()), f_arr.size)
+        ei[sel] = np.asarray(b).reshape(int(sel.sum()), f_arr.size)
+    return (er[0], ei[0]) if np.ndim(depth_m) == 0 else (er, ei)
+
+
+def alpha_at_depth(f, depth_m, level, feotio2_wt=None):
+    """深さ z・周波数 f の減衰係数 alpha [Np/m]（厳密式）。"""
+    er, ei = eps_at_depth(f, depth_m, level, feotio2_wt)
+    td = ei / er
+    w_over_c = 2.0 * np.pi * np.atleast_1d(np.asarray(f, dtype=float)) / (C * 1e9)
+    with np.errstate(invalid='ignore'):
+        a = w_over_c * np.sqrt(er / 2.0) * np.sqrt(np.sqrt(1.0 + td ** 2) - 1.0)
+    return np.nan_to_num(a, nan=0.0)
+
+
+def path_integrals(f, depth_m, level, feotio2_wt=None, dz=None, group=False):
+    """深さ 0 から d までの片道の経路積分を返す。
+
+        att(f) = ∫ alpha dz        [Np]   吸収
+        opt(f) = ∫ n dz            [m]    光学的距離（走時は opt/c）
+        inv(f) = ∫ dz/n            [m]    見かけ源距離に使う
+
+    group=True なら opt に群屈折率を使う（包絡ピークの走時に対応）。
+    刻みは既定 LEVEL5_INTEGRATION_DZ。氷層と密度プロファイルの境界は
+    自動で刻みに含まれる（境界をまたぐ区間ができないよう分割する）。
+    """
+    f_arr = np.atleast_1d(np.asarray(f, dtype=float))
+    d = float(depth_m)
+    zero = np.zeros_like(f_arr)
+    if d <= 0.0:
+        return zero, zero.copy(), zero.copy()
+
+    step = LEVEL5_INTEGRATION_DZ if dz is None else float(dz)
+    if not has_density_profile(level):
+        # 均質なら層の境界だけで十分（積分は解析的に厳密）
+        edges = sorted({0.0, d} | {b for b in interface_depths(level)
+                                   if 0.0 < b < d})
+    else:
+        edges = [0.0]
+        for b in sorted(b for b in interface_depths(level) if 0.0 < b < d):
+            edges.append(b)
+        edges.append(d)
+        fine = []
+        for a, b in zip(edges[:-1], edges[1:]):
+            m = max(1, int(np.ceil((b - a) / step)))
+            fine.extend(np.linspace(a, b, m + 1)[:-1])
+        fine.append(d)
+        edges = fine
+    edges = np.asarray(edges, dtype=float)
+    mid = 0.5 * (edges[:-1] + edges[1:])
+    w = np.diff(edges)
+
+    alpha = np.asarray(alpha_at_depth(f_arr, mid, level, feotio2_wt)
+                       ).reshape(mid.size, f_arr.size)
+    if group:
+        n = np.empty((mid.size, f_arr.size))
+        h = max(1e5, 1e-3 * float(np.min(np.abs(f_arr)) or 1e8))
+        e0 = np.asarray(eps_at_depth(f_arr, mid, level, feotio2_wt)[0]
+                        ).reshape(mid.size, f_arr.size)
+        ep = np.asarray(eps_at_depth(f_arr + h, mid, level, feotio2_wt)[0]
+                        ).reshape(mid.size, f_arr.size)
+        em = np.asarray(eps_at_depth(f_arr - h, mid, level, feotio2_wt)[0]
+                        ).reshape(mid.size, f_arr.size)
+        n = np.sqrt(e0) + f_arr[None, :] * (np.sqrt(ep) - np.sqrt(em)) / (2 * h)
+    else:
+        n = np.sqrt(np.asarray(eps_at_depth(f_arr, mid, level, feotio2_wt)[0]
+                               ).reshape(mid.size, f_arr.size))
+    n_ph = np.sqrt(np.asarray(eps_at_depth(f_arr, mid, level, feotio2_wt)[0]
+                              ).reshape(mid.size, f_arr.size))
+    att = np.sum(alpha * w[:, None], axis=0)
+    opt = np.sum(n * w[:, None], axis=0)
+    inv = np.sum(w[:, None] / n_ph, axis=0)
+    return att, opt, inv
+
+
+def interface_depths(level):
+    """レベルが持つ地下界面の深さ [m]（地表は含まない）。"""
+    if has_ice_layer(level):
+        top = float(LEVEL4_ICE_TOP_M)
+        return [top, top + float(LEVEL4_ICE_THICK_M)]
+    return []
+
+
+def surface_index(f, level, feotio2_wt=None):
+    """地表直下の屈折率。地表透過係数と幾何項の起点に使う。"""
+    er, _ = eps_at_depth(f, 0.0, level, feotio2_wt)
+    return np.sqrt(er)
+
+
+def r_eff_oneway(f, depth_m, level, feotio2_wt=None):
+    """片道の見かけ源距離 r_eff = n(d) * [ h + ∫dz/n ]。"""
+    _, _, inv = path_integrals(f, depth_m, level, feotio2_wt)
+    er, _ = eps_at_depth(f, float(depth_m), level, feotio2_wt)
+    return np.sqrt(er) * (TX_HEIGHT + inv)
+
+
+def r_eff_roundtrip(f, depth_m, level, feotio2_wt=None):
+    """往復の見かけ源距離 r_eff = 2h + 2∫dz/n。"""
+    _, _, inv = path_integrals(f, depth_m, level, feotio2_wt)
+    return 2.0 * TX_HEIGHT + 2.0 * inv
+
+
+def interface_reflection(f, depth_m, level, feotio2_wt=None, eps=1e-6):
+    """深さ d の界面の反射係数 R = (n_above - n_below)/(n_above + n_below)。"""
+    er_a, _ = eps_at_depth(f, float(depth_m) - eps, level, feotio2_wt)
+    er_b, _ = eps_at_depth(f, float(depth_m) + eps, level, feotio2_wt)
+    na, nb = np.sqrt(er_a), np.sqrt(er_b)
+    return (na - nb) / (na + nb)
+
+
+def transmission_product(f, depth_m, level, feotio2_wt=None, two_way=False,
+                         include_surface=True, eps=1e-6):
+    """深さ d までに横切る界面の透過係数の積。
+
+    Ez は界面に接線なので片道 T = 2 n_above/(n_above + n_below)。
+    two_way=True なら往復ぶん（下向き×上向き）を掛ける。
+    """
+    f_arr = np.atleast_1d(np.asarray(f, dtype=float))
+    T = np.ones_like(f_arr)
+    n_prev = np.ones_like(f_arr)
+    if include_surface:
+        n_s = surface_index(f_arr, level, feotio2_wt)
+        T = T * (2.0 * n_prev / (n_prev + n_s))
+        if two_way:
+            T = T * (2.0 * n_s / (n_prev + n_s))
+        n_prev = n_s
+    for b in interface_depths(level):
+        if b >= float(depth_m) - eps:
+            continue
+        er_a, _ = eps_at_depth(f_arr, b - eps, level, feotio2_wt)
+        er_b, _ = eps_at_depth(f_arr, b + eps, level, feotio2_wt)
+        na, nb = np.sqrt(er_a), np.sqrt(er_b)
+        T = T * (2.0 * na / (na + nb))
+        if two_way:
+            T = T * (2.0 * nb / (na + nb))
+    return T
