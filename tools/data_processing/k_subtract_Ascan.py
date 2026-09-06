@@ -122,10 +122,12 @@ def create_plots(time, target_data, surface_data, subtracted_data, output_dir, b
         for row, (label, data, color, ylim) in enumerate(zip(row_labels, row_data, row_colors, y_limits)):
             ax = axes[row]
             ax.plot(time, data[comp], color=color, linewidth=0.8)
-            ax.set_title(f'{label} - {comp}', fontsize=12)
-            ax.set_xlabel('Time [ns]', fontsize=10)
-            ax.set_ylabel(ylabel, fontsize=10)
+            ax.set_title(f'{label} - {comp}', fontsize=16)
+            ax.set_xlabel('Time [ns]', fontsize=14)
+            ax.set_ylabel(ylabel, fontsize=14)
             ax.grid(True)
+            ax.tick_params(labelsize=12)
+            ax.minorticks_on()
             ax.set_xlim([0, time[-1]])
             ax.set_ylim(ylim)
         
