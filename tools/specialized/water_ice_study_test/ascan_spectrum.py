@@ -83,6 +83,25 @@ from scipy import signal
 from gprMax.exceptions import CmdInputError
 from tools.core.outputfiles_merge import get_output_data
 
+
+# --- 理論に使うレベルの上書き [EDIT HERE] ------------------------------------
+# 既定（None）では JSON で選んだレベルの理論と比べる。これは「順方向モデルが
+# 正しいか」の検証にはなるが、「氷を検出できるか」の検証にはなっていない。
+# 実測では氷の有無が未知なので、解析者は「氷がないと仮定した理論」を当てはめる。
+# そこで出る残差がそのまま検出信号になる。
+#
+#   THEORY_LEVEL_OVERRIDE = 'Level_3'
+#       -> Level 4/5 のデータを「氷なしの理論」で解析する。
+#          残差が深さ 1.0 m（氷層上面）で折れ曲がり、2.0 m（下面）で
+#          飽和する形になり、氷層の位置と厚さが読み取れる。
+#   THEORY_LEVEL_OVERRIDE = None
+#       -> 従来どおり（モデル検証用）
+#
+# 【注意】データ側のレベルは変わらないので、出力先も JSON の階層のまま。
+# 検出用と検証用を混ぜないよう、OUTPUT_SUBDIRNAME を変えるか別フォルダに
+# 退避してから実行すること。
+THEORY_LEVEL_OVERRIDE = None
+
 # =============================================================================
 # 定数
 # =============================================================================
@@ -1869,20 +1888,35 @@ def main():
 
     check_paths_exist(rx_paths, reference)
 
-    results, freq_hz, E_ref, d0_key, d0 = analyze_level(rx_paths, reference, level)
+
+    # --- 理論に使うレベルの上書き（検証用 -> 検出用への切り替え）----------
+    # データ側のレベル（level）はそのままにし、理論だけ別レベルにする。
+    # THEORY_LEVEL_OVERRIDE='Level_3' なら「氷がないと仮定した理論」で
+    # 解析するので、残差がそのまま検出信号になる。
+    theory_level = level
+    if THEORY_LEVEL_OVERRIDE:
+        if THEORY_LEVEL_OVERRIDE not in LEVEL_EFFECTS:
+            raise CmdInputError('THEORY_LEVEL_OVERRIDE が不正: {}'
+                                .format(THEORY_LEVEL_OVERRIDE))
+        theory_level = THEORY_LEVEL_OVERRIDE
+        print('\n【理論レベルの上書き】データ = {} / 理論 = {}'
+              .format(level, theory_level))
+        print('  残差は「氷がないと仮定したときのずれ」= 検出信号になる。')
+        print('  モデル検証をするときは THEORY_LEVEL_OVERRIDE = None に戻すこと。')
+    results, freq_hz, E_ref, d0_key, d0 = analyze_level(rx_paths, reference, theory_level)
 
     output_dir = resolve_output_dir(level, rx_paths)
     os.makedirs(output_dir, exist_ok=True)
 
     plot_spectra(results, freq_hz, E_ref, output_dir)
     plot_lsr(results, freq_hz, d0, output_dir)
-    plot_attenuation(results, freq_hz, level, N_REGOLITH, output_dir)
+    plot_attenuation(results, freq_hz, theory_level, N_REGOLITH, output_dir)
     plot_phase(results, freq_hz, output_dir)
-    plot_interval_profile(results, level, output_dir)
+    plot_interval_profile(results, theory_level, output_dir)
     write_csv(results, output_dir)
-    write_interval_csv(results, level, output_dir)
+    write_interval_csv(results, theory_level, output_dir)
     write_npz(results, freq_hz, E_ref, output_dir)
-    write_run_info(level, kind, JSON_PATH, results, output_dir)
+    write_run_info(theory_level, kind, JSON_PATH, results, output_dir)
 
     print('\nAll outputs saved to:', output_dir)
 

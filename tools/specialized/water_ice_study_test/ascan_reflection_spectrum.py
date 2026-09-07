@@ -54,6 +54,25 @@ from gprMax.exceptions import CmdInputError
 if not any(lab == '水氷の描像' for _, lab in asp._EXTRA_LAYER_LABELS):
     asp._EXTRA_LAYER_LABELS.append((_is_ice_model_layer, '水氷の描像'))
 
+
+# --- 理論に使うレベルの上書き [EDIT HERE] ------------------------------------
+# 既定（None）では JSON で選んだレベルの理論と比べる。これは「順方向モデルが
+# 正しいか」の検証にはなるが、「氷を検出できるか」の検証にはなっていない。
+# 実測では氷の有無が未知なので、解析者は「氷がないと仮定した理論」を当てはめる。
+# そこで出る残差がそのまま検出信号になる。
+#
+#   THEORY_LEVEL_OVERRIDE = 'Level_3'
+#       -> Level 4/5 のデータを「氷なしの理論」で解析する。
+#          残差が深さ 1.0 m（氷層上面）で折れ曲がり、2.0 m（下面）で
+#          飽和する形になり、氷層の位置と厚さが読み取れる。
+#   THEORY_LEVEL_OVERRIDE = None
+#       -> 従来どおり（モデル検証用）
+#
+# 【注意】データ側のレベルは変わらないので、出力先も JSON の階層のまま。
+# 検出用と検証用を混ぜないよう、OUTPUT_SUBDIRNAME を変えるか別フォルダに
+# 退避してから実行すること。
+THEORY_LEVEL_OVERRIDE = None
+
 # =============================================================================
 # 設定  [EDIT HERE]
 # =============================================================================
@@ -153,13 +172,13 @@ def build_events(level):
       above   : その界面より浅い層の [(厚さ, 氷層か), ...]（往復経路の計算用）
     """
     events = [{'name': 'surface', 'depth_m': 0.0, 'above': []}]
-    if 'ice_layer' in LEVEL_EFFECTS[level]:
-        top = float(sm.LEVEL4_ICE_TOP_M)
-        bot = top + float(sm.LEVEL4_ICE_THICK_M)
-        events.append({'name': 'ice_top', 'depth_m': top,
-                       'above': [(top, False)]})
-        events.append({'name': 'ice_bottom', 'depth_m': bot,
-                       'above': [(top, False), (bot - top, True)]})
+    # 氷なし（ICE_MODEL='none'）では interface_depths が空になるので、
+    # 地表反射だけのイベント列になる。Level 1-3 と同じ扱い。
+    bounds = sm.interface_depths(level)
+    names = ['ice_top', 'ice_bottom']
+    for i, b in enumerate(bounds):
+        events.append({'name': names[i] if i < len(names) else 'iface{}'.format(i),
+                       'depth_m': float(b), 'above': []})
     return events
 
 
@@ -734,7 +753,6 @@ def plot_spectra(results, info, output_dir):
     ax.set_xlabel('Frequency [GHz]', fontsize=13)
     ax.set_title(r'(b) Centroid and spectral width $f_c \pm \sigma_f$'
                  '   (middle marker = $f_c$)', fontsize=13)
-    ax.invert_yaxis()
 
     for ax in axes:
         ax.grid(alpha=0.4)

@@ -215,7 +215,7 @@ LEVEL4_ICE_VOL_PCT = 10.0     # [vol%]
 LEVEL4_ICE_WT_PCT  = 0.5      # [wt%]
 
 LEVEL4_EPS_ICE  = 3.15        # 氷の eps'（GHz 帯。低温での温度依存は小さい）
-LEVEL4_TAND_ICE = 2.0e-5      # [要文献確認] 氷の tan_delta。低温ほど小さいので保守側
+LEVEL4_TAND_ICE = 2.0e-4      # [要文献確認] 氷の tan_delta。低温ほど小さいので保守側
 LEVEL4_RHO_ICE  = 0.94        # [g/cm^3] 82-110 K での氷の密度（wt% 換算用）
 LEVEL4_RHO_GRAIN = 2.645      # [g/cm^3] 斜長岩の粒子密度。空隙率チェックにのみ使う
 
@@ -244,13 +244,20 @@ _L4_EPS_ICE_CBRT = LEVEL4_EPS_ICE ** (1.0 / 3.0)       # = 1.46590
 #
 # 2 つは減衰チャネルと反射チャネルで有利・不利がちょうど入れ替わるので、
 # 両方を回して両チャネルを見れば描像そのものを判別できる可能性がある。
-LEVEL4_ICE_MODEL = 'pore'          # 'pore' / 'excess'
-LEVEL4_ICE_MODELS = ('pore', 'excess')
+#   'none'   水氷なし（参照ケース）
+#            氷層そのものを置かない。Level 4/5 の .in を ENABLE_ICE=False で
+#            回したものに対応する。氷量の指定（f_ice_NN）があっても無視して
+#            v_ice = 0 とし、界面も作らない。
+#            氷ありの結果と比べる基準線になるので、各レベルで
+#            pore / excess / none の 3 通りを回す。
+LEVEL4_ICE_MODEL = 'pore'          # 'pore' / 'excess' / 'none'
+LEVEL4_ICE_MODELS = ('pore', 'excess', 'none')
 
 # JSON のサブ階層キーと描像の対応。別名を使うならここに足す。
 LEVEL4_ICE_MODEL_KEYS = {
     'pore_ice': 'pore', 'pore': 'pore', 'adsorbed': 'pore',
     'excess_ice': 'excess', 'excess': 'excess', 'bulk_ice': 'excess',
+    'no_ice': 'none', 'none': 'none', 'dry': 'none', 'ice_off': 'none',
 }
 
 
@@ -353,7 +360,10 @@ def level5_index(f, depth_m, in_ice=False, feotio2_wt=None):
 
 
 def level5_in_ice(depth_m):
-    """その深さが氷層の中かどうか。氷層を持たない設定なら常に False。"""
+    """その深さが氷層の中かどうか。氷なし（'none'）なら常に False。"""
+    z0 = np.asarray(depth_m, dtype=float)
+    if LEVEL4_ICE_MODEL == 'none' or LEVEL4_ICE_THICK_M <= 0.0:
+        return np.zeros(z0.shape, dtype=bool)
     top = float(LEVEL4_ICE_TOP_M)
     bot = top + float(LEVEL4_ICE_THICK_M)
     z = np.asarray(depth_m, dtype=float)
@@ -702,10 +712,19 @@ def configure_from_kind(kind, level):
         notes.append('密度プロファイル: {}'.format(describe_level5_medium()))
     if 'ice_layer' in effects:
         model, mkey = set_level4_ice_model(kind)
-        vol, vkey = set_level4_ice(kind)
-        notes.append('水氷の描像: {}  [{}]'.format(model, mkey))
-        notes.append('水氷濃度: {:.2f} vol% = {:.3f} wt%  [{}]'
-                     .format(vol, 100 * level4_ice_weight_fraction(), vkey))
+        # 氷なしなら f_ice_NN キーが無くてもよい
+        try:
+            vol, vkey = set_level4_ice(kind)
+        except CmdInputError:
+            if model != 'none':
+                raise
+            vol, vkey = 0.0, '(none)'
+        if model == 'none':
+            notes.append('水氷: なし（参照ケース）  [{}]'.format(mkey))
+        else:
+            notes.append('水氷の描像: {}  [{}]'.format(model, mkey))
+            notes.append('水氷濃度: {:.2f} vol% = {:.3f} wt%  [{}]'
+                         .format(vol, 100 * level4_ice_weight_fraction(), vkey))
     return notes
 
 def level3_targets(feotio2_wt=None):
@@ -795,6 +814,9 @@ def level4_ice_volume_fraction():
     if LEVEL4_ICE_MODEL not in LEVEL4_ICE_MODELS:
         raise CmdInputError(
             "LEVEL4_ICE_MODEL は {} のいずれか".format(LEVEL4_ICE_MODELS))
+    if LEVEL4_ICE_MODEL == 'none':
+        # 氷なしの参照ケース。JSON に f_ice_NN があっても無視する。
+        return 0.0
     if LEVEL4_ICE_SPEC == 'vol':
         v = LEVEL4_ICE_VOL_PCT / 100.0
     elif LEVEL4_ICE_SPEC == 'wt':
@@ -900,6 +922,8 @@ def describe_level4_medium():
     a_i = float(level4_alpha(np.array([BAND_CENTRE_HZ]), True)[0])
     key_note = ('' if _LEVEL4_ACTIVE_ICE_KEY is None
                 else ' [{}]'.format(_LEVEL4_ACTIVE_ICE_KEY))
+    if LEVEL4_ICE_MODEL == 'none':
+        return 'no ice (reference case: ice layer not present)'
     model_note = ('pore-filling (adsorbed water)' if LEVEL4_ICE_MODEL == 'pore'
                   else 'bulk replacement (excess ice)')
     return ('ice layer {:.3f} vol%{} ({:.3f} wt%) at {:.2f}-{:.2f} m, '
@@ -1241,7 +1265,12 @@ def path_integrals(f, depth_m, level, feotio2_wt=None, dz=None, group=False):
 
 
 def interface_depths(level):
-    """レベルが持つ地下界面の深さ [m]（地表は含まない）。"""
+    """レベルが持つ地下界面の深さ [m]（地表は含まない）。
+
+    氷なし（LEVEL4_ICE_MODEL='none'）なら地下界面は存在しない。
+    """
+    if LEVEL4_ICE_MODEL == 'none':
+        return []
     if has_ice_layer(level):
         top = float(LEVEL4_ICE_TOP_M)
         return [top, top + float(LEVEL4_ICE_THICK_M)]

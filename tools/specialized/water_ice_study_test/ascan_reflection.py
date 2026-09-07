@@ -40,6 +40,24 @@ import matplotlib.pyplot as plt
 # 地下構造モデル（.in が定める物理）。レベル更新時はここだけを触る。
 import subsurface_model as sm
 # 解析の手順（JSON の読み込みなど）はこれまでどおり ascan_spectrum から。
+
+# --- 理論に使うレベルの上書き [EDIT HERE] ------------------------------------
+# 既定（None）では JSON で選んだレベルの理論と比べる。これは「順方向モデルが
+# 正しいか」の検証にはなるが、「氷を検出できるか」の検証にはなっていない。
+# 実測では氷の有無が未知なので、解析者は「氷がないと仮定した理論」を当てはめる。
+# そこで出る残差がそのまま検出信号になる。
+#
+#   THEORY_LEVEL_OVERRIDE = 'Level_3'
+#       -> Level 4/5 のデータを「氷なしの理論」で解析する。
+#          残差が深さ 1.0 m（氷層上面）で折れ曲がり、2.0 m（下面）で
+#          飽和する形になり、氷層の位置と厚さが読み取れる。
+#   THEORY_LEVEL_OVERRIDE = None
+#       -> 従来どおり（モデル検証用）
+#
+# 【注意】データ側のレベルは変わらないので、出力先も JSON の階層のまま。
+# 検出用と検証用を混ぜないよう、OUTPUT_SUBDIRNAME を変えるか別フォルダに
+# 退避してから実行すること。
+THEORY_LEVEL_OVERRIDE = None
 import ascan_spectrum as asp
 
 
