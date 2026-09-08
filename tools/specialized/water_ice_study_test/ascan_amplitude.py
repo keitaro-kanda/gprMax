@@ -84,23 +84,23 @@ from gprMax.exceptions import CmdInputError
 from tools.core.outputfiles_merge import get_output_data
 
 
-# --- 理論に使うレベルの上書き [EDIT HERE] ------------------------------------
-# 既定（None）では JSON で選んだレベルの理論と比べる。これは「順方向モデルが
-# 正しいか」の検証にはなるが、「氷を検出できるか」の検証にはなっていない。
-# 実測では氷の有無が未知なので、解析者は「氷がないと仮定した理論」を当てはめる。
-# そこで出る残差がそのまま検出信号になる。
+# --- 氷あり／氷なし理論の比較 [EDIT HERE] ------------------------------------
+# 氷を含むデータ（f_ice_NN）を解析するとき、次の 2 種類を自動で出す。
+#   1. 通常の出力          … 実測 + 氷ありの理論（順方向モデルの検証）
+#   2. NOICE_SUBDIRNAME 以下 … 実測 + 氷あり理論 + 氷なし理論（検出性能）
 #
-#   THEORY_LEVEL_OVERRIDE = 'Level_3'
-#       -> Level 4/5 のデータを「氷なしの理論」で解析する。
-#          残差が深さ 1.0 m（氷層上面）で折れ曲がり、2.0 m（下面）で
-#          飽和する形になり、氷層の位置と厚さが読み取れる。
-#   THEORY_LEVEL_OVERRIDE = None
-#       -> 従来どおり（モデル検証用）
+# 実測では氷の有無が未知なので、解析者はまず「氷がないと仮定した理論」を
+# 当てはめる。そこで出る残差がそのまま検出信号になる。
 #
-# 【注意】データ側のレベルは変わらないので、出力先も JSON の階層のまま。
-# 検出用と検証用を混ぜないよう、OUTPUT_SUBDIRNAME を変えるか別フォルダに
-# 退避してから実行すること。
-THEORY_LEVEL_OVERRIDE = None
+# 【氷なし理論の作り方】レベルは変えない。Level 5 の氷なしは Level 3 では
+# なく「Level 5 のまま氷だけ取り除いたもの」である。Level 5 は経験式で
+# 深さ方向の eps'/tan_delta 変化を入れているので、それを残す必要がある。
+# subsurface_model.no_ice_theory() が LEVEL4_ICE_MODEL を一時的に 'none' に
+# するだけなので、密度プロファイルはそのまま残る。
+#
+# 氷なしのデータ（no_ice）を解析するときは、氷あり理論が存在しないので
+# 比較図は作らない（通常の出力だけになる）。
+NOICE_SUBDIRNAME = 'ice_vs_noice'
 
 # =============================================================================
 # 定数
@@ -1176,6 +1176,88 @@ def write_csv(results, t_check, output_dir):
     print('Saved:', path)
 
 
+def plot_ice_vs_noice(results, results_noice, output_dir):
+    """検出図: 振幅・到達時刻の実測が、氷なし理論からどれだけ外れるか。
+
+    (a) 振幅 vs 深さ（実測・氷あり理論・氷なし理論）
+    (b) 氷なし理論に対する振幅残差 = 検出信号
+    (c) 到達時刻 vs 深さ（同上）
+    (d) 氷なし理論に対する走時残差 = 検出信号
+
+    (b)(d) は氷層に届くまでゼロ、届いてから増え、抜けたら飽和する。
+    折れ曲がりが氷層上面、飽和が下面を与える。
+    """
+    z = np.array([r['depth_m'] for r in results])
+    a_m = np.array([r['amp_meas_db'] for r in results])
+    a_i = np.array([r['amp_theory_db'] for r in results])
+    a_n = np.array([r['amp_theory_db'] for r in results_noice])
+    t_m = np.array([r['t_meas_ns'] for r in results])
+    t_i = np.array([r['t_theory_ns'] for r in results])
+    t_n = np.array([r['t_theory_ns'] for r in results_noice])
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+    ax_a, ax_b, ax_c, ax_d = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
+    fig.suptitle('Detection view: measured vs ice / no-ice theory',
+                 fontsize=14, y=1.00)
+
+    ax_a.plot(a_m, z, 'o', color='k', ms=5, label='measured')
+    ax_a.plot(a_i, z, '-', color='r', lw=1.5, label='theory (ice)')
+    ax_a.plot(a_n, z, ':', color='b', lw=1.5, label='theory (no ice)')
+    ax_b.plot(a_m - a_n, z, 'o-', color='k', lw=1.6, ms=5,
+              label='measured - no ice')
+    ax_b.plot(a_i - a_n, z, '--', color='r', lw=1.4, label='ice - no ice')
+
+    ax_c.plot(t_m, z, 'o', color='k', ms=5, label='measured')
+    ax_c.plot(t_i, z, '-', color='r', lw=1.5, label='theory (ice)')
+    ax_c.plot(t_n, z, ':', color='b', lw=1.5, label='theory (no ice)')
+    ax_d.plot(t_m - t_n, z, 'o-', color='k', lw=1.6, ms=5,
+              label='measured - no ice')
+    ax_d.plot(t_i - t_n, z, '--', color='r', lw=1.4, label='ice - no ice')
+
+    for ax, xlab, ttl in (
+            (ax_a, 'Envelope peak amplitude [dB re. E_ref]',
+             '(a) Amplitude vs depth'),
+            (ax_b, 'Amplitude residual [dB]',
+             '(b) Amplitude signature = detection signal'),
+            (ax_c, 'Arrival time [ns]', '(c) Arrival time vs depth'),
+            (ax_d, 'Arrival time residual [ns]',
+             '(d) Travel-time signature = detection signal')):
+        ax.set_xlabel(xlab, fontsize=12)
+        ax.set_ylabel('rx depth [m]', fontsize=12)
+        ax.set_title(ttl, fontsize=13)
+        ax.grid(alpha=0.4)
+        ax.minorticks_on()
+        ax.invert_yaxis()
+        ax.legend(fontsize=9)
+    for ax in (ax_b, ax_d):
+        ax.axvline(0.0, color='0.5', lw=0.8)
+    bounds = sm.interface_depths_for_plot()
+    if bounds:
+        for ax in axes.ravel():
+            ax.axhspan(bounds[0], bounds[-1], color='tab:cyan', alpha=0.12,
+                       zorder=0)
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig5_ice_vs_noice')
+
+
+def write_detection_csv(results, results_noice, output_dir):
+    """氷なし理論に対する残差を数値で出す（検出信号そのもの）。"""
+    import csv
+    path = os.path.join(output_dir, 'detection_vs_noice.csv')
+    with open(path, 'w', newline='', encoding='utf-8') as fh:
+        w = csv.writer(fh)
+        w.writerow(['depth_m', 'damp_meas_minus_noice_dB',
+                    'damp_iceTheory_minus_noice_dB',
+                    'dt_meas_minus_noice_ns', 'dt_iceTheory_minus_noice_ns'])
+        for r, rn in zip(results, results_noice):
+            w.writerow([r['depth_m'],
+                        r['amp_meas_db'] - rn['amp_theory_db'],
+                        r['amp_theory_db'] - rn['amp_theory_db'],
+                        r['t_meas_ns'] - rn['t_theory_ns'],
+                        r['t_theory_ns'] - rn['t_theory_ns']])
+    print('Saved:', path)
+
+
 def write_run_info(level, kind, json_path, results, t_check, output_dir):
     path = os.path.join(output_dir, 'run_info.txt')
     with open(path, 'w') as f:
@@ -1238,21 +1320,8 @@ def main():
             '追加してください。'.format(level, ', '.join(sorted(IMPLEMENTED_LEVELS))))
 
 
-    # --- 理論に使うレベルの上書き（検証用 -> 検出用への切り替え）----------
-    # データ側のレベル（level）はそのままにし、理論だけ別レベルにする。
-    # THEORY_LEVEL_OVERRIDE='Level_3' なら「氷がないと仮定した理論」で
-    # 解析するので、残差がそのまま検出信号になる。
+    results, t_check, e_ref, dt_ref = analyze_level(rx_paths, reference, level)
     theory_level = level
-    if THEORY_LEVEL_OVERRIDE:
-        if THEORY_LEVEL_OVERRIDE not in LEVEL_EFFECTS:
-            raise CmdInputError('THEORY_LEVEL_OVERRIDE が不正: {}'
-                                .format(THEORY_LEVEL_OVERRIDE))
-        theory_level = THEORY_LEVEL_OVERRIDE
-        print('\n【理論レベルの上書き】データ = {} / 理論 = {}'
-              .format(level, theory_level))
-        print('  残差は「氷がないと仮定したときのずれ」= 検出信号になる。')
-        print('  モデル検証をするときは THEORY_LEVEL_OVERRIDE = None に戻すこと。')
-    results, t_check, e_ref, dt_ref = analyze_level(rx_paths, reference, theory_level)
 
     output_dir = resolve_output_dir(level, rx_paths)
     os.makedirs(output_dir, exist_ok=True)
@@ -1262,6 +1331,16 @@ def main():
     plot_waveforms(results, output_dir)
     write_csv(results, t_check, output_dir)
     write_run_info(theory_level, kind, JSON_PATH, results, t_check, output_dir)
+
+    # --- 氷を含むデータなら、氷なし理論との比較図も自動で作る -------------
+    if sm.ice_is_present():
+        noice_dir = os.path.join(output_dir, NOICE_SUBDIRNAME)
+        os.makedirs(noice_dir, exist_ok=True)
+        print('\n氷なし理論との比較図を作成中 ->', noice_dir)
+        with sm.no_ice_theory():
+            results_noice, _, _, _ = analyze_level(rx_paths, reference, level)
+        plot_ice_vs_noice(results, results_noice, noice_dir)
+        write_detection_csv(results, results_noice, noice_dir)
 
     print('\nAll outputs saved to:', output_dir)
 

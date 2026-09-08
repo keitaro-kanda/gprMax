@@ -49,6 +49,7 @@ JSON のサブ階層キー（pore_ice / excess_ice）から自動判定する。
 確認できる。
 """
 
+import contextlib
 import re
 
 import numpy as np
@@ -1330,3 +1331,46 @@ def transmission_product(f, depth_m, level, feotio2_wt=None, two_way=False,
         if two_way:
             T = T * (2.0 * nb / (na + nb))
     return T
+
+
+# =============================================================================
+# 氷なし理論（検出性能を見るための対照）
+# =============================================================================
+# 実測では氷の有無が未知なので、解析者はまず「氷がないと仮定した理論」を
+# 当てはめる。そこで出る残差がそのまま検出信号になる。
+#
+# 【レベルは変えないこと】Level 5 の氷なし理論は Level 3 ではない。
+# Level 5 は経験式で深さ方向の eps'/tan_delta 変化を入れているので、
+# それを残したまま氷だけを取り除く必要がある。そこでレベルは据え置き、
+# LEVEL4_ICE_MODEL を一時的に 'none' にする。
+#     Level 4 の氷なし -> 均質背景（結果として Level 3 と同じ）
+#     Level 5 の氷なし -> 密度プロファイルは残り、氷層だけが消える
+# =============================================================================
+
+def ice_is_present():
+    """いま氷ありの設定になっているか（氷なしケースの解析では False）。"""
+    return LEVEL4_ICE_MODEL != 'none' and LEVEL4_ICE_VOL_PCT > 0.0
+
+
+@contextlib.contextmanager
+def no_ice_theory():
+    """氷なし理論を一時的に使う。レベルと密度プロファイルはそのまま。"""
+    global LEVEL4_ICE_MODEL
+    keep = LEVEL4_ICE_MODEL
+    LEVEL4_ICE_MODEL = 'none'
+    try:
+        yield
+    finally:
+        LEVEL4_ICE_MODEL = keep
+
+
+def interface_depths_for_plot():
+    """作図で氷層の帯を描くための [上面, 下面]。氷なしなら空リスト。
+
+    LEVEL4_ICE_MODEL が 'none' でも、設定上の氷層位置を返したい場面がある
+    （氷なし理論の文脈で呼ばれても帯を描けるようにするため）。
+    """
+    if not has_ice_layer('Level_4') or LEVEL4_ICE_THICK_M <= 0:
+        return []
+    top = float(LEVEL4_ICE_TOP_M)
+    return [top, top + float(LEVEL4_ICE_THICK_M)]
