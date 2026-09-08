@@ -143,6 +143,45 @@ BACKGROUND_TRACE_PATH = ''         # 氷なし at_tx の .out。空なら差分�
 # 平坦でなければ、ゲート・吸収モデル・幾何項のいずれかが誤っていることになる。
 PLOT_REFLECTION_SPECTRUM = False   # 既定 False。診断したいときだけ True
 
+# --- fig6: 時間-周波数マップ（狙い撃ちをしない表示）--------------------------
+# 【なぜ追加したか】
+# fig1 は surface / ice_top / ice_bottom の理論走時をあらかじめ計算し、その時刻
+# だけをゲートしてスペクトルを取っている。順方向モデルの検証には最短の方法だが、
+# 「どこに何が来るか」を先に知っている前提なので、実際の観測ではできない。
+# そこで、同じゲートを時間方向に一定間隔で滑らせ、全時刻のスペクトルを 2 次元
+# マップとして描く。イベントの位置を仮定せずに重心周波数とスペクトル幅の
+# 時間変化が読めるので、fig1 の「狙い撃ち」の結果が生データのどこに対応して
+# いるのかを確認できる。fig1 は削らず、両方を出す。
+#
+# 【分解能のトレードオフ】窓長 2*halfwidth に対して周波数分解能は
+# 約 1/(2*halfwidth) になる。既定の 2.0 ns なら 0.25 GHz で、帯域 1.5 GHz を
+# 6 点でしか刻めない。重心とスペクトル幅は積分量なのでこの分解能でも意味を
+# 持つが、スペクトルの細かい構造を読む用途には向かない。
+PLOT_SPECTROGRAM = True
+SPECTROGRAM_HALFWIDTH_NS = None    # None なら GATE_HALFWIDTH_NS と同じ（fig1 と揃う）
+SPECTROGRAM_STEP_NS = 0.10         # ゲート中心を進める刻み
+SPECTROGRAM_TIME_RANGE_NS = None   # None なら自動（全イベントを含む範囲）
+SPECTROGRAM_FREQ_RANGE_GHZ = (0.3, 2.3)   # 表示する周波数範囲（帯域より少し広く）
+SPECTROGRAM_DB_RANGE = 90.0        # カラースケールの下限（最大値からの落差）。
+                                   # 地表反射から 80 dB 下の excess の ice_top まで
+                                   # 入れる必要があるので広めに取ってある。
+                                   # 強いイベントだけを見たいなら 40-60 に狭める。
+SPECTROGRAM_NORM = 'map_max'       # 'map_max' … マップ全体の最大で正規化
+                                   # 'lsr'     … 参照計算 far_1m で割る（fig2 と同じ量）
+SPECTROGRAM_SNR_MIN_DB = 6.0       # これ未満の時刻では重心の追跡線を破線に落とす。
+                                   # フロアを測っているだけの区間で重心が
+                                   # 跳ねるのを、線種で区別できるようにする。
+SPECTROGRAM_CMAP = 'viridis'
+SPECTROGRAM_TRACK_SMOOTH_NS = 0.0  # 追跡線の移動平均の窓幅 [ns]。0 なら平滑化しない。
+                                   # 【なぜ振動するか】励振が平坦帯域なので時間
+                                   # 領域では sinc に近く、長いリンギングを持つ。
+                                   # 窓を滑らせるとその山谷が窓の縁を出入りし、
+                                   # 重心が窓の位置に応じて細かく振れる。これは
+                                   # 数値誤差ではなく実際に起きていることなので、
+                                   # 既定では平滑化しない。読みにくいときだけ
+                                   # 0.5-1.0 ns 程度を入れる（表示のみ。CSV には
+                                   # 常に平滑化前の値を書く）。
+
 FIG_EVENT_COLORS = ['k', 'tab:red', 'tab:blue', 'tab:green', 'tab:purple']
 
 # 実測と理論の描き分け（全図で共通）。o / 実線 = 実測、x / 破線 = 理論。
@@ -909,6 +948,229 @@ def plot_reflection(results, info, output_dir):
 # =============================================================================
 # 8. 数値出力
 # =============================================================================
+def compute_spectrogram(results, info):
+    """ゲートを時間方向に滑らせ、時間-周波数マップと重心の追跡を返す。
+
+    fig1 と同じ gate_trace / spectrum / moments を使うので、追跡線が各イベントの
+    理論走時を横切る位置での値は、fig1 のマーカーと一致するはずである
+    （GATE_CENTER='theory' のとき厳密に、'measured' のときはゲート中心の
+    決め方のぶんだけずれる）。両者が食い違うなら、どちらかのゲートが
+    イベントを外している。
+
+    返す dict:
+        t_ns      (Nt,)      ゲート中心の時刻
+        freq_ghz  (Nf,)      表示帯の周波数
+        S_db      (Nt, Nf)   スペクトル強度 [dB]
+        f_c, sigma_f         (Nt,) 重心とスペクトル幅 [GHz]（帯域 BAND_GHZ 内）
+        peak_db   (Nt,)      その窓の包絡ピーク [dB re. surface peak]
+        snr_db    (Nt,)      peak_db - ノイズフロア
+        usable    (Nt,) bool snr_db >= SPECTROGRAM_SNR_MIN_DB
+    """
+    dt = info['dt']
+    dt_ns = dt * 1e9
+    work = info['work']
+    freq = info['freq']
+    hw = (GATE_HALFWIDTH_NS if SPECTROGRAM_HALFWIDTH_NS is None
+          else float(SPECTROGRAM_HALFWIDTH_NS))
+    t_end = (len(work) - 1) * dt_ns
+
+    if SPECTROGRAM_TIME_RANGE_NS is not None:
+        t0, t1 = SPECTROGRAM_TIME_RANGE_NS
+    else:
+        # 全イベントを含み、最後のイベントの後ろにも余裕を持たせる。
+        t_last = max(r['t_theory'] for r in results) if results else t_end
+        t0, t1 = 0.0, min(t_end, t_last + 4.0 * hw)
+    # 窓がトレースからはみ出さない範囲に収める。
+    t0 = max(t0, hw)
+    t1 = min(t1, t_end - hw)
+    if not (t1 > t0):
+        raise CmdInputError(
+            'スペクトログラムの時間範囲が空です（t0={:.2f}, t1={:.2f} ns）。'
+            'SPECTROGRAM_TIME_RANGE_NS か SPECTROGRAM_HALFWIDTH_NS を'
+            '見直してください。'.format(t0, t1))
+    t_centers = np.arange(t0, t1 + 0.5 * SPECTROGRAM_STEP_NS,
+                          SPECTROGRAM_STEP_NS)
+
+    f_ghz_all = freq * 1e-9
+    fsel = ((f_ghz_all >= SPECTROGRAM_FREQ_RANGE_GHZ[0])
+            & (f_ghz_all <= SPECTROGRAM_FREQ_RANGE_GHZ[1]))
+    if not np.any(fsel):
+        raise CmdInputError('SPECTROGRAM_FREQ_RANGE_GHZ に周波数点がありません')
+
+    mag = np.empty((t_centers.size, int(np.count_nonzero(fsel))))
+    f_c = np.full(t_centers.size, np.nan)
+    sig = np.full(t_centers.size, np.nan)
+    pk_db = np.full(t_centers.size, -np.inf)
+
+    for i, tc in enumerate(t_centers):
+        gated, _ = gate_trace(work, dt, float(tc), hw)
+        _, E = spectrum(gated, dt)
+        mag[i] = np.abs(E[fsel])
+        pk = measure_peak(gated, dt)['amp_peak']
+        with np.errstate(divide='ignore'):
+            pk_db[i] = 20.0 * np.log10(pk / info['surface_amp'])
+        # 帯域内に電力が無い窓（トレース冒頭など）では重心が定義できない。
+        with np.errstate(invalid='ignore', divide='ignore'):
+            try:
+                m = moments(freq, E)
+                if np.isfinite(m['f_c']):
+                    f_c[i] = m['f_c'] * 1e-9
+                    sig[i] = m['sigma_f'] * 1e-9
+            except (ZeroDivisionError, FloatingPointError, ValueError):
+                pass
+
+    if SPECTROGRAM_NORM == 'lsr':
+        # 【帯域端の発散を防ぐ】far_1m は帯域外でほぼゼロなので、そのまま割ると
+        # SPECTROGRAM_FREQ_RANGE_GHZ の端で LSR が +300 dB といった値になり、
+        # カラースケールがそこに占領されて中身が見えなくなる。
+        # valid_mask の第 1 段と同じ規則（帯域内最大から MASK_REF_FLOOR_DB 以上
+        # 落ちる周波数は使わない）で切り、切った列は NaN にして描かない。
+        ref = np.abs(info['E_ref'])
+        in_band = ((f_ghz_all >= BAND_GHZ[0]) & (f_ghz_all <= BAND_GHZ[1]))
+        ref_max = np.max(ref[in_band]) if np.any(in_band) else np.nan
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ref_db = 20.0 * np.log10(ref / ref_max)
+        good = (ref_db >= asp.MASK_REF_FLOOR_DB)[fsel]
+        ref_sel = np.where(good, ref[fsel], np.nan)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            S_db = 20.0 * np.log10(mag / ref_sel[None, :])
+        norm_note = 'dB re. far_1m (absolute LSR)'
+    else:
+        peak = np.nanmax(mag)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            S_db = 20.0 * np.log10(mag / peak)
+        norm_note = 'dB re. map max'
+
+    snr_db = pk_db - info['noise_db']
+    return {'t_ns': t_centers, 'freq_ghz': f_ghz_all[fsel], 'S_db': S_db,
+            'f_c': f_c, 'sigma_f': sig, 'peak_db': pk_db, 'snr_db': snr_db,
+            'usable': snr_db >= SPECTROGRAM_SNR_MIN_DB,
+            'halfwidth_ns': hw, 'norm_note': norm_note}
+
+
+def _write_spectrogram_csv(sg, output_dir):
+    """重心の追跡を CSV に出す（図から数値を読み取らずに済むように）。"""
+    path = os.path.join(output_dir, 'spectrogram_track.csv')
+    with open(path, 'w', encoding='utf-8') as fh:
+        fh.write('t_ns,f_c_GHz,sigma_f_GHz,f_lo_GHz,f_hi_GHz,'
+                 'peak_dB_re_surface,snr_dB,usable\n')
+        for i, t in enumerate(sg['t_ns']):
+            fc, sf = sg['f_c'][i], sg['sigma_f'][i]
+            fh.write('{:.4f},{},{},{},{},{:.4f},{:.4f},{}\n'.format(
+                t,
+                '' if not np.isfinite(fc) else '{:.6f}'.format(fc),
+                '' if not np.isfinite(sf) else '{:.6f}'.format(sf),
+                '' if not np.isfinite(fc + sf) else '{:.6f}'.format(fc - sf),
+                '' if not np.isfinite(fc + sf) else '{:.6f}'.format(fc + sf),
+                sg['peak_db'][i], sg['snr_db'][i],
+                int(bool(sg['usable'][i]))))
+    print('Saved:', path)
+
+
+def plot_spectrogram(results, info, output_dir):
+    """fig6: (a) 時間-周波数マップ＋重心の追跡 (b) 窓ごとの包絡ピーク。
+
+    fig1 との違いは「イベントの位置を仮定しないこと」だけで、ゲートも
+    スペクトルも重心の定義も fig1 と同一である。理論走時は水平線として
+    重ねるが、これは答え合わせのための参考線であって、解析には使っていない。
+
+    (b) を併置しているのは、重心の追跡線がどこで信用できるかを読み手が
+    判断できるようにするため。反射がノイズフロアに埋もれている時刻でも
+    重心そのものは必ず計算できてしまい、フロアの形を反映した無意味な値が
+    出る。SNR がしきい値を下回る区間は追跡線を破線に落としてある。
+    """
+    sg = compute_spectrogram(results, info)
+    t, f = sg['t_ns'], sg['freq_ghz']
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 9), sharey=True,
+                             gridspec_kw={'width_ratios': [3, 1]})
+
+    # --- (a) 時間-周波数マップ ---------------------------------------------
+    vmax = np.nanmax(sg['S_db'])
+    vmin = vmax - SPECTROGRAM_DB_RANGE
+    mesh = axes[0].pcolormesh(f, t, sg['S_db'], cmap=SPECTROGRAM_CMAP,
+                              vmin=vmin, vmax=vmax, shading='auto')
+    cbar = fig.colorbar(mesh, ax=axes[0], pad=0.02, fraction=0.05)
+    cbar.set_label('|E(f)| [{}]'.format(sg['norm_note']), fontsize=12)
+
+    # 解析帯域の外は参考。境界を引いておく。
+    for fb in BAND_GHZ:
+        axes[0].axvline(fb, color='w', ls=':', lw=1.2, alpha=0.8)
+
+    # 重心とスペクトル幅の追跡。信用できない区間は破線に落とす。
+    ok = sg['usable'] & np.isfinite(sg['f_c'])
+    faint = np.isfinite(sg['f_c'])
+
+    def _smooth(a):
+        """表示用の移動平均。NaN を保ったまま平均する。CSV には適用しない。"""
+        if SPECTROGRAM_TRACK_SMOOTH_NS <= 0:
+            return a
+        w = max(1, int(round(SPECTROGRAM_TRACK_SMOOTH_NS
+                             / SPECTROGRAM_STEP_NS)))
+        if w < 2:
+            return a
+        good = np.isfinite(a).astype(float)
+        filled = np.where(np.isfinite(a), a, 0.0)
+        k = np.ones(w) / w
+        num = np.convolve(filled, k, mode='same')
+        den = np.convolve(good, k, mode='same')
+        with np.errstate(invalid='ignore', divide='ignore'):
+            out = num / den
+        return np.where(den > 0, out, np.nan)
+
+    fc_p, sg_p = _smooth(sg['f_c']), _smooth(sg['sigma_f'])
+    for arr, style, lab in (
+            (fc_p, dict(lw=2.2, color='w'), 'centroid $f_c$'),
+            (fc_p - sg_p, dict(lw=1.2, color='w', ls='--', alpha=0.9),
+             r'$f_c \pm \sigma_f$'),
+            (fc_p + sg_p, dict(lw=1.2, color='w', ls='--', alpha=0.9), None)):
+        axes[0].plot(np.where(faint, arr, np.nan), t, lw=style.get('lw', 1.5),
+                     color='0.55', ls=':', alpha=0.9, zorder=3)
+        axes[0].plot(np.where(ok, arr, np.nan), t, zorder=4,
+                     label=lab, **style)
+
+    # 理論走時（答え合わせ用の参考線。解析には使っていない）
+    for r in results:
+        axes[0].axhline(r['t_theory'], color=r['color'], ls='--', lw=1.3,
+                        alpha=0.9)
+        axes[0].annotate(r['name'], xy=(f[-1], r['t_theory']),
+                         xytext=(-4, -4), textcoords='offset points',
+                         ha='right', va='top', fontsize=10, color=r['color'],
+                         bbox=dict(fc='w', ec='none', alpha=0.6, pad=1.0))
+    axes[0].set_xlabel('Frequency [GHz]', fontsize=13)
+    axes[0].set_ylabel('Delay time [ns]', fontsize=13)
+    axes[0].set_title('(a) Time-frequency map (gate swept, no event picking)\n'
+                      'gate halfwidth {:.2f} ns  ->  df ~ {:.2f} GHz'
+                      .format(sg['halfwidth_ns'], 1.0 / (2.0 * sg['halfwidth_ns'])),
+                      fontsize=13)
+    axes[0].legend(fontsize=10, loc='upper right', framealpha=0.85)
+
+    # --- (b) 窓ごとの包絡ピーク --------------------------------------------
+    axes[1].plot(sg['peak_db'], t, color='k', lw=1.0)
+    if np.isfinite(info['noise_db']):
+        axes[1].axvline(info['noise_db'], color='m', ls=':', lw=1.5,
+                        label='noise floor {:.1f} dB'.format(info['noise_db']))
+        axes[1].axvline(info['noise_db'] + SPECTROGRAM_SNR_MIN_DB,
+                        color='m', ls='--', lw=1.0, alpha=0.7,
+                        label='+{:.0f} dB (tracking limit)'
+                        .format(SPECTROGRAM_SNR_MIN_DB))
+    for r in results:
+        axes[1].axhline(r['t_theory'], color=r['color'], ls='--', lw=1.3,
+                        alpha=0.9)
+    axes[1].set_xlabel('Gated peak [dB re. surface peak]', fontsize=13)
+    axes[1].set_title('(b) Amplitude in the\nsame gate', fontsize=13)
+    axes[1].set_xlim(min(-90.0, np.nanmin(sg['peak_db'])), 5.0)
+    axes[1].legend(fontsize=9, loc='lower left', framealpha=0.85)
+
+    for ax in axes:
+        ax.grid(alpha=0.3)
+        ax.minorticks_on()
+    axes[0].set_ylim(t[-1], t[0])      # 時間は下向きに増やす（レーダグラム流儀）
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig6_spectrogram')
+    _write_spectrogram_csv(sg, output_dir)
+    return sg
+
+
 def write_outputs(results, info, level, kind, output_dir):
     import csv
     freq = info['freq']
@@ -1048,6 +1310,8 @@ def run_once(at_tx_path, ref_path, level, kind, output_dir,
     plot_phase(results, info, output_dir)
     if PLOT_REFLECTION_SPECTRUM:
         plot_reflection(results, info, output_dir)
+    if PLOT_SPECTROGRAM:
+        plot_spectrogram(results, info, output_dir)
     write_outputs(results, info, level, kind, output_dir)
     return results, info
 
