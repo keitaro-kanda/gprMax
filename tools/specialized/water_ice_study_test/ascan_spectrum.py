@@ -44,6 +44,14 @@ import numpy as np
 # 例: _EXTRA_LAYER_LABELS.append((判定関数, 'ラベル'))
 _EXTRA_LAYER_LABELS = []
 
+# 【from ... import してはいけない名前について】
+# LEVEL4_ICE_MODEL / LEVEL4_ICE_VOL_PCT / LEVEL4_ICE_SPEC は、JSON のキーを
+# 読んだあとに set_level4_ice_model() / set_level4_ice() が書き換え、さらに
+# no_ice_theory() が一時的に 'none' に差し替える「実行時に変わる値」である。
+# from subsurface_model import LEVEL4_ICE_MODEL と書くと import した時点の値が
+# このモジュールにコピーされ、以後どれだけ書き換えても追随しない（引き継ぎ書
+# §7.3）。氷ありのまま氷なし理論を描く、といった静かな事故になるので、
+# import リストから外してある。参照するときは必ず sm.LEVEL4_ICE_MODEL と書くこと。
 import subsurface_model as sm
 from subsurface_model import (  # noqa: F401  （再エクスポートを兼ねる）
     C, TX_HEIGHT, R_REF, EPS_R_REGOLITH, N_REGOLITH, BAND_GHZ,
@@ -53,9 +61,9 @@ from subsurface_model import (  # noqa: F401  （再エクスポートを兼ね�
     LEVEL3_CARRIER_TAND_C, LEVEL3_COMPOSITIONS, LEVEL3_DEFAULT_COMPOSITION,
     LEVEL3_EPS_REAL_MODE, LEVEL3_EPS_IMAG_MODE, LEVEL3_DEBYE_BAND_HZ,
     LEVEL3_DEBYE_F0, LEVEL3_DEBYE_TAU, LEVEL4_ICE_TOP_M, LEVEL4_ICE_THICK_M,
-    LEVEL4_ICE_SPEC, LEVEL4_ICE_VOL_PCT, LEVEL4_ICE_WT_PCT, LEVEL4_EPS_ICE,
+    LEVEL4_ICE_WT_PCT, LEVEL4_EPS_ICE,
     LEVEL4_TAND_ICE, LEVEL4_RHO_ICE, LEVEL4_RHO_GRAIN, LEVEL4_ICE_KEYS,
-    LEVEL4_ICE_MODEL, LEVEL4_ICE_MODELS, LEVEL4_ICE_MODEL_KEYS, LEVEL3B_RHO,
+    LEVEL4_ICE_MODELS, LEVEL4_ICE_MODEL_KEYS, LEVEL3B_RHO,
     LEVEL3B_FEOTIO2, LEVEL3B_ANCHOR_FREQ, LEVEL3B_CARRIER_EPS_BASE,
     LEVEL3B_CARRIER_TAND_A, LEVEL3B_CARRIER_TAND_B, LEVEL3B_CARRIER_TAND_C,
     LEVEL3B_DEBYE_DE1, LEVEL3B_DEBYE_TAU1, LEVEL3B_DEBYE_DE2,
@@ -72,6 +80,8 @@ from subsurface_model import (  # noqa: F401  （再エクスポートを兼ね�
     level5_in_ice,
     level3_alpha, _group_index_from_eps, level3_group_index,
     level4_porosity, level4_ice_weight_fraction, level4_ice_volume_fraction,
+    ice_layer_rho_range, ice_layer_porosity_min, ice_layer_wt_range,
+    set_active_level, active_level,
     level4_targets, level4_eps, level4_tandelta, level4_alpha,
     level4_segments, level4_interfaces_crossed, level4_alpha_path_avg,
     describe_level4_medium, refractive_index, level3b_carrier,

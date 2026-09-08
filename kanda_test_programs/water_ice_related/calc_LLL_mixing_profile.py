@@ -86,7 +86,9 @@ ice_colors   = ['k', 'r', 'g', 'b', 'c']
 ice_labels   = [f'{c} vol% ice' for c in ice_contents]
 
 EPS_ICE   = 3.15          # [5] GHz 帯の氷の eps'。低温での温度依存は小さい。
-TAND_ICE  = 2.0e-5        # [要文献確認] 低温ほど小さくなるので保守側（検出しにくい側）
+TAND_ICE  = 2.0e-5        # Evans 1965 の -60 degC 最小値。月極域(40-100 K)では
+                          # さらに小さいので、これ自体が保守側（検出しにくい側）
+                          # の上限。subsurface_model.LEVEL4_TAND_ICE と一致必須
 RHO_ICE   = 0.94          # [6] [g/cm^3] 82-110 K での氷の密度。wt% 換算に使う。
 RHO_GRAIN = 2.645         # [g/cm^3] 斜長岩の粒子密度 [4]。
                           # 吸着水描像では空隙率チェックにのみ使う（式には現れない）。

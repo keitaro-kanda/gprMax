@@ -215,8 +215,14 @@ LEVEL4_ICE_SPEC = 'vol'       # 'vol' … 体積パーセントで指定
 LEVEL4_ICE_VOL_PCT = 10.0     # [vol%]
 LEVEL4_ICE_WT_PCT  = 0.5      # [wt%]
 
-LEVEL4_EPS_ICE  = 3.15        # 氷の eps'（GHz 帯。低温での温度依存は小さい）
-LEVEL4_TAND_ICE = 2.0e-4      # [要文献確認] 氷の tan_delta。低温ほど小さいので保守側
+LEVEL4_EPS_ICE  = 3.15        # 氷の eps'（Evans 1965: 3.17±0.07、Fujita+2000）
+# 【値の根拠】Evans 1965, J. Glaciol. の -60 degC における tan_delta 最小値。
+# 月極域は 40-100 K とさらに低温なので、この値自体が保守側（検出しにくい側）の
+# 上限にあたる。alpha への効きは 0.5% 程度。
+# 【変更履歴】2.0e-4 になっていたのを 2.0e-5 に修正（Level_N.in は当初から
+# 2.0e-5 で回っており、解析側だけが 10 倍大きい値を使っていた）。
+# .in と解析側で必ず同じ値にすること（引き継ぎ書 §7.1 のラベル不一致の型）。
+LEVEL4_TAND_ICE = 2.0e-5      # 氷の tan_delta（Evans 1965, -60 degC の最小値）
 LEVEL4_RHO_ICE  = 0.94        # [g/cm^3] 82-110 K での氷の密度（wt% 換算用）
 LEVEL4_RHO_GRAIN = 2.645      # [g/cm^3] 斜長岩の粒子密度。空隙率チェックにのみ使う
 
@@ -448,6 +454,24 @@ LEVEL4_ICE_KEYS = {}      # 例: {'f_ice_lowest': 0.5}
 _LEVEL3_ACTIVE_WT = LEVEL3_COMPOSITIONS[LEVEL3_DEFAULT_COMPOSITION]
 _LEVEL3_ACTIVE_KEY = LEVEL3_DEFAULT_COMPOSITION
 _LEVEL4_ACTIVE_ICE_KEY = None
+
+# いま解析しているレベル。configure_from_kind() が設定する。
+# 空隙率・質量分率・媒質の説明文が「密度プロファイルがあるか」で変わるため、
+# それらを引数なしで呼んでも正しい値になるようにモジュールが覚えておく。
+# None のときは Level 4 までと同じ均質扱い（従来の挙動）になる。
+_ACTIVE_LEVEL = None
+
+
+def set_active_level(level):
+    """解析中のレベルを記録する（configure_from_kind から呼ばれる）。"""
+    global _ACTIVE_LEVEL
+    _ACTIVE_LEVEL = level
+    return _ACTIVE_LEVEL
+
+
+def active_level():
+    """現在記録されているレベル。未設定なら None。"""
+    return _ACTIVE_LEVEL
 def level2_tandelta(f, n):
     """Level 2 の tan_delta(f)。
 
@@ -704,6 +728,7 @@ def configure_from_kind(kind, level):
     戻り値は表示用の説明文のリスト。
     """
     notes = []
+    set_active_level(level)
     effects = LEVEL_EFFECTS.get(level, [])
     if 'absorb_tandelta' in effects:
         wt, key = set_level3_composition(kind)
@@ -724,8 +749,21 @@ def configure_from_kind(kind, level):
             notes.append('水氷: なし（参照ケース）  [{}]'.format(mkey))
         else:
             notes.append('水氷の描像: {}  [{}]'.format(model, mkey))
-            notes.append('水氷濃度: {:.2f} vol% = {:.3f} wt%  [{}]'
-                         .format(vol, 100 * level4_ice_weight_fraction(), vkey))
+            w_top, w_bot = ice_layer_wt_range(level=level)
+            if abs(w_top - w_bot) < 1e-9:
+                notes.append('水氷濃度: {:.2f} vol% = {:.3f} wt%  [{}]'
+                             .format(vol, 100 * w_top, vkey))
+            else:
+                # 密度プロファイルがあると同じ vol% でも wt% は深さで変わる。
+                # 「10 vol% = 5.09 wt%」のような Level 4 の値を Level 5 の図に
+                # 書いてしまう事故を防ぐため、範囲として出す。
+                notes.append(
+                    '水氷濃度: {:.2f} vol% = {:.3f}-{:.3f} wt%'
+                    '（氷層 {:.2f}-{:.2f} m で密度が変わるため深さ依存）  [{}]'
+                    .format(vol, 100 * w_top, 100 * w_bot, LEVEL4_ICE_TOP_M,
+                            LEVEL4_ICE_TOP_M + LEVEL4_ICE_THICK_M, vkey))
+            notes.append('空隙率（氷層内の最小値）: {:.1f} vol%（pore 描像の上限）'
+                         .format(100 * ice_layer_porosity_min(level)))
     return notes
 
 def level3_targets(feotio2_wt=None):
@@ -785,22 +823,72 @@ def level3_group_index(f, feotio2_wt=None):
     return _group_index_from_eps(
         lambda ff: level3_eps(ff, feotio2_wt)[0], f)
 
-def level4_porosity():
-    """乾燥レゴリスの空隙率。pore 描像での氷量の上限になる。"""
-    return 1.0 - LEVEL3_RHO / LEVEL4_RHO_GRAIN
+# -----------------------------------------------------------------------------
+# 空隙率・質量分率は「その深さの乾燥バルク密度」で決まる
+# -----------------------------------------------------------------------------
+# Level 4 までは密度が一定（LEVEL3_RHO）だったので rho を引数に取る必要が
+# なかった。Level 5 では氷層 1.0-2.0 m の中で rho が 1.826 -> 1.869 と変わる
+# ので、均質値を使い続けると wt% も空隙率上限も間違う。
+#     10 vol% pore の質量分率 : Level 4 で 5.088 wt%
+#                               Level 5 では 4.90 -> 4.79 wt%（深さで変わる）
+#     pore の上限（空隙率）   : Level 4 で 33.7 vol%
+#                               Level 5 の氷層下面では 29.3 vol%
+# rho を省略したときの既定は従来どおり LEVEL3_RHO なので、Level 1-4 の
+# 呼び出しは値が一切変わらない。
+
+def level4_porosity(rho=None):
+    """乾燥レゴリスの空隙率。pore 描像での氷量の上限になる。
+
+    rho を省略すると Level 4 の均質密度（LEVEL3_RHO）を使う。
+    Level 5 ではその深さの density_profile(z) を渡すこと。
+    """
+    r = LEVEL3_RHO if rho is None else float(rho)
+    return 1.0 - r / LEVEL4_RHO_GRAIN
 
 
-def level4_ice_weight_fraction(v_ice=None):
+def ice_layer_rho_range(level=None):
+    """氷層の上面・下面における乾燥バルク密度 (rho_top, rho_bot) [g/cm^3]。
+
+    密度プロファイルを持たないレベルでは両方 LEVEL3_RHO になる。
+    level を省略すると configure_from_kind() が記録した現在のレベルを使う。
+    """
+    lv = _ACTIVE_LEVEL if level is None else level
+    if lv is not None and has_density_profile(lv):
+        top = float(LEVEL4_ICE_TOP_M)
+        bot = top + float(LEVEL4_ICE_THICK_M)
+        return float(density_profile(top)), float(density_profile(bot))
+    return float(LEVEL3_RHO), float(LEVEL3_RHO)
+
+
+def ice_layer_porosity_min(level=None):
+    """氷層の中で最小の空隙率。pore 描像の上限判定はこれで行う。
+
+    Carrier プロファイルでは深いほど密なので、下面が最小になる。
+    """
+    return min(level4_porosity(r) for r in ice_layer_rho_range(level))
+
+
+def level4_ice_weight_fraction(v_ice=None, rho=None):
     """体積分率 -> 質量分率。かさ密度の作られ方が描像で違う。
 
         'pore'   : かさ密度 = rho + v*rho_ice        （粒子はそのまま残る）
         'excess' : かさ密度 = (1-v)*rho + v*rho_ice  （レゴリスごと置き換わる）
+
+    rho を省略すると Level 4 の均質密度（LEVEL3_RHO）を使う。
+    Level 5 では深さで変わるので ice_layer_wt_range() を使うこと。
     """
     v = level4_ice_volume_fraction() if v_ice is None else float(v_ice)
+    r = LEVEL3_RHO if rho is None else float(rho)
     m_ice = v * LEVEL4_RHO_ICE
-    m_reg = ((1.0 - v) * LEVEL3_RHO if LEVEL4_ICE_MODEL == 'excess'
-             else LEVEL3_RHO)
+    m_reg = (1.0 - v) * r if LEVEL4_ICE_MODEL == 'excess' else r
     return m_ice / (m_reg + m_ice)
+
+
+def ice_layer_wt_range(v_ice=None, level=None):
+    """氷層の上面・下面での質量分率 (w_top, w_bot)。均質レベルでは同値。"""
+    r_top, r_bot = ice_layer_rho_range(level)
+    return (level4_ice_weight_fraction(v_ice, r_top),
+            level4_ice_weight_fraction(v_ice, r_bot))
 
 
 def level4_ice_volume_fraction():
@@ -821,6 +909,20 @@ def level4_ice_volume_fraction():
     if LEVEL4_ICE_SPEC == 'vol':
         v = LEVEL4_ICE_VOL_PCT / 100.0
     elif LEVEL4_ICE_SPEC == 'wt':
+        # 【Level 5 では wt% 指定はできない】wt% -> vol% の換算はその深さの
+        # 乾燥バルク密度に依存するので、密度プロファイルがあると「一様な wt%」は
+        # 「深さで変わる vol%」を意味してしまう。.in が置くのは一様な氷層なので
+        # 表現できない。既定値に落とさずエラーで止める（引き継ぎ書 §7.5）。
+        if _ACTIVE_LEVEL is not None and has_density_profile(_ACTIVE_LEVEL):
+            r_top, r_bot = ice_layer_rho_range()
+            raise CmdInputError(
+                "LEVEL4_ICE_SPEC='wt' は密度プロファイルのあるレベル（{}）では"
+                '使えません。氷層 {:.2f}-{:.2f} m で rho = {:.4f} -> {:.4f} と'
+                '変わるため、一様な wt% は一様な vol% に対応しません。\n'
+                "LEVEL4_ICE_SPEC='vol' で指定してください（JSON のキーから"
+                '設定する通常の経路では自動的に vol になります）。'
+                .format(_ACTIVE_LEVEL, LEVEL4_ICE_TOP_M,
+                        LEVEL4_ICE_TOP_M + LEVEL4_ICE_THICK_M, r_top, r_bot))
         w = LEVEL4_ICE_WT_PCT / 100.0
         if LEVEL4_ICE_MODEL == 'excess':
             v = w * LEVEL3_RHO / (LEVEL4_RHO_ICE * (1.0 - w) + w * LEVEL3_RHO)
@@ -830,11 +932,16 @@ def level4_ice_volume_fraction():
         raise CmdInputError("LEVEL4_ICE_SPEC は 'wt' か 'vol'")
     if not 0.0 <= v < 1.0:
         raise CmdInputError('氷の体積分率が範囲外です: {:.4f}'.format(v))
-    if LEVEL4_ICE_MODEL == 'pore' and v > level4_porosity():
+    # 空隙率の上限は氷層の中で最小のもの（Carrier では下面）で判定する。
+    phi_min = ice_layer_porosity_min()
+    if LEVEL4_ICE_MODEL == 'pore' and v > phi_min:
         raise CmdInputError(
             '氷の体積分率 {:.4f} が空隙率 {:.4f} を超えています。'
-            "空隙充填では不可能な量です（excess 描像なら可能）"
-            .format(v, level4_porosity()))
+            '空隙充填では不可能な量です（excess 描像なら可能）。'
+            '空隙率は氷層内で最小の値（深さ {:.2f} m 相当）で判定しています。'
+            .format(v, phi_min,
+                    LEVEL4_ICE_TOP_M + LEVEL4_ICE_THICK_M
+                    if phi_min < level4_porosity() else LEVEL4_ICE_TOP_M))
     return v
 
 def level4_targets(feotio2_wt=None):
@@ -912,29 +1019,56 @@ def level4_alpha_path_avg(f, depth_m, feotio2_wt=None):
         acc = acc + level4_alpha(f, in_ice, feotio2_wt) * length
     return acc / d
 
-def describe_level4_medium():
-    """Level 4 の氷層設定を人が読める形で返す（ログと run_info 用）。"""
-    v = level4_ice_volume_fraction()
-    (er_d, ei_d), (er_i, ei_i) = level4_targets()
-    wt_pct = 100.0 * level4_ice_weight_fraction(v)
-    n0, n1 = np.sqrt(er_d), np.sqrt(er_i)
-    R = (n0 - n1) / (n0 + n1)
-    a_d = float(level4_alpha(np.array([BAND_CENTRE_HZ]), False)[0])
-    a_i = float(level4_alpha(np.array([BAND_CENTRE_HZ]), True)[0])
-    key_note = ('' if _LEVEL4_ACTIVE_ICE_KEY is None
-                else ' [{}]'.format(_LEVEL4_ACTIVE_ICE_KEY))
+def describe_level4_medium(level=None):
+    """氷層の設定を人が読める形で返す（ログと run_info 用）。
+
+    密度プロファイルを持つレベル（Level 5）では、背景の値を氷層上面の
+    深さで評価する。均質値（LEVEL3_RHO）で書くと、実際の界面反射や wt% と
+    食い違った数字がログに残るため（引き継ぎ書 §8.3）。
+    level を省略すると configure_from_kind() が記録したレベルを使う。
+    """
     if LEVEL4_ICE_MODEL == 'none':
         return 'no ice (reference case: ice layer not present)'
+    lv = _ACTIVE_LEVEL if level is None else level
+    v = level4_ice_volume_fraction()
+    key_note = ('' if _LEVEL4_ACTIVE_ICE_KEY is None
+                else ' [{}]'.format(_LEVEL4_ACTIVE_ICE_KEY))
     model_note = ('pore-filling (adsorbed water)' if LEVEL4_ICE_MODEL == 'pore'
                   else 'bulk replacement (excess ice)')
-    return ('ice layer {:.3f} vol%{} ({:.3f} wt%) at {:.2f}-{:.2f} m, '
-            'LLL mixing, {} model, '
+    top = float(LEVEL4_ICE_TOP_M)
+    bot = top + float(LEVEL4_ICE_THICK_M)
+    f = np.array([BAND_CENTRE_HZ])
+    profiled = lv is not None and has_density_profile(lv)
+
+    if profiled:
+        # 界面の直上・直下で揃えて評価する（引き継ぎ書 §7.3 の「評価深さ」）。
+        eps_z = 1e-6
+        er_d, ei_d = (float(x) for x in level5_targets(top - eps_z, None, False))
+        er_i, ei_i = (float(x) for x in level5_targets(top + eps_z, None, True))
+        a_d = float(np.atleast_1d(alpha_at_depth(f, top - eps_z, lv))[0])
+        a_i = float(np.atleast_1d(alpha_at_depth(f, top + eps_z, lv))[0])
+        where = ' (evaluated at the ice-layer top, {:.2f} m)'.format(top)
+    else:
+        (er_d, ei_d), (er_i, ei_i) = level4_targets()
+        er_d, ei_d, er_i, ei_i = (float(er_d), float(ei_d),
+                                  float(er_i), float(ei_i))
+        a_d = float(level4_alpha(f, False)[0])
+        a_i = float(level4_alpha(f, True)[0])
+        where = ''
+
+    w_top, w_bot = ice_layer_wt_range(v, lv)
+    wt_note = ('{:.3f} wt%'.format(100.0 * w_top)
+               if abs(w_top - w_bot) < 1e-9
+               else '{:.3f}-{:.3f} wt% over depth'.format(100.0 * w_top,
+                                                          100.0 * w_bot))
+    n0, n1 = np.sqrt(er_d), np.sqrt(er_i)
+    R = (n0 - n1) / (n0 + n1)
+    return ('ice layer {:.3f} vol%{} ({}) at {:.2f}-{:.2f} m, '
+            'LLL mixing, {} model{}, '
             "eps' {:.6f} -> {:.6f} ({:+.2f}%), eps'' {:.6f} -> {:.6f} ({:+.3f}%), "
             'alpha {:+.2f}% @{:.2f} GHz, interface R = {:.1f} dB'
-            .format(100.0 * v, key_note, wt_pct,
-                    LEVEL4_ICE_TOP_M,
-                    LEVEL4_ICE_TOP_M + LEVEL4_ICE_THICK_M,
-                    model_note,
+            .format(100.0 * v, key_note, wt_note, top, bot,
+                    model_note, where,
                     er_d, er_i, 100.0 * (er_i / er_d - 1.0),
                     ei_d, ei_i, 100.0 * (ei_i / ei_d - 1.0),
                     100.0 * (a_i / a_d - 1.0), BAND_CENTRE_HZ / 1e9,
@@ -1036,102 +1170,377 @@ def describe_level3b_medium():
             .format(LEVEL3B_FEOTIO2, LEVEL3B_RHO, eps_s, eps_s - de1 - de2, de1, de2,
                     a_lo, a_hi, a_hi / a_lo))
 
-def describe_level3_medium():
-    """Level 3 の媒質設定を人が読める形で返す（ログと run_info 用）。"""
+def describe_level3_medium(level=None):
+    """背景レゴリスの設定を人が読める形で返す（ログと run_info 用）。
+
+    密度プロファイルを持つレベルでは、ここに出る rho / eps_r / tan_delta は
+    「Level 4 までの均質値」であって実際に使われている値ではない。その旨を
+    明示する（引き継ぎ書 §8.3。実際の深さ依存の値は describe_level5_medium()）。
+    """
     wt = _LEVEL3_ACTIVE_WT
     td = level3_carrier_tandelta(wt)
     a_lo = float(level3_alpha(np.array([0.5e9]))[0])
     a_hi = float(level3_alpha(np.array([2.0e9]))[0])
+    lv = _ACTIVE_LEVEL if level is None else level
+    suffix = ''
+    if lv is not None and has_density_profile(lv):
+        suffix = ('  ** 参考値: {} は密度プロファイルを使うので、上の rho / '
+                  'eps_r / tan_delta / alpha は実際には使われていない。'
+                  '実際の深さ依存の値は次行の密度プロファイルを見ること **'
+                  .format(lv))
     return ('constant eps_imag (tan_delta ~ const), FeO+TiO2 = {:.1f} wt% [{}], '
             'rho = {:.6f}, eps_r = {:.3f}, tan_delta = {:.6f}  '
             '(alpha = {:.4f} -> {:.4f} Np/m over 0.5-2.0 GHz, ratio {:.3f}) '
-            "[eps' mode = {}, eps'' mode = {}]"
+            "[eps' mode = {}, eps'' mode = {}]{}"
             .format(wt, _LEVEL3_ACTIVE_KEY, LEVEL3_RHO, LEVEL3_EPS_R, td,
                     a_lo, a_hi, a_hi / a_lo,
-                    LEVEL3_EPS_REAL_MODE, LEVEL3_EPS_IMAG_MODE))
+                    LEVEL3_EPS_REAL_MODE, LEVEL3_EPS_IMAG_MODE, suffix))
 
-def debye_flat_eps(eps_r_target, eps_imag_target, f):
-    """最大平坦 2 極 Debye の (eps'(f), eps''(f))。Level_3.in と同一の式。
-
-    eps_r_target / eps_imag_target は帯域の幾何平均 f0 での目標値。
-    氷層のように背景と eps' が違う材料にもそのまま使える。
-    """
-    f_arr = np.asarray(f, dtype=float)
-    de = np.sqrt(2.0) * eps_imag_target
-    eps_inf = eps_r_target - de
-    w = 2.0 * np.pi * f_arr
-    x1 = w * LEVEL3_DEBYE_TAU[0]
-    x2 = w * LEVEL3_DEBYE_TAU[1]
-    er = eps_inf + de / (1.0 + x1 ** 2) + de / (1.0 + x2 ** 2)
-    ei = de * x1 / (1.0 + x1 ** 2) + de * x2 / (1.0 + x2 ** 2)
-    return er, ei
-
-def apply_eps_modes(eps_r_target, eps_imag_target, f):
-    """モード設定に従って (eps', eps'') を返す共通ヘルパ。
-
-    Level 3（背景レゴリス）と Level 4（氷層）の両方から使う。
-    """
-    f_arr = np.asarray(f, dtype=float)
-    er_d, ei_d = debye_flat_eps(eps_r_target, eps_imag_target, f_arr)
-    er = er_d if LEVEL3_EPS_REAL_MODE == 'debye' \
-        else np.full_like(f_arr, float(eps_r_target))
-    ei = ei_d if LEVEL3_EPS_IMAG_MODE == 'debye' \
-        else np.full_like(f_arr, float(eps_imag_target))
-    return er, ei
+# 【重複定義を削除】debye_flat_eps() と apply_eps_modes() が、以前はこの位置に
+# もう一組そっくり定義されていた。Python は後勝ちなので、ファイル前半
+# （LEVEL3_DEBYE_TAU の定義直後）にある正本を編集しても効かず、こちらの複製が
+# 使われていた。中身が同一だったため実害は出ていなかったが、Debye 設計を触った
+# 瞬間に踏む地雷なので複製側を削除した。正本はファイル前半の 1 か所だけ。
 
 
 # =============================================================================
 # 自己検証
 # =============================================================================
-def check_against_ascan_spectrum(verbose=True):
-    """ascan_spectrum.py の媒質モデルと数値が一致するかを確認する。
+# 【この節を書き換えた理由】以前ここには check_against_ascan_spectrum() があり、
+# ascan_spectrum.py が内部に持っていた「もう一つの媒質モデル」と数値を突き
+# 合わせていた。その後 ascan_spectrum.py 側の物理定義は完全に削除され、いまは
+# このモジュールから re-export しているだけになっている。つまりこの検査は
+# 同一オブジェクトを自分自身と比べており、媒質モデルをどう壊しても必ず
+# 「最大差 0.00e+00 / 一致」と表示される。安心材料にならないどころか、
+# 検査を通ったという理由で誤りを見逃す原因になるので、次の 3 つに置き換えた。
+#
+#   check_delegation()          解析コードが本当に委譲しているか（同一オブジェクトか）
+#   check_physics_identities()  閉形式で答えが分かる恒等式を実際に検算する
+#   check_against_in_file()     .in ファイルの定数と突き合わせる（§7.1 の再発防止）
+#
+# 3 つめが本命。解析側と .in の定数のずれ（tan_delta_ice が 2e-5 と 2e-4 で
+# 食い違っていた件がまさにこれ）は、走らせてみても「もっともらしい図」が出て
+# しまうので、値そのものを突き合わせる以外に検出手段がない。
 
-    現時点では ascan_spectrum.py も同じモデルを内部に持っているため、
-    両者がずれていないことを確認できるようにしておく。
-    将来 ascan_spectrum.py をこのモジュールの import に切り替えたら不要になる。
-    描像は 'pore' でのみ比較する（ascan_spectrum は pore しか持たないため）。
+# 委譲されているべき関数名。解析コードがこれらを独自に定義し直したら
+# （＝物理が再び 2 か所に分かれたら）検査で落ちる。
+_DELEGATED_NAMES = (
+    'debye_flat_eps', 'apply_eps_modes',
+    'level2_tandelta', 'level2_alpha',
+    'level3_eps', 'level3_alpha', 'level3_group_index', 'level3_targets',
+    'level3_carrier_tandelta',
+    'level4_eps', 'level4_alpha', 'level4_targets',
+    'level4_ice_volume_fraction', 'level4_ice_weight_fraction',
+    'level3b_eps', 'level3b_alpha',
+    'refractive_index', 'eps_at_depth', 'alpha_at_depth', 'path_integrals',
+)
+
+# 実行時に書き換わるので、from ... import で他モジュールに持ち込んではいけない
+# 名前（引き継ぎ書 §7.3 の「from x import CONST」）。値のコピーが作られるため、
+# set_level4_ice_model() や no_ice_theory() の変更に追随しなくなる。
+_MUTABLE_NAMES = ('LEVEL4_ICE_MODEL', 'LEVEL4_ICE_VOL_PCT', 'LEVEL4_ICE_SPEC')
+
+_ANALYSIS_MODULES = ('ascan_spectrum', 'ascan_amplitude',
+                     'ascan_reflection_spectrum', 'ascan_reflection')
+
+
+def check_delegation(module_names=_ANALYSIS_MODULES, verbose=True):
+    """解析コードが媒質モデルを本当にこのモジュールへ委譲しているかを見る。
+
+    * 委譲されているべき関数が「同一オブジェクト」であることを確認する。
+      コピーが作られていたら物理が 2 か所に分かれた合図。
+    * 実行時に変わる定数が from ... import で持ち込まれていないかを確認する。
+
+    gprMax の無い環境では解析コードを import できないので、その場合は
+    その module を飛ばして報告する（検査に失敗したとは扱わない）。
     """
-    import ascan_spectrum as _asp
-    f = np.linspace(0.4e9, 2.2e9, 401)
-    keep = LEVEL4_ICE_MODEL
-    globals()['LEVEL4_ICE_MODEL'] = 'pore'
-    set_level3_composition('FeO_075'); _asp.set_level3_composition('FeO_075')
-    set_level4_ice('f_ice_10');        _asp.set_level4_ice('f_ice_10')
-    n_reg = np.full_like(f, np.sqrt(3.0))
-    checks = [
-        ("level3_eps'", level3_eps(f)[0], _asp.level3_eps(f)[0]),
-        ('level3_eps"', level3_eps(f)[1], _asp.level3_eps(f)[1]),
-        ('level3_alpha', level3_alpha(f), _asp.level3_alpha(f)),
-        ('level3_group_index', level3_group_index(f), _asp.level3_group_index(f)),
-        ('level4_eps(ice)', level4_eps(f, True)[0], _asp.level4_eps(f, True)[0]),
-        ('level4_alpha(ice)', level4_alpha(f, True), _asp.level4_alpha(f, True)),
-        ('level2_alpha', level2_alpha(f, n_reg), _asp.level2_alpha(f, n_reg)),
-        ('level3b_eps', level3b_eps(f)[0], _asp.level3b_eps(f)[0]),
-        ('level3b_alpha', level3b_alpha(f), _asp.level3b_alpha(f)),
-    ]
-    for lv in IMPLEMENTED_LEVELS:
-        checks.append(('refractive_index ' + lv,
-                       refractive_index(f, lv), _asp.refractive_index(f, lv)))
-    worst = 0.0
-    for name, a, b in checks:
-        d = float(np.max(np.abs(np.asarray(a) - np.asarray(b))))
-        worst = max(worst, d)
-        if verbose:
-            print('  {:24s} 最大差 {:.3e}'.format(name, d))
-    globals()['LEVEL4_ICE_MODEL'] = keep
+    import importlib
+    import sys
+    ok = True
+    for mod_name in module_names:
+        try:
+            mod = importlib.import_module(mod_name)
+        except Exception as exc:
+            if verbose:
+                print('  {:26s} 読み込めないため省略（{}）'
+                      .format(mod_name, type(exc).__name__))
+            continue
+        # 比較の基準は「その解析コード自身が import した subsurface_model」に
+        # する。このファイルを python subsurface_model.py として直接走らせると
+        # 自分は __main__、解析コードが読むのは subsurface_model という別の
+        # モジュール実体になり、globals() と突き合わせると全部が「独自定義」に
+        # 見えてしまうため（実際に誤検出した）。
+        base = getattr(mod, 'sm', None) or sys.modules.get(__name__)
+        copied = [n for n in _DELEGATED_NAMES
+                  if getattr(mod, n, None) is not None
+                  and getattr(mod, n) is not getattr(base, n, None)]
+        stale = [n for n in _MUTABLE_NAMES if hasattr(mod, n)]
+        if copied:
+            ok = False
+            print('  {:26s} ** 独自定義 ** {}'.format(mod_name, ', '.join(copied)))
+        if stale:
+            ok = False
+            print('  {:26s} ** 可変定数を束縛 ** {}（sm.NAME で参照すること）'
+                  .format(mod_name, ', '.join(stale)))
+        if verbose and not copied and not stale:
+            print('  {:26s} 委譲 OK'.format(mod_name))
     if verbose:
-        print('  -> {} (最大差 {:.3e})'.format(
-            '一致' if worst < 1e-12 else '** 不一致 **', worst))
-    return worst < 1e-12
+        print('  -> {}'.format('委譲は健全' if ok else '** 要修正 **'))
+    return ok
 
 
-if __name__ == '__main__':
-    print('subsurface_model 自己検証')
-    check_against_ascan_spectrum()
-    print()
-    for _m in LEVEL4_ICE_MODELS:
-        globals()['LEVEL4_ICE_MODEL'] = _m
-        print(' ', describe_level4_medium())
+def check_physics_identities(verbose=True):
+    """閉形式で答えが分かる恒等式を実際に検算する。
+
+    ここに並ぶのは「モデルを壊すと必ず破れる関係」だけ。数値積分の刻みや
+    経路の分割、混合則の実装、Debye の設計条件など、静かにずれると図を見ても
+    気づけない部分を対象にしている。
+    """
+    keep_model, keep_spec = LEVEL4_ICE_MODEL, LEVEL4_ICE_SPEC
+    keep_vol, keep_level = LEVEL4_ICE_VOL_PCT, _ACTIVE_LEVEL
+    globals()['LEVEL4_ICE_SPEC'] = 'vol'
+    globals()['LEVEL4_ICE_VOL_PCT'] = 10.0
+    set_active_level(None)
+    set_level3_composition('FeO_075')
+
+    checks = []      # (名前, 得た値, 期待値, 許容差)
+    f0 = LEVEL3_DEBYE_F0
+    w0 = 2.0 * np.pi * f0
+
+    # --- 2 極 Debye の設計条件 ---------------------------------------------
+    # 最大平坦条件 tau = 1/(w0(1+sqrt2)), (1+sqrt2)/w0 のとき、
+    # sum 1/(1+(w0 tau_i)^2) = 1 が厳密に成り立つ。これが成り立つからこそ
+    # eps_inf = eps_r - De が閉形式になる（引き継ぎ書 §3.3）。
+    checks.append(('Debye 恒等式 sum 1/(1+(w0 tau)^2)',
+                   sum(1.0 / (1.0 + (w0 * t) ** 2) for t in LEVEL3_DEBYE_TAU),
+                   1.0, 1e-14))
+    er0, ei0 = debye_flat_eps(3.0, 0.0126, np.array([f0]))
+    checks.append(("f0 で eps' が目標値", float(er0[0]), 3.0, 1e-12))
+    checks.append(('f0 で eps" が目標値', float(ei0[0]), 0.0126, 1e-12))
+    checks.append(('f0 = 帯域の幾何平均',
+                   f0, float(np.sqrt(LEVEL3_DEBYE_BAND_HZ[0]
+                                     * LEVEL3_DEBYE_BAND_HZ[1])), 1e-6))
+
+    # --- Carrier 経験式と密度の整合 ----------------------------------------
+    checks.append(("1.871^rho = eps_r",
+                   float(carrier_eps_real(LEVEL3_RHO)), LEVEL3_EPS_R, 1e-6))
+    # LEVEL3_RHO は密度プロファイル上のある深さに対応しているはず。
+    # 逆に解いた深さで density_profile を評価して戻ることを確かめる。
+    z_eq = ((LEVEL5_DENSITY_A * LEVEL5_DENSITY_B - LEVEL3_RHO * LEVEL5_DENSITY_C)
+            / (LEVEL3_RHO - LEVEL5_DENSITY_A)) / 100.0
+    checks.append(('密度プロファイルが LEVEL3_RHO を通る',
+                   float(density_profile(z_eq)), LEVEL3_RHO, 1e-9))
+
+    # --- 混合則（描像ごとの定義そのもの）------------------------------------
+    for model, want_imag in (('pore', 'conserved'), ('excess', 'diluted')):
+        globals()['LEVEL4_ICE_MODEL'] = model
+        v = level4_ice_volume_fraction()
+        (er_d, ei_d), (er_i, ei_i) = level4_targets()
+        if want_imag == 'conserved':
+            # pore: 粒子が減らないので背景の eps'' はそのまま残る
+            expect = ei_d + v * LEVEL4_EPS_ICE * LEVEL4_TAND_ICE
+            expect_re = (er_d ** (1 / 3) + v * (LEVEL4_EPS_ICE ** (1 / 3) - 1)) ** 3
+        else:
+            # excess: 粒子が (1-v) 倍に減るので eps'' が希釈される
+            expect = (1 - v) * ei_d + v * LEVEL4_EPS_ICE * LEVEL4_TAND_ICE
+            expect_re = ((1 - v) * er_d ** (1 / 3)
+                         + v * LEVEL4_EPS_ICE ** (1 / 3)) ** 3
+        checks.append(('{}: eps" の混合'.format(model), float(ei_i),
+                       float(expect), 1e-15))
+        checks.append(("{}: eps' の混合".format(model), float(er_i),
+                       float(expect_re), 1e-12))
+        # vol% -> wt% -> vol% の往復。描像ごとに式が違うので取り違えを検出する。
+        w = level4_ice_weight_fraction(v)
+        back = (w * LEVEL3_RHO / (LEVEL4_RHO_ICE * (1 - w) + w * LEVEL3_RHO)
+                if model == 'excess'
+                else (LEVEL3_RHO / LEVEL4_RHO_ICE) * w / (1 - w))
+        checks.append(('{}: vol%<->wt% の往復'.format(model), float(back),
+                       float(v), 1e-12))
+
+    # --- 均質レベルでは経路積分が閉形式に一致するはず ------------------------
+    globals()['LEVEL4_ICE_MODEL'] = 'pore'
+    f = np.array([0.75e9, 1.25e9, 1.75e9])
+    d = 2.75
+    att, opt, inv = path_integrals(f, d, 'Level_3')
+    a3 = level3_alpha(f)
+    n3 = refractive_index(f, 'Level_3')
+    checks.append(('Level 3: ∫alpha dz = alpha*d',
+                   float(np.max(np.abs(att - a3 * d))), 0.0, 1e-14))
+    checks.append(('Level 3: ∫n dz = n*d',
+                   float(np.max(np.abs(opt - n3 * d))), 0.0, 1e-13))
+    checks.append(('Level 3: ∫dz/n = d/n',
+                   float(np.max(np.abs(inv - d / n3))), 0.0, 1e-14))
+    checks.append(('Level 3: 片道 r_eff = n*h + d',
+                   float(np.max(np.abs(r_eff_oneway(f, d, 'Level_3')
+                                       - (n3 * TX_HEIGHT + d)))), 0.0, 1e-13))
+    checks.append(('Level 3: 往復 r_eff = 2h + 2d/n',
+                   float(np.max(np.abs(r_eff_roundtrip(f, d, 'Level_3')
+                                       - (2 * TX_HEIGHT + 2 * d / n3)))),
+                   0.0, 1e-13))
+    checks.append(('地表透過 T = 2/(1+n)',
+                   float(np.max(np.abs(
+                       transmission_product(f, 0.5, 'Level_3')
+                       - 2.0 / (1.0 + n3)))), 0.0, 1e-14))
+
+    # Level 4（均質背景 + 氷層）も 3 区間の閉形式で書ける。
+    a_d4, a_i4 = level4_alpha(f, False), level4_alpha(f, True)
+    n_d4 = np.sqrt(level4_eps(f, False)[0])
+    n_i4 = np.sqrt(level4_eps(f, True)[0])
+    top, thick = LEVEL4_ICE_TOP_M, LEVEL4_ICE_THICK_M
+    seg = ((top, False), (thick, True), (d - top - thick, False))
+    att4 = sum(L * (a_i4 if ice else a_d4) for L, ice in seg)
+    opt4 = sum(L * (n_i4 if ice else n_d4) for L, ice in seg)
+    g_att, g_opt, _ = path_integrals(f, d, 'Level_4')
+    checks.append(('Level 4: ∫alpha dz = 区間和',
+                   float(np.max(np.abs(g_att - att4))), 0.0, 1e-14))
+    checks.append(('Level 4: ∫n dz = 区間和',
+                   float(np.max(np.abs(g_opt - opt4))), 0.0, 1e-13))
+
+    # --- Level 5 は数値積分なので刻みへの収束を見る --------------------------
+    # 刻みを半分にしても答えが変わらないことを確認する。中点則なので
+    # 誤差は dz^2 で落ちるはずで、既定の 2.5 mm なら相対 1e-7 以下に収まる。
+    set_active_level('Level_5')
+    a_c, o_c, i_c = path_integrals(f, d, 'Level_5')
+    a_f, o_f, i_f = path_integrals(f, d, 'Level_5',
+                                   dz=LEVEL5_INTEGRATION_DZ / 2.0)
+    checks.append(('Level 5: ∫alpha dz の刻み収束',
+                   float(np.max(np.abs(a_f - a_c) / np.abs(a_f))), 0.0, 1e-6))
+    checks.append(('Level 5: ∫n dz の刻み収束',
+                   float(np.max(np.abs(o_f - o_c) / np.abs(o_f))), 0.0, 1e-7))
+    # 界面は刻みの境界に必ず載っているはず（またぐ区間があると氷層の厚さが
+    # 数値的にずれる）。氷層のちょうど上面・下面で切って足し合わせ、
+    # 通しの積分と一致するかを見る。
+    a_top, o_top, _ = path_integrals(f, top, 'Level_5')
+    a_bot, o_bot, _ = path_integrals(f, top + thick, 'Level_5')
+    a_end, o_end, _ = path_integrals(f, d, 'Level_5')
+    checks.append(('Level 5: 界面で分割しても積分が加法的',
+                   float(np.max(np.abs(
+                       (a_end - a_bot) + (a_bot - a_top) + a_top - a_end))),
+                   0.0, 1e-12))
+
+    # --- 氷なし理論はレベルを落とさない -------------------------------------
+    # no_ice_theory() は密度プロファイルを残したまま氷だけを消すのが仕様。
+    with no_ice_theory():
+        no_ice_surface = float(surface_index(np.array([f0]), 'Level_5')[0])
+    profile_surface = float(np.sqrt(level5_targets(0.0, None, False)[0]))
+    checks.append(('氷なし理論でも密度プロファイルが残る',
+                   no_ice_surface, profile_surface, 1e-12))
+    with no_ice_theory():
+        n_ifaces = len(interface_depths('Level_5'))
+    checks.append(('氷なし理論では地下界面が無い', float(n_ifaces), 0.0, 0.0))
+
+    globals()['LEVEL4_ICE_MODEL'] = keep_model
+    globals()['LEVEL4_ICE_SPEC'] = keep_spec
+    globals()['LEVEL4_ICE_VOL_PCT'] = keep_vol
+    set_active_level(keep_level)
+
+    ok = True
+    for name, got, want, tol in checks:
+        diff = abs(got - want)
+        good = diff <= tol
+        ok = ok and good
+        if verbose or not good:
+            print('  {:38s} {:>13.6g} (差 {:.2e}) {}'
+                  .format(name, got, diff, 'OK' if good else '** NG **'))
+    if verbose:
+        print('  -> {}'.format('恒等式はすべて成立' if ok else '** 破れあり **'))
+    return ok
+
+
+# .in ファイルの中で使われている変数名の候補。実際の名前が違えば足すこと。
+# 左が subsurface_model 側の定数名、右が .in 側の候補（先に見つかったものを使う）。
+IN_FILE_CONSTANTS = {
+    'LEVEL4_TAND_ICE':   ('TAND_ICE', 'TAN_DELTA_ICE', 'TANDELTA_ICE',
+                          'ICE_TAND', 'ICE_TAN_DELTA'),
+    'LEVEL4_EPS_ICE':    ('EPS_ICE', 'EPS_R_ICE', 'ICE_EPS'),
+    'LEVEL4_RHO_ICE':    ('RHO_ICE',),
+    'LEVEL4_RHO_GRAIN':  ('RHO_GRAIN',),
+    'LEVEL4_ICE_TOP_M':  ('ICE_TOP', 'ICE_TOP_M', 'ICE_DEPTH', 'ICE_Z0'),
+    'LEVEL4_ICE_THICK_M': ('ICE_THICK', 'ICE_THICK_M', 'ICE_THICKNESS'),
+    'LEVEL3_RHO':        ('RHO', 'RHO_DRY', 'RHO_REGOLITH', 'RHO_BULK'),
+    'LEVEL3_EPS_R':      ('EPS_R', 'EPS_REGOLITH', 'EPS_DRY'),
+    'TX_HEIGHT':         ('TX_HEIGHT', 'H_TX', 'TX_H'),
+    'LEVEL5_DENSITY_A':  ('DENSITY_A', 'RHO_A'),
+    'LEVEL5_DENSITY_B':  ('DENSITY_B', 'RHO_B'),
+    'LEVEL5_DENSITY_C':  ('DENSITY_C', 'RHO_C'),
+    'LEVEL3_CARRIER_EPS_BASE': ('EPS_BASE', 'CARRIER_EPS_BASE'),
+    'LEVEL3_CARRIER_TAND_A': ('TAND_A', 'CARRIER_TAND_A'),
+    'LEVEL3_CARRIER_TAND_B': ('TAND_B', 'CARRIER_TAND_B'),
+    'LEVEL3_CARRIER_TAND_C': ('TAND_C', 'CARRIER_TAND_C'),
+}
+
+
+def _scan_numeric_assignments(text):
+    """テキストから `NAME = 数値` の代入を拾って dict にする。
+
+    .in の Python ブロックを実行せずに読むための最小限の走査。
+    右辺が数値リテラルの代入だけを見るので、式で書かれた定数は拾えない
+    （拾えなかったものは「見つからず」として報告する）。
+    """
+    found = {}
+    pat = re.compile(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'
+                     r'([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*(?:#.*)?$')
+    for line in text.splitlines():
+        m = pat.match(line)
+        if m:
+            found.setdefault(m.group(1), float(m.group(2)))
+    return found
+
+
+def check_against_in_file(path, verbose=True, rtol=1e-9):
+    """.in ファイルの定数と、このモジュールの定数が一致するかを確認する。
+
+    引き継ぎ書 §7.1「データとラベルの不一致」の再発防止。ここがずれていても
+    解析は最後まで完走し、もっともらしい図が出てしまうので、値そのものを
+    突き合わせる以外に検出手段がない（tan_delta_ice が .in で 2e-5、解析側で
+    2e-4 になっていた件がまさにこれ）。
+
+    右辺が数値リテラルの代入だけを見る簡易な走査なので、式で書かれた定数は
+    「見つからず」になる。名前が違うだけなら IN_FILE_CONSTANTS に足すこと。
+    """
+    with open(path, encoding='utf-8', errors='replace') as fh:
+        found = _scan_numeric_assignments(fh.read())
+    if verbose:
+        print('  {} から数値代入 {} 件を読んだ'.format(path, len(found)))
+    ok, n_cmp = True, 0
+    for our_name, candidates in sorted(IN_FILE_CONSTANTS.items()):
+        hit = next((c for c in candidates if c in found), None)
+        ours = globals().get(our_name)
+        if hit is None:
+            if verbose:
+                print('    {:26s} .in に見つからず（候補: {}）'
+                      .format(our_name, ', '.join(candidates)))
+            continue
+        n_cmp += 1
+        theirs = found[hit]
+        same = abs(theirs - float(ours)) <= rtol * max(1.0, abs(float(ours)))
+        ok = ok and same
+        if verbose or not same:
+            print('    {:26s} .in[{}] = {:<14.8g} model = {:<14.8g} {}'
+                  .format(our_name, hit, theirs, float(ours),
+                          'OK' if same else '** 不一致 **'))
+    if verbose:
+        print('  -> {} 件を比較: {}'
+              .format(n_cmp, '一致' if ok else '** 不一致あり。.in と解析側を'
+                      '揃えるまで結果を信用しないこと **'))
+    return ok
+
+
+def self_check(in_files=(), verbose=True):
+    """自己検証をまとめて走らせる。.in のパスを渡すと突き合わせも行う。"""
+    print('[1/3] 委譲の確認')
+    a = check_delegation(verbose=verbose)
+    print('\n[2/3] 物理の恒等式')
+    b = check_physics_identities(verbose=verbose)
+    print('\n[3/3] .in ファイルとの突き合わせ')
+    if not in_files:
+        print('  .in のパスが渡されていないため省略。'
+              '例: python subsurface_model.py Level_5.in')
+        c = True
+    else:
+        c = all(check_against_in_file(p, verbose=verbose) for p in in_files)
+    print('\n総合: {}'.format('OK' if (a and b and c) else '** 要確認 **'))
+    return a and b and c
 
 
 # =============================================================================
@@ -1184,12 +1593,25 @@ def eps_at_depth(f, depth_m, level, feotio2_wt=None):
             a = np.broadcast_to(a, (int(sel.sum()), f_arr.size))
             b = np.broadcast_to(b, (int(sel.sum()), f_arr.size))
         else:
-            n = refractive_index(f_arr, level)
-            a = np.broadcast_to(n ** 2, (int(sel.sum()), f_arr.size))
-            td = (level2_tandelta(f_arr, n)
-                  if 'absorb_const' in LEVEL_EFFECTS[level]
-                  else np.zeros_like(f_arr))
-            b = a * td
+            # 【修正】以前ここは eps'' を level2_tandelta からしか作っておらず、
+            # 'absorb_const'（Level 2）以外は問答無用で eps'' = 0 にしていた。
+            # そのため Level 3 と Level 3b では alpha_at_depth と path_integrals
+            # が厳密にゼロを返し、理論の吸収が丸ごと消えていた（level3_alpha を
+            # 直接呼ぶ古い経路は正しかったので、両者が食い違っていた）。
+            # レベルごとに正しい複素誘電率を返すよう分岐させる。
+            effects = LEVEL_EFFECTS.get(level, [])
+            if 'absorb_tandelta' in effects:            # Level 3（eps'' 一定）
+                a1, b1 = level3_eps(f_arr, feotio2_wt)
+            elif 'absorb_debye' in effects:             # Level 3b（分散あり）
+                a1, b1 = level3b_eps(f_arr)
+            else:                                       # Level 1 / Level 2
+                n = refractive_index(f_arr, level)
+                a1 = n ** 2
+                b1 = a1 * (level2_tandelta(f_arr, n)
+                           if 'absorb_const' in effects
+                           else np.zeros_like(f_arr))
+            a = np.broadcast_to(a1, (int(sel.sum()), f_arr.size))
+            b = np.broadcast_to(b1, (int(sel.sum()), f_arr.size))
         er[sel] = np.asarray(a).reshape(int(sel.sum()), f_arr.size)
         ei[sel] = np.asarray(b).reshape(int(sel.sum()), f_arr.size)
     return (er[0], ei[0]) if np.ndim(depth_m) == 0 else (er, ei)
@@ -1374,3 +1796,14 @@ def interface_depths_for_plot():
         return []
     top = float(LEVEL4_ICE_TOP_M)
     return [top, top + float(LEVEL4_ICE_THICK_M)]
+
+
+if __name__ == '__main__':
+    import sys
+    print('subsurface_model 自己検証\n')
+    _ok = self_check(in_files=tuple(sys.argv[1:]))
+    print()
+    for _m in LEVEL4_ICE_MODELS:
+        globals()['LEVEL4_ICE_MODEL'] = _m
+        print(' ', describe_level4_medium())
+    sys.exit(0 if _ok else 1)
