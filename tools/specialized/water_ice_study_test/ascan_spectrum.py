@@ -86,8 +86,9 @@ from tools.core.outputfiles_merge import get_output_data
 
 # --- 氷あり／氷なし理論の比較 [EDIT HERE] ------------------------------------
 # 氷を含むデータ（f_ice_NN）を解析するとき、次の 2 種類を自動で出す。
-#   1. 通常の出力          … 実測 + 氷ありの理論（順方向モデルの検証）
-#   2. NOICE_SUBDIRNAME 以下 … 実測 + 氷あり理論 + 氷なし理論（検出性能）
+#   1. 通常の図       … 実測 + 氷ありの理論（順方向モデルの検証）
+#   2. 比較図 1 枚    … 実測 + 氷あり理論 + 氷なし理論（検出性能）
+# どちらも同じ出力ディレクトリに出す（比較図は 1 枚だけなので分けない）。
 #
 # 実測では氷の有無が未知なので、解析者はまず「氷がないと仮定した理論」を
 # 当てはめる。そこで出る残差がそのまま検出信号になる。
@@ -99,8 +100,7 @@ from tools.core.outputfiles_merge import get_output_data
 # するだけなので、密度プロファイルはそのまま残る。
 #
 # 氷なしのデータ（no_ice）を解析するときは、氷あり理論が存在しないので
-# 比較図は作らない（通常の出力だけになる）。
-NOICE_SUBDIRNAME = 'ice_vs_noice'
+# 比較図は作らない（通常の図だけになる）。
 
 # =============================================================================
 # 定数
@@ -555,9 +555,11 @@ def resolve_output_dir(level, rx_paths):
     else:
         level_root = os.path.dirname(os.path.dirname(os.path.dirname(paths[0])))
 
-    if level not in os.path.basename(level_root):
-        print('Warning: 推定した親ディレクトリ "{}" に選択レベル "{}" が含まれていません。'
-              'JSON のパス構成を確認してください。'.format(level_root, level))
+    # ディレクトリ名は level_5 のように小文字のことがあるので大小を無視する。
+    if level.lower() not in os.path.basename(level_root).lower():
+        print('Warning: 推定した親ディレクトリ "{}" に選択レベル "{}" が含まれて'
+              'いません。JSON のパス構成を確認してください。'
+              .format(level_root, level))
 
     return os.path.join(level_root, OUTPUT_PARENT_DIRNAME, OUTPUT_SUBDIRNAME)
 
@@ -2028,14 +2030,12 @@ def main():
     # 通常の出力（実測 + 氷あり理論）は順方向モデルの検証。
     # こちらは実測が氷なし理論からどれだけ外れるかを見る検出性能の図。
     if sm.ice_is_present():
-        noice_dir = os.path.join(output_dir, NOICE_SUBDIRNAME)
-        os.makedirs(noice_dir, exist_ok=True)
-        print('\n氷なし理論との比較図を作成中 ->', noice_dir)
+        print('\n氷なし理論との比較図を作成中')
         with sm.no_ice_theory():
             results_noice, _, _, _, _ = analyze_level(
                 rx_paths, reference, level)
-        plot_ice_vs_noice(results, results_noice, freq_hz, noice_dir)
-        write_detection_csv(results, results_noice, freq_hz, noice_dir)
+        plot_ice_vs_noice(results, results_noice, freq_hz, output_dir)
+        write_detection_csv(results, results_noice, freq_hz, output_dir)
 
     print('\nAll outputs saved to:', output_dir)
 

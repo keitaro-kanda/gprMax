@@ -86,8 +86,9 @@ from tools.core.outputfiles_merge import get_output_data
 
 # --- 氷あり／氷なし理論の比較 [EDIT HERE] ------------------------------------
 # 氷を含むデータ（f_ice_NN）を解析するとき、次の 2 種類を自動で出す。
-#   1. 通常の出力          … 実測 + 氷ありの理論（順方向モデルの検証）
-#   2. NOICE_SUBDIRNAME 以下 … 実測 + 氷あり理論 + 氷なし理論（検出性能）
+#   1. 通常の図       … 実測 + 氷ありの理論（順方向モデルの検証）
+#   2. 比較図 1 枚    … 実測 + 氷あり理論 + 氷なし理論（検出性能）
+# どちらも同じ出力ディレクトリに出す（比較図は 1 枚だけなので分けない）。
 #
 # 実測では氷の有無が未知なので、解析者はまず「氷がないと仮定した理論」を
 # 当てはめる。そこで出る残差がそのまま検出信号になる。
@@ -99,8 +100,7 @@ from tools.core.outputfiles_merge import get_output_data
 # するだけなので、密度プロファイルはそのまま残る。
 #
 # 氷なしのデータ（no_ice）を解析するときは、氷あり理論が存在しないので
-# 比較図は作らない（通常の出力だけになる）。
-NOICE_SUBDIRNAME = 'ice_vs_noice'
+# 比較図は作らない（通常の図だけになる）。
 
 # =============================================================================
 # 定数
@@ -1237,8 +1237,10 @@ def plot_ice_vs_noice(results, results_noice, output_dir):
             ax.axhspan(bounds[0], bounds[-1], color='tab:cyan', alpha=0.12,
                        zorder=0)
     plt.tight_layout()
-    save_figure(fig, output_dir, 'fig5_ice_vs_noice')
-
+    path = os.path.join(output_dir, 'fig4_ice_vs_noice.png')
+    fig.savefig(path, dpi=300, bbox_inches='tight')
+    print('Saved:', path)
+    plt.close(fig)
 
 def write_detection_csv(results, results_noice, output_dir):
     """氷なし理論に対する残差を数値で出す（検出信号そのもの）。"""
@@ -1334,13 +1336,11 @@ def main():
 
     # --- 氷を含むデータなら、氷なし理論との比較図も自動で作る -------------
     if sm.ice_is_present():
-        noice_dir = os.path.join(output_dir, NOICE_SUBDIRNAME)
-        os.makedirs(noice_dir, exist_ok=True)
-        print('\n氷なし理論との比較図を作成中 ->', noice_dir)
+        print('\n氷なし理論との比較図を作成中')
         with sm.no_ice_theory():
             results_noice, _, _, _ = analyze_level(rx_paths, reference, level)
-        plot_ice_vs_noice(results, results_noice, noice_dir)
-        write_detection_csv(results, results_noice, noice_dir)
+        plot_ice_vs_noice(results, results_noice, output_dir)
+        write_detection_csv(results, results_noice, output_dir)
 
     print('\nAll outputs saved to:', output_dir)
 

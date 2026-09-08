@@ -131,7 +131,14 @@ class MediumModel:
     def _z_dry(self):
         return max(0.0, float(sm.LEVEL4_ICE_TOP_M) - 1e-6)
 
+    def _z_ice_iface(self):
+        # 反射係数は界面の直下で評価する。Level 5 では密度が深さで変わるので、
+        # レゴリス側（界面の直上）と同じ深さで比べないと、氷ではなく密度勾配の
+        # 差を反射として拾ってしまう。
+        return float(sm.LEVEL4_ICE_TOP_M) + 1e-6
+
     def _z_ice(self):
+        # 層内の減衰は層の平均を代表させるので中央深さで評価する。
         return float(sm.LEVEL4_ICE_TOP_M) + 0.5 * float(sm.LEVEL4_ICE_THICK_M)
 
     def regolith_index(self, f):
@@ -150,7 +157,7 @@ class MediumModel:
         with _ice_fraction(self.ice_vol):
             if sm.has_density_profile(self.level):
                 return _index_from_eps(sm.eps_at_depth(
-                    np.atleast_1d(f), self._z_ice(), self.level))
+                    np.atleast_1d(f), self._z_ice_iface(), self.level))
             return _index_from_eps(sm.level4_eps(np.atleast_1d(f), True))
 
     def ice_alpha(self, f):
@@ -420,7 +427,8 @@ def channel_reflection(dets, events):
     base, s0 = d0.peak, d0.signed_peak
     out = {}
     for ev, d in zip(events, dets):
-        if d.below_floor or base <= 0:
+        if d.below_floor or base <= 0 or not np.all(np.abs(
+                np.asarray(ev.G * ev.T * ev.A)) > 0):
             R = np.nan
         else:
             corr = (ev0.G * ev0.T * ev0.A) / (ev.G * ev.T * ev.A)
@@ -443,11 +451,19 @@ def channel_traveltime(dets, events, events_noice):
         per[name] = {"t_theory": e.t, "t_measured": d.t_measured,
                      "residual": float(d.t_measured - e.t) if np.isfinite(d.t_measured) else np.nan,
                      "delta_vs_noice": float(e.t - byn[name].t)}
+    if not _has_ice_events(events):
+        # 氷なしの参照ケース。層内屈折率は定義できない。
+        nan = float('nan')
+        layer = {"dt_measured": nan, "dt_theory": nan,
+                 "n_layer_measured": nan, "n_layer_theory": nan,
+                 "no_ice": True}
+        return {"per_event": per, "layer": layer}
     dt_meas = dby["ice_bot"].t_measured - dby["ice_top"].t_measured
     dt_theory = by["ice_bot"].t - by["ice_top"].t
     layer = {"dt_measured": float(dt_meas), "dt_theory": float(dt_theory),
              "n_layer_measured": float(invert_layer_index(dt_meas, ICE_THICK_M)),
-             "n_layer_theory": float(invert_layer_index(dt_theory, ICE_THICK_M))}
+             "n_layer_theory": float(invert_layer_index(dt_theory, ICE_THICK_M)),
+             "no_ice": False}
     return {"per_event": per, "layer": layer}
 
 
@@ -458,17 +474,40 @@ def _gate(t, amp, t_center, half_ns=GATE_HALFWIDTH_NS):
     return g
 
 
+def _has_ice_events(events):
+    """氷層のイベントが存在し、反射係数が有限かどうか。
+
+    no_ice のデータ（ICE_MODEL='none' または氷量 0）では氷層界面が無いので、
+    反射・走時・減衰の 3 チャネルは定義できない。ゼロ割りで落ちる前にここで
+    判定し、呼び出し側で NaN を返す。
+    """
+    by = {e.name: e for e in events}
+    if 'ice_top' not in by or 'ice_bot' not in by:
+        return False
+    return bool(np.all(np.abs(np.asarray(by['ice_top'].R)) > 1e-12)
+                and np.all(np.abs(np.asarray(by['ice_bot'].R)) > 1e-12))
+
+
 def channel_attenuation(t, amp, dets, events, medium):
     """Gate the ice-top and ice-bottom events and invert the layer alpha(f)
     from their spectral amplitude ratio (README 4.7). T_top is the two-way
     transmission of the ice-top interface = (ice_bot cumulative T)/(ice_top)."""
-    dby = {d.name: d for d in dets}
-    eby = {e.name: e for e in events}
     n = len(t)
     freqs = rfftfreq(n, t[1] - t[0])
+    band0 = (freqs > 0.6e9) & (freqs < 1.9e9)
+    if not _has_ice_events(events):
+        # 氷なしの参照ケース。氷層が無いので層内 alpha は定義できない。
+        nanv = np.full(int(band0.sum()), np.nan)
+        return {"freqs": freqs[band0], "alpha_measured": nanv,
+                "alpha_theory": nanv.copy(),
+                "alpha_at_center": float('nan'),
+                "alpha_theory_at_center": float('nan'),
+                "no_ice": True}
+    dby = {d.name: d for d in dets}
+    eby = {e.name: e for e in events}
     S_top = rfft(_gate(t, amp, dby["ice_top"].t_measured))
     S_bot = rfft(_gate(t, amp, dby["ice_bot"].t_measured))
-    band = (freqs > 0.6e9) & (freqs < 1.9e9)
+    band = band0
     with np.errstate(divide="ignore", invalid="ignore"):
         A_ratio = np.abs(S_bot) / np.abs(S_top)
     et, eb = eby["ice_top"], eby["ice_bot"]
@@ -480,6 +519,7 @@ def channel_attenuation(t, amp, dets, events, medium):
         "alpha_theory": np.atleast_1d(medium.ice_alpha(freqs[band])),
         "alpha_at_center": float(np.interp(CENTER_FREQ_HZ, freqs[band], alpha_f[band])),
         "alpha_theory_at_center": float(medium.ice_alpha(CENTER_FREQ_HZ)[0]),
+        "no_ice": False,
     }
 
 
@@ -712,22 +752,34 @@ def run_analysis(at_tx_path, ref_path, ice_vol, bg_path="", use_bg_sub=False, ou
     tt = channel_traveltime(dets, events, events_noice)
     atten = channel_attenuation(t_at, a_use, dets, events, medium)
 
+    # 氷なしの参照ケースでは、氷層に依存する 3 チャネルが定義できない。
+    # 検出限界スイープ（fig6）は氷量を仮想的に振る計算なので実行できるが、
+    # alpha のノイズ基準だけは実測から取れないので理論値で代用する。
+    has_ice = _has_ice_events(events)
+    if has_ice:
+        alpha_noise = max(atten["alpha_theory_at_center"] * 0.1, 1e-6)
+    else:
+        alpha_noise = max(
+            float(MediumModel(0.10).ice_alpha(CENTER_FREQ_HZ)[0]) * 0.1, 1e-6)
+        print("  [note] 氷なしの参照ケースなので、反射・走時・減衰の 3 チャネル"
+              "は定義できません（fig3/4/5 はスキップ）。")
     sweep = sweep_detection_limits(
         freqs, E_ref, dt, t0, floor_db=floor.db,
-        traveltime_noise_ns=0.025,
-        alpha_noise=max(atten["alpha_theory_at_center"] * 0.1, 1e-6))
+        traveltime_noise_ns=0.025, alpha_noise=alpha_noise)
 
     fig1_trace(out_dir, t_at, a_at, a_sub, events, floor)
     fig2_events(out_dir, dets, events, dt)
-    R_curve = np.array([reflection_coefficient(
-        MediumModel(v).regolith_index(CENTER_FREQ_HZ)[0],
-        MediumModel(v).ice_index(CENTER_FREQ_HZ)[0]) for v in ICE_VOL_SWEEP])
-    fig3_reflection(out_dir, ICE_VOL_SWEEP, R_curve,
-                    [(ice_vol, refl.get("ice_top", {}).get("R_measured", np.nan))], floor)
-    dt_bot = [abs((theory_events(MediumModel(v), freqs, E_ref, dt, t0)[2].t
-                   - events_noice[2].t) * 1e9) for v in ICE_VOL_SWEEP]
-    fig4_traveltime(out_dir, ICE_VOL_SWEEP, dt_bot)
-    fig5_attenuation(out_dir, atten)
+    if has_ice:
+        R_curve = np.array([reflection_coefficient(
+            MediumModel(v).regolith_index(CENTER_FREQ_HZ)[0],
+            MediumModel(v).ice_index(CENTER_FREQ_HZ)[0]) for v in ICE_VOL_SWEEP])
+        fig3_reflection(out_dir, ICE_VOL_SWEEP, R_curve,
+                        [(ice_vol, refl.get("ice_top", {}).get("R_measured",
+                                                               np.nan))], floor)
+        dt_bot = [abs((theory_events(MediumModel(v), freqs, E_ref, dt, t0)[2].t
+                       - events_noice[2].t) * 1e9) for v in ICE_VOL_SWEEP]
+        fig4_traveltime(out_dir, ICE_VOL_SWEEP, dt_bot)
+        fig5_attenuation(out_dir, atten)
     fig6_channels(out_dir, sweep)
 
     write_events_csv(os.path.join(out_dir, "events.csv"), dets, events, refl)
