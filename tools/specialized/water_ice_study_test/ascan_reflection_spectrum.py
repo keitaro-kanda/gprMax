@@ -116,7 +116,7 @@ SNR_MARGINAL_DB = 6.0              # これ以上なら限界
 # --- 相対 LSR の基準イベント -------------------------------------------------
 # 既定は最も浅い地下界面。地表反射を基準にすると地表の往復透過が残るため、
 # 実測可能性の観点では地下界面どうしで取るほうが素直。
-REL_LSR_REF_EVENT = 'ice_top'
+REL_LSR_REF_EVENT = 'surface'
 
 # --- 直達波の除去（修正 2）---------------------------------------------------
 # at_tx では rx が tx と同位置にあるため、直達波（波源の近傍場）が記録される。
@@ -815,9 +815,9 @@ def plot_lsr(results, info, output_dir):
     fg = freq * 1e-9
     fig, axes = plt.subplots(2, 2, figsize=(13, 9))
     spec = [((0, 0), (0, 1), 'L_abs_meas', 'L_abs_theory',
-             'Absolute LSR (ref = far_1m)', '(a)', '(b)'),
+             'LSR (ref = far_1m)', '(a)', '(b)'),
             ((1, 0), (1, 1), 'L_rel_meas', 'L_rel_theory',
-             'Relative LSR (ref = {})'.format(info['rel_ref']), '(c)', '(d)')]
+             'LSR (ref = {})'.format(info['rel_ref']), '(c)', '(d)')]
     for pos_v, pos_r, key_m, key_t, ttl, tag_v, tag_r in spec:
         av, ar = axes[pos_v], axes[pos_r]
         for r in results:
