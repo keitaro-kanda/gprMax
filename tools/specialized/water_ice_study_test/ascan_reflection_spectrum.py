@@ -1199,7 +1199,11 @@ def plot_spectrogram(results, info, output_dir):
     for ax in axes:
         ax.grid(alpha=0.3)
         ax.minorticks_on()
-    axes[0].set_ylim(t[-1], t[0])      # 時間は下向きに増やす（レーダグラム流儀）
+        
+    # 縦軸をスペクトログラムの計算範囲によらず、常に元データの全時間範囲へ固定する
+    t_max_ns = (len(info['work']) - 1) * info['dt'] * 1e9
+    axes[0].set_ylim(t_max_ns, 0.0)      # 時間は下向きに増やす（レーダグラム流儀）
+    
     plt.tight_layout()
     save_figure(fig, output_dir, 'fig6_spectrogram')
     _write_spectrogram_csv(sg, output_dir)
