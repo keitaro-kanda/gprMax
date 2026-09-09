@@ -135,6 +135,16 @@ GATE_TAPER = 0.2             # Tukey
 # 相対LSRの参照深さ (§6.2)
 LSR_REF_DEPTH_M = 0.25
 
+# --- fig7: 氷層の上端と下端の rx を直接比べる ---------------------------------
+# 【なぜ追加したか】fig5 の区間 alpha は「dz で割って Np/m に換算した導出量」、
+# fig5(d) は LSR の傾き、fig6(d) は理論からの残差で、いずれも一段加工が入る。
+# 「水氷層の上端と下端に置いた rx の信号強度を比べて、層の中でどれだけ減った
+# かを見る」という最も素直な操作に対応する図が無かったので足した。
+# 比を取るだけなので、地表透過も波源の形も分子分母で消える。残るのは
+# 層の中の吸収と、幾何拡散のわずかな差だけになる。
+PLOT_LAYER_ATTENUATION = True
+LAYER_ATT_DEPTHS_M = None   # None なら氷層の上端・下端。(z1, z2) で明示指定できる
+
 # 上限・下限周波数のしきい値 (§6.4)
 FLOHI_THRESHOLDS_DB = [-3.0, -10.0, -20.0]
 FLOHI_PRIMARY_DB = -10.0
@@ -1602,38 +1612,23 @@ def _stack_depths(results):
 def interval_alpha(a, b, dz, level):
     """区間 [a, b] の alpha(f) を理論との差分から逆算する。
 
-    理論側の区間 alpha は、その区間が氷層かどうかで切り替える
-    （Level 4 では level4_segments が層構造を持っている）。
+    理論側の区間 alpha は、経路積分の差を区間長で割って出す。
+
+        a_th = (∫_0^zb alpha dz - ∫_0^za alpha dz) / (zb - za)
+
+    【修正】以前は 'ice_layer' を持つレベルに対して level4_alpha() を
+    呼んでいた。これは均質密度 LEVEL3_RHO を前提とした Level 4 用の値で、
+    Level 5 の密度プロファイルを見ていない。氷層内で真値が 0.10001 Np/m
+    のところ 0.09093 Np/m を返しており、10% ずれていた。これは測ろうと
+    している氷の signature（pore -4.6% / excess -10.0%）と同じ大きさで、
+    fig5 の理論曲線が使いものにならなかった。
+    path_integrals はレベルごとの層構造も密度プロファイルも中で扱うので、
+    そちらに委ねればレベル分岐そのものが不要になる。
     """
     freq = a['freq_hz']
-    if 'ice_layer' in LEVEL_EFFECTS[level]:
-        # 区間の中で氷層とレゴリスが混ざる場合は長さで重み付けする
-        segs_b = level4_segments(b['depth_m'])
-        segs_a = level4_segments(a['depth_m'])
-        acc = np.zeros_like(freq)
-        used = 0.0
-        for length, in_ice in segs_b[len(segs_a):] or segs_b:
-            pass
-        # 区間 [a, b] に含まれる層をあらためて取り出す
-        acc = np.zeros_like(freq)
-        z0, z1 = a['depth_m'], b['depth_m']
-        top = float(sm.LEVEL4_ICE_TOP_M)
-        bot = top + float(sm.LEVEL4_ICE_THICK_M)
-        edges = sorted({z0, z1, min(max(top, z0), z1), min(max(bot, z0), z1)})
-        for p, q in zip(edges[:-1], edges[1:]):
-            if q <= p:
-                continue
-            mid = 0.5 * (p + q)
-            acc = acc + level4_alpha(freq, top <= mid < bot) * (q - p)
-        a_th = acc / dz
-    elif 'absorb_tandelta' in LEVEL_EFFECTS[level]:
-        a_th = level3_alpha(freq)
-    elif 'absorb_debye' in LEVEL_EFFECTS[level]:
-        a_th = level3b_alpha(freq)
-    elif 'absorb_const' in LEVEL_EFFECTS[level]:
-        a_th = level2_alpha(freq, refractive_index(freq, level))
-    else:
-        a_th = np.zeros_like(freq)
+    att_a = path_integrals(freq, a['depth_m'], level)[0]
+    att_b = path_integrals(freq, b['depth_m'], level)[0]
+    a_th = (att_b - att_a) / dz
 
     dl_meas = b['L_abs_meas'] - a['L_abs_meas']
     dl_th = b['L_abs_theory'] - a['L_abs_theory']
@@ -1800,6 +1795,118 @@ def write_interval_csv(results, level, output_dir):
                         alpha_to_tandelta(km, BAND_CENTRE_HZ, n_for_td),
                         ng, ng_th])
     print('Saved:', path)
+
+
+def _nearest_result(results, depth_m):
+    """指定した深さに最も近い rx の結果を返す。"""
+    return min(results, key=lambda r: abs(r['depth_m'] - depth_m))
+
+
+def plot_layer_attenuation(results, level, output_dir, results_noice=None):
+    """fig7: 氷層の上端と下端の rx を直接比べ、層の中の減衰を出す。
+
+    (a) 2 つの深さの生スペクトル |E(f)|
+    (b) その比 = 層を片道通る間の減衰 [dB]
+
+    比を取るだけなので、波源の形も地表透過も分子分母で消える。残るのは
+    層の中の吸収と、幾何拡散のわずかな差だけである。fig5 の区間 alpha と
+    違って dz で割らないので、図に出ている数字がそのまま「上端から下端まで
+    で何 dB 減ったか」になる。
+
+    results_noice を渡すと、氷なし理論の同じ量を重ねる。氷ありと氷なしの
+    差がこの測定の検出信号にあたる。
+    """
+    if LAYER_ATT_DEPTHS_M is not None:
+        z1, z2 = (float(v) for v in LAYER_ATT_DEPTHS_M)
+    else:
+        z1 = float(sm.LEVEL4_ICE_TOP_M)
+        z2 = z1 + float(sm.LEVEL4_ICE_THICK_M)
+    top = _nearest_result(results, z1)
+    bot = _nearest_result(results, z2)
+    if abs(top['depth_m'] - bot['depth_m']) < 1e-9:
+        print('  [skip] fig7: 上端と下端で同じ rx が選ばれました')
+        return
+    z1, z2 = top['depth_m'], bot['depth_m']
+    freq = top['freq_hz']
+    f_ghz = freq * 1e-9
+    mask = top['mask'] & bot['mask']
+    fc_i = int(np.argmin(np.abs(freq - BAND_CENTRE_HZ)))
+
+    def ratio_db(a, b, field):
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return 20.0 * np.log10(np.abs(b[field]) / np.abs(a[field]))
+
+    r_meas = ratio_db(top, bot, 'E_meas')
+    r_theory = ratio_db(top, bot, 'E_theory')
+
+    fig, axes = plt.subplots(2, 1, figsize=(10, 9), sharex=True)
+
+    # --- (a) 2 深さの生スペクトル -----------------------------------------
+    ax = axes[0]
+    ref = np.nanmax(np.abs(top['E_meas'][mask])) if np.any(mask) else 1.0
+    for r, c, lab in ((top, 'tab:blue', 'rx z = {:.2f} m'.format(z1)),
+                      (bot, 'tab:red', 'rx z = {:.2f} m'.format(z2))):
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ax.plot(f_ghz, 20.0 * np.log10(np.abs(r['E_meas']) / ref),
+                    color=c, lw=1.4, label=lab)
+    for fb in BAND_GHZ:
+        ax.axvline(fb, color='0.5', ls=':', lw=1.0)
+    ax.set_ylabel('|E(f)| [dB re. max at z = {:.2f} m]'.format(z1), fontsize=12)
+    ax.set_title('(a) Raw spectra at the two rx depths', fontsize=13)
+    ax.legend(fontsize=10)
+    ax.grid(alpha=0.3)
+
+    # --- (b) その比 = 層の中の減衰 ----------------------------------------
+    ax = axes[1]
+    fm = np.where(mask, f_ghz, np.nan)
+    ax.plot(fm, np.where(mask, r_meas, np.nan), color='k', lw=1.8,
+            label='measured (ice)')
+    ax.plot(fm, np.where(mask, r_theory, np.nan), color='k', ls='--', lw=1.2,
+            label='theory (ice)')
+    def band_slope(y):
+        """帯域内の傾き [dB/GHz]。幾何拡散は周波数に依らないので傾きには
+        乗らず、吸収だけが残る。オフセットのほうは速度変化による拡散の差も
+        含むので、tan_delta を見たいときはこちらを読むこと。"""
+        g = mask & np.isfinite(y)
+        if np.count_nonzero(g) < 2:
+            return np.nan
+        return float(np.polyfit(f_ghz[g], y[g], 1)[0])
+
+    note = ['loss from {:.2f} to {:.2f} m @ {:.2f} GHz'.format(
+        z1, z2, BAND_CENTRE_HZ / 1e9),
+        '  ice     measured {:+.4f} dB / theory {:+.4f} dB'.format(
+            r_meas[fc_i], r_theory[fc_i]),
+        'band slope [dB/GHz]  (absorption only)',
+        '  ice     measured {:+.4f} / theory {:+.4f}'.format(
+            band_slope(r_meas), band_slope(r_theory))]
+    if results_noice is not None:
+        tn = _nearest_result(results_noice, z1)
+        bn = _nearest_result(results_noice, z2)
+        rn_theory = ratio_db(tn, bn, 'E_theory')
+        ax.plot(fm, np.where(mask, rn_theory, np.nan), color='tab:green',
+                ls='--', lw=1.2, label='theory (no ice)')
+        note.insert(2, '  no ice  theory   {:+.4f} dB'.format(rn_theory[fc_i]))
+        note.append('  no ice  theory   {:+.4f}'.format(band_slope(rn_theory)))
+        note.append('detection signal: offset {:+.4f} dB / slope {:+.4f} dB/GHz'
+                    .format(r_meas[fc_i] - rn_theory[fc_i],
+                            band_slope(r_meas) - band_slope(rn_theory)))
+    ax.axvline(BAND_CENTRE_HZ * 1e-9, color='0.5', ls=':', lw=1.0)
+    ax.set_xlabel('Frequency [GHz]', fontsize=12)
+    ax.set_ylabel('one-way loss over the layer [dB]', fontsize=12)
+    ax.set_title('(b) Ratio of the two spectra = loss through {:.2f} m'
+                 .format(z2 - z1), fontsize=13)
+    ax.legend(fontsize=10, loc='lower left')
+    ax.grid(alpha=0.3)
+    ax.annotate('\n'.join(note), xy=(0.98, 0.97), xycoords='axes fraction',
+                ha='right', va='top', fontsize=9, family='monospace',
+                bbox=dict(fc='w', ec='0.7', alpha=0.9))
+
+    ax.set_xlim(BAND_GHZ[0] - 0.1, BAND_GHZ[1] + 0.1)
+    plt.tight_layout()
+    save_figure(fig, output_dir, 'fig7_layer_attenuation')
+    print('  fig7: {:.2f} -> {:.2f} m の減衰 @{:.2f} GHz  実測 {:+.4f} dB / '
+          '理論 {:+.4f} dB'.format(z1, z2, BAND_CENTRE_HZ / 1e9,
+                                   r_meas[fc_i], r_theory[fc_i]))
 
 
 def plot_ice_vs_noice(results, results_noice, freq_hz, output_dir):
@@ -2046,6 +2153,13 @@ def main():
                 rx_paths, reference, level)
         plot_ice_vs_noice(results, results_noice, freq_hz, output_dir)
         write_detection_csv(results, results_noice, freq_hz, output_dir)
+        if PLOT_LAYER_ATTENUATION:
+            plot_layer_attenuation(results, theory_level, output_dir,
+                                   results_noice)
+    elif PLOT_LAYER_ATTENUATION:
+        # 氷なしのデータそのものを解析している場合。比較相手は無いが、
+        # 同じ 2 深さの比を出しておけば、氷ありの図とそのまま重ねられる。
+        plot_layer_attenuation(results, theory_level, output_dir)
 
     print('\nAll outputs saved to:', output_dir)
 
