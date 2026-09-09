@@ -44,8 +44,7 @@ EPS0 = 8.8541878128e-12   # [F/m] 真空の誘電率
 # =============================================================================
 # 0. 設定  [EDIT HERE]
 # =============================================================================
-OUTPUT_BASE = ('/Volumes/SSD_Kanda_BUFFALO/test_programs_output/'
-               'LLL_mixing_profile')
+OUTPUT_BASE = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/LLL_mixing_profile'
 DIR_FREQ = 'profile_diff_frequency'      # 周波数を振ったプロファイル
 DIR_COMP = 'profile_diff_FeO+TiO2'       # 組成を振ったプロファイル
 DIR_SPEC = 'spectrum'                    # スペクトル解析
@@ -93,7 +92,7 @@ RHO_ICE   = 0.94          # [6] [g/cm^3] 82-110 K での氷の密度。wt% 換�
 RHO_GRAIN = 2.645         # [g/cm^3] 斜長岩の粒子密度 [4]。
                           # 吸着水描像では空隙率チェックにのみ使う（式には現れない）。
 
-# --- 氷の存在形態（描像）-----------------------------------------------------
+# --- 氷の存在形態（描像）-----------------------------------------------------f
 # 月の水氷がどんな形態で存在するかはまだ分かっていないので、両極端を並行して
 # 計算し、観測量がどう変わるかを見る。既存の解析はすべて 'pore' で行ってきた。
 #
@@ -118,7 +117,7 @@ RHO_GRAIN = 2.645         # [g/cm^3] 斜長岩の粒子密度 [4]。
 #            LLL 増分形（eps^(1/3) 上での線形内挿になる）:
 #              eps_wet^(1/3) = (1-v_ice)*eps_dry^(1/3) + v_ice*eps_ice^(1/3)
 #
-# 2 つの描像は減衰チャネルと反射チャネルで有利・不利がちょうど入れ替わるので、
+# 2 つの描像は減衰と反射で有利・不利がちょうど入れ替わるので、
 # 両方を測れば描像そのものを判別できる可能性がある。
 ICE_MODELS = ['pore', 'excess']        # 実行する描像（両方出す）
 ICE_MODEL = 'pore'                     # 現在計算中の描像。main() が切り替える
@@ -502,17 +501,20 @@ def build_profile_set(pairs):
     """
     n_style = len(pairs)
     out = {k: np.zeros((n_ice, n_style, Nz))
-           for k in ('eps_re', 'eps_im', 'sigma', 'tand', 'alpha')}
+           for k in ('eps_re', 'eps_im', 'sigma', 'tand', 'alpha', 'travel_time')}
     for si, (wt, f) in enumerate(pairs):
         fa = np.array([f])
         for ii, c in enumerate(ice_contents):
             er, ei = medium_eps(z, fa, c, wt)
-            al, _ = alpha_velocity(z, fa, c, wt)
+            al, v = alpha_velocity(z, fa, c, wt)
             out['eps_re'][ii, si] = er[:, 0]
             out['eps_im'][ii, si] = ei[:, 0]
             out['sigma'][ii, si] = ei[:, 0] * (2 * np.pi * f) * EPS0
             out['tand'][ii, si] = ei[:, 0] / er[:, 0]
             out['alpha'][ii, si] = al[:, 0]
+            cum_t = np.zeros_like(v[:, 0])
+            cum_t[1:] = np.cumsum(0.5 * (1.0 / v[1:, 0] + 1.0 / v[:-1, 0]) * DZ)
+            out['travel_time'][ii, si] = cum_t * 1e9
     return out
 
 
@@ -553,7 +555,7 @@ def _ensure_dirs():
 
 
 def save_fig(fig, base_path):
-    """PNG と PDF の両方を保存する。"""
+    """PNG と PDF 両方を保存する。"""
     fig.savefig(base_path + '.png', bbox_inches='tight', dpi=FIGURE_DPI)
     fig.savefig(base_path + '.pdf', bbox_inches='tight')
     plt.close(fig)
@@ -669,6 +671,45 @@ def make_profile_family(dataset, ref, labels, subdir, title):
             dataset[key], lab, fname, labels, subdir, title, ref=r))
     return made
 
+
+def make_travel_time_profile(dataset, labels, subdir, title):
+    fig, ax = plt.subplots(figsize=(6.5, 6))
+    draw_lines(ax, dataset['travel_time'])
+    style_depth_axis(ax, 'One-way travel time [ns]')
+    ax.set_title(title, fontsize=13)
+    add_legend(fig, labels, with_ref=False)
+    plt.tight_layout()
+    return save_fig(fig, out_dir(subdir, 'travel_time'))
+
+def write_travel_time_csv():
+    import csv
+    path = out_dir('travel_time_summary.csv')
+    target_depths = np.arange(0.0, Z_MAX + 0.1, 0.5)
+    target_indices = [int(np.argmin(np.abs(z - d))) for d in target_depths]
+
+    with open(path, 'w', newline='', encoding='utf-8') as fh:
+        w = csv.writer(fh)
+        head = ['depth_m']
+        for c in ice_contents:
+            for lab in PROFILE_FREQ_LABELS:
+                tl = lab.replace(' ', '')
+                head.append(f'tt_ns_{c}vol_{tl}_{FEOTIO2_WT}wt')
+        for c in ice_contents:
+            for lab in PROFILE_WT_LABELS:
+                tl = lab.replace(' ', '')
+                head.append(f'tt_ns_{c}vol_{PROFILE_FIXED_FREQ/1e9:.2f}GHz_{tl}')
+        w.writerow(head)
+
+        for i in target_indices:
+            row = [z[i]]
+            for ii in range(n_ice):
+                for si in range(len(PROFILE_FREQ_LABELS)):
+                    row.append(SET_FREQ['travel_time'][ii, si, i])
+            for ii in range(n_ice):
+                for si in range(len(PROFILE_WT_LABELS)):
+                    row.append(SET_COMP['travel_time'][ii, si, i])
+            w.writerow(row)
+    return [path]
 
 def make_density_profile():
     """密度と空隙率。周波数にも組成にも依らないので基準ディレクトリに置く。"""
@@ -1093,12 +1134,18 @@ def run_for_model(model):
     print('=' * 74)
 
     print('--- 系統 A: 周波数を振ったプロファイル ---')
+    made.append(make_travel_time_profile(
+        SET_FREQ, PROFILE_FREQ_LABELS, DIR_FREQ,
+        f'Travel time (FeO+TiO2 = {FEOTIO2_WT} wt%)  [{MIXING_LABEL} / {model}]'))
     made += make_profile_family(
         SET_FREQ, REF_FREQ, PROFILE_FREQ_LABELS, DIR_FREQ,
         f'Frequency comparison (FeO+TiO2 = {FEOTIO2_WT} wt%)'
         f'  [{MIXING_LABEL} / {model}]')
 
     print('--- 系統 B: FeO+TiO2 を振ったプロファイル ---')
+    made.append(make_travel_time_profile(
+        SET_COMP, PROFILE_WT_LABELS, DIR_COMP,
+        f'Travel time ({PROFILE_FIXED_FREQ/1e9:.2f} GHz)  [{MIXING_LABEL} / {model}]'))
     made += make_profile_family(
         SET_COMP, REF_COMP, PROFILE_WT_LABELS, DIR_COMP,
         f'Composition comparison ({PROFILE_FIXED_FREQ/1e9:.2f} GHz)'
@@ -1119,6 +1166,7 @@ def run_for_model(model):
 
     print('--- 数値出力 ---')
     made += write_csv()
+    made += write_travel_time_csv()
 
     print()
     run_checks()
