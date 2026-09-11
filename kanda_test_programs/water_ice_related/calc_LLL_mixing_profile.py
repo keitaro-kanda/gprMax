@@ -617,15 +617,24 @@ def style_depth_axis(ax, xlabel, logx=False):
 # =============================================================================
 def make_summary_2x2(dataset, ref, labels, subdir, title):
     fig, axes = plt.subplots(2, 2, figsize=(11, 11))
+    
     draw_lines(axes[0, 0], dataset['eps_re'], ref=ref.get('eps_re'))
     axes[0, 0].set_xlabel(r"$\varepsilon^{\prime}$", fontsize=16)
+    axes[0, 0].set_xlim(2.0, 4.0)
+    
     draw_lines(axes[0, 1], dataset['eps_im'])
     axes[0, 1].set_xlabel(r"$\varepsilon^{\prime\prime}$", fontsize=16)
+    axes[0, 1].set_xlim(0.005, 0.018)
+    
     draw_lines(axes[1, 0], dataset['sigma'])
     axes[1, 0].set_xlabel(r"$\sigma_{\rm eff}$ [S/m]", fontsize=16)
+    axes[1, 0].set_xlim(0.00025, 0.001)
+    
     draw_lines(axes[1, 1], dataset['tand'], ref=ref.get('tand'))
     axes[1, 1].set_xlabel(r"$\tan\delta$", fontsize=16)
+    axes[1, 1].set_xlim(0.002, 0.0055)
     axes[1, 1].locator_params(axis='x', nbins=5)
+    
     fig.suptitle(title, fontsize=15, y=1.0)
     add_legend(fig, labels)
     plt.tight_layout()
@@ -639,8 +648,21 @@ def make_profile_and_delta(data, label, fname, labels, subdir, title,
     fig, axes = plt.subplots(1, 2, figsize=(11, 6))
     draw_lines(axes[0], data, ref=ref)
     axes[0].set_xlabel(label, fontsize=16)
+    
+    if fname == 'eps_real':
+        axes[0].set_xlim(2.0, 4.0)
+    elif fname == 'eps_imag':
+        axes[0].set_xlim(0.005, 0.018)
+    elif fname == 'conductivity':
+        axes[0].set_xlim(0.00025, 0.001)
+    elif fname == 'losstangent':
+        axes[0].set_xlim(0.002, 0.0055)
+    elif fname == 'attenuation':
+        axes[0].set_xlim(0.03, 0.105)
+
     if fname == 'losstangent':
         axes[0].locator_params(axis='x', nbins=5)
+        
     for ii, c in enumerate(ice_contents):
         if c == 0:
             continue
@@ -650,6 +672,18 @@ def make_profile_and_delta(data, label, fname, labels, subdir, title,
                          lw=1.6, zorder=3 + ii)
     style_depth_axis(axes[1],
                      r'$|X_{0\%} - X| / X_{0\%} \times 100$ [%]', logx=True)
+                     
+    if fname == 'eps_real':
+        axes[1].set_xlim(3e-4, 3e1)
+    elif fname == 'eps_imag':
+        axes[1].set_xlim(3e-2, 3e1)
+    elif fname == 'conductivity':
+        axes[1].set_xlim(3e-2, 3e1)
+    elif fname == 'losstangent':
+        axes[1].set_xlim(8e-1, 3e1)
+    elif fname == 'attenuation':
+        axes[1].set_xlim(4e-1, 3e1)
+        
     fig.suptitle(title, fontsize=15, y=1.02)
     add_legend(fig, labels, with_ref=ref is not None)
     plt.tight_layout()
@@ -676,6 +710,10 @@ def make_travel_time_profile(dataset, labels, subdir, title):
     fig, ax = plt.subplots(figsize=(6.5, 6))
     draw_lines(ax, dataset['travel_time'])
     style_depth_axis(ax, 'One-way travel time [ns]')
+    
+    ax.set_xlim(-0.1, 20.5)
+    ax.set_ylim(3.0, 0.0)
+    
     ax.set_title(title, fontsize=13)
     add_legend(fig, labels, with_ref=False)
     plt.tight_layout()
@@ -806,6 +844,10 @@ def make_centroid_width_profile():
         axes[1].plot(sg / 1e9, z, color=ice_colors[ii], lw=2)
     style_depth_axis(axes[0], r'$f_c \pm \sigma_f$ [GHz]')
     style_depth_axis(axes[1], r'$\sigma_f$ [GHz]')
+    
+    axes[0].set_xlim(1.09, 1.26)
+    axes[1].set_xlim(0.3600, 0.3800)
+    
     fig.suptitle(f'{FEOTIO2_WT} wt%', fontsize=14, y=1.02)
     fig.legend(handles=ice_handles, loc='lower center', ncol=5, fontsize=12,
                frameon=True, bbox_to_anchor=(0.5, 1.0))
@@ -1133,7 +1175,7 @@ def run_for_model(model):
     print('  出力先: {}'.format(out_dir()))
     print('=' * 74)
 
-    print('--- 系統 A: 周波数を振ったプロファイル ---')
+    print('--- 系統 A: 周波典型的振ったプロファイル ---')
     made.append(make_travel_time_profile(
         SET_FREQ, PROFILE_FREQ_LABELS, DIR_FREQ,
         f'Travel time (FeO+TiO2 = {FEOTIO2_WT} wt%)  [{MIXING_LABEL} / {model}]'))
