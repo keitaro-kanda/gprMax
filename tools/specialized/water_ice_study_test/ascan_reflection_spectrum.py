@@ -84,27 +84,37 @@ GATE_SWEEP_NS = []                 # 例 [1.0, 2.0, 3.0]。空なら感度確認
 # 励振波形は平坦帯域＋Tukey テーパなので時間領域では sinc に近く、サイドローブが
 # 長く尾を引く。実測では surface が 2-12 ns、ice_top が 14-24 ns、ice_bottom が
 # 27-36 ns に広がっており、8-40 ns のほぼ全域がどれかのイベントのローブで埋まる。
-# そこで RMS を取ると「数値ノイズ」ではなく「励振波形のサイドローブレベル」を
-# 測ってしまう（実測で -45 dB。静かな区間の実際の値は -80 dB 前後）。
 #
-# 対策は 3 つ。
-#   (1) 推定量を分位点にする。ローブの山に引きずられない。
-#   (2) 界面のないトレース（Level 3 の at_tx など）で測れるようにする。
-#   (3) 時間分解したフロアを fig0(b) に重ね、どの時間帯が何に支配されているかを
-#       目で見えるようにする。
-NOISE_WINDOW_NS = (8.0, 40.0)      # 地表反射より後の、界面反射がない時間帯
-NOISE_ESTIMATOR = 'percentile'     # 'percentile'（推奨）/ 'rms'（旧挙動）
-NOISE_PERCENTILE = 10.0            # 分位点 [%]。包絡の下側を拾う
-NOISE_PERCENTILE_TO_RMS = True     # 分位点を RMS 相当に換算するか（下記）
-# 純雑音の包絡は Rayleigh 分布に従うので、p 分位点は sigma*sqrt(-2 ln(1-p)) に
-# なる（p=10% で 0.459 sigma）。一方 RMS は sigma。換算しないと分位点のほうが
-# 6.8 dB 低く出て、2 つの推定量を並べたときに比較できない。換算すると
-# 「純雑音なら RMS と一致し、イベントのローブがあるときだけ低く出る」
-# という素直な量になる。
-NOISE_ROLL_NS = 2.0                # 時間分解フロアの移動窓幅 [ns]
-NOISE_TRACE_PATH = ''              # 界面のないトレース（Level 3 の at_tx など）の
-                                   # .out。指定するとこちらでフロアを測る。
-                                   # 空なら解析対象トレース自身で測る（参考値）。
+# 【旧方式を削除した理由】以前は「窓内の包絡の下側 10% 分位点を、Rayleigh 分布を
+# 仮定して RMS に換算したもの」をノイズフロアと呼んでいた。これは二重に誤って
+# いた。
+#   (1) FDTD には熱雑音が無い。あの水準を作っているのは地表反射のサイドローブと、
+#       密度プロファイルを階段で近似したことによる段差反射で、どちらも数値誤差
+#       ではなく「水氷に由来しない信号（クラッター）」である。実測 -81.2 dB は
+#       深さ 1 m での段差反射の理論値 -81.5 dB とほぼ一致する。
+#   (2) 換算係数 sqrt(-2 ln(1-p)) は包絡が Rayleigh 分布に従うとき、つまり下地が
+#       ガウス雑音のときにしか成り立たない。決定論的なパルスの重なりでは包絡の
+#       干渉零点を拾ってしまい、数値実験では換算が 30 dB ずれた。
+#
+# 【新方式】比較相手を「氷なし計算の同じ時間窓」にする。検出とは「氷を入れた
+# ことで、入れなかった場合には無かった信号が現れた」ことなので、これが定義
+# そのものになる。分位点も分布の仮定も換算係数も要らない。
+#
+#   検出 SNR = 20 log10( 氷ありの包絡ピーク / 氷なしの包絡ピーク )   ※同じゲート内
+#
+# 包絡は両方に同じ Hilbert 変換を使うので、分布の仮定は一切入らない。ピーク
+# どうしの比較なので peak-to-RMS 換算も不要。深さごとに基準が変わるのは物理的に
+# 正しい（段差反射は深さ 1 m で -81.5 dB、2 m で -92.1 dB と 10 dB 以上違う）。
+NOICE_TRACE_PATH = ''              # 空でなければレベルによらずこれを使う
+NOICE_TRACE_PATHS = {
+    # Level 4 の氷なしは Level 3（同じ均質媒質で氷層だけが無い）
+    'Level_4': '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/water_ice_study_test'
+               '/level_3/FeO075/at_tx/result/Ascan.out',
+    # Level 5 以降は Level 5 の no_ice
+    '_default': '/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_3x4/water_ice_study_test'
+                '/Level_5/no_ice/at_tx/result/Ascan.out',
+}
+PLOT_WITHOUT_NOICE = True          # 重ね書きしない版の図も出すか
 
 # --- 検出判定（修正 6）------------------------------------------------------
 # 旧版はフロアの絶対値（-70/-60/-55 dB）で判定していたが、これは「地表反射比」
@@ -352,57 +362,28 @@ def refine_center(trace, dt, t_center_ns, halfwidth_ns=None):
 
 
 # =============================================================================
-# 4. ノイズフロア（README §4.3）
+# 4. 氷なし計算を基準にした検出判定
 # =============================================================================
-def rolling_floor(trace, dt, width_ns=None):
-    """包絡の移動分位点。時間分解したノイズフロアを返す（fig0(b) 用）。
+def resolve_noice_path(level):
+    """そのレベルに対応する氷なし計算のパスを返す。
 
-    どの時間帯が数値ノイズに支配され、どこがイベントのサイドローブに
-    支配されているかを目で見られるようにするための量。
+    氷層を持たないレベル（Level 1-3 など）では比較相手が存在しないので空を返す。
     """
-    w = NOISE_ROLL_NS if width_ns is None else width_ns
-    env = np.abs(signal.hilbert(trace))
-    n = max(3, int(round(w * 1e-9 / dt)))
-    if len(env) <= n:
-        return env
-    from numpy.lib.stride_tricks import sliding_window_view
-    val = np.percentile(sliding_window_view(env, n), NOISE_PERCENTILE, axis=1)
-    if NOISE_PERCENTILE_TO_RMS:
-        val = val / np.sqrt(-2.0 * np.log(1.0 - NOISE_PERCENTILE / 100.0))
-    pad = len(env) - len(val)
-    return np.pad(val, (pad // 2, pad - pad // 2), mode='edge')
+    if NOICE_TRACE_PATH:
+        return NOICE_TRACE_PATH
+    # 定義済みのレベルで氷層を持たないものだけを除外する。未定義のレベル
+    # （Level 6 以降）は既定（Level 5 の no_ice）に落とす。「氷層が無いから
+    # 比較相手が無い」と「まだ LEVEL_EFFECTS に登録していない」を取り違えて
+    # 黙って基準なしで走るのを防ぐため。
+    eff = LEVEL_EFFECTS.get(level)
+    if eff is not None and 'ice_layer' not in eff:
+        return ''
+    return NOICE_TRACE_PATHS.get(level, NOICE_TRACE_PATHS['_default'])
 
 
-def measure_noise_floor(trace, dt, surface_amp, exclude_ns=()):
-    """ノイズフロアを (絶対値, 地表反射ピークに対する dB) で返す。
-
-    NOISE_ESTIMATOR = 'percentile'（既定）
-        窓内の包絡の下側分位点。イベントのサイドローブの山に引きずられない。
-    NOISE_ESTIMATOR = 'rms'
-        窓内の波形 RMS（旧挙動）。サイドローブを拾うので過大評価になる。
-
-    exclude_ns に既知のイベント時刻を渡すと、その前後 ±(ゲート半幅 + 1 ns) を
-    窓から除く。ただしサイドローブはこれよりずっと遠くまで伸びるので、
-    除外だけでは足りない。正しくは界面のないトレース（NOISE_TRACE_PATH）で
-    測ること（README §4.3）。
-    """
-    dt_ns = dt * 1e9
-    t_axis = np.arange(len(trace)) * dt_ns
-    lo, hi = NOISE_WINDOW_NS
-    keep = (t_axis >= lo) & (t_axis <= hi)
-    for t0 in exclude_ns:
-        keep &= np.abs(t_axis - t0) > (GATE_HALFWIDTH_NS + 1.0)
-    idx = np.where(keep)[0]
-    if len(idx) == 0 or not surface_amp > 0:
-        return np.nan, np.nan
-    if NOISE_ESTIMATOR == 'rms':
-        val = float(np.sqrt(np.mean(trace[idx] ** 2)))
-    else:
-        env = np.abs(signal.hilbert(trace))
-        val = float(np.percentile(env[idx], NOISE_PERCENTILE))
-        if NOISE_PERCENTILE_TO_RMS:
-            val /= np.sqrt(-2.0 * np.log(1.0 - NOISE_PERCENTILE / 100.0))
-    return val, 20.0 * np.log10(val / surface_amp)
+def envelope(trace):
+    """Hilbert 変換による包絡 |x + i H{x}| = sqrt(x^2 + H{x}^2)。"""
+    return np.abs(signal.hilbert(trace))
 
 
 def judge_snr(snr_db):
@@ -436,14 +417,15 @@ def _load_and_align(path, dt_ref, n_ref, what):
 
 
 def analyze(at_tx_path, ref_path, level, freespace_path='',
-            background_path='', noise_path=''):
+            background_path='', noice_path=''):
     """at_tx トレースを読み、イベントごとのスペクトルと理論を突き合わせる。
 
     freespace_path : 自由空間 at_tx。指定すると直達波を差し引く（修正 2）。
     background_path: 氷なし at_tx。指定すると背景差分を行う（実機では不可）。
-    noise_path     : 界面のない at_tx（Level 3 など）。指定するとフロアを
-                     こちらで測る。イベントのサイドローブに汚染されないため、
-                     こちらが正式な測り方（修正 6）。
+    noice_path     : 氷なし計算の at_tx。検出判定の基準になる。各イベントと
+                     まったく同じ時間窓で包絡ピークを測り、その比を検出 SNR と
+                     する。背景差分（background_path）とは別物で、こちらは
+                     トレースを引かずに比較だけを行う。
     """
     trace, dt = load_trace(at_tx_path)
     ref_trace, dt_ref = load_trace(ref_path)
@@ -490,24 +472,19 @@ def analyze(at_tx_path, ref_path, level, freespace_path='',
                          't_geom': t_geom, 't_theory': t_th})
     source_delay = prepared[0]['t_theory'] - prepared[0]['t_geom']
 
-    # 地表反射（at_tx では直達波を含む）のピーク振幅。ノイズフロアの基準。
+    # 地表反射（at_tx では直達波を含む）のピーク振幅。dB 表示の基準。
     g_surf, _ = gate_trace(trace, dt, prepared[0]['t_theory'])
     surf_amp = measure_peak(g_surf, dt)['amp_peak']
-    # フロアは界面のないトレースで測るのが正式（修正 6）。
-    # 指定がなければ解析対象自身で測るが、その場合はイベントのサイドローブが
-    # 混じるため過大評価になる（参考値）。
-    if noise_path:
-        nz = _load_and_align(noise_path, dt, len(raw_trace), 'ノイズ測定用 at_tx')
-        if fs_trace is not None:
-            nz = nz - fs_trace
-        nf_val, nf_db = measure_noise_floor(nz, dt, surf_amp)
-        nf_src = noise_path
-        nf_trace = nz
+
+    # 氷なし計算を読み込む。直達波の差分は氷ありとまったく同じ処理をする
+    # （でないと基準側だけ直達波が残り、比較が成立しない）。
+    if noice_path:
+        nz_raw = _load_and_align(noice_path, dt, len(raw_trace), '氷なし at_tx')
+        noice_trace = nz_raw if fs_trace is None else (nz_raw - fs_trace)
+        noice_work = (noice_trace if bg_trace is None
+                      else (noice_trace - bg_trace))
     else:
-        nf_val, nf_db = measure_noise_floor(
-            trace, dt, surf_amp, exclude_ns=[p['t_theory'] for p in prepared])
-        nf_src = '(解析対象自身。イベントのサイドローブを含む参考値)'
-        nf_trace = trace
+        noice_trace = noice_work = None
 
     work = trace if bg_trace is None else (trace - bg_trace)
 
@@ -527,6 +504,19 @@ def analyze(at_tx_path, ref_path, level, freespace_path='',
         pk = measure_peak(gated, dt)
         mask = valid_mask(freq, E_meas, E_ref)
 
+        # 氷なし計算に「まったく同じ窓」をかけ、その包絡ピークを基準にする。
+        # 窓の中心は氷ありのイベント時刻に合わせる（「そのイベントが見えた
+        # 時刻に、氷が無ければ何があったか」を問うため）。pore では氷層下端が
+        # 0.26 ns 遅れるので、氷なし側の理論走時を使ってはいけない。
+        if noice_work is not None:
+            nz_gated, _ = gate_trace(noice_work, dt, t_center)
+            nz_pk = measure_peak(nz_gated, dt)
+            noice_amp = nz_pk['amp_peak']
+            noice_t_peak = nz_pk['t_peak']
+            _, E_noice = spectrum(nz_gated, dt)
+        else:
+            noice_amp, noice_t_peak, E_noice = np.nan, np.nan, None
+
         L_abs_meas = log_spectral_ratio(E_meas, E_ref)
         L_abs_th = log_spectral_ratio(E_th, E_ref)
 
@@ -542,6 +532,8 @@ def analyze(at_tx_path, ref_path, level, freespace_path='',
             't_geom': pr['t_geom'], 't_theory': t_th,
             't_center': t_center, 't_measured': pk['t_peak'],
             'amp_peak': pk['amp_peak'], 'window': window,
+            'noice_amp': noice_amp, 'noice_t_peak': noice_t_peak,
+            'E_noice': E_noice,
             'E_meas': E_meas, 'E_theory': E_th, 'terms': tm, 'mask': mask,
             'L_abs_meas': L_abs_meas, 'L_abs_theory': L_abs_th,
             'moments_meas': mom_m, 'moments_theory': mom_t,
@@ -565,8 +557,9 @@ def analyze(at_tx_path, ref_path, level, freespace_path='',
     info = {'dt': dt, 'freq': freq, 'E_ref': E_ref, 'trace': trace,
             'raw_trace': raw_trace, 'freespace': fs_trace,
             'work': work, 'background': bg_trace,
-            'noise_val': nf_val, 'noise_db': nf_db, 'noise_src': nf_src,
-            'noise_trace': nf_trace, 'surface_amp': surf_amp,
+            'noice_trace': noice_trace, 'noice_work': noice_work,
+            'noice_src': noice_path or '(氷層のないレベルなので比較相手なし)',
+            'surface_amp': surf_amp,
             'rel_ref': ref_name, 'source_delay': source_delay,
             'subtracted': fs_trace is not None}
     return results, info
@@ -672,7 +665,8 @@ def _marker_handles():
             Line2D([0], [0], color='0.3', lw=2, **STYLE_TH, label='theory')]
 
 
-def plot_trace(results, info, output_dir):
+def plot_trace(results, info, output_dir, overlay_noice=True,
+               stem='fig0_trace'):
     """fig0: (a) 全波形＋理論走時＋ゲート窓 (b) 包絡の dB とノイズフロア。"""
     dt_ns = info['dt'] * 1e9
     t = np.arange(len(info['work'])) * dt_ns
@@ -693,6 +687,31 @@ def plot_trace(results, info, output_dir):
                       fontsize=13)
     axes[0].legend(fontsize=10)
 
+    # 氷なし計算の包絡を重ねる。水平線ではなく曲線にするのは、背景の水準が
+    # 時間（深さ）で大きく変わるため。理論では段差反射が深さ 1 m で -81.5 dB、
+    # 2 m で -92.1 dB と 10 dB 以上違い、水平線で代表させると深い側を損する。
+    if overlay_noice and info['noice_work'] is not None:
+        with np.errstate(divide='ignore'):
+            nz_db = 20.0 * np.log10(
+                envelope(info['noice_work']) / info['surface_amp'])
+        axes[1].plot(t, nz_db, color='tab:green', lw=0.9, alpha=0.85,
+                     label='no ice (same medium without the ice layer)')
+        # 各ゲート内での氷なし包絡ピーク＝検出 SNR の分母。これは「窓の
+        # 代表値」であって曲線上の 1 点ではない（最大が現れる時刻は窓の中の
+        # どこでもよい）。以前はゲート中心に点マーカーで描いていたため、
+        # 緑の曲線から浮いて見えて誤解を招いた。窓の幅いっぱいに伸びる
+        # 水平線にして、窓全体を代表する量であることを見た目で示す。
+        # 実際にピークが立っている時刻には細い縦線を添える。
+        for r in results:
+            if not np.isfinite(r['noice_amp']):
+                continue
+            lvl = 20.0 * np.log10(r['noice_amp'] / info['surface_amp'])
+            axes[1].hlines(lvl, r['window'][0], r['window'][1],
+                           color='tab:green', lw=2.5, alpha=0.95, zorder=5)
+            if np.isfinite(r['noice_t_peak']):
+                axes[1].vlines(r['noice_t_peak'], lvl - 3.0, lvl + 3.0,
+                               color='tab:green', lw=1.2, alpha=0.8, zorder=5)
+
     with np.errstate(divide='ignore'):
         env_db = 20.0 * np.log10(env / info['surface_amp'])
     axes[1].plot(t, env_db, color='k', lw=0.9)
@@ -705,23 +724,15 @@ def plot_trace(results, info, output_dir):
         th_db = 20.0 * np.log10(theory_amp(r, i_c) / theory_amp(results[0], i_c))
         axes[1].plot(r['t_theory'], th_db, marker='o', ms=7,
                      color=r['color'], mfc='none', mew=2)
-    # 時間分解したフロア（包絡の移動分位点）。どの時間帯が数値ノイズに支配され、
-    # どこがイベントのサイドローブに支配されているかが読み取れる（修正 6）。
-    with np.errstate(divide='ignore'):
-        roll_db = 20.0 * np.log10(
-            rolling_floor(info['noise_trace'], info['dt']) / info['surface_amp'])
-    axes[1].plot(t[:len(roll_db)], roll_db, color='m', lw=1.0, alpha=0.8,
-                 label='rolling floor ({:.0f}th pct, {:.1f} ns)'
-                 .format(NOISE_PERCENTILE, NOISE_ROLL_NS))
-    if np.isfinite(info['noise_db']):
-        axes[1].axhline(info['noise_db'], color='m', ls=':', lw=1.5,
-                        label='noise floor {:.1f} dB'.format(info['noise_db']))
-        axes[1].axvspan(NOISE_WINDOW_NS[0], NOISE_WINDOW_NS[1],
-                        color='m', alpha=0.06)
-    axes[1].legend(fontsize=9, loc='upper right')
+    # 重ね書きなしの版では (b) にラベル付きの線が無くなるので、凡例を出さない
+    # （出すと matplotlib が「ラベル付きの要素がない」と警告する）。
+    if axes[1].get_legend_handles_labels()[0]:
+        axes[1].legend(fontsize=9, loc='upper right')
     axes[1].set_xlabel('Time [ns]', fontsize=13)
     axes[1].set_ylabel('Envelope [dB re. surface peak]', fontsize=13)
-    axes[1].set_title('(b) Envelope, theory (circles) and noise floor',
+    axes[1].set_title('(b) Envelope, theory (circles)'
+                      + (' and no-ice reference' if overlay_noice
+                         and info['noice_work'] is not None else ''),
                       fontsize=13)
     axes[1].set_ylim(-90, 5)
     for ax in axes:
@@ -730,7 +741,7 @@ def plot_trace(results, info, output_dir):
     fig.legend(handles=_event_handles(results), loc='upper center', ncol=4,
                fontsize=11, bbox_to_anchor=(0.5, 0.0), frameon=True)
     plt.tight_layout()
-    save_figure(fig, output_dir, 'fig0_trace')
+    save_figure(fig, output_dir, stem)
 
 
 def plot_spectra(results, info, output_dir):
@@ -769,9 +780,11 @@ def plot_spectra(results, info, output_dir):
             ax.plot(fg, 20 * np.log10(np.abs(r['E_theory']) / norm),
                     color=r['color'], lw=1.0, ls='--', alpha=0.8,
                     label=r['name'] + ' (theory)')
-    if np.isfinite(info['noise_db']):
-        ax.axhline(info['noise_db'], color='m', ls=':', lw=1.2,
-                   label='noise floor')
+        for r in results:
+            if r['E_noice'] is not None:
+                ax.plot(fg, 20 * np.log10(np.abs(r['E_noice']) / norm),
+                        color=r['color'], lw=1.0, ls=':', alpha=0.9,
+                        label=r['name'] + ' (no ice)')
     for x in BAND_GHZ:
         ax.axvline(x, color='k', ls=':', lw=1.0)
     ax.set_xlim(0, 3.0)
@@ -1061,11 +1074,23 @@ def compute_spectrogram(results, info):
     # 混じると vmax が壊れるので、非有限値はすべて NaN（＝描かない）に揃える。
     S_db = np.where(np.isfinite(S_db), S_db, np.nan)
 
-    snr_db = pk_db - info['noise_db']
+    # 基準は氷なし計算に「同じゲート」を滑らせた包絡ピーク。時間分解した
+    # 背景レベルになるので、水平線より正確に「氷で増えたぶん」を切り出せる。
+    if info['noice_work'] is not None:
+        nz_db = np.full(t_centers.size, np.nan)
+        for i, tc in enumerate(t_centers):
+            nzg, _ = gate_trace(info['noice_work'], dt, float(tc), hw)
+            npk = measure_peak(nzg, dt)['amp_peak']
+            if npk > 0:
+                nz_db[i] = 20.0 * np.log10(npk / info['surface_amp'])
+        snr_db = pk_db - nz_db
+    else:
+        nz_db = np.full(t_centers.size, np.nan)
+        snr_db = np.full(t_centers.size, np.nan)
     usable = np.isfinite(snr_db) & (snr_db >= SPECTROGRAM_SNR_MIN_DB)
     return {'t_ns': t_centers, 'freq_ghz': f_ghz_all[fsel], 'S_db': S_db,
             'f_c': f_c, 'sigma_f': sig, 'peak_db': pk_db, 'snr_db': snr_db,
-            'usable': usable,
+            'noice_db': nz_db, 'usable': usable,
             'halfwidth_ns': hw, 'norm_note': norm_note}
 
 
@@ -1078,13 +1103,14 @@ def _write_spectrogram_csv(sg, output_dir):
 
     with open(path, 'w', encoding='utf-8') as fh:
         fh.write('t_ns,f_c_GHz,sigma_f_GHz,f_lo_GHz,f_hi_GHz,'
-                 'peak_dB_re_surface,snr_dB,usable\n')
+                 'peak_dB_re_surface,noice_dB_re_surface,'
+                 'snr_vs_noice_dB,usable\n')
         for i, t in enumerate(sg['t_ns']):
             fc, sf = sg['f_c'][i], sg['sigma_f'][i]
-            fh.write('{:.4f},{},{},{},{},{},{},{}\n'.format(
+            fh.write('{:.4f},{},{},{},{},{},{},{},{}\n'.format(
                 t, _f(fc), _f(sf), _f(fc - sf), _f(fc + sf),
-                _f(sg['peak_db'][i], '{:.4f}'), _f(sg['snr_db'][i], '{:.4f}'),
-                int(bool(sg['usable'][i]))))
+                _f(sg['peak_db'][i], '{:.4f}'), _f(sg['noice_db'][i], '{:.4f}'),
+                _f(sg['snr_db'][i], '{:.4f}'), int(bool(sg['usable'][i]))))
     print('Saved:', path)
 
 
@@ -1174,25 +1200,23 @@ def plot_spectrogram(results, info, output_dir):
     axes[0].legend(fontsize=10, loc='upper right', framealpha=0.85)
 
     # --- (b) 窓ごとの包絡ピーク --------------------------------------------
-    axes[1].plot(sg['peak_db'], t, color='k', lw=1.0)
-    if np.isfinite(info['noise_db']):
-        axes[1].axvline(info['noise_db'], color='m', ls=':', lw=1.5,
-                        label='noise floor {:.1f} dB\n(track limit +{:.0f} dB)'
-                        .format(info['noise_db'], SPECTROGRAM_SNR_MIN_DB))
+    axes[1].plot(sg['peak_db'], t, color='k', lw=1.0, label='ice')
+    if np.any(np.isfinite(sg['noice_db'])):
+        axes[1].plot(sg['noice_db'], t, color='tab:green', lw=1.0, alpha=0.85,
+                     label='no ice\n(track limit +{:.0f} dB)'
+                     .format(SPECTROGRAM_SNR_MIN_DB))
         if SPECTROGRAM_SHOW_TRACKING_LIMIT:
-            axes[1].axvline(info['noise_db'] + SPECTROGRAM_SNR_MIN_DB,
-                            color='m', ls='--', lw=1.0, alpha=0.7)
+            axes[1].plot(sg['noice_db'] + SPECTROGRAM_SNR_MIN_DB, t,
+                         color='tab:green', ls='--', lw=1.0, alpha=0.6)
     for r in results:
         axes[1].axhline(r['t_theory'], color=r['color'], ls='--', lw=1.3,
                         alpha=0.9)
     axes[1].set_xlabel('Gated peak [dB re. surface peak]', fontsize=13)
     axes[1].set_title('(b) Amplitude in the\nsame gate', fontsize=13)
-    # noise floor が軸の外に出て線が見えなくなることがあったので、下限に含める。
-    # 有限値だけで決める（信号が無い時刻は NaN になっているため）。
-    finite_pk = sg['peak_db'][np.isfinite(sg['peak_db'])]
+    # 有限値だけで下限を決める（信号が無い時刻は NaN になっているため）。
+    both = np.concatenate([sg['peak_db'], sg['noice_db']])
+    finite_pk = both[np.isfinite(both)]
     x_lo = min(-90.0, float(np.min(finite_pk))) if finite_pk.size else -90.0
-    if np.isfinite(info['noise_db']):
-        x_lo = min(x_lo, float(info['noise_db']) - 5.0)
     axes[1].set_xlim(x_lo, 5.0)
     axes[1].legend(fontsize=9, loc='lower left', framealpha=0.85)
 
@@ -1220,21 +1244,32 @@ def write_outputs(results, info, level, kind, output_dir):
     path = os.path.join(output_dir, 'events.csv')
     with open(path, 'w', newline='', encoding='utf-8') as fh:
         w = csv.writer(fh)
+        # noice_* は氷なし計算を「同じ時間窓」で測った値。
+        # snr_vs_noice_dB = amp_rel_surface_dB - noice_rel_surface_dB が検出量。
         w.writerow(['event', 'depth_m', 't_geom_ns', 't_theory_ns',
                     't_measured_ns', 'dt_ns', 'amp_peak', 'amp_rel_surface_dB',
                     'amp_theory_rel_surface_dB',
+                    'noice_amp_peak', 'noice_rel_surface_dB',
+                    'snr_vs_noice_dB',
                     'R_theory', 'R_measured', 'alpha_abs_1.25GHz',
                     'alpha_rel_1.25GHz', 'f_c_GHz', 'sigma_f_GHz'])
         for r in results:
             a_abs = alpha_from_absolute(r, level)
             a_rel = alpha_from_relative(r, r0, level)
             Rm = reflection_spectrum(r)[i_c]
+            amp_db = 20 * np.log10(r['amp_peak'] / info['surface_amp'])
+            if np.isfinite(r['noice_amp']) and r['noice_amp'] > 0:
+                nz_db = 20 * np.log10(r['noice_amp'] / info['surface_amp'])
+                nz_cell, snr_cell = '{:.6f}'.format(nz_db), '{:.6f}'.format(amp_db - nz_db)
+                nz_amp = '{:.6e}'.format(r['noice_amp'])
+            else:
+                nz_amp = nz_cell = snr_cell = ''
             w.writerow([
                 r['name'], r['depth_m'], r['t_geom'], r['t_theory'],
                 r['t_measured'], r['t_measured'] - r['t_theory'],
-                r['amp_peak'],
-                20 * np.log10(r['amp_peak'] / results[0]['amp_peak']),
+                r['amp_peak'], amp_db,
                 20 * np.log10(theory_amp(r, i_c) / theory_amp(results[0], i_c)),
+                nz_amp, nz_cell, snr_cell,
                 float(np.abs(r['terms']['R'][i_c])), float(Rm),
                 '' if a_abs is None else float(a_abs[i_c]),
                 '' if a_rel is None else float(a_rel[i_c]),
@@ -1261,8 +1296,8 @@ def write_outputs(results, info, level, kind, output_dir):
             fh.write('  ice model: {}\n'.format(sm.LEVEL4_ICE_MODEL))
         fh.write('  source delay (from theory trace): {:.3f} ns\n'
                  .format(info['source_delay']))
-        fh.write('  noise floor: {:.2f} dB re. surface peak ({}, {})\n'
-                 .format(info['noise_db'], NOISE_ESTIMATOR, info['noise_src']))
+        fh.write('  detection reference (no-ice run): {}\n'
+                 .format(info['noice_src']))
         if 'absorb_const' in LEVEL_EFFECTS[level]:
             fh.write('  medium: {}\n'.format(
                 describe_level2_medium(refractive_index(freq, level))))
@@ -1293,7 +1328,8 @@ def gate_sensitivity(at_tx_path, ref_path, level, freespace_path=''):
     for hw in GATE_SWEEP_NS:
         GATE_HALFWIDTH_NS = hw
         res, info = analyze(at_tx_path, ref_path, level, freespace_path,
-                            BACKGROUND_TRACE_PATH, NOISE_TRACE_PATH)
+                            BACKGROUND_TRACE_PATH,
+                            resolve_noice_path(level))
         names = [r['name'] for r in res]
         r0 = res[names.index(info['rel_ref'])]
         i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
@@ -1313,12 +1349,12 @@ def run_once(at_tx_path, ref_path, level, kind, output_dir,
     """1 条件ぶんの解析と作図。差分あり／なしで 2 回呼ぶ。"""
     os.makedirs(output_dir, exist_ok=True)
     results, info = analyze(at_tx_path, ref_path, level, freespace_path,
-                            BACKGROUND_TRACE_PATH, NOISE_TRACE_PATH)
+                            BACKGROUND_TRACE_PATH,
+                            resolve_noice_path(level))
 
     tag = '直達波の差分あり' if info['subtracted'] else '直達波の差分なし（生データ）'
     print('\n=== {} -> {}'.format(tag, output_dir))
-    print('  ノイズフロア: {:.2f} dB re. surface peak  ({}, {})'
-          .format(info['noise_db'], NOISE_ESTIMATOR, info['noise_src']))
+    print('  検出の基準（氷なし計算）: {}'.format(info['noice_src']))
     print('  波源遅延（理論トレースの包絡ピークから）: {:.3f} ns'
           .format(info['source_delay']))
     i_c = int(np.argmin(np.abs(info['freq'] - BAND_CENTRE_HZ)))
@@ -1327,10 +1363,14 @@ def run_once(at_tx_path, ref_path, level, kind, output_dir,
     for r in results:
         amp_db = 20 * np.log10(r['amp_peak'] / results[0]['amp_peak'])
         th_db = 20 * np.log10(theory_amp(r, i_c) / theory_amp(results[0], i_c))
-        snr = amp_db - info['noise_db']
+        if np.isfinite(r['noice_amp']) and r['noice_amp'] > 0:
+            snr = amp_db - 20 * np.log10(r['noice_amp'] / results[0]['amp_peak'])
+        else:
+            snr = np.nan
         print('  {:10s} {:5.2f} {:9.3f} {:11.3f} {:+9.2f} {:+8.2f} {:+7.2f} {:+6.1f}  {}'
               .format(r['name'], r['depth_m'], r['t_theory'], r['t_measured'],
-                      amp_db, th_db, amp_db - th_db, snr, judge_snr(snr)))
+                      amp_db, th_db, amp_db - th_db, snr,
+                      '-' if not np.isfinite(snr) else judge_snr(snr)))
     # ゲートによる損失を切り分けるため、理論トレースを同じゲートに通した値も出す。
     print('  （参考）理論トレースを同じゲートに通したときの振幅:')
     for r in results:
@@ -1342,7 +1382,11 @@ def run_once(at_tx_path, ref_path, level, kind, output_dir,
                            info['dt'])['amp_peak'])
         print('    {:10s} {:+8.2f} dB'.format(r['name'], g_db))
 
-    plot_trace(results, info, output_dir)
+    plot_trace(results, info, output_dir, overlay_noice=True,
+               stem='fig0_trace_noice')
+    if PLOT_WITHOUT_NOICE:
+        plot_trace(results, info, output_dir, overlay_noice=False,
+                   stem='fig0_trace')
     plot_spectra(results, info, output_dir)
     plot_lsr(results, info, output_dir)
     plot_attenuation(results, info, level, output_dir)
