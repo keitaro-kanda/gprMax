@@ -72,13 +72,13 @@ _TRAPZ = getattr(np, 'trapezoid', None) or np.trapz
 # =============================================================================
 # [EDIT HERE] 設計パラメータ
 # =============================================================================
-OUT_FILENAME = 'lupex_src.txt'          # 出力 ASCII ファイル名
-PLOT_FILENAME = 'lupex_src_diagnostics.png'   # 診断プロットのファイル名
+OUT_FILENAME = 'LPR_CH2.txt'          # 出力 ASCII ファイル名
+PLOT_FILENAME = 'LPR_CH2_diagnostics.png'   # 診断プロットのファイル名
 DEFAULT_OUTDIR = '.'            # 出力先の既定値（実行時に Enter だけ押すとこれを使う）
-WAVEFORM_ID = 'lupex_src'       # #hertzian_dipole から参照する識別子（空白不可）
+WAVEFORM_ID = 'LPR_CH2'         # #hertzian_dipole から参照する識別子（空白不可）
 
-F_LO = 0.5e9                    # [Hz] 帯域下端
-F_HI = 2.0e9                    # [Hz] 帯域上端
+F_LO = 250e6                    # [Hz] 帯域下端
+F_HI = 750e6                    # [Hz] 帯域上端
 TUKEY_ALPHA = 0.2               # 帯域端のテーパー幅の割合 (0=矩形, 1=Hann)
                                 #   大きくすると時間領域のリンギングは減るが
                                 #   sigma_f^2 が下がり水氷検出感度も下がる。
@@ -111,7 +111,7 @@ PEAK_CURRENT = 1.0              # [A] 電流波形のピーク振幅
 
 # 診断用
 NFFT = 2 ** 18
-LEAK_REF_LO, LEAK_REF_HI = 0.4e9, 2.2e9   # 帯域外漏れを評価する外側の境界
+LEAK_REF_LO, LEAK_REF_HI = 200e6, 800e6   # 帯域外漏れを評価する外側の境界
 
 
 # =============================================================================
