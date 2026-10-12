@@ -11,6 +11,8 @@ Level 6 のランダム場（Jiang et al. 2013 のスペクトル法）を、設
     ステップ 2  生成格子を用意し、周期性の条件を確かめる   （追加）
     ステップ 3  C を格子に標本化して FFT → パワースペクトル F（式 10）
     ステップ 4  一様乱数の位相 θ を引く（乱数はここだけ）   （式 11 の θ）
+                np.random.RandomState(SEED) を使う。NEP 19 で乱数列が凍結されているので、
+                numpy の版が変わっても同じ整数シードから同じ θ が出る
     ステップ 5  √F·e^{iθ} を逆 FFT して実部をとる          （式 11, 12）
     ステップ 6  地下領域を切り出して平均 0・分散 1 に正規化 （式 13–15）
 
@@ -21,16 +23,22 @@ Level 6 のランダム場（Jiang et al. 2013 のスペクトル法）を、設
     step4_phase.png      位相 θ、そのヒストグラム、振幅 √F とランダムスペクトル
     step5_ifft.png       逆 FFT の実部（使う）と虚部（捨てる）、分布
     step6_normalize.png  正規化後の R、分布、実現した自己相関と目標 C の比較
-    overview.png         各ステップの代表的な生成物を 1 枚に並べた流れ図
+    overview_seed<N>.png 各ステップの代表的な生成物を 1 枚に並べた流れ図。
+                         OVERVIEW_SEEDS の各シードについて 1 枚ずつ（既定は 2 種類）。
+                         ステップ 1–3 はシードに依存しないので共通、4–6 だけが変わる
 
 最後に、段階的に計算した R がドキュメントの一括関数 make_random_field_spectral()
 の結果とビット単位で一致することを確かめる（CHECK_AGAINST_FUNCTION）。
+また、別の計算機と照合するための指紋として、θ の先頭 3 値と R の sha256 を表示する。
+θ の先頭 3 値は numpy の版や計算機によらず一致するはず。R の sha256 は FFT の丸めの
+違いで変わりうる（その場合も値の差は 1e-12 程度で、物理的には同じ場）。
 
 必要なもの: numpy, matplotlib（scipy は不要）
 メモリ: 既定設定（dx = 2.5 mm、生成格子 14 × 7 m = 5600 × 2800）でピーク 1.5 GB 程度。
         軽く試すだけなら DX を 0.005 などに上げる（ただし場は別の実現になる）。
 """
 
+import hashlib
 import os
 import time
 
@@ -50,7 +58,8 @@ DOMAIN_Z_M = 3.0            # 切り出す地下領域の深さ [m]（地表 y =
 A_M = 0.70                  # 水平相関長 a [m]（自己相関が 1/e になる距離）
 B_M = 0.28                  # 鉛直相関長 b [m]
 R_ROUGH = 0.0               # 粗さ係数 r（0 = ガウス型、1 = 指数型）
-SEED = 20261009             # 乱数シード（ステップ 4 だけで使う）
+SEED = 20261009             # 乱数シード（ステップ 4 だけで使う）。0 <= SEED < 2**32 の整数
+OVERVIEW_SEEDS = (20261009, 20261010)  # overview を描くシード（ステップ別の図は SEED だけ）
 GEN_SIZE_M = (14.0, 7.0)    # 生成格子 (Lx, Lz) [m]。相関長を変えても固定する
 WRAP_EPS = 1e-3             # 周期性の条件に使う自己相関のしきい値
 
@@ -216,7 +225,7 @@ def draw_grid_schematic(ax, g):
             ax.add_patch(Rectangle((i * Lx, j * Lz), Dx, Dz, fill=True,
                                    fc='#d62728' if main else '#f4b6b6',
                                    ec='#d62728', alpha=0.85 if main else 0.6))
-    ax.text(Lx * 0.7, Lz * 0.72, '生成格子\n（実際に計算する範囲）', ha='center', va='center',
+    ax.text(Lx * 0.6, Lz * 0.42, '生成格子\n（実際に計算する範囲）', ha='center', va='center',
             fontsize=9)
     ax.text(Lx * 1.5, Lz * 0.55, 'FFT が暗黙に仮定する\n周期的なコピー', ha='center',
             va='center', fontsize=9, color='gray')
@@ -422,14 +431,23 @@ def plot_step3(g, s1, s3):
 # =============================================================================
 # ステップ 4：ランダム位相を与える
 # =============================================================================
-def step4_random_phase(g, s3):
+def step4_random_phase(g, s3, seed=SEED):
     """位相 θ を [0, 2π) の一様乱数で引く。乱数を使うのはこのステップだけ。
     振幅は √F に固定するので、統計（どの波数にどれだけパワーがあるか）は変わらず、
-    「どこに粒があるか」だけが θ で決まる。"""
+    「どこに粒があるか」だけが θ で決まる。
+
+    乱数生成器は np.random.RandomState(SEED)（旧来の Mersenne Twister 系統）。
+      - NEP 19 で乱数列が凍結されており、numpy の版が変わっても同じ整数から同じ θ が出る
+        （新しい Generator の uniform にはこの保証がない）
+      - np.random.seed() で全体の状態を設定する代わりに、手元のインスタンスで持つ。
+        途中で他のコードが np.random を呼んでも θ がずれない
+    """
     print('\n[ステップ 4] 一様乱数の位相 θ を引く')
-    rng = np.random.default_rng(SEED)
+    rng = np.random.RandomState(seed)
     theta = rng.uniform(0.0, 2.0 * np.pi, size=(g['Gx'], g['Gz']))
-    print(f'    seed = {SEED}, 配列の形 = {theta.shape}（生成格子と同じ形）')
+    print(f'    RandomState(seed = {seed}), 配列の形 = {theta.shape}（生成格子と同じ形）')
+    print(f'    θ の先頭 3 値（指紋。版・計算機によらず一致するはず）: '
+          f'{theta[0, 0]:.15f}, {theta[0, 1]:.15f}, {theta[0, 2]:.15f}')
     print(f'    θ の平均 {theta.mean():.4f}（一様なら π = {np.pi:.4f}）')
     return dict(theta=theta)
 
@@ -624,7 +642,7 @@ def plot_step6(g, s1, s6):
 # =============================================================================
 # 全体の流れ（各ステップの代表的な生成物を 1 枚に）
 # =============================================================================
-def plot_overview(g, s1, s3, s4, s5, s6):
+def plot_overview(g, s1, s3, s4, s5, s6, seed=SEED):
     fig, axs = plt.subplots(2, 3, figsize=(18, 10.5))
     draw_acf_map(axs[0, 0], s1)
     axs[0, 0].set_title('ステップ 1：自己相関 C を決める\n（解析式。乱数なし）')
@@ -641,9 +659,9 @@ def plot_overview(g, s1, s3, s4, s5, s6):
     im = draw_R(axs[1, 2], g, s6['R'], 'ステップ 6：切り出して正規化 → R\n（平均 0・分散 1）')
     fig.colorbar(im, ax=axs[1, 2], fraction=0.046, label='R')
     fig.suptitle(f'スペクトル法の流れ（a = {s1["a"]} m, b = {s1["b"]} m, r = {s1["r"]}, '
-                 f'seed = {SEED}, 生成格子 {g["Lx"]:.0f} × {g["Lz"]:.0f} m）', fontsize=14)
+                 f'seed = {seed}, 生成格子 {g["Lx"]:.0f} × {g["Lz"]:.0f} m）', fontsize=14)
     fig.tight_layout()
-    _save(fig, 'overview.png')
+    _save(fig, f'overview_seed{seed}.png')
 
 
 # =============================================================================
@@ -666,7 +684,7 @@ def make_random_field_spectral(nx, nz, dx, a, b, r, seed, gen_size_m, wrap_eps=1
     F = np.fft.fft2(C).real
     del C
     F[F < 0] = 0.0
-    rng = np.random.default_rng(seed)
+    rng = np.random.RandomState(seed)               # 乱数列が凍結された旧来の系統
     theta = rng.uniform(0.0, 2.0 * np.pi, size=(Gx, Gz))
     f = np.fft.ifft2(np.sqrt(F) * np.exp(1j * theta)).real
     del F, theta
@@ -675,9 +693,21 @@ def make_random_field_spectral(nx, nz, dx, a, b, r, seed, gen_size_m, wrap_eps=1
 
 
 # =============================================================================
+def _prepare_out_dir():
+    """出力先を用意する。/Volumes 以下を指定していてボリュームがマウントされていなければ、
+    勝手にフォルダを作らずに止める（macOS では /Volumes 直下に作ろうとして権限エラーになる）。"""
+    parts = os.path.abspath(OUT_DIR).split(os.sep)
+    if len(parts) > 2 and parts[1] == 'Volumes':
+        vol = os.sep + os.path.join(parts[1], parts[2])
+        if not os.path.isdir(vol):
+            raise SystemExit(f'出力先のボリューム {vol} が見つかりません。'
+                             'SSD を接続するか、OUT_DIR を変更してください。')
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+
 def main():
     _setup_japanese_font()
-    os.makedirs(OUT_DIR, exist_ok=True)
+    _prepare_out_dir()
     t_all = time.time()
 
     s1 = step1_define_acf()
@@ -698,15 +728,38 @@ def main():
     s6 = step6_crop_normalize(g, s5)
     plot_step6(g, s1, s6)
 
-    plot_overview(g, s1, s3, s4, s5, s6)
+    if SEED in OVERVIEW_SEEDS:
+        plot_overview(g, s1, s3, s4, s5, s6, seed=SEED)
 
     R = s6['R'].copy()
     np.save(os.path.join(OUT_DIR, 'R_demo.npy'), R)
     print(f'\n    R を保存: {os.path.join(OUT_DIR, "R_demo.npy")}  形 {R.shape}（[x, z]）')
+    print(f'    R の sha256: {hashlib.sha256(np.ascontiguousarray(R).tobytes()).hexdigest()}')
+    print(f'    numpy {np.__version__}')
+
+    # overview だけ、別のシードでも描く（ステップ 1–3 の結果 s1, g, s3 はそのまま使い回す）
+    del s4, s5, s6                            # 先にメモリを空ける
+    R_by_seed = {SEED: R}
+    for sd in OVERVIEW_SEEDS:
+        if sd == SEED:
+            continue
+        print(f'\n[overview] seed = {sd} でステップ 4–6 をやり直す')
+        s4b = step4_random_phase(g, s3, seed=sd)
+        s5b = step5_inverse_fft(s3, s4b)
+        s6b = step6_crop_normalize(g, s5b)
+        plot_overview(g, s1, s3, s4b, s5b, s6b, seed=sd)
+        R_by_seed[sd] = s6b['R'].copy()
+        del s4b, s5b, s6b
+    if len(R_by_seed) > 1:
+        seeds = list(R_by_seed)
+        for sd in seeds[1:]:
+            cc = np.corrcoef(R_by_seed[seeds[0]].ravel(), R_by_seed[sd].ravel())[0, 1]
+            print(f'    R の相関係数 seed {seeds[0]} vs {sd}: {cc:+.3f}（別の実現なら 0 付近）')
+    del R_by_seed
 
     if CHECK_AGAINST_FUNCTION:
         print('\n[検算] ドキュメントの一括関数と比べる')
-        del s3, s4, s5, s6                    # メモリを空けてから一括版を回す
+        del s3                                # メモリを空けてから一括版を回す
         R2 = make_random_field_spectral(g['nx'], g['nz'], DX, A_M, B_M, R_ROUGH, SEED,
                                         GEN_SIZE_M, WRAP_EPS)
         same = np.array_equal(R, R2)
