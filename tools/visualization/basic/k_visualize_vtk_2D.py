@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 """
 Plot relative permittivity, conductivity, and loss tangent from
-gprMax geometry files (.h5 + materials.txt).
+a gprMax geometry view file (.vti, written by #geometry_view with 'n').
+
+Only the .vti path is required. Everything else is collected automatically:
+  - Grid size, extent and origin       : read from the .vti header
+  - Material ID -> material name        : read from the <gprMax> block at the end of the .vti
+  - Material properties (eps, sigma,    : read from the .in file that wrote this .vti
+    Debye poles)                          (#material / #add_dispersion_debye lines),
+                                          and from <vti stem>_materials.txt if it exists
+  - Surface position                    : detected from the geometry (top of the non-free-space
+                                          material in each column, median over columns).
+                                          Set SURFACE_Y_M below to override.
 
 Axis convention:
   - Vertical axis: depth below surface [m]. Surface=0, subsurface>0, vacuum<0.
-  - Surface position determined from JSON ground_depth
-    (distance from box top to surface).
-  - Vacuum region (depth < 0) is included; a dashed white line marks the surface.
+  - Vacuum region (depth < 0) is included.
 
 Dispersive / non-dispersive handling (automatic):
   - Materials without #add_dispersion_debye have deps=tau=0
@@ -16,102 +24,222 @@ Dispersive / non-dispersive handling (automatic):
     and summed at the target frequency.
 """
 import os
-import json
-import h5py
+import re
+import glob
+import xml.etree.ElementTree as ET
 import numpy as np
 import matplotlib.pyplot as plt
 import mpl_toolkits.axes_grid1 as axgrid1
-from tqdm import tqdm
 import sys
+
+
+# =============================================================================
+# Settings
+# =============================================================================
+freqs = [0.5e9, 1.25e9, 2.0e9]   # Hz
+SURFACE_Y_M = None               # Surface height from the bottom of the domain [m]. None: detect automatically
 
 
 # =============================================================================
 # Input
 # =============================================================================
-json_file = input("Enter geometry JSON file path: ").strip()
-if not os.path.exists(json_file):
-    sys.exit("Error: Geometry JSON file not found.")
-
-#freq = input("Enter GPR frequency (Hz): ").strip()
-# if freq == '':
-#     sys.exit("Error: Frequency is required.")
-#freq = float(freq)
+vti_file = input("Enter geometry .vti file path: ").strip().strip("'\"").replace("\\ ", " ")
+if not os.path.exists(vti_file):
+    sys.exit("Error: .vti file not found.")
+vti_file = os.path.abspath(vti_file)
 
 output_basename = 'geometry_plot'
-output_dir = os.path.join(os.path.dirname(json_file), output_basename)
+output_dir = os.path.join(os.path.dirname(vti_file), output_basename)
 os.makedirs(output_dir, exist_ok=True)
 
-with open(json_file) as f:
-    params = json.load(f)
 
-geo = params['geometry_settings']
-spatial_grid  = geo['grid_size']    # [m]
-domain_x      = geo['domain_x']     # [m]
-domain_z      = geo['domain_z']     # [m]  (total height in Y direction)
-y_surf        = geo['ground_depth'] # [m]  (JSONには下からの高さが格納されている)
+# =============================================================================
+# Load .vti (material IDs, grid, material names)
+# =============================================================================
+def read_vti(path):
+    """Read the Material array (cells), spacing, origin and {name: ID} from a gprMax .vti."""
+    raw = open(path, 'rb').read()
+    head_end = raw.index(b'<AppendedData')
+    header = raw[:head_end].decode('utf-8', errors='replace')
+    ext = [int(v) for v in re.search(r'WholeExtent="([^"]+)"', header).group(1).split()]
+    nx, ny, nz = ext[1] - ext[0], ext[3] - ext[2], ext[5] - ext[4]
+    spacing = [float(v) for v in re.search(r'Spacing="([^"]+)"', header).group(1).split()]
+    origin = [float(v) for v in re.search(r'Origin="([^"]+)"', header).group(1).split()]
+    htype = re.search(r'header_type="([^"]+)"', header)
+    hdt = np.dtype('<u8') if (htype and htype.group(1) == 'UInt64') else np.dtype('<u4')
 
-# モデル上端からの距離（深さ）に変換 (4.0 - 3.0 = 1.0m)
-ground_depth  = domain_z - y_surf
+    m = re.search(r'<DataArray type="UInt32" Name="Material" format="appended" offset="(\d+)"', header)
+    start = raw.index(b'_', raw.index(b'>', head_end)) + 1 + int(m.group(1))
+    nbytes = int(np.frombuffer(raw[start:start + hdt.itemsize], hdt)[0])
+    data = np.frombuffer(raw[start + hdt.itemsize:start + hdt.itemsize + nbytes], dtype='<u4')
+    material = data.reshape((nz, ny, nx)).transpose(2, 1, 0)      # (nx, ny, nz), VTK has x fastest
 
-# Depth-axis limits (surface-referenced)
-depth_top    = -ground_depth              # negative (vacuum region)
-depth_bottom =  domain_z - ground_depth  # positive (deepest subsurface)
+    ids = {}
+    tail = raw[raw.index(b'</VTKFile>'):].decode('utf-8', errors='replace')
+    gm = re.search(r'<gprMax>.*</gprMax>', tail, re.S)
+    if gm:
+        for el in ET.fromstring(gm.group(0)).findall('Material'):
+            ids[el.attrib['name']] = int(el.text)
+    if not ids:
+        sys.exit("Error: material names not found in the .vti (<gprMax> block missing).")
+    return material, spacing, origin, ids
 
-print(f"ground_depth = {ground_depth} m")
-print(f"Depth axis: {depth_top:.3f} m (vacuum top) to {depth_bottom:.3f} m (bottom)")
+
+material_3d, spacing, origin, name_to_id = read_vti(vti_file)
+spatial_grid = spacing[0]
+print(f"VTI: {vti_file}")
+print(f"  cells {material_3d.shape[:2]}, grid {spatial_grid} m, origin ({origin[0]}, {origin[1]}) m")
+print(f"  materials in vti: {', '.join(name_to_id)}")
 
 
 # =============================================================================
-# Load materials.txt (multi-pole Debye supported)
+# Find the .in that wrote this .vti, and load material properties
 # =============================================================================
-material_path = geo['material_file']
+def strip_python_blocks(lines):
+    """Drop lines inside #python: ... #end_python: (materials made by Python cannot be read here)."""
+    out, inside = [], False
+    for line in lines:
+        s = line.strip()
+        if s.startswith('#python:'):
+            inside = True
+        elif s.startswith('#end_python:'):
+            inside = False
+        elif not inside:
+            out.append(s)
+    return out
 
-mat_names = []   # ordered list matching h5 integer indices
-mat_props = {}   # name -> {eps, sigma, poles: [(deps,tau),...]}
 
-with open(material_path, 'r') as mf:
-    for line in mf:
-        line = line.strip()
+def find_input_file(vti_path):
+    """Search the .vti folder and up to 2 parent folders for the .in whose #geometry_view wrote this file."""
+    target = os.path.normcase(os.path.abspath(vti_path))
+    d = os.path.dirname(vti_path)
+    dirs = [d, os.path.dirname(d), os.path.dirname(os.path.dirname(d))]
+    for folder in dirs:
+        for inf in sorted(glob.glob(os.path.join(folder, '*.in'))):
+            try:
+                lines = strip_python_blocks(open(inf, encoding='utf-8', errors='replace').read().splitlines())
+            except OSError:
+                continue
+            for line in lines:
+                if not line.startswith('#geometry_view:'):
+                    continue
+                v = line.split()
+                if len(v) < 12:
+                    continue
+                # #geometry_view: xs ys zs xf yf zf dx dy dz filename type
+                base = os.path.join(os.path.dirname(inf), v[10])
+                # gprMax appends the model number when run with -n (e.g. geometry1.vti, geometry2.vti)
+                pat = re.escape(os.path.normcase(os.path.abspath(base))) + r'\d*\.vti$'
+                if re.match(pat, target):
+                    return inf
+    cands = glob.glob(os.path.join(d, '*.in'))
+    if len(cands) == 1:
+        return cands[0]
+    return None
+
+
+def parse_materials(lines, props):
+    """#material / #add_dispersion_debye lines -> props[name] = {eps, sigma, poles}"""
+    for line in lines:
         if line.startswith('#material:'):
             v = line.split()
             name = v[5]
             eps_v = 1.0 if name == 'pec' else float(v[1])
             sig_v = 0.0 if name == 'pec' else float(v[2])
-            mat_props[name] = {'eps': eps_v, 'sigma': sig_v, 'poles': []}
-            mat_names.append(name)
-
+            props[name] = {'eps': eps_v, 'sigma': sig_v, 'poles': []}
         elif line.startswith('#add_dispersion_debye:'):
-            # Syntax: #add_dispersion_debye: N  De1 tau1  [De2 tau2 ...]  name
+            # Syntax: #add_dispersion_debye: N  De1 tau1  [De2 tau2 ...]  name(s)
             v = line.split()
-            name  = v[-1]
-            npoles = int(v[1])
-            poles = []
-            for p in range(npoles):
-                de  = float(v[2 + p * 2])
-                tau = float(v[3 + p * 2])
-                poles.append((de, tau))
-            if name in mat_props:
-                mat_props[name]['poles'] = poles
+            npoles = int(float(v[1]))
+            poles = [(float(v[2 + p * 2]), float(v[3 + p * 2])) for p in range(npoles)]
+            for name in v[2 + 2 * npoles:]:          # one or more material names
+                if name in props:
+                    props[name]['poles'] = poles
 
-epsilon_list      = np.array([mat_props[n]['eps']   for n in mat_names])
-conductivity_list = np.array([mat_props[n]['sigma'] for n in mat_names])
-poles_list        = [mat_props[n]['poles']           for n in mat_names]
+
+mat_props = {'pec': {'eps': 1.0, 'sigma': 0.0, 'poles': []},
+             'free_space': {'eps': 1.0, 'sigma': 0.0, 'poles': []}}
+sources = []
+
+materials_txt = os.path.splitext(vti_file)[0] + '_materials.txt'
+if os.path.exists(materials_txt):
+    parse_materials([l.strip() for l in open(materials_txt)], mat_props)
+    sources.append(materials_txt)
+
+input_file = find_input_file(vti_file)
+if input_file is None:
+    try:
+        ans = input("Could not find the .in file automatically. Enter .in file path (Enter to skip): ")
+    except EOFError:
+        ans = ''
+    ans = ans.strip().strip("'\"").replace("\\ ", " ")
+    input_file = ans if ans else None
+if input_file:
+    parse_materials(strip_python_blocks(open(input_file, encoding='utf-8', errors='replace').read().splitlines()),
+                    mat_props)
+    sources.append(input_file)
+print(f"  material properties from: {', '.join(sources) if sources else '(built-in only)'}")
+
+# Averaged materials made by gprMax (dielectric smoothing), e.g. 'regolith+basalt': mean of eps and sigma
+for name in name_to_id:
+    if name not in mat_props and '+' in name:
+        parts = name.split('+')
+        if all(p in mat_props for p in parts):
+            mat_props[name] = {'eps': float(np.mean([mat_props[p]['eps'] for p in parts])),
+                               'sigma': float(np.mean([mat_props[p]['sigma'] for p in parts])),
+                               'poles': []}
+
+missing = [n for n in name_to_id if n not in mat_props]
+if missing:
+    sys.exit(f"Error: properties not found for materials: {missing}\n"
+             "  (materials defined inside #python blocks cannot be read from the .in; "
+             "write <vti stem>_materials.txt with #geometry_objects_write, or define them with #material)")
+
+# Arrays indexed by the material ID used in the .vti
+n_ids = max(name_to_id.values()) + 1
+mat_names = [None] * n_ids
+for name, i in name_to_id.items():
+    mat_names[i] = name
+epsilon_list      = np.array([mat_props[n]['eps']   if n else 1.0 for n in mat_names])
+conductivity_list = np.array([mat_props[n]['sigma'] if n else 0.0 for n in mat_names])
+poles_list        = [mat_props[n]['poles'] if n else [] for n in mat_names]
 
 has_dispersion = any(len(p) > 0 for p in poles_list)
-print(f"Loaded {len(mat_names)} materials. Dispersion: {has_dispersion}")
+print(f"Loaded {len(name_to_id)} materials. Dispersion: {has_dispersion}")
+for name, i in sorted(name_to_id.items(), key=lambda t: t[1]):
+    p = mat_props[name]
+    print(f"  {i:3d} {name:20s} eps_inf={p['eps']:.6g} sigma={p['sigma']:.6g} poles={p['poles']}")
 
 
 # =============================================================================
-# Load HDF5 geometry
+# Geometry map and depth axis
 # =============================================================================
-h5_file = geo['h5_file']
-with h5py.File(h5_file, 'r') as h5f:
-    print(f"HDF5 data shape: {h5f['data'].shape}")
-    geometry_data = h5f['data'][:, :, 0]
-
-geometry_data = np.rot90(geometry_data, k=1)
+geometry_data = np.rot90(material_3d[:, :, 0], k=1)      # rows = y (top row = highest y), cols = x
 z_num, x_num = geometry_data.shape
 print(f"Geometry map shape (rows=depth, cols=x): {geometry_data.shape}")
+
+y_bottom = origin[1]                                      # [m] bottom of the view
+y_top = origin[1] + z_num * spatial_grid                  # [m] top of the view
+
+if SURFACE_Y_M is None:
+    # Surface = top of the non-free-space material in each column (median over columns)
+    fs_id = name_to_id.get('free_space', -1)
+    solid = geometry_data != fs_id                        # row 0 = top
+    has_solid = solid.any(axis=0)
+    if not has_solid.any():
+        y_surf = y_bottom
+    else:
+        top_row = np.argmax(solid[:, has_solid], axis=0)  # first non-free-space row from the top
+        y_surf = y_top - np.median(top_row) * spatial_grid
+    print(f"Surface (detected): y = {y_surf:.4f} m from the bottom")
+else:
+    y_surf = SURFACE_Y_M
+    print(f"Surface (SURFACE_Y_M): y = {y_surf:.4f} m from the bottom")
+
+# Depth-axis limits (surface-referenced)
+depth_top    = -(y_top - y_surf)      # negative (vacuum region)
+depth_bottom =  y_surf - y_bottom     # positive (deepest subsurface)
+print(f"Depth axis: {depth_top:.3f} m (vacuum top) to {depth_bottom:.3f} m (bottom)")
 
 
 # =============================================================================
@@ -120,32 +248,23 @@ print(f"Geometry map shape (rows=depth, cols=x): {geometry_data.shape}")
 epsilon_0 = 8.854187817e-12
 
 def build_property_maps(freq):
-    omega     = 2 * np.pi * freq
+    """Same formulas as before, evaluated once per material and mapped by ID (vectorized)."""
+    omega = 2 * np.pi * freq
 
-    permittivity_map_at_freq = np.zeros((z_num, x_num), dtype=float)
-    conductivity_map_at_freq = np.zeros((z_num, x_num), dtype=float)
-    losstangent_map_at_freq  = np.zeros((z_num, x_num), dtype=float)
+    eps_real_mat = epsilon_list.astype(float).copy()
+    eps_imag_disp_mat = np.zeros_like(eps_real_mat)
+    for k, poles in enumerate(poles_list):
+        for (de, tau) in poles:
+            denom = 1.0 + (omega * tau) ** 2
+            eps_real_mat[k]      += de / denom
+            eps_imag_disp_mat[k] += de * omega * tau / denom
+    eps_imag_total_mat = eps_imag_disp_mat + conductivity_list / (omega * epsilon_0)
+    losstangent_mat = eps_imag_total_mat / (eps_real_mat + 1e-30)
 
-    for i in tqdm(range(x_num), desc="Building property maps"):
-        for j in range(z_num):
-            idx    = int(geometry_data[j, i])
-            eps_inf = epsilon_list[idx]
-            sigma   = conductivity_list[idx]
-            poles   = poles_list[idx]
-
-            # Evaluate multi-pole Debye at target freq (no poles -> static / non-dispersive)
-            eps_real      = eps_inf
-            eps_imag_disp = 0.0
-            for (de, tau) in poles:
-                denom          = 1.0 + (omega * tau) ** 2
-                eps_real      += de / denom
-                eps_imag_disp += de * omega * tau / denom
-
-            eps_imag_total = eps_imag_disp + sigma / (omega * epsilon_0)
-
-            permittivity_map_at_freq[j, i] = eps_real
-            conductivity_map_at_freq[j, i] = sigma
-            losstangent_map_at_freq[j, i]  = eps_imag_total / (eps_real + 1e-30)
+    idx = geometry_data.astype(np.intp)
+    permittivity_map_at_freq = eps_real_mat[idx]
+    conductivity_map_at_freq = conductivity_list.astype(float)[idx]
+    losstangent_map_at_freq  = losstangent_mat[idx]
 
     permittivity_profile_at_freq = np.mean(permittivity_map_at_freq, axis=1)
     conductivity_profile_at_freq = np.mean(conductivity_map_at_freq, axis=1)
@@ -162,12 +281,11 @@ def build_property_maps(freq):
 colors       = ['viridis', 'magma', 'plasma']
 names        = ['Relative permittivity', 'Conductivity [S/m]', 'Loss tangent']
 output_names = ['Permittivity', 'Conductivity', 'Losstangent']
-# disp_tag     = ' (dispersive)' if has_dispersion else ' (non-dispersive)'
 
 # imshow extent: [x_left, x_right, depth_bottom, depth_top]
 # imshow treats the 3rd value as "bottom" and 4th as "top", so placing
 # depth_bottom (positive, deep) as 3rd gives a top-to-bottom increasing axis.
-extent_map = [0, x_num * spatial_grid, depth_bottom, depth_top]
+extent_map = [origin[0], origin[0] + x_num * spatial_grid, depth_bottom, depth_top]
 
 # Depth array for profile plots (cell centres)
 depth_axis = depth_top + (np.arange(z_num) + 0.5) * spatial_grid
@@ -238,7 +356,7 @@ def plot_map_profile(freq, map_data, profile_data, idx):
     plt.savefig(os.path.join(output_dir, base + f'_{freq:.2e}' + '_map.png'), dpi=300, bbox_inches='tight')
     plt.savefig(os.path.join(output_dir, base + f'_{freq:.2e}' + '_map.pdf'), dpi=300, bbox_inches='tight')
     print(f"Saved: {base}_map.png / .pdf")
-    if freq == freqs[1]:  # Show the last frequency's plots interactively 
+    if freq == freqs[1]:  # Show the last frequency's plots interactively
         plt.show()
     else:
         plt.close()
@@ -274,8 +392,6 @@ def plot_profile(freq, profile_data, idx):
 # =============================================================================
 # Run
 # =============================================================================
-freqs = [0.5e9, 1.25e9, 2.0e9] # Hz
-
 for freq in freqs:
     print(f'===== Processing {freq:.2e} Hz =====')
     permittivity_map ,conductivity_map, losstangent_map, \
