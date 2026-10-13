@@ -69,11 +69,12 @@ THRESHOLD_DB = -90.0      # 検出の閾値（地表反射のエンベロープ�
 TOLERANCE_NS = 1.0        # 予測時刻とエンベロープ極大点を対応づける許容差 [ns]
 FWHM_NS = None            # 上端と下端の分離の基準 [ns]。None なら ref_freespace の直接波から測る
 PLOT_MARGIN_NS = 5.0      # 確認用図の表示範囲（t_top - 5 ns から t_bot + 5 ns）
-FONT_SIZE = 12            # 図の文字の大きさ（matplotlib の既定は 10）
+FONT_SIZE_SMALL = 12            # 図の文字の大きさ（matplotlib の既定は 10）
+FONT_SIZE_LARGE = 16
 
 # 集計図：深さの色（matplotlib の既定の色の順 C0 青、C1 橙、C2 緑。深さに固定で割り当てる）
-DEPTH_COLORS = {1.0: "C0", 6.0: "C1", 12.0: "C2"}
-EXTRA_COLORS = ["C3", "C4", "C5"]                     # 計画にない深さ用（順に割り当て）
+DEPTH_COLORS = {1.0: "r", 6.0: "g", 12.0: "b"}
+EXTRA_COLORS = ["c", "m", "y"]                     # 計画にない深さ用（順に割り当て）
 # 集計図：形状の線種と記号（不規則な形状は線なし）
 SHAPE_STYLES = {
     "circle":  dict(ls="-",  marker="o"),
@@ -87,7 +88,7 @@ OTHER_SHAPE = dict(ls="", marker="D")
 ANALYSIS_VERSION = "1.1.0"
 C0 = 299792458.0
 NS = 1e-9
-plt.rcParams["font.size"] = FONT_SIZE
+# plt.rcParams["font.size"] = FONT_SIZE
 
 CATEGORIES = ["not_detected", "single", "partial", "separated"]
 CSV_FIELDS = [
@@ -376,7 +377,7 @@ def plot_ascan(path: Path, row: dict, tr: dict, ref: dict, margin_s: float):
         "polarity   " + ("WARNING " + ", ".join(flags) if flags else "ok"),
     ])
     ax.text(1.03, 1.0, txt, transform=ax.transAxes, va="top", ha="left", family="monospace",
-            fontsize=FONT_SIZE - 1, linespacing=1.4)
+            fontsize=FONT_SIZE_SMALL - 1, linespacing=1.4)
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -448,22 +449,23 @@ def plot_summary(csv_path: Path, out_dir: Path):
                     if st["ls"]:
                         ax.plot([p[0] for p in pts], [p[1] for p in pts], color=col, ls=st["ls"])
                     for xi, yi, c in pts:                  # 塗りつぶし = separated、白抜き = partial
-                        ax.plot(xi, yi, st["marker"], color=col, ms=8,
+                        ax.plot(xi, yi, st["marker"], color=col, ms=5,
                                 mfc=col if c == "separated" else "w", zorder=3)
             ax.set_xlim(0, xmax * 1.05)
             if kind == "size":
                 ax.set_ylim(bottom=0)
-            ax.set_xlabel("True size (height, cm)")
-            ax.set_ylabel(ylab)
-            ax.set_title(f"{target} (eps = {eps:.4g})")
+            ax.set_xlabel("True size (height, cm)", fontsize=FONT_SIZE_LARGE)
+            ax.set_ylabel(ylab, fontsize=FONT_SIZE_LARGE)
+            ax.set_title(f"{target} (eps = {eps:.4g})", fontsize=FONT_SIZE_LARGE)
             ax.grid(alpha=0.3)
+            ax.tick_params(axis="both", which="major", labelsize=FONT_SIZE_SMALL)
 
             h = [Line2D([], [], color=depth_color(dep, extra), label=f"depth {dep:g} m") for dep in depths]
             h += [Line2D([], [], color="k", ls=SHAPE_STYLES.get(s, OTHER_SHAPE)["ls"] or "none",
                          marker=SHAPE_STYLES.get(s, OTHER_SHAPE)["marker"], label=s) for s in shapes]
             h += [Line2D([], [], color="k", ls="none", marker="o", label="separated"),
                   Line2D([], [], color="k", ls="none", marker="o", mfc="w", label="partial")]
-            ax.legend(handles=h, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
+            ax.legend(handles=h, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0, fontsize=FONT_SIZE_SMALL)
             fig.tight_layout()
             for ext in ("png", "pdf"):
                 p = out_dir / f"{fname}_{target}.{ext}"
