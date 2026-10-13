@@ -34,18 +34,40 @@ python scripts/verify_geometry.py .          # ok / NG を表示
 PYTHON=python ./run_all.sh
 ```
 
-一部だけ生成・実行したいとき:
+`.sh` に実行権限がないと `./run_all.sh` は「permission denied」になる（チャットからダウンロードしたファイルなど）。
+その場合は `chmod +x *.sh` で権限を付けるか、`bash run_all.sh` のように bash で呼ぶ。
+生成スクリプトが書き出す `.sh` には実行権限が付いている。
+
+指定した階層以下だけ計算するとき（`in_list.txt` の順番で実行）:
+
+```bash
+./run_subset.sh basalt                          # basalt 全部
+./run_subset.sh basalt/circle/depth01m          # basalt > circle > depth01m 以下
+./run_subset.sh void/square highland/circle     # 複数指定
+./run_subset.sh basalt/circle/depth01m/D020cm   # 1 ケースだけ
+./run_subset.sh --list basalt/circle            # 実行せず、対象のケースと件数だけ表示
+```
+
+* 階層はキャンペーンフォルダからの相対パス（Finder からドラッグした絶対パスでもよい）。
+  使ったリストは `subset_lists/` に残る。中身は `run_all.sh` にリストを渡して実行しているだけ。
+* 進捗: gprMax の進捗バー（tqdm）は `<case_id>.log` に書かれる（改行ではなく `\r` で上書きされる形）。
+  `tail -c 300 <case_id>.log | tr '\r' '\n' | tail -1` で最新の行（%、ステップ数、残り時間）が見られる。
+  ログは 1 ケースあたり 1–2 MB 程度になる。
+* 実行中のケースには `<case_id>.running`（空のフォルダ）ができ、別の `run_all.sh` / `run_subset.sh` からは飛ばされる。
+  階層が重なる 2 つを同時に流しても、同じケースを二重に計算しない。
+  計算機が落ちるなどして `.running` が残ったときは、そのフォルダを削除してから再実行する（Ctrl-C で止めた場合は自動で消える）。
+
+一部だけ生成したいとき:
 
 ```bash
 python generate_ascan_inputs.py --depths 1 --targets basalt void --shapes circle
 python generate_ascan_inputs.py --groups reference
-./run_all.sh my_list.txt        # in_list.txt から行を抜き出したリストを渡す
 ```
 
 * 絞り込みを指定すると、`--groups reference` を付けない限り参照計算は含まれない。
 * `manifest.json` / `in_list.txt` / `out_list.txt` は、フォルダ内のケース JSON を走査して毎回作り直すので、
   一部ずつ生成しても常に全ケースが載る。
-* 同じ内容なら再生成しても何も変わらない（`unchanged`）。内容が変わった `.in` / `.json` は `--force` で上書きする。
+* 同じ内容なら再生成しても何も変わらない（`unchanged`）。実行スクリプトも内容が変わったときだけ書き換える。内容が変わった `.in` / `.json` は `--force` で上書きする。
   **計算済み（`.done` か `.out` がある）のケースは `--force` でも上書きしない。**
 * `campaign.json` の物理設定（材料、計算領域、アンテナ、波形、時間窓）が変わったら停止する。
   設定を変えるときは `CAMPAIGN` を新しい名前（`ascan_v02` など）にする。
@@ -58,7 +80,7 @@ python generate_ascan_inputs.py --groups reference
 | 形状 | `circle`（サイズ = 直径）、`square`（サイズ = 一辺） |
 | サイズ | 1–15 cm（1 cm 刻み）、20, 30, 40, 50 cm |
 | 深さ（地表から上端） | 1, 6, 12 m |
-| 不規則な形状（様子見） | `irreg01`, `irreg02` × 6, 10, 30 cm × 深さ 1 m × basalt, void（サイズ = 面積相当直径） |
+| 不規則な形状（様子見） | `irreg01`, `irreg02` × 6, 10, 30 cm × 深さ 1 m × basalt, void。一辺 D の正方形の 4 つの角を乱数の折れ線で切り落とした形（切る長さ 0.10–0.35 D）。高さ・幅・真下の厚さは D のまま（サイズ = 高さ） |
 | 参照計算 | `ref_background`（レゴリスのみ）、`ref_freespace`（自由空間のみ） |
 
 合計 356 ケース（主計算 342、不規則な形状 12、参照 2）。容量は .vti が約 24 GB、.out が約 0.25 GB。
@@ -85,7 +107,8 @@ ascan_v01/
 ├── manifest.csv         同じ内容の表（pandas で絞り込む用）
 ├── in_list.txt          .in の一覧（相対パス、実行順：参照 → 深さの浅い順）
 ├── out_list.txt         .out の一覧（絶対パス）
-├── run_all.sh / check_geometry.sh
+├── run_all.sh / run_subset.sh / check_geometry.sh
+├── subset_lists/        run_subset.sh が作ったリスト
 ├── run_history.tsv      run_all.sh が追記する計算時間の記録
 ├── scripts/             生成に使ったスクリプトのコピー
 ├── reference/ref_background/ , reference/ref_freespace/
@@ -93,7 +116,7 @@ ascan_v01/
     ├── <case_id>.in
     ├── <case_id>.json
     ├── <case_id>_geometry.vti
-    ├── <case_id>.log  /  <case_id>.done
+    ├── <case_id>.log  /  <case_id>.done  /  <case_id>.running（計算中だけ）
     └── A-scan/<case_id>.out
 ```
 
@@ -124,7 +147,7 @@ ascan_v01/
 | `materials.background`, `materials.target` | ε、tanδ、ε∞、Δε、τ、密度、組成、出典、gprMax の行 |
 | `target.shape`, `size_m`, `size_definition`, `depth_top_m` | 公称の形状とサイズ |
 | `target.gprmax_commands` | 対象を作る gprMax の行 |
-| `target.irregular` | 不規則な形状の頂点座標と乱数シード |
+| `target.irregular` | 不規則な形状の頂点座標、角の切り方（`cuts`）、乱数シード |
 | `target.nominal_nadir` | 連続形状での、中点の真下の上端深さと厚さ |
 | `target.as_built` | 格子化後の形状（gprMax と同じ規則で予測。`verify_geometry.py` で .vti と一致を確認） |
 | `target.as_built.nadir.effective_thickness_m` | Ez が感じる実効的な厚さ（= セルの厚さ + dx、下の注意を参照） |

@@ -17,6 +17,7 @@ gprMax の .in ファイルと、ケースごとのパラメータ JSON、一覧
     in_list.txt             .in の一覧（キャンペーンフォルダからの相対パス、実行順）
     out_list.txt            .out の一覧（絶対パス）
     run_all.sh              一括実行（.done があるケースは飛ばす）
+    run_subset.sh           指定した階層以下だけ実行（例: ./run_subset.sh basalt/circle/depth01m）
     check_geometry.sh       --geometry-only で形状だけ作る
     scripts/                生成に使ったスクリプトのコピー
     reference/ref_background/, reference/ref_freespace/
@@ -79,17 +80,19 @@ SHAPES = ["circle", "square"]
 SIZES_CM = list(range(1, 16)) + [20, 30, 40, 50]
 DEPTHS_M = [1, 6, 12]                              # 地表から対象上端までの深さ
 
-# 不規則な形状（様子見用）。形状は variant ごとに固定し、サイズで相似に拡大縮小する。
-# サイズは多角形の面積相当直径。
+# 不規則な形状（様子見用）: 一辺 D の正方形の 4 つの角を、乱数で決めた折れ線（2 本の線分）で切り落とした形。
+# 高さと幅は D のまま（サイズ = 高さ）。切る長さの上限が 0.35 D なので、上面と底面の中央 0.30 D 以上が必ず残り、
+# 送受信点の中点の真下の厚さも D になる。形は variant ごとに固定し、サイズで相似に拡大縮小する。
 IRREGULAR = dict(
     enabled=True,
     targets=["basalt", "void"],
     depths_m=[1],
     sizes_cm=[6, 10, 30],
     variants=[1, 2],
-    n_vertices=(7, 11),
-    radius_jitter=0.25,
-    base_seed=20261007,
+    cut_fraction=(0.10, 0.35),      # 角から切る長さ（D に対する割合）。上下の辺方向・側辺方向それぞれ
+    kink_position=(0.3, 0.7),       # 折れ点の位置（切り口の直線上の割合）
+    kink_offset=(-0.3, 0.6),        # 折れ点のずらし量（+: 角の側に膨らむ、-: 内側にへこむ。角までの距離に対する割合）
+    base_seed=20261013,
 )
 
 # ---- スナップショット（既定ではコメントアウトした形で .in に残す） -------------
@@ -195,27 +198,40 @@ def planned_cases() -> List[Case]:
 # =============================================================================
 # 対象の形状
 # =============================================================================
-def irregular_unit_polygon(variant: int) -> Tuple[np.ndarray, int]:
-    """面積相当直径 1 の、星形（自己交差しない）ランダム多角形。variant ごとに固定。"""
+def irregular_unit_polygon(variant: int) -> Tuple[np.ndarray, int, List[Dict]]:
+    """
+    一辺 1 の正方形（x, y とも -0.5 - 0.5、上辺 y = 0.5）の 4 つの角を、折れ線で切り落とした多角形。
+    variant ごとに乱数シードで固定。頂点は時計回り、12 個。
+    """
     seed = int(IRREGULAR["base_seed"]) + int(variant)
     rng = np.random.default_rng(seed)
-    nmin, nmax = IRREGULAR["n_vertices"]
-    n = int(rng.integers(nmin, nmax + 1))
-    ang = (np.arange(n) + rng.uniform(-0.35, 0.35, n)) * 2.0 * np.pi / n + rng.uniform(0, 2 * np.pi)
-    ang = np.sort(np.mod(ang, 2.0 * np.pi))
-    rad = np.clip(1.0 + IRREGULAR["radius_jitter"] * rng.standard_normal(n), 0.55, 1.45)
-    v = np.c_[rad * np.cos(ang), rad * np.sin(ang)]
-    x, y = v[:, 0], v[:, 1]
-    area = 0.5 * abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
-    v *= math.sqrt((math.pi / 4.0) / area)
-    return v, seed
-
-
-def polygon_centroid(v: np.ndarray) -> Tuple[float, float]:
-    x, y = v[:, 0], v[:, 1]
-    cr = x * np.roll(y, -1) - np.roll(x, -1) * y
-    a = 0.5 * cr.sum()
-    return float(((x + np.roll(x, -1)) * cr).sum() / (6 * a)), float(((y + np.roll(y, -1)) * cr).sum() / (6 * a))
+    cmin, cmax = IRREGULAR["cut_fraction"]
+    tmin, tmax = IRREGULAR["kink_position"]
+    smin, smax = IRREGULAR["kink_offset"]
+    cuts = []
+    pts = []
+    # 角ごとに: 角の座標、上下の辺の上を角から離れる向き、側辺の上を角から離れる向き
+    corners = [("top_right", (0.5, 0.5), (-1, 0), (0, -1)),
+               ("bottom_right", (0.5, -0.5), (-1, 0), (0, 1)),
+               ("bottom_left", (-0.5, -0.5), (1, 0), (0, 1)),
+               ("top_left", (-0.5, 0.5), (1, 0), (0, -1))]
+    for name, c, uh, uv in corners:
+        c = np.array(c, float)
+        a = float(rng.uniform(cmin, cmax))         # 上下の辺に沿って切る長さ
+        b = float(rng.uniform(cmin, cmax))         # 側辺に沿って切る長さ
+        t = float(rng.uniform(tmin, tmax))
+        sft = float(rng.uniform(smin, smax))
+        pa = c + a * np.array(uh, float)           # 上下の辺の上の切り口
+        pb = c + b * np.array(uv, float)           # 側辺の上の切り口
+        m = pa + t * (pb - pa)
+        pk = m + sft * (c - m)                     # 折れ点
+        cuts.append(dict(corner=name, cut_horizontal=a, cut_vertical=b, kink_position=t, kink_offset=sft))
+        # 時計回り: 上の辺 -> 右の辺 -> 下の辺 -> 左の辺
+        if name in ("top_right", "bottom_left"):
+            pts += [pa, pk, pb]
+        else:
+            pts += [pb, pk, pa]
+    return np.array(pts), seed, cuts
 
 
 def vertical_chord(v: np.ndarray, x0: float) -> Optional[Tuple[float, float]]:
@@ -258,24 +274,25 @@ def target_geometry(case: Case) -> Dict:
                     nominal_nadir=dict(depth_top_m=case.depth_m, thickness_m=D))
         align = [x0, x1, y0, y1]
     elif case.shape.startswith("irreg"):
-        unit, seed = irregular_unit_polygon(case.variant)
+        unit, seed, cuts = irregular_unit_polygon(case.variant)
         v = unit * D
-        cx, _ = polygon_centroid(v)
-        v[:, 0] += xc - cx
-        v[:, 1] += y_top - v[:, 1].max()
+        v[:, 0] += xc                              # 元の正方形の中心を送受信点の中点の真下に
+        v[:, 1] += y_top - 0.5 * D                 # 上辺を設定深さに
         lm = rasterize_polygon(v, DX_M)
         boxes = mask_to_column_boxes(lm)
         cmds = [f"#box: {fm(a)} {fm(b)} 0 {fm(c)} {fm(d)} {fm(DX_M)} {name} n" for a, b, c, d in boxes]
         chord = vertical_chord(v, xc)
-        info.update(size_definition="area-equivalent diameter of the polygon",
-                    center_xy_m=list(polygon_centroid(v)),
+        info.update(size_definition="height (vertical extent): square of side D with randomly cut corners",
+                    center_xy_m=[xc, y_top - 0.5 * D],
                     x_extent_m=[float(v[:, 0].min()), float(v[:, 0].max())],
                     y_extent_m=[float(v[:, 1].min()), float(v[:, 1].max())],
                     irregular=dict(variant=case.variant, seed=seed, n_vertices=int(len(v)),
+                                   cuts=cuts,
                                    vertices_m=v.round(9).tolist(),
                                    unit_vertices=unit.round(9).tolist(),
-                                   construction="star-shaped random polygon; rasterized by cell centres "
-                                                "and written as one #box per contiguous column run"),
+                                   construction="square of side D with its four corners cut by random two-segment "
+                                                "lines (cut length 0.10-0.35 D along each edge); rasterized by "
+                                                "cell centres and written as one #box per contiguous column run"),
                     nominal_nadir=None if chord is None else dict(
                         depth_top_m=SURFACE_Y_M - chord[0], thickness_m=chord[0] - chord[1]))
         align = [a for b in boxes for a in b]
@@ -598,6 +615,8 @@ RUN_ALL_SH = r"""#!/bin/bash
 #   環境変数: PYTHON      gprMax を入れた Python（既定: python）
 #             GPRMAX_OPTS gprMax に渡す追加オプション（例: "-gpu"）
 #   計算時間は run_history.tsv に追記する。
+#   実行中のケースには <case_id>.running（フォルダ）を作り、別の run_all.sh / run_subset.sh からは飛ばす。
+#   計算機が落ちるなどして .running が残ったら、そのフォルダを削除してから再実行する。
 set -u
 cd "$(dirname "$0")" || exit 1
 PYTHON="${PYTHON:-python}"
@@ -620,6 +639,11 @@ while IFS= read -r inf || [ -n "$inf" ]; do
     date '+%Y-%m-%dT%H:%M:%S' > "$done_marker"
     echo "[$n/$total] skip (output found)  $base"; continue
   fi
+  lock="$dir/$base.running"
+  if ! mkdir "$lock" 2> /dev/null; then
+    echo "[$n/$total] skip (running elsewhere; delete $lock if not)  $base"; continue
+  fi
+  trap 'rmdir "$lock" 2> /dev/null; echo "interrupted: $base"; exit 130' INT TERM
   s0=$(date '+%Y-%m-%dT%H:%M:%S'); t0=$(date +%s)
   echo "[$n/$total] $s0  start  $base"
   if "$PYTHON" -m gprMax "$inf" $GPRMAX_OPTS > "$log" 2>&1 < /dev/null && [ -f "$out" ]; then
@@ -627,10 +651,53 @@ while IFS= read -r inf || [ -n "$inf" ]; do
   else
     status=FAILED
   fi
+  rmdir "$lock" 2> /dev/null
+  trap - INT TERM
   s1=$(date '+%Y-%m-%dT%H:%M:%S'); t1=$(date +%s)
   printf "%s\t%s\t%s\t%d\t%s\n" "$base" "$s0" "$s1" $((t1 - t0)) "$status" >> "$HIST"
   echo "            -> $status ($((t1 - t0)) s)"
 done < "$LIST"
+"""
+
+RUN_SUBSET_SH = r"""#!/bin/bash
+# run_subset.sh -- 指定した階層以下のケースだけを、in_list.txt の順番で計算する（run_all.sh を呼ぶ）
+#   使い方:   ./run_subset.sh basalt                       basalt 全部
+#             ./run_subset.sh basalt/circle/depth01m       basalt > circle > depth01m 以下
+#             ./run_subset.sh void/square highland/circle  複数指定（in_list.txt の順で実行）
+#             ./run_subset.sh basalt/circle/depth01m/D020cm   1 ケースだけ
+#             ./run_subset.sh --list basalt/circle         実行せず、対象のケースと件数だけ表示
+#   階層はキャンペーンフォルダからの相対パス。Finder からドラッグした絶対パスでもよい。
+#   作ったリストは subset_lists/ に残る。環境変数 PYTHON / GPRMAX_OPTS は run_all.sh と同じ。
+set -u
+cd "$(dirname "$0")" || exit 1
+camp="$(pwd)"
+listonly=0
+if [ "${1:-}" = "--list" ]; then listonly=1; shift; fi
+if [ $# -lt 1 ]; then sed -n '2,10p' "$0"; exit 1; fi
+mkdir -p subset_lists
+tag=$(printf "%s_" "$@" | tr '/' '-' | tr -cd 'A-Za-z0-9_.-' | cut -c1-80)
+lst="subset_lists/$(date +%Y%m%d_%H%M%S)_${tag%_}.txt"
+: > "$lst"
+while IFS= read -r inf || [ -n "$inf" ]; do
+  [ -z "$inf" ] && continue
+  for p in "$@"; do
+    p="${p#"$camp"/}"; p="${p#./}"; p="${p%/}"
+    case "$inf" in
+      "$p"/*|"$p") echo "$inf" >> "$lst"; break ;;
+    esac
+  done
+done < in_list.txt
+n=$(grep -c . "$lst")
+if [ "$n" -eq 0 ]; then
+  echo "該当するケースがありません: $*"
+  echo "指定できる階層の例: $(cut -d/ -f1 in_list.txt | sort -u | tr '\n' ' ')"
+  rm -f "$lst"; exit 1
+fi
+if [ "$listonly" -eq 1 ]; then
+  cat "$lst"; echo "-> $n cases"; rm -f "$lst"; exit 0
+fi
+echo "$n cases  (list: $lst)"
+exec bash ./run_all.sh "$lst"          # bash で呼ぶので run_all.sh に実行権限がなくても動く
 """
 
 CHECK_GEOMETRY_SH = r"""#!/bin/bash
@@ -841,9 +908,12 @@ def main(argv=None) -> int:
         p_js.write_text(json.dumps(rec, indent=1, ensure_ascii=False), encoding="utf-8")
 
     n_total = write_lists(camp)
-    for name, body in [("run_all.sh", RUN_ALL_SH), ("check_geometry.sh", CHECK_GEOMETRY_SH)]:
+    for name, body in [("run_all.sh", RUN_ALL_SH), ("run_subset.sh", RUN_SUBSET_SH),
+                       ("check_geometry.sh", CHECK_GEOMETRY_SH)]:
         p = camp / name
-        p.write_text(body, encoding="utf-8")
+        # 内容が同じなら書き換えない（実行中の bash スクリプトを上書きすると、その実行が壊れるため）
+        if not p.exists() or p.read_text(encoding="utf-8") != body:
+            p.write_text(body, encoding="utf-8")
         p.chmod(0o755)
 
     print(f"\nwritten: new {n_new}, updated {n_upd}, unchanged {n_same}")
