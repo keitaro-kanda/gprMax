@@ -13,6 +13,18 @@ Only the .vti path is required. Everything else is collected automatically:
                                           material in each column, median over columns).
                                           Set SURFACE_Y_M below to override.
 
+Frequency presets (chosen at start-up):
+  [1] LPR   : CE-4/LPR CH2 simulations, 250 / 500 / 750 MHz
+  [2] LUPEX : LUPEX GPR simulations, 0.5 / 1.25 / 2.0 GHz
+  [3] Custom: frequencies entered one by one (MHz)
+  Only the relative-permittivity "map + profile" figure at the middle frequency of the list
+  is shown on screen; every figure is saved.
+
+Output figures (for each frequency and each property):
+  <vti dir>/geometry_plot/              <Prop>_<freq>_map.png/.pdf      2D map + depth profile
+  <vti dir>/geometry_plot/maps/         <Prop>_<freq>_maponly.png/.pdf  2D map only
+  <vti dir>/geometry_plot/profiles/     <Prop>_<freq>_profile.png/.pdf  depth profile only
+
 Axis convention:
   - Vertical axis: depth below surface [m]. Surface=0, subsurface>0, vacuum<0.
   - Vacuum region (depth < 0) is included.
@@ -36,8 +48,50 @@ import sys
 # =============================================================================
 # Settings
 # =============================================================================
-freqs = [0.5e9, 1.25e9, 2.0e9]   # Hz
+FREQ_PRESETS = {                 # Hz
+    '1': ('LPR',   [250e6, 500e6, 750e6]),     # CE-4/LPR CH2 (250-750 MHz)
+    '2': ('LUPEX', [0.5e9, 1.25e9, 2.0e9]),    # LUPEX GPR (0.5-2.0 GHz)
+}
+SHOW_PLOT = True                 # Show the permittivity "map + profile" figure at the middle frequency
 SURFACE_Y_M = None               # Surface height from the bottom of the domain [m]. None: detect automatically
+
+
+def ask_frequencies():
+    """Choose a preset or enter frequencies one by one. Returns (label, [Hz, ...])."""
+    print("Select simulation type:")
+    print("  [1] LPR   (250, 500, 750 MHz)")
+    print("  [2] LUPEX (0.5, 1.25, 2.0 GHz)")
+    print("  [3] Custom (enter frequencies one by one)")
+    while True:
+        ans = input("Enter 1, 2 or 3: ").strip()
+        if ans in FREQ_PRESETS:
+            return FREQ_PRESETS[ans]
+        if ans == '3':
+            break
+        print("  Please enter 1, 2 or 3.")
+    fs = []
+    while True:
+        a = input(f"Enter frequency #{len(fs) + 1} in MHz (blank to finish): ").strip()
+        if not a:
+            if fs:
+                break
+            print("  Enter at least one frequency.")
+            continue
+        try:
+            f = float(a)
+        except ValueError:
+            print("  Not a number. Try again.")
+            continue
+        if f <= 0:
+            print("  Frequency must be positive.")
+            continue
+        fs.append(f * 1e6)
+    return 'Custom', sorted(set(fs))
+
+
+def freq_label(f):
+    """Human-readable frequency for titles (e.g. '500 MHz', '1.25 GHz')."""
+    return f'{f / 1e9:g} GHz' if f >= 1e9 else f'{f / 1e6:g} MHz'
 
 
 # =============================================================================
@@ -48,9 +102,17 @@ if not os.path.exists(vti_file):
     sys.exit("Error: .vti file not found.")
 vti_file = os.path.abspath(vti_file)
 
+sim_label, freqs = ask_frequencies()
+show_freq = freqs[len(freqs) // 2]          # middle frequency of the list
+print(f"Frequencies ({sim_label}): {', '.join(freq_label(f) for f in freqs)}"
+      f"  / shown on screen: {freq_label(show_freq)} (permittivity only)")
+
 output_basename = 'geometry_plot'
 output_dir = os.path.join(os.path.dirname(vti_file), output_basename)
-os.makedirs(output_dir, exist_ok=True)
+output_dir_map = os.path.join(output_dir, 'maps')
+output_dir_profile = os.path.join(output_dir, 'profiles')
+for d in (output_dir, output_dir_map, output_dir_profile):
+    os.makedirs(d, exist_ok=True)
 
 
 # =============================================================================
@@ -299,102 +361,93 @@ def _add_surface_line(ax):
     ax.axhline(0.0, color='white', linewidth=1.2, linestyle='--', label='Surface')
 
 
-def plot_map_profile(freq, map_data, profile_data, idx):
-    """Plot 2D map (left) and depth profile (right) side by side, then save."""
-    map_aspect = map_data.shape[0] / map_data.shape[1]
-
-    fig, ax = plt.subplots(
-        nrows=1, ncols=2,
-        width_ratios=[3, 1],
-        figsize=(12, 9 * map_aspect)
-    )
-
-    # ---- Left: 2D map ----
-    imshow_kwargs = dict(
-        extent=extent_map,
-        interpolation='nearest',
-        aspect='auto',
-        cmap=colors[idx],
-    )
+def _imshow_kwargs(idx):
+    kw = dict(extent=extent_map, interpolation='nearest', aspect='auto', cmap=colors[idx])
     if idx == 0:
-        imshow_kwargs.update(vmin=1, vmax=4.0)
+        kw.update(vmin=1, vmax=4.0)
     elif idx == 2:
-        imshow_kwargs.update(vmin=0, vmax=0.020)
+        kw.update(vmin=0, vmax=0.020)
+    return kw
 
-    im = ax[0].imshow(map_data, **imshow_kwargs)
-    # _add_surface_line(ax[0])
 
-    ax[0].set_title(names[idx] + f'  @ {freq:.2e} Hz', size=14)
-    ax[0].set_xlabel('X [m]', size=18)
-    ax[0].set_ylabel('Depth [m]', size=18)
-    ax[0].set_ylim(depth_bottom, depth_top)   # deep at bottom (positive), vacuum at top (negative)
-    ax[0].tick_params(labelsize=14)
-    ax[0].grid(alpha=0.3)
-
-    divider = axgrid1.make_axes_locatable(ax[0])
+def draw_map(fig, ax, freq, map_data, idx):
+    """2D map with colour bar (shared by the 'map + profile' and 'map only' figures)."""
+    im = ax.imshow(map_data, **_imshow_kwargs(idx))
+    # _add_surface_line(ax)
+    ax.set_title(names[idx] + f'  @ {freq_label(freq)}', size=14)
+    ax.set_xlabel('X [m]', size=18)
+    ax.set_ylabel('Depth [m]', size=18)
+    ax.set_ylim(depth_bottom, depth_top)   # deep at bottom (positive), vacuum at top (negative)
+    ax.tick_params(labelsize=14)
+    ax.grid(alpha=0.3)
+    divider = axgrid1.make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
     cbar = fig.colorbar(im, cax=cax)
     cbar.set_label(names[idx], size=14)
     cbar.ax.tick_params(labelsize=12)
 
-    # ---- Right: depth profile ----
-    ax[1].plot(profile_data, depth_axis)
-    # ax[1].axhline(0.0, color='gray', linewidth=1.0, linestyle='--')  # surface
-    ax[1].set_xlabel(names[idx], size=18)
-    ax[1].set_ylabel('Depth [m]', size=18)
-    if idx == 0:
-        ax[1].set_xlim(0.95, 4.0)
-    elif idx == 2:
-        ax[1].set_xlim(-0.0005, 0.006)
-    ax[1].set_ylim(depth_bottom, depth_top)
-    ax[1].tick_params(labelsize=14)
-    ax[1].minorticks_on()
-    ax[1].grid(alpha=0.3)
 
-    plt.tight_layout()
-    base = output_names[idx]
-    plt.savefig(os.path.join(output_dir, base + f'_{freq:.2e}' + '_map.png'), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join(output_dir, base + f'_{freq:.2e}' + '_map.pdf'), dpi=300, bbox_inches='tight')
-    print(f"Saved: {base}_map.png / .pdf")
-    if freq == freqs[1]:  # Show the last frequency's plots interactively
-        plt.show()
-    else:
-        plt.close()
-
-
-def plot_profile(freq, profile_data, idx):
-    """Plot depth profile only, then save."""
-    fig, ax = plt.subplots(figsize=(4, 8))
+def draw_profile(ax, profile_data, idx, title=None):
+    """Depth profile (shared by the 'map + profile' and 'profile only' figures)."""
     ax.plot(profile_data, depth_axis)
-    # ax.axhline(0.0, color='gray', linewidth=1.0, linestyle='--', label='Surface')
+    # ax.axhline(0.0, color='gray', linewidth=1.0, linestyle='--')  # surface
     ax.set_xlabel(names[idx], size=18)
+    ax.set_ylabel('Depth [m]', size=18)
     if idx == 0:
         ax.set_xlim(0.95, 4.0)
     elif idx == 2:
         ax.set_xlim(-0.0005, 0.006)
-    ax.set_ylabel('Depth [m]', size=18)
     ax.set_ylim(depth_bottom, depth_top)
     ax.tick_params(labelsize=14)
     ax.minorticks_on()
     ax.grid(alpha=0.3)
-    #ax.legend(fontsize=14)
-    plt.tight_layout()
-    output_dir_profile = output_dir + '/profiles'
-    if not os.path.exists(output_dir_profile):
-        os.makedirs(output_dir_profile)
-    base = output_names[idx]
-    plt.savefig(os.path.join(output_dir_profile, base + f'_{freq:.2e}' + '_profile.png'), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join(output_dir_profile, base + f'_{freq:.2e}' + '_profile.pdf'), dpi=300, bbox_inches='tight')
-    print(f"Saved: {base}_profile.png / .pdf")
-    plt.close()
+    if title:
+        ax.set_title(title, size=14)
+
+
+def _save(fig, folder, stem):
+    for ext in ('png', 'pdf'):
+        fig.savefig(os.path.join(folder, f'{stem}.{ext}'), dpi=300, bbox_inches='tight')
+    print(f"Saved: {os.path.relpath(os.path.join(folder, stem), output_dir)}.png / .pdf")
+
+
+def plot_map_profile(freq, map_data, profile_data, idx):
+    """2D map (left) and depth profile (right) side by side. Returns the figure (not closed)."""
+    map_aspect = map_data.shape[0] / map_data.shape[1]
+    fig, ax = plt.subplots(nrows=1, ncols=2, width_ratios=[3, 1], figsize=(12, 9 * map_aspect))
+    draw_map(fig, ax[0], freq, map_data, idx)
+    draw_profile(ax[1], profile_data, idx)
+    fig.tight_layout()
+    _save(fig, output_dir, f'{output_names[idx]}_{freq:.2e}_map')
+    return fig
+
+
+def plot_map(freq, map_data, idx):
+    """2D map only."""
+    map_aspect = map_data.shape[0] / map_data.shape[1]
+    fig, ax = plt.subplots(figsize=(9.5, 9 * map_aspect + 0.6))
+    draw_map(fig, ax, freq, map_data, idx)
+    fig.tight_layout()
+    _save(fig, output_dir_map, f'{output_names[idx]}_{freq:.2e}_maponly')
+    plt.close(fig)
+
+
+def plot_profile(freq, profile_data, idx):
+    """Depth profile only."""
+    fig, ax = plt.subplots(figsize=(4, 8))
+    draw_profile(ax, profile_data, idx, title=f'@ {freq_label(freq)}')
+    fig.tight_layout()
+    _save(fig, output_dir_profile, f'{output_names[idx]}_{freq:.2e}_profile')
+    plt.close(fig)
 
 
 # =============================================================================
 # Run
 # =============================================================================
+fig_show = None
 for freq in freqs:
-    print(f'===== Processing {freq:.2e} Hz =====')
-    permittivity_map ,conductivity_map, losstangent_map, \
+    print(f'===== Processing {freq_label(freq)} =====')
+    permittivity_map, conductivity_map, losstangent_map, \
         permittivity_profile, conductivity_profile, losstangent_profile = build_property_maps(freq)
 
     for idx, (map_data, profile_data) in enumerate([
@@ -402,7 +455,15 @@ for freq in freqs:
         (conductivity_map, conductivity_profile),
         (losstangent_map,  losstangent_profile),
     ]):
-        plot_map_profile(freq, map_data, profile_data, idx)
+        fig = plot_map_profile(freq, map_data, profile_data, idx)
+        if SHOW_PLOT and idx == 0 and freq == show_freq:
+            fig_show = fig                 # keep only this one for the screen
+        else:
+            plt.close(fig)
+        plot_map(freq, map_data, idx)
         plot_profile(freq, profile_data, idx)
-
     print(' ')
+
+if fig_show is not None:
+    print(f"Showing: {names[0]} (map + profile) @ {freq_label(show_freq)}")
+    plt.show()
