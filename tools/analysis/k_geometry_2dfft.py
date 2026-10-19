@@ -12,7 +12,9 @@ B-scan の解析とは独立に、作った地下構造モデルだけを見る
     * 区間：水平に SEG_LENGTHS_M（4, 10, 20, 50 m）の長さで切る。範囲に収まらない長さは飛ばす
       （区間が範囲より短いときは、余りが左右に等しく残るよう中央に並べる）。鉛直は範囲全体
     * 軸：x も深さ z も m のまま（時間 [ns] には直さない）。k_x, k_z [rad/m] は構造の波数そのもの
-    * 計算は地形の格子（5 mm）のまま。表示は地形のナイキスト波数 pi / dx（628 rad/m）まで
+    * 計算は地形の格子（5 mm）のまま（地形のナイキスト波数 pi / dx = 628 rad/m）
+    * 波数軸の範囲は B-scan の解析（gprmax_bscan_2dfft.py）と同じ固定値（K_LIM_1D、MAP_KX_LIM、
+      MAP_KZ_LIM）。縦軸（dB）は見ている量が違うので揃えず、表示範囲の値から自動で決める
     * ε' はそのまま（平均を引かない）FFT する。平均は k = 0 に集まり、窓関数のすそで
       k = 0 のすぐ隣のビンに漏れる。k < DC_EXCLUDE_BINS * Δk は図で灰色に塗り、軸・色の範囲の
       計算から除く
@@ -67,15 +69,20 @@ DC_EXCLUDE_BINS = 2         # k < この数 x Δk を平均（k = 0）の漏れ�
 # --- 表示
 MARK_KZ_BAND = (18.1, 54.4) # 参考に塗る k_z の帯 [rad/m]（CE-4 の 250-750 MHz、ε_r = 3）。None で描かない
 MARK_KZ_LABEL = 'CE-4 band (250–750 MHz, ε_r = 3)'
-MAP_KX_MAX = None           # 2 次元図の |k_x| の上限 [rad/m]。None で自動（下の MAP_AUTO_DB）
-MAP_KZ_MAX = None           # 2 次元図の k_z の上限 [rad/m]。None で自動
-MAP_AUTO_DB = 60.0          # 自動のとき：平均の S_x, S_z が最大値から何 dB 下がる所まで見せるか
+# --- 波数軸の範囲（gprmax_bscan_2dfft.py と同じ値にすること。B-scan と並べて比べるため）
+K_LIM_1D = (0.5, 200.0)     # S_x, S_z の横軸 [rad/m]（対数軸）
+                            #   下限：最小の分解能（10 m 区間の Δk = 0.63）より下
+                            #   上限：B-scan のナイキスト波数（89.8 / 116.2）と、地下構造のスペクトルが
+                            #         床に落ちる所（a = 0.05 m で約 150 rad/m）の両方より上
+MAP_KX_LIM = 100.0          # 2 次元図の |k_x| の上限 [rad/m]
+MAP_KZ_LIM = 150.0          # 2 次元図の k_z の上限 [rad/m]
+WL_TICKS_MAP_X = (0.075, 0.1, 0.15, 0.25, 0.5)          # 2 次元図の λ_x の目盛り [m]
+WL_TICKS_MAP_Z = (0.05, 0.075, 0.1, 0.15, 0.25, 0.5)    # 2 次元図の λ_z の目盛り [m]
 DB_RANGE = 70.0             # 2 次元図の色の幅 [dB]
 SX_YLIM_DB = None           # S_x の縦軸 (下限, 上限) [dB]。None で自動（全図共通）
 SZ_YLIM_DB = None           # S_z の縦軸
 SPEC_DB_RANGE_MAX = 100.0   # 自動のときの縦軸の幅の上限 [dB]
-WL_TICKS = (0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20)   # 波長の第 2 軸の目盛り [m]
-WL_TICKS_MAP = (0.01, 0.015, 0.02, 0.03, 0.05, 0.075, 0.1, 0.15, 0.25, 0.5, 1, 2)
+WL_TICKS = (0.03, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)     # 1 次元図の波長の目盛り [m]
 IMAGE_CMAP = 'viridis'      # ε' の図の色
 IMAGE_VLIM = None           # ε' の図の色の範囲 (下限, 上限)。None で解析範囲の 0.5-99.5 % 点
 SAVE_SEGMENT_FIGS = True
@@ -313,8 +320,8 @@ def draw_map(ax, g, Sh):
     ax.set_ylim(*LIM['kz_map'])
     ax.set_xlabel('k_x [rad/m]')
     ax.set_ylabel('k_z [rad/m]')
-    _wl_axis(ax, 'x', WL_TICKS_MAP, 'λ_x [m]', symmetric=True, min_frac=0.12)
-    _wl_axis(ax, 'y', WL_TICKS_MAP, 'λ_z [m]', min_frac=0.12)
+    _wl_axis(ax, 'x', WL_TICKS_MAP_X, 'λ_x [m]', symmetric=True)
+    _wl_axis(ax, 'y', WL_TICKS_MAP_Z, 'λ_z [m]')
     ax.set_title('S(k_x, k_z)')
     if hs:
         ax.legend(handles=hs, loc='upper right', fontsize=7.5, facecolor='0.4', labelcolor='w',
@@ -349,7 +356,8 @@ def _draw_1d(ax, axis, k_list, curves, dk_lines, kn, plot):
             ax.axvline(dk, color=col, ls='-.', lw=1.0)
         hs.append(Line2D([], [], color='k', ls='-.', lw=1.0, label=f'Δk_{axis} (colour = L)'))
     ax.axvline(kn, **KN_STYLE)
-    hs.append(Line2D([], [], label=f'k_N = {kn:.1f} rad/m', **KN_STYLE))
+    off = ' (off scale)' if kn > LIM['k' + axis][1] else ''
+    hs.append(Line2D([], [], label=f'k_N = {kn:.1f} rad/m{off}', **KN_STYLE))
     ax.set_xlim(*LIM['k' + axis])
     ax.set_ylim(*LIM['s' + axis])
     _wl_axis(ax, 'x', WL_TICKS, f'λ_{axis} [m]')
@@ -470,53 +478,41 @@ def plot_compare_lengths(outdir, label, all_L):
     plt.close(fig)
 
 
-def _nice_ceil(v):
-    step = 5.0 if v <= 50 else (10.0 if v <= 200 else 50.0)
-    return step * np.ceil(v / step)
-
-
 def set_common_limits(all_L):
     """全図に共通の軸の範囲を決める（横軸・縦軸・2 次元図の色）"""
-    gs = [d['g'] for d in all_L.values()]
-    kn = gs[0].kn
-    LIM['kx'] = (0.8 * min(g.dkx for g in gs), 1.25 * kn)
-    LIM['kz'] = (0.8 * min(g.dkz for g in gs), 1.25 * kn)
+    # 波数軸は設定の固定値（B-scan の解析 gprmax_bscan_2dfft.py と同じ）
+    LIM['kx'] = tuple(K_LIM_1D)
+    LIM['kz'] = tuple(K_LIM_1D)
+    LIM['kx_map'] = (-MAP_KX_LIM, MAP_KX_LIM)
+    LIM['kz_map'] = (0.0, MAP_KZ_LIM)
+    # 縦軸・色は、表示する波数の範囲に入る値だけで決める（平均の漏れ k < DC_EXCLUDE_BINS x Δk は除く）
     tops = {'x': [], 'z': []}
     bots = {'x': [], 'z': []}
-    reach = {'x': [], 'z': []}
     map_max = []
     for d in all_L.values():
         g = d['g']
-        mk = {'x': g.kx_pos >= DC_EXCLUDE_BINS * g.dkx, 'z': g.kz_pos >= DC_EXCLUDE_BINS * g.dkz}
-        kk = {'x': g.kx_pos, 'z': g.kz_pos}
+        mk = {a: (k >= max(DC_EXCLUDE_BINS * dk, LIM['k' + a][0])) & (k <= LIM['k' + a][1])
+              for a, k, dk in (('x', g.kx_pos, g.dkx), ('z', g.kz_pos, g.dkz))}
         for sx, sz in d['seg_marg'] + [(d['mean']['Sx'], d['mean']['Sz'])]:
             for a, s in (('x', sx), ('z', sz)):
                 tops[a].append(_db(s[mk[a]]).max())
         for a, s in (('x', d['mean']['Sx']), ('z', d['mean']['Sz'])):
-            v = _db(s[mk[a]])
-            bots[a].append(v.min())
-            above = np.where(v >= v.max() - MAP_AUTO_DB)[0]   # 最大値から MAP_AUTO_DB 以内の最も高い k
-            reach[a].append(kk[a][mk[a]][above[-1]])
+            bots[a].append(_db(s[mk[a]]).min())
         dc = (np.abs(g.kz)[:, None] < DC_EXCLUDE_BINS * g.dkz) & \
              (np.abs(g.kx)[None, :] < DC_EXCLUDE_BINS * g.dkx)
-        map_max.append(_db(np.where(dc, 0.0, d['mean']['S'])).max())
+        inside = (g.kz[:, None] <= MAP_KZ_LIM) & (np.abs(g.kx)[None, :] <= MAP_KX_LIM)
+        map_max.append(_db(np.where(dc | ~inside, 0.0, d['mean']['S'])).max())
     for a, user in (('x', SX_YLIM_DB), ('z', SZ_YLIM_DB)):
         if user is not None:
             LIM['s' + a] = tuple(user)
         else:
             top = float(max(tops[a])) + 3.0
             LIM['s' + a] = (max(float(min(bots[a])) - 3.0, top - SPEC_DB_RANGE_MAX), top)
-    kxm = MAP_KX_MAX or min(_nice_ceil(1.1 * max(reach['x'])), kn)
-    kzm = MAP_KZ_MAX or min(_nice_ceil(1.1 * max(reach['z'])), kn)
-    LIM['kx_map'] = (-kxm, kxm)
-    LIM['kz_map'] = (0.0, kzm)
     vmax = float(max(map_max)) + 5.0
     LIM['map'] = (vmax - DB_RANGE, vmax)
-    print('共通の軸: k_x {:.3f}-{:.1f}、k_z {:.3f}-{:.1f} rad/m、S_x {:.1f}-{:.1f} dB、'
-          'S_z {:.1f}-{:.1f} dB'.format(*LIM['kx'], *LIM['kz'], *LIM['sx'], *LIM['sz']))
-    print('  2 次元図: |k_x| <= {:g}、k_z <= {:g} rad/m{}、色 {:.1f}-{:.1f} dB'.format(
-        kxm, kzm, '' if (MAP_KX_MAX and MAP_KZ_MAX) else
-        '（自動：平均の S_x, S_z が最大値から {:g} dB 下がる所まで）'.format(MAP_AUTO_DB), *LIM['map']))
+    print('共通の軸: k_x, k_z {:g}-{:g} rad/m（2 次元図 |k_x| <= {:g}、k_z <= {:g}）、'
+          'S_x {:.1f}-{:.1f} dB、S_z {:.1f}-{:.1f} dB、2 次元図 {:.1f}-{:.1f} dB'.format(
+              *LIM['kx'], MAP_KX_LIM, MAP_KZ_LIM, *LIM['sx'], *LIM['sz'], *LIM['map']))
 
 
 # =============================================================================

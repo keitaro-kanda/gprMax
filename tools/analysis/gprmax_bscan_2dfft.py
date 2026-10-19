@@ -10,6 +10,8 @@ CE-4/LPR の実データと同じ処理・同じ図で求める（単体で動�
 解析・描画の部分（スペクトル、区間の切り出し、図）は lpr_bscan_2dfft.py からの写しで、
 図の種類・軸・色・ファイル名は LPR の解析と同じ。どちらかを変えたときは、もう一方も
 手で同じように直すこと（写した範囲は「ここから lpr_bscan_2dfft.py と同じ」の印の間）。
+波数軸の範囲は地下構造の解析（geometry_2dfft.py）と揃えている（K_LIM_1D、MAP_KX_LIM、
+MAP_KY_LIM。変えた所には「軸の統一」の印）。S_y も S_x と同じ対数軸。
 
 前処理（実データの処理に合わせる）
     1. 受信点の Ez を読む（行 = 時間、列 = トレース）
@@ -84,9 +86,19 @@ DB_RANGE = 70.0             # 2 次元スペクトル図の色の幅 [dB]
 SX_YLIM_DB = None           # S_x の図の縦軸 (下限, 上限) [dB]。None で自動（6 ケースで揃えるなら指定）
 SY_YLIM_DB = None           # S_y の図の縦軸 (下限, 上限) [dB]。同上
 SPEC_DB_RANGE_MAX = 100.0
-WL_TICKS_X = (0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50)
-WL_TICKS_X_MAP = (0.075, 0.1, 0.15, 0.25, 0.5)
-WL_TICKS_Y = (0.06, 0.08, 0.1, 0.15, 0.2, 0.3, 0.5, 1)
+
+# --- 波数軸の範囲（geometry_2dfft.py と同じ値にすること。B-scan と地下構造の図を並べて比べるため）
+#     縦軸（S_x, S_y の dB）は見ている量が違うので揃えず、それぞれ自動で決める
+K_LIM_1D = (0.5, 200.0)     # S_x, S_y の横軸 [rad/m]（対数軸）
+                            #   下限：最小の分解能（地下構造の 10 m 区間の Δk = 0.63）より下
+                            #   上限：B-scan のナイキスト波数（89.8 / 116.2）と、地下構造のスペクトルが
+                            #         床に落ちる所（a = 0.05 m で約 150 rad/m）の両方より上
+MAP_KX_LIM = 100.0          # 2 次元図の |k_x| の上限 [rad/m]（B-scan の k_N,x = 89.8 が入る）
+MAP_KY_LIM = 150.0          # 2 次元図の k_y の上限 [rad/m]（B-scan の k_N,y = 116.2 が入る）
+NO_DATA_COLOR = '0.55'      # 2 次元図でナイキスト波数より外（データなし）の色
+WL_TICKS = (0.03, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)     # 1 次元図の波長の目盛り [m]
+WL_TICKS_MAP_X = (0.075, 0.1, 0.15, 0.25, 0.5)          # 2 次元図の λ_x の目盛り
+WL_TICKS_MAP_Y = (0.05, 0.075, 0.1, 0.15, 0.25, 0.5)    # 2 次元図の λ_y の目盛り
 OVERVIEW_STRIDE = 1
 DPI = 130
 
@@ -392,15 +404,19 @@ def draw_map(ax, g, S):
                    vmin=LIM['map'][0], vmax=LIM['map'][1])
     for f in BAND_MHZ:
         ax.axhline(mhz_to_ky(f), **BAND_LINE)
+    ax.set_facecolor(NO_DATA_COLOR)                                           # 軸の統一：k_N より外
     ax.set_xlim(*LIM['kx_map'])
     ax.set_ylim(*LIM['ky_map'])
     ax.set_xlabel('k_x [rad/m]')
     ax.set_ylabel('k_y [rad/m]')
-    _wl_axis(ax, 'x', WL_TICKS_X_MAP, 'λ_x [m]', symmetric=True)
-    _wl_axis(ax, 'y', WL_TICKS_Y, f'λ_y [m] (ε_r = {EPS_R:g})')
+    _wl_axis(ax, 'x', WL_TICKS_MAP_X, 'λ_x [m]', symmetric=True)
+    _wl_axis(ax, 'y', WL_TICKS_MAP_Y, f'λ_y [m] (ε_r = {EPS_R:g})')
     ax.set_title('S(k_x, k_y)')
-    ax.legend(handles=[Line2D([], [], label=f'{BAND_MHZ[0]:g}–{BAND_MHZ[1]:g} MHz', **BAND_LINE)],
-              loc='upper right', fontsize=7.5, facecolor='0.4', labelcolor='w', framealpha=0.7)
+    hs = [Line2D([], [], label=f'{BAND_MHZ[0]:g}–{BAND_MHZ[1]:g} MHz', **BAND_LINE)]
+    if LIM['kx_map'][1] > np.pi / DX_M or LIM['ky_map'][1] > ky_max():
+        hs.append(Patch(color=NO_DATA_COLOR, label='beyond k_N (no data)'))
+    ax.legend(handles=hs, loc='upper right', fontsize=7.5, facecolor='0.4', labelcolor='w',
+              framealpha=0.7)
     return im
 
 
@@ -437,7 +453,7 @@ def draw_sx(ax, g, curves, dk_lines=None, plot=True):
         hs.insert(0, Line2D([], [], color='k', ls='-.', lw=1.0, label='Δk_x (colour = L)'))
     ax.set_xlim(*LIM['kx'])
     ax.set_ylim(*LIM['sx'])
-    _wl_axis(ax, 'x', WL_TICKS_X, 'λ_x [m]')
+    _wl_axis(ax, 'x', WL_TICKS, 'λ_x [m]')
     ax.set_xlabel('k_x [rad/m]')
     ax.set_ylabel('S_x [dB]')
     ax.set_title(f'S_x(k_x), k_y in {BAND_MHZ[0]:g}–{BAND_MHZ[1]:g} MHz')
@@ -448,6 +464,7 @@ def draw_sx(ax, g, curves, dk_lines=None, plot=True):
 def draw_sy(ax, g, curves, plot=True):
     k = g.ky[g.ky_pos]
     m = k <= ky_max() + 1e-9
+    ax.set_xscale('log')                                                       # 軸の統一：対数軸
     for c in curves if plot else []:
         ls = c.get('ls', '-')
         ax.plot(k[m], _db(c['s'][m]), color=c['color'], lw=_lw(ls, c.get('lw', 1.3)), ls=ls)
@@ -458,11 +475,11 @@ def draw_sy(ax, g, curves, plot=True):
     ax.set_xlabel('k_y [rad/m]')
     ax.set_ylabel('S_y [dB]')
     ax.set_title('S_y(k_y)')
-    ax.grid(alpha=0.3)
-    _wl_axis(ax, 'x', WL_TICKS_Y, f'λ_y [m] (ε_r = {EPS_R:g})')
+    ax.grid(alpha=0.3, which='both')
+    _wl_axis(ax, 'x', WL_TICKS, f'λ_y [m] (ε_r = {EPS_R:g})')
     h0 = _curve_handles(curves)
     h0.append(Patch(label=f'{BAND_MHZ[0]:g}–{BAND_MHZ[1]:g} MHz', **BAND_FILL))
-    ax.legend(handles=h0 + hs, fontsize=7.5, loc='lower center')
+    ax.legend(handles=h0 + hs, fontsize=7.5, loc='lower left')
 
 
 def plot_overview(data, outdir, amp):
@@ -598,23 +615,25 @@ def plot_compare_groups(outdir, Ls, res_by_group):
 
 def set_common_limits(all_L):
     """全図に共通の軸の範囲を決める（横軸・縦軸・2 次元図の色）"""
-    kn_x, kn_y = np.pi / DX_M, np.pi / dy_m()
-    dkx_min = min(d['g'].dkx for d in all_L.values())
-    LIM['kx'] = (0.8 * dkx_min, 1.25 * kn_x)
-    LIM['kx_map'] = (-kn_x, kn_x)
-    LIM['ky'] = (0.0, ky_max() * 1.02)
-    LIM['ky_map'] = (0.0, ky_max())
+    # 波数軸は設定の固定値（地下構造の解析 geometry_2dfft.py と同じ）            # 軸の統一
+    LIM['kx'] = tuple(K_LIM_1D)
+    LIM['kx_map'] = (-MAP_KX_LIM, MAP_KX_LIM)
+    LIM['ky'] = tuple(K_LIM_1D)
+    LIM['ky_map'] = (0.0, MAP_KY_LIM)
+    # 縦軸は、表示する波数の範囲に入る値だけで決める（主要部分が切れないように）
     tops_x, tops_y, bots_x, bots_y, map_max = [], [], [], [], []
     for d in all_L.values():
         g = d['g']
-        mky = (g.ky[g.ky_pos] <= ky_max() + 1e-9) & (g.ky[g.ky_pos] >= 2 * g.dky)
+        kxp, kyp = g.kx[g.kx_pos], g.ky[g.ky_pos]
+        mkx = (kxp >= LIM['kx'][0]) & (kxp <= LIM['kx'][1])
+        mky = (kyp <= ky_max() + 1e-9) & (kyp >= max(2 * g.dky, LIM['ky'][0])) & (kyp <= LIM['ky'][1])
         for sx, sy in d['seg_marg']:                       # 区間ごとの線（上端を決める）
-            tops_x.append(_db(sx).max())
+            tops_x.append(_db(sx[mkx]).max())
             tops_y.append(_db(sy[mky]).max())
         for byL in d['res'].values():                      # 平均の線（下端を決める）
             curves = [(byL['Sx'], byL['Sy'])] + [(r['Sx'], r['Sy']) for r in byL['by_win'].values()]
             for sx, sy in curves:
-                bots_x.append(_db(sx).min())
+                bots_x.append(_db(sx[mkx]).min())
                 bots_y.append(_db(sy[mky]).min())
             map_max.append(_db(byL['S'][g.ky <= ky_max() + 1e-9]).max())
     for key, user, tops, bots in (('sx', SX_YLIM_DB, tops_x, bots_x), ('sy', SY_YLIM_DB, tops_y, bots_y)):
@@ -626,9 +645,9 @@ def set_common_limits(all_L):
             LIM[key] = (bot, top)
     vmax = float(max(map_max)) + 5.0
     LIM['map'] = (vmax - DB_RANGE, vmax)
-    print('共通の軸: k_x {:.3f}-{:.1f}、k_y 0-{:.1f} rad/m、S_x {:.1f}-{:.1f} dB、S_y {:.1f}-{:.1f} dB、'
-          '2 次元図 {:.1f}-{:.1f} dB'.format(LIM['kx'][0], LIM['kx'][1], LIM['ky'][1], *LIM['sx'],
-                                          *LIM['sy'], *LIM['map']))
+    print('共通の軸: k_x, k_y {:g}-{:g} rad/m（2 次元図 |k_x| <= {:g}、k_y <= {:g}）、'
+          'S_x {:.1f}-{:.1f} dB、S_y {:.1f}-{:.1f} dB、2 次元図 {:.1f}-{:.1f} dB'.format(
+              *LIM['kx'], MAP_KX_LIM, MAP_KY_LIM, *LIM['sx'], *LIM['sy'], *LIM['map']))
 
 
 def run_analysis(data, outdir, source, extra_info=None):
