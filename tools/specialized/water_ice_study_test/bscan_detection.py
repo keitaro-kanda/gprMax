@@ -48,13 +48,13 @@ from gprMax.exceptions import CmdInputError
 # =============================================================================
 # 設定  [EDIT HERE]
 # =============================================================================
-JSON_PATH = "/Volumes/gprMax_water_ice/2D_12x4/water_ice_study_test/out_file_paths.json"        # 既存ツールと同じ JSON
+JSON_PATH = "/Volumes/gprMax_water_ice/2D_12x4/water_ice_study_test/out_file_paths.json"          # 既存ツールと同じ JSON
 BSCAN_KEY = 'bscan'                # 各条件の B-scan（merged.out）のキー
 REF_KEY = 'far_1m'                 # 参照計算（波源遅延・dB の基準の確認に使う）
 FREESPACE_KEY = 'at_tx'            # 自由空間 at_tx（直達波の除去用）
 REFERENCE_CONDITION = 'no_ice'     # 反射体のない基準の条件キー
 TARGET_CONDITIONS = None           # None なら基準以外のすべての条件を順に解析
-OUTPUT_SUBDIRNAME = 'bscan_detection_results'
+OUTPUT_SUBDIRNAME = 'bscan_detection_resutls'  # 出力フォルダ名（merged.out と同じ階層に作る）
 # 'per_bscan'：対象の merged.out と同じフォルダに <OUTPUT_SUBDIRNAME>/ を作る
 # 'level_root'：レベル親ディレクトリの analysis/<OUTPUT_SUBDIRNAME>/<対象>/（A-scan ツールと同じ）
 OUTPUT_LOCATION = 'per_bscan'
@@ -93,6 +93,7 @@ BAND_METHOD = 'normal'             # 'normal'：平均 ± z σ / 'percentile'：
 
 # --- 作図 ---------------------------------------------------------------------
 IMG_DB_RANGE = 80.0                # B-scan 図の色の幅 [dB]
+PLOT_BSCAN_ASCAN = True            # B-scan と平均 A-scan を縦軸（two-way time）共有で並べた図も出す
 COL_REF = '0.35'                   # 基準（no_ice）
 COL_TGT = 'tab:red'                # 対象
 COL_EVENT = 'tab:blue'             # 平均媒質の界面の理論走時
@@ -569,6 +570,61 @@ def plot_bscan(res, T, R, dt, out_dir, tgt_name):
     fig.colorbar(im, ax=axs, label='Envelope [dB re surface reflection]', shrink=0.9)
     fig.suptitle('B-scan envelope (dotted: model interfaces of the mean medium)')
     save_figure(fig, out_dir, 'fig1_bscan')
+
+
+def _mean_ascan_db(D, a):
+    """平均 A-scan [dB re a]：コヒーレント平均（トレースを足してから包絡）と、
+    インコヒーレント平均（包絡を足す）。前者はランダム場のクラッタが打ち消し合い、
+    水平な層の反射が残る。後者はクラッタも含めた平均の強さ。"""
+    coh = np.abs(signal.hilbert(D.mean(axis=1)))
+    inc = np.abs(signal.hilbert(D, axis=0)).mean(axis=1)
+    to_db = lambda v: DB20 * np.log(np.maximum(v, 1e-300) / a)
+    return to_db(coh), to_db(inc)
+
+
+def plot_bscan_ascan(res, T, dt, out_dir, tgt_name, stem, a_norm, R=None):
+    """B-scan（左）と平均 A-scan（右）を、縦軸 two-way time を共有して並べる。
+
+    R を渡すと（比較の図）、右のパネルに基準の平均 A-scan も重ねる。
+    """
+    t = np.arange(T.shape[0]) * dt * 1e9
+    t_max = T.shape[0] * dt * 1e9
+    x = res['x']
+    fig = plt.figure(figsize=(14, 7.5), layout='constrained')
+    gs = fig.add_gridspec(1, 2, width_ratios=[2.6, 1])
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1], sharey=ax1)
+    env = np.abs(signal.hilbert(T, axis=0))
+    im = ax1.imshow(DB20 * np.log(np.maximum(env, 1e-300) / a_norm), aspect='auto',
+                    extent=[x[0], x[-1], t_max, 0], cmap='viridis',
+                    vmin=-IMG_DB_RANGE, vmax=0, interpolation='nearest')
+    for e in res['events']:
+        ax1.axhline(e['t_ns'], color='w', ls=':', lw=0.9)
+    ax1.set_xlabel('x [m]')
+    ax1.set_ylabel('Two-way time [ns]')
+    ax1.set_title('(a) B-scan envelope ({})'.format(tgt_name))
+    fig.colorbar(im, ax=ax1, label='Envelope [dB re surface reflection]', pad=0.01)
+
+    curves = [(T, COL_TGT, tgt_name)]
+    if R is not None:
+        curves.insert(0, (R, COL_REF, REFERENCE_CONDITION))
+    for D, col, lab in curves:
+        coh, inc = _mean_ascan_db(D, a_norm)
+        ax2.plot(coh, t, color=col, lw=1.3, label='{}: coherent mean'.format(lab))
+        ax2.plot(inc, t, color=col, lw=1.0, ls='--', label='{}: mean of envelopes'.format(lab))
+    h = _event_lines(ax2, res['events'], orient='h')
+    ax2.set_xlim(-IMG_DB_RANGE - 10, 5)
+    ax2.set_ylim(t_max, 0)
+    ax2.set_xlabel('Envelope [dB re surface reflection]')
+    ax2.tick_params(labelleft=False)
+    ax2.grid(alpha=0.3)
+    ax2.legend(handles=ax2.get_legend_handles_labels()[0] + ([h] if h else []),
+               fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.09))
+    ax2.set_title('(b) Mean A-scan ({} traces)'.format(T.shape[1]))
+    ref_txt = ' vs {}'.format(REFERENCE_CONDITION) if R is not None else ' only'
+    fig.suptitle('B-scan and mean A-scan [{}{}] (dotted: model interfaces of the mean medium)'
+                 .format(tgt_name, ref_txt))
+    save_figure(fig, out_dir, stem)
 
 
 def plot_reflection(res, out_dir, tgt_name):
@@ -1150,6 +1206,8 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
     os.makedirs(single_dir, exist_ok=True)
     plot_single_bscan(res, T, dt, single_dir, tgt)
     plot_single_reflection(res, single_dir, tgt)
+    if PLOT_BSCAN_ASCAN:
+        plot_bscan_ascan(res, T, dt, single_dir, tgt, 'single12_bscan_ascan', res['a_surf_T'])
     plot_single_decay(res, single_dir, tgt)
     plot_single_shift(res, single_dir, tgt)
     plot_single_spectrogram(res, single_dir, tgt)
@@ -1160,6 +1218,8 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
     os.makedirs(out_dir, exist_ok=True)
     plot_bscan(res, T, R, dt, out_dir, tgt)
     plot_reflection(res, out_dir, tgt)
+    if PLOT_BSCAN_ASCAN:
+        plot_bscan_ascan(res, T, dt, out_dir, tgt, 'fig12_bscan_ascan', res['a_surf'], R=R)
     plot_decay(res, out_dir, tgt)
     plot_shift(res, out_dir, tgt)
     plot_spectrogram(res, out_dir, tgt)
