@@ -48,13 +48,13 @@ from gprMax.exceptions import CmdInputError
 # =============================================================================
 # 設定  [EDIT HERE]
 # =============================================================================
-JSON_PATH = "/Volumes/gprMax_water_ice/2D_12x4/water_ice_study_test/out_file_paths.json"          # 既存ツールと同じ JSON
+JSON_PATH = '/Volumes/gprMax_water_ice/2D_12x4/water_ice_study_test/out_file_paths.json'
 BSCAN_KEY = 'bscan'                # 各条件の B-scan（merged.out）のキー
 REF_KEY = 'far_1m'                 # 参照計算（波源遅延・dB の基準の確認に使う）
 FREESPACE_KEY = 'at_tx'            # 自由空間 at_tx（直達波の除去用）
 REFERENCE_CONDITION = 'no_ice'     # 反射体のない基準の条件キー
 TARGET_CONDITIONS = None           # None なら基準以外のすべての条件を順に解析
-OUTPUT_SUBDIRNAME = 'bscan_detection_resutls'  # 出力フォルダ名（merged.out と同じ階層に作る）
+OUTPUT_SUBDIRNAME = 'bscan_detection'
 # 'per_bscan'：対象の merged.out と同じフォルダに <OUTPUT_SUBDIRNAME>/ を作る
 # 'level_root'：レベル親ディレクトリの analysis/<OUTPUT_SUBDIRNAME>/<対象>/（A-scan ツールと同じ）
 OUTPUT_LOCATION = 'per_bscan'
@@ -113,6 +113,13 @@ def select_conditions(json_path):
         raise CmdInputError('JSON file {} does not exist'.format(json_path))
     with open(json_path) as fh:
         all_paths = json.load(fh)
+    print('パス JSON: {}'.format(json_path))
+    bad = [k for k, v in all_paths.items() if not k.startswith('_') and not isinstance(v, dict)]
+    if bad or not all_paths:
+        raise CmdInputError(
+            '{} はパス JSON の形になっていません（値が辞書でないキー: {}）。'
+            'JSON_PATH が out_file_paths.json を指しているか確認してください。'
+            .format(json_path, ', '.join(bad) or '(空)'))
     levels = [k for k in all_paths if not k.startswith('_')]
     level = asp._select(levels, 'レベル')
     node, chosen = all_paths[level], []
@@ -407,7 +414,8 @@ def analyze_target(name, T, R, dt, x, events, tand, info):
     envT = np.abs(signal.hilbert(T, axis=0))
     a_surf_T = float(np.median(envT[ms].max(axis=0)))
 
-    res = {'name': name, 'a_surf': a_surf, 'a_surf_T': a_surf_T, 'x': x, 'events': events}
+    res = {'name': name, 'a_surf': a_surf, 'a_surf_T': a_surf_T, 'x': x, 'events': events,
+           'x_label': info.get('x_label', 'x [m]')}
 
     # --- 1. 反射 ------------------------------------------------------------
     rs = reflection_scan(T, R, dt)
@@ -422,7 +430,11 @@ def analyze_target(name, T, R, dt, x, events, tand, info):
                          't_peak_ns': rs['t'][k], 'pd_max': rs['pd'][k],
                          'excess_db': rs['excess_db'][k],
                          'nearest_event': near['name'] if near else '',
-                         'nearest_event_dt_ns': (rs['t'][k] - near['t_ns']) if near else np.nan})
+                         'nearest_event_dt_ns': (rs['t'][k] - near['t_ns']) if near else np.nan,
+                         # fig2(c) の代わりの表示用（記録ファイルが無く理論の界面が無いとき）
+                         'label': 'detected\n{:.1f}–{:.1f} ns'.format(rs['t'][i0], rs['t'][i1]),
+                         'pd': rs['pd'][k], 'verdict': verdict(rs['pd'][k]),
+                         'peaks_rel_th_db': DB20 * np.log(rs['PT'][k] / rs['th'][k])})
     res['regions'] = reg_rows
     ev_rows = []
     for e in events:
@@ -565,7 +577,7 @@ def plot_bscan(res, T, R, dt, out_dir, tgt_name):
         for e in res['events']:
             ax.axhline(e['t_ns'], color='w', ls=':', lw=0.9)
         ax.set_title(title)
-        ax.set_xlabel('x [m]')
+        ax.set_xlabel(res['x_label'])
     axs[0].set_ylabel('Two-way time [ns]')
     fig.colorbar(im, ax=axs, label='Envelope [dB re surface reflection]', shrink=0.9)
     fig.suptitle('B-scan envelope (dotted: model interfaces of the mean medium)')
@@ -600,7 +612,7 @@ def plot_bscan_ascan(res, T, dt, out_dir, tgt_name, stem, a_norm, R=None):
                     vmin=-IMG_DB_RANGE, vmax=0, interpolation='nearest')
     for e in res['events']:
         ax1.axhline(e['t_ns'], color='w', ls=':', lw=0.9)
-    ax1.set_xlabel('x [m]')
+    ax1.set_xlabel(res['x_label'])
     ax1.set_ylabel('Two-way time [ns]')
     ax1.set_title('(a) B-scan envelope ({})'.format(tgt_name))
     fig.colorbar(im, ax=ax1, label='Envelope [dB re surface reflection]', pad=0.01)
@@ -664,6 +676,17 @@ def plot_reflection(res, out_dir, tgt_name):
     ax2.grid(alpha=0.3)
     ax2.set_title('(b) Fraction of target traces above the threshold (shaded: visible)')
     rows = res['event_rows']
+    if rows:
+        labels = [r['event'] for r in rows]
+        ax3_title = '(c) At model interfaces'
+    else:
+        # 記録ファイルが無く平均媒質の界面が分からないときは、データで見えた反射を並べる
+        rows = res['regions']
+        labels = [r['label'] for r in rows]
+        ax3_title = '(c) At detected reflections\n(no model interfaces: record file not found)'
+        if not rows:
+            ax3.text(0.5, 0.5, 'no model interfaces\nand no detected reflection',
+                     ha='center', va='center', transform=ax3.transAxes)
     for i, r in enumerate(rows):
         v = r['peaks_rel_th_db']
         jit = (np.random.RandomState(i).rand(len(v)) - 0.5) * 0.3
@@ -673,10 +696,10 @@ def plot_reflection(res, out_dir, tgt_name):
                  ha='center', va='bottom', fontsize=9)
     ax3.axhline(0, color='k', ls='--', lw=1.2, label='clutter threshold')
     ax3.set_xticks(range(len(rows)))
-    ax3.set_xticklabels([r['event'] for r in rows], rotation=20)
+    ax3.set_xticklabels(labels, rotation=20, fontsize=8)
     ax3.set_xlim(-0.7, len(rows) - 0.3)
     ax3.set_ylabel('Target trace peak − threshold [dB]')
-    ax3.set_title('(c) At model interfaces')
+    ax3.set_title(ax3_title, fontsize=10)
     ax3.grid(alpha=0.3)
     ax3.legend(fontsize=8, loc='lower right')
     if rows:
@@ -829,7 +852,7 @@ def plot_single_bscan(res, T, dt, out_dir, tgt_name):
                    vmin=-IMG_DB_RANGE, vmax=0, interpolation='nearest')
     for e in res['events']:
         ax.axhline(e['t_ns'], color='w', ls=':', lw=0.9)
-    ax.set_xlabel('x [m]')
+    ax.set_xlabel(res['x_label'])
     ax.set_ylabel('Two-way time [ns]')
     fig.colorbar(im, ax=ax, label='Envelope [dB re own surface reflection]')
     ax.set_title('{} B-scan envelope (dotted: model interfaces)'.format(_single_title(tgt_name)))
@@ -1190,6 +1213,7 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
         checks.append('計算領域の底（PML 上端）の往復走時 {:.2f} ns。これより後は窓の検定に使わない'
                       .format(t_bottom))
     info = {'t_surface_data': t_s_data, 't_bottom': t_bottom, 'same_field': same, 'checks': checks,
+            'x_label': ctx['x_label'],
             'inputs': {'level': level, 'target': '{} ({})'.format(tgt, p_t),
                        'reference': '{} ({})'.format(REFERENCE_CONDITION,
                                                      conds[REFERENCE_CONDITION][BSCAN_KEY]),
@@ -1269,7 +1293,8 @@ def main():
               .format(p_r, R.shape[1], x[0], x[-1], 'm' if has_x else '(番号)', dt * 1e12)]
     if rec_R and rec_R.get('enable_ice'):
         raise CmdInputError('基準 {} の記録ファイルでは氷が入っています（enable_ice = True）'.format(p_r))
-    ctx = {'shape': full_shape, 'sel': sel, 'checks': checks, 'fs_path': fs_path}
+    ctx = {'shape': full_shape, 'sel': sel, 'checks': checks, 'fs_path': fs_path,
+           'x_label': 'x [m]' if has_x else 'Trace number (no record file)'}
 
     out_base = None
     if OUTPUT_LOCATION != 'per_bscan':
