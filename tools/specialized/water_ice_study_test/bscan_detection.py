@@ -36,6 +36,7 @@ from datetime import datetime
 import numpy as np
 import h5py
 from scipy import signal, ndimage, stats
+from scipy import fft as sp_fft
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
@@ -93,12 +94,25 @@ BAND_METHOD = 'normal'             # 'normal'：平均 ± z σ / 'percentile'：
 
 # --- 作図 ---------------------------------------------------------------------
 IMG_DB_RANGE = 80.0                # B-scan 図の色の幅 [dB]
+DIFF_CMAP = 'RdBu_r'               # fig1(c)（包絡の差 [dB]）の色。0 dB が白、赤が対象のほうが強い
+DIFF_DB_RANGE = 20.0               # fig1(c) の色の範囲 ±[dB]
 PLOT_BSCAN_ASCAN = True            # B-scan と平均 A-scan を縦軸（two-way time）共有で並べた図も出す
 COL_REF = '0.35'                   # 基準（no_ice）
 COL_TGT = 'tab:red'                # 対象
 COL_EVENT = 'tab:blue'             # 平均媒質の界面の理論走時
 DB20 = 20.0 / np.log(10.0)
 
+
+
+def envelope(D):
+    """包絡（解析信号の絶対値）を、時間軸（axis 0）方向にゼロ詰めしてから求める。
+
+    scipy.signal.hilbert は FFT で計算するので、そのままだとトレースの末尾と先頭が
+    つながった「円環」として扱われ、末尾（深い時間）の内容が先頭（0 ns 付近）の包絡に
+    漏れ込む。トレース長以上のゼロを足してから計算し、元の長さに切り戻す。
+    """
+    n = D.shape[0]
+    return np.abs(signal.hilbert(D, N=sp_fft.next_fast_len(2 * n), axis=0))[:n]
 
 # =============================================================================
 # 1. 入力
@@ -142,15 +156,41 @@ def select_conditions(json_path):
     return level, chosen, conds, reference
 
 
+def has_ice(rec):
+    """記録ファイルの条件に、実際に氷が入っているか。
+
+    enable_ice = True でも ice_vol_frac = 0 なら、混合則（pore / excess）で
+    誘電率は乾燥レゴリスと同じになり、物理的には氷なしと同じ。
+    """
+    return bool(rec.get('enable_ice')) and float(rec.get('ice_vol_frac', 0.0)) > 0.0
+
+
 def find_record(path):
-    """B-scan のフォルダと 1-2 つ上から記録ファイルを探す。"""
-    d = os.path.dirname(os.path.abspath(path))
-    for _ in range(3):
-        hits = sorted(glob.glob(os.path.join(d, RECORD_NAME)))
+    """B-scan に対応する記録ファイルを探す。
+
+    記録は A-scan の計算（モデル作成）のときに作られ、次のように B-scan と並ぶ:
+        <条件>/<ランダムパラメータ>/Ascan/Ascan_level6_record.json
+        <条件>/<ランダムパラメータ>/Bscan/Bscan_merged.out
+    探す順:
+      1. B-scan のフォルダ
+      2. 1 つ上（<ランダムパラメータ>/）と、その直下のフォルダ（Ascan/ など）
+      3. 2 つ上（<条件>/）。ここでは直下のフォルダは探さない
+         （別のランダムパラメータ ax010_... / ax020_... の記録を拾わないため）
+    同じ階層で複数見つかったら、取り違えを避けるため止める。
+    """
+    bdir = os.path.dirname(os.path.abspath(path))
+    parent = os.path.dirname(bdir)
+    steps = [[os.path.join(bdir, RECORD_NAME)],
+             [os.path.join(parent, RECORD_NAME), os.path.join(parent, '*', RECORD_NAME)],
+             [os.path.join(os.path.dirname(parent), RECORD_NAME)]]
+    for patterns in steps:
+        hits = sorted({h for p in patterns for h in glob.glob(p)})
+        if len(hits) > 1:
+            raise CmdInputError('{} に対応する記録ファイルが複数あります: {}'
+                                .format(path, ', '.join(hits)))
         if hits:
             with open(hits[0], encoding='utf-8') as fh:
                 return hits[0], json.load(fh)
-        d = os.path.dirname(d)
     return None, None
 
 
@@ -189,7 +229,7 @@ def configure_mean_medium(rec):
     """記録ファイルの値で subsurface_model を平均媒質（ランダム性なし）に設定する。"""
     sm.set_active_level(THEORY_LEVEL)
     sm.set_level3_composition(_composition_token(rec['feotio2_wt']))
-    sm.LEVEL4_ICE_MODEL = rec['ice_model'] if rec.get('enable_ice') else 'none'
+    sm.LEVEL4_ICE_MODEL = rec['ice_model'] if has_ice(rec) else 'none'
     sm.LEVEL4_ICE_TOP_M = float(rec['ice_top_m'])
     sm.LEVEL4_ICE_THICK_M = float(rec['ice_thick_m'])
     sm.LEVEL4_ICE_SPEC = 'vol'
@@ -224,7 +264,7 @@ def domain_bottom_time(rec, source_delay_ns, n_pml=10):
 
 def layer_tandelta(rec):
     """氷層の中央での tan_delta（氷あり / 氷なし）。変化の目安に使う。"""
-    if not rec.get('enable_ice'):
+    if not has_ice(rec):
         return None
     z = float(rec['ice_top_m']) + 0.5 * float(rec['ice_thick_m'])
     f0 = np.array([1.0e9])
@@ -244,8 +284,8 @@ def layer_tandelta(rec):
 def reflection_scan(T, R, dt):
     """ゲートを滑らせ、トレースごとの包絡ピークを基準の 95 % 点と比べる。"""
     dt_ns = dt * 1e9
-    envT = np.abs(signal.hilbert(T, axis=0))
-    envR = np.abs(signal.hilbert(R, axis=0))
+    envT = envelope(T)
+    envR = envelope(R)
     n_gate = max(3, int(round(2 * REFL_GATE_HW_NS / dt_ns)) | 1)
     pkT = ndimage.maximum_filter1d(envT, size=n_gate, axis=0, mode='nearest')
     pkR = ndimage.maximum_filter1d(envR, size=n_gate, axis=0, mode='nearest')
@@ -402,16 +442,27 @@ def verdict(pd):
     return '見える' if pd >= PD_VISIBLE else '見えない'
 
 
+def _argmax_centre(pd, idx, t=None, prefer_t=None):
+    """idx の中で P_D が最大になる時刻の番号。最大値が平らに続くときは、
+    prefer_t（理論の界面の走時）があればそれに最も近いものを、無ければ平らな部分の
+    中央を選ぶ（先頭を選ぶとゲートが反射の手前に寄り、ピークがゲートの端で切れやすい）。"""
+    v = pd[idx]
+    top = idx[v >= np.nanmax(v) - 1e-12]
+    if prefer_t is not None:
+        return int(top[np.argmin(np.abs(t[top] - prefer_t))])
+    return int(top[len(top) // 2])
+
+
 def analyze_target(name, T, R, dt, x, events, tand, info):
     dt_ns = dt * 1e9
     # --- dB の基準：基準 B-scan の地表反射（全トレースの中央値）---------------
-    envR = np.abs(signal.hilbert(R, axis=0))
+    envR = envelope(R)
     t_axis = np.arange(R.shape[0]) * dt_ns
     t_s = info['t_surface_data']
     ms = (t_axis >= t_s - REFL_GATE_HW_NS) & (t_axis <= t_s + REFL_GATE_HW_NS)
     a_surf = float(np.median(envR[ms].max(axis=0)))
     # 対象だけの図では、対象自身の地表反射で規格化する（基準に依らない）
-    envT = np.abs(signal.hilbert(T, axis=0))
+    envT = envelope(T)
     a_surf_T = float(np.median(envT[ms].max(axis=0)))
 
     res = {'name': name, 'a_surf': a_surf, 'a_surf_T': a_surf_T, 'x': x, 'events': events,
@@ -421,9 +472,19 @@ def analyze_target(name, T, R, dt, x, events, tand, info):
     rs = reflection_scan(T, R, dt)
     res['refl'] = rs
     regs = visible_regions(rs['t'], rs['pd'], merge_ns=REFL_GATE_HW_NS)
+
+    def trace_detail(k):
+        """fig2(c) 用：ゲート中心 t_k（全トレース共通）と、各トレースでゲート内の
+        包絡が最大になった時刻（＝ピークの値を取った時刻）。"""
+        tk = float(rs['t'][k])
+        m = np.abs(t_axis - tk) <= REFL_GATE_HW_NS
+        idx = np.where(m)[0]
+        return {'t_k': tk, 'gate': (float(t_axis[idx[0]]), float(t_axis[idx[-1]])),
+                'peak_t_ns': t_axis[idx[np.argmax(envT[idx], axis=0)]]}
+
     reg_rows = []
     for i0, i1 in regs:
-        k = i0 + int(np.argmax(rs['pd'][i0:i1 + 1]))
+        k = _argmax_centre(rs['pd'], np.arange(i0, i1 + 1))
         near = (min(events, key=lambda e: abs(e['t_ns'] - rs['t'][k]))
                 if events else None)
         reg_rows.append({'t_start_ns': rs['t'][i0], 't_end_ns': rs['t'][i1],
@@ -432,21 +493,22 @@ def analyze_target(name, T, R, dt, x, events, tand, info):
                          'nearest_event': near['name'] if near else '',
                          'nearest_event_dt_ns': (rs['t'][k] - near['t_ns']) if near else np.nan,
                          # fig2(c) の代わりの表示用（記録ファイルが無く理論の界面が無いとき）
-                         'label': 'detected\n{:.1f}–{:.1f} ns'.format(rs['t'][i0], rs['t'][i1]),
+                         'label': 'detected {:.1f}–{:.1f} ns'.format(rs['t'][i0], rs['t'][i1]),
                          'pd': rs['pd'][k], 'verdict': verdict(rs['pd'][k]),
-                         'peaks_rel_th_db': DB20 * np.log(rs['PT'][k] / rs['th'][k])})
+                         'peaks_rel_th_db': DB20 * np.log(rs['PT'][k] / rs['th'][k]),
+                         **trace_detail(k)})
     res['regions'] = reg_rows
     ev_rows = []
     for e in events:
         m = np.abs(rs['t'] - e['t_ns']) <= REFL_GATE_HW_NS
         if not m.any():
             continue
-        k = np.where(m)[0][int(np.argmax(rs['pd'][m]))]
+        k = _argmax_centre(rs['pd'], np.where(m)[0], rs['t'], e['t_ns'])
         ev_rows.append({'event': e['name'], 'depth_m': e['depth_m'], 't_model_ns': e['t_ns'],
                         't_at_max_ns': rs['t'][k], 'pd': rs['pd'][k],
                         'excess_db': rs['excess_db'][k],
                         'peaks_rel_th_db': DB20 * np.log(rs['PT'][k] / rs['th'][k]),
-                        'verdict': verdict(rs['pd'][k])})
+                        'verdict': verdict(rs['pd'][k]), **trace_detail(k)})
     res['event_rows'] = ev_rows
 
     # 同じ場であれば、氷層より浅い時間では対象と基準が同一なので P_D ≈ P_FA になる
@@ -566,21 +628,43 @@ def plot_bscan(res, T, R, dt, out_dir, tgt_name):
     x = res['x']
     ext = [x[0], x[-1], t_max, 0]
     a = res['a_surf']
-    imgs = [(R, 'Reference ({})'.format(REFERENCE_CONDITION)),
-            (T, 'Target ({})'.format(tgt_name)),
-            (T - R, 'Target − reference (same random field)')]
-    fig, axs = plt.subplots(1, 3, figsize=(16, 6.5), sharey=True, layout='constrained')
-    for ax, (D, title) in zip(axs, imgs):
-        env = np.abs(signal.hilbert(D, axis=0))
+    fig, axs = plt.subplots(1, 3, figsize=(18, 6.5), sharey=True, layout='constrained')
+
+    # (a)(b) 基準・対象：包絡を基準（no_ice）の地表反射で規格化した dB
+    for ax, D, title, lab in (
+            (axs[0], R, '(a) Reference ({})'.format(REFERENCE_CONDITION),
+             'Envelope of {} [dB]\nre {} surface reflection'.format(REFERENCE_CONDITION, REFERENCE_CONDITION)),
+            (axs[1], T, '(b) Target ({})'.format(tgt_name),
+             'Envelope of {} [dB]\nre {} surface reflection'.format(tgt_name, REFERENCE_CONDITION))):
+        env = envelope(D)
         im = ax.imshow(DB20 * np.log(np.maximum(env, 1e-300) / a), aspect='auto', extent=ext,
                        cmap='viridis', vmin=-IMG_DB_RANGE, vmax=0, interpolation='nearest')
-        for e in res['events']:
-            ax.axhline(e['t_ns'], color='w', ls=':', lw=0.9)
+        fig.colorbar(im, ax=ax, label=lab, shrink=0.9, pad=0.01)
         ax.set_title(title)
+
+    # (c) 差：包絡どうしの差を dB で。20 log10(env_T / env_R) = (b) の dB − (a) の dB。
+    #     規格化の基準（地表反射）は打ち消し合うので、どこで規格化しても同じ値になる。
+    #     正：対象のほうが強い、負：基準のほうが強い。
+    env_T = envelope(T)
+    env_R = envelope(R)
+    d_db = DB20 * np.log(np.maximum(env_T, 1e-300) / np.maximum(env_R, 1e-300))
+    # 両方とも (a)(b) の色の範囲より弱い（−IMG_DB_RANGE dB 未満）ところは、比が意味を持たないので灰色にする
+    floor = a * 10 ** (-IMG_DB_RANGE / 20.0)
+    d_db = np.ma.masked_where((env_T < floor) & (env_R < floor), d_db)
+    cmap_d = plt.get_cmap(DIFF_CMAP).copy()
+    cmap_d.set_bad('0.75')
+    im = axs[2].imshow(d_db, aspect='auto', extent=ext, cmap=cmap_d,
+                       vmin=-DIFF_DB_RANGE, vmax=DIFF_DB_RANGE, interpolation='nearest')
+    fig.colorbar(im, ax=axs[2], shrink=0.9, pad=0.01,
+                 label='Envelope difference [dB]\n= (b) − (a) = 20 log10(env {} / env {})'
+                 .format(tgt_name, REFERENCE_CONDITION))
+    axs[2].set_title('(c) Envelope difference (grey: both below −{:.0f} dB)'.format(IMG_DB_RANGE))
+
+    for ax, col in zip(axs, ('w', 'w', 'k')):
+        for e in res['events']:
+            ax.axhline(e['t_ns'], color=col, ls=':', lw=0.9)
         ax.set_xlabel(res['x_label'])
     axs[0].set_ylabel('Two-way time [ns]')
-    fig.colorbar(im, ax=axs, label='Envelope [dB re surface reflection]', shrink=0.9)
-    fig.suptitle('B-scan envelope (dotted: model interfaces of the mean medium)')
     save_figure(fig, out_dir, 'fig1_bscan')
 
 
@@ -588,8 +672,8 @@ def _mean_ascan_db(D, a):
     """平均 A-scan [dB re a]：コヒーレント平均（トレースを足してから包絡）と、
     インコヒーレント平均（包絡を足す）。前者はランダム場のクラッタが打ち消し合い、
     水平な層の反射が残る。後者はクラッタも含めた平均の強さ。"""
-    coh = np.abs(signal.hilbert(D.mean(axis=1)))
-    inc = np.abs(signal.hilbert(D, axis=0)).mean(axis=1)
+    coh = envelope(D.mean(axis=1))
+    inc = envelope(D).mean(axis=1)
     to_db = lambda v: DB20 * np.log(np.maximum(v, 1e-300) / a)
     return to_db(coh), to_db(inc)
 
@@ -606,7 +690,7 @@ def plot_bscan_ascan(res, T, dt, out_dir, tgt_name, stem, a_norm, R=None):
     gs = fig.add_gridspec(1, 2, width_ratios=[2.6, 1])
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[0, 1], sharey=ax1)
-    env = np.abs(signal.hilbert(T, axis=0))
+    env = envelope(T)
     im = ax1.imshow(DB20 * np.log(np.maximum(env, 1e-300) / a_norm), aspect='auto',
                     extent=[x[0], x[-1], t_max, 0], cmap='viridis',
                     vmin=-IMG_DB_RANGE, vmax=0, interpolation='nearest')
@@ -639,16 +723,23 @@ def plot_bscan_ascan(res, T, dt, out_dir, tgt_name, stem, a_norm, R=None):
     save_figure(fig, out_dir, stem)
 
 
-def plot_reflection(res, out_dir, tgt_name):
-    """fig2：反射チャネル（分布としきい値、P_D、界面ごとの判定）。"""
+ROW_COLORS = ('tab:purple', 'tab:orange', 'tab:green', 'tab:brown', 'tab:cyan', 'tab:olive')  # 赤は対象の色なので使わない
+
+
+def reflection_rows(res):
+    """fig2(c)(d) に並べる行：理論の界面があればそれ、無ければデータで見えた反射。"""
+    if res['event_rows']:
+        return [dict(r, label=r['event']) for r in res['event_rows']], 'model interfaces'
+    return res['regions'], 'detected reflections (no record file)'
+
+
+def _plot_reflection_ab(res, ax1, ax2, tgt_name, rows=(), cols=()):
+    """fig2 の (a)(b)。rows を渡すと、(b) にだけ (c)(d) で使ったゲートの枠と中心 t_k を描く。"""
     rs, a = res['refl'], res['a_surf']
     t = rs['t']
     to_db = lambda v: DB20 * np.log(np.maximum(v, 1e-300) / a)
-    fig = plt.figure(figsize=(15, 8.5), layout='constrained')
-    gs = fig.add_gridspec(2, 2, width_ratios=[3, 1])
-    ax1 = fig.add_subplot(gs[0, 0])
-    ax2 = fig.add_subplot(gs[1, 0], sharex=ax1)
-    ax3 = fig.add_subplot(gs[:, 1])
+
+    # --- (a) -------------------------------------------------------------------
     for P, col, lab in ((rs['PR'], COL_REF, REFERENCE_CONDITION), (rs['PT'], COL_TGT, tgt_name)):
         lo, med, hi = np.quantile(P, [0.05, 0.5, 0.95], axis=1)
         ax1.fill_between(t, to_db(lo), to_db(hi), color=col, alpha=0.25, lw=0)
@@ -662,53 +753,93 @@ def plot_reflection(res, out_dir, tgt_name):
                fontsize=8, loc='upper right')
     ax1.grid(alpha=0.3)
     ax1.set_title('(a) Reflection strength vs clutter')
+
+    # --- (b) -------------------------------------------------------------------
     ax2.plot(t, rs['pd'], color=COL_TGT, lw=1.3)
     for r in res['regions']:
-        ax2.axvspan(r['t_start_ns'], r['t_end_ns'], color=COL_TGT, alpha=0.15, lw=0)
+        ax2.axvspan(r['t_start_ns'], r['t_end_ns'], color='0.85', lw=0, zorder=0)
     ax2.axhline(P_FA, color='k', ls=':', lw=1, label='false alarm rate {:.0f} %'.format(100 * P_FA))
     ax2.axhline(PD_VISIBLE, color='k', ls='--', lw=1,
                 label='visible if P_D ≥ {:.0f} %'.format(100 * PD_VISIBLE))
     _event_lines(ax2, res['events'], label=False)
+    for r, col in zip(rows, cols):
+        ax2.axvspan(r['gate'][0], r['gate'][1], facecolor='none', edgecolor=col, lw=1.4, zorder=3)
+        ax2.axvline(r['t_k'], color=col, lw=1.0, zorder=3)
+    handles = ax2.get_legend_handles_labels()[0]
+    if len(rows):
+        handles.append(Patch(facecolor='none', edgecolor='k', lw=1.2,
+                             label='gate used in (c)(d) (line: centre t_k)'))
     ax2.set_ylim(-0.02, 1.02)
-    ax2.set_xlabel('Two-way time [ns]')
+    ax2.set_xlabel('Two-way time [ns]  (horizontal axis = gate centre)')
     ax2.set_ylabel('Detection probability P_D')
-    ax2.legend(fontsize=8, loc='upper right')
+    ax2.legend(handles=handles, fontsize=8, loc='upper right')
     ax2.grid(alpha=0.3)
-    ax2.set_title('(b) Fraction of target traces above the threshold (shaded: visible)')
-    rows = res['event_rows']
-    if rows:
-        labels = [r['event'] for r in rows]
-        ax3_title = '(c) At model interfaces'
-    else:
-        # 記録ファイルが無く平均媒質の界面が分からないときは、データで見えた反射を並べる
-        rows = res['regions']
-        labels = [r['label'] for r in rows]
-        ax3_title = '(c) At detected reflections\n(no model interfaces: record file not found)'
-        if not rows:
-            ax3.text(0.5, 0.5, 'no model interfaces\nand no detected reflection',
-                     ha='center', va='center', transform=ax3.transAxes)
-    for i, r in enumerate(rows):
-        v = r['peaks_rel_th_db']
-        jit = (np.random.RandomState(i).rand(len(v)) - 0.5) * 0.3
-        ax3.scatter(np.full(len(v), i) + jit, v, s=8, color=COL_TGT, alpha=0.6)
-        ax3.text(i, np.nanmax(v) + 3,
-                 '{}\nP_D = {:.0f} %'.format(VERDICT_EN[r['verdict']], 100 * r['pd']),
-                 ha='center', va='bottom', fontsize=9)
-    ax3.axhline(0, color='k', ls='--', lw=1.2, label='clutter threshold')
-    ax3.set_xticks(range(len(rows)))
-    ax3.set_xticklabels(labels, rotation=20, fontsize=8)
-    ax3.set_xlim(-0.7, len(rows) - 0.3)
-    ax3.set_ylabel('Target trace peak − threshold [dB]')
-    ax3.set_title(ax3_title, fontsize=10)
-    ax3.grid(alpha=0.3)
-    ax3.legend(fontsize=8, loc='lower right')
-    if rows:
-        lo = min(np.nanmin(r['peaks_rel_th_db']) for r in rows)
-        hi = max(np.nanmax(r['peaks_rel_th_db']) for r in rows)
-        ax3.set_ylim(lo - 5, hi + 12)
+    ax2.set_title('(b) Fraction of target traces above the threshold (grey: visible)')
+
+
+def plot_reflection_ab(res, out_dir, tgt_name):
+    """fig2-1：反射チャネルの (a)(b) だけ（ゲートの表示なし）。"""
+    fig = plt.figure(figsize=(12, 8.5), layout='constrained')
+    gs = fig.add_gridspec(2, 1)
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    _plot_reflection_ab(res, ax1, ax2, tgt_name)
     fig.suptitle('Reflection channel: is any reflection visible above the clutter? ({} vs {})'
                  .format(tgt_name, REFERENCE_CONDITION))
-    save_figure(fig, out_dir, 'fig2_reflection')
+    save_figure(fig, out_dir, 'fig2-1_reflection')
+
+
+def plot_reflection(res, out_dir, tgt_name):
+    """fig2-2：反射チャネルの (a)-(d)。
+
+    (a) ゲート内ピークの分布としきい値 (b) P_D(t)
+    (c) 各行（界面 / 見えた反射）について、全トレース共通のゲート中心 t_k での
+        トレースごとの「ピーク − しきい値」を、トレースの位置 x に対して描く
+    (d) 同じトレースで、ゲート内の包絡が最大になった時刻（＝(c) の値を取った時刻）
+    (b) の色つきの枠が、(c)(d) で使ったゲート（t_k ± REFL_GATE_HW_NS）。
+    """
+    x = res['x']
+    rows, row_kind = reflection_rows(res)
+    cols = [ROW_COLORS[i % len(ROW_COLORS)] for i in range(len(rows))]
+
+    fig = plt.figure(figsize=(17, 9), layout='constrained')
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.7, 1])
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[1, 0], sharex=ax1)
+    ax3 = fig.add_subplot(gs[0, 1])
+    ax4 = fig.add_subplot(gs[1, 1], sharex=ax3)
+    _plot_reflection_ab(res, ax1, ax2, tgt_name, rows, cols)
+
+    # --- (c)(d) ----------------------------------------------------------------
+    if not rows:
+        for ax in (ax3, ax4):
+            ax.text(0.5, 0.5, 'no model interfaces\nand no detected reflection',
+                    ha='center', va='center', transform=ax.transAxes)
+    for r, col in zip(rows, cols):
+        v = r['peaks_rel_th_db']
+        lab = '{}: gate {:.2f}–{:.2f} ns (centre t_k = {:.2f} ns)\n  {}, P_D = {:.0f} %'.format(
+            r['label'], r['gate'][0], r['gate'][1], r['t_k'], VERDICT_EN[r['verdict']], 100 * r['pd'])
+        ax3.plot(x, v, color=col, lw=0.6, alpha=0.5)
+        ax3.scatter(x, v, s=9, color=col, label=lab, zorder=3)
+        ax4.axhspan(r['gate'][0], r['gate'][1], color=col, alpha=0.10, lw=0)
+        ax4.axhline(r['t_k'], color=col, lw=0.8, ls='--')
+        ax4.scatter(x, r['peak_t_ns'], s=9, color=col, zorder=3)
+    ax3.axhline(0, color='k', ls='--', lw=1.2)
+    ax3.set_ylabel('Peak − threshold [dB]\n(above 0: this trace exceeds the threshold)')
+    ax3.set_title('(c) Each target trace at {}'.format(row_kind), fontsize=10)
+    ax3.grid(alpha=0.3)
+    if rows:
+        ax3.legend(fontsize=7.5, loc='best')
+    ax3.tick_params(labelbottom=False)
+    ax4.set_xlabel(res['x_label'])
+    ax4.set_ylabel('Time of the envelope peak\nwithin the gate [ns]')
+    ax4.invert_yaxis()
+    ax4.grid(alpha=0.3)
+    ax4.set_title('(d) Where in the gate the value of (c) was taken\n'
+                  '(band: gate, dashed: centre t_k)', fontsize=10)
+    fig.suptitle('Reflection channel: is any reflection visible above the clutter? ({} vs {})'
+                 .format(tgt_name, REFERENCE_CONDITION))
+    save_figure(fig, out_dir, 'fig2-2_reflection_traces')
 
 
 def _rate_figure(res, key, out_dir, tgt_name, stem, title, ylab_raw, raw_T, raw_R,
@@ -845,7 +976,7 @@ def plot_single_bscan(res, T, dt, out_dir, tgt_name):
     """single1：対象の B-scan。"""
     t_max = T.shape[0] * dt * 1e9
     x = res['x']
-    env = np.abs(signal.hilbert(T, axis=0))
+    env = envelope(T)
     fig, ax = plt.subplots(figsize=(8, 6.5), layout='constrained')
     im = ax.imshow(DB20 * np.log(np.maximum(env, 1e-300) / res['a_surf_T']), aspect='auto',
                    extent=[x[0], x[-1], t_max, 0], cmap='viridis',
@@ -1088,6 +1219,15 @@ def write_outputs(res, out_dir, tgt_name, info):
                 'nearest_event', 'nearest_event_dt_ns'])
     _write_csv(os.path.join(out_dir, 'reflection_events.csv'), res['event_rows'],
                ['event', 'depth_m', 't_model_ns', 't_at_max_ns', 'pd', 'excess_db', 'verdict'])
+    rows, _ = reflection_rows(res)
+    _write_csv(os.path.join(out_dir, 'reflection_traces.csv'),
+               [{'row': r['label'], 'gate_centre_ns': r['t_k'], 'gate_start_ns': r['gate'][0],
+                 'gate_end_ns': r['gate'][1], 'trace': j, 'x': res['x'][j],
+                 'peak_time_ns': r['peak_t_ns'][j], 'peak_minus_threshold_db': r['peaks_rel_th_db'][j],
+                 'above_threshold': bool(r['peaks_rel_th_db'][j] > 0)}
+                for r in rows for j in range(len(res['x']))],
+               ['row', 'gate_centre_ns', 'gate_start_ns', 'gate_end_ns', 'trace', 'x',
+                'peak_time_ns', 'peak_minus_threshold_db', 'above_threshold'])
     sp, dc, sh = res['spec'], res['decay'], res['shift']
     _write_csv(os.path.join(out_dir, 'rate_scan.csv'),
                [{'t_ns': sp['t'][i],
@@ -1175,6 +1315,14 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
     T = T[:, ctx['sel']]
     rec_path, rec_T = find_record(p_t)
     checks = list(ctx['checks'])
+    if rec_T:
+        checks.append('対象の記録: {}（enable_ice = {}, ice_model = {}, ice_vol_frac = {}）'.format(
+            rec_path, rec_T.get('enable_ice'), rec_T.get('ice_model'), rec_T.get('ice_vol_frac')))
+        if not has_ice(rec_T):
+            msg = ('注意: 対象 {} の記録では氷が入っていません（ice_vol_frac = {}）。'
+                   '基準と同じ媒質のはずです'.format(tgt, rec_T.get('ice_vol_frac')))
+            print('  ' + msg)
+            checks.append(msg)
     same = False
     if rec_T and rec_R:
         h_t = rec_T.get('rho', {}).get('rho_map_sha256')
@@ -1200,7 +1348,7 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
             events, tand, t_bottom = [], None, np.inf
     t_axis = np.arange(R.shape[0]) * dt * 1e9
     t_s_model = 2.0 * sm.TX_HEIGHT / sm.C + src_delay
-    env_mean = np.abs(signal.hilbert(R, axis=0)).mean(axis=1)
+    env_mean = envelope(R).mean(axis=1)
     m = t_axis <= t_s_model + 5.0
     t_s_data = float(t_axis[m][np.argmax(env_mean[m])])
     checks.append('波源遅延 {:.3f} ns、地表反射の走時：理論 {:.3f} ns / データ {:.3f} ns'
@@ -1217,7 +1365,8 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
             'inputs': {'level': level, 'target': '{} ({})'.format(tgt, p_t),
                        'reference': '{} ({})'.format(REFERENCE_CONDITION,
                                                      conds[REFERENCE_CONDITION][BSCAN_KEY]),
-                       'record (target)': rec_path or '-', 'far_1m': reference[REF_KEY],
+                       'record (target)': rec_path or '-',
+                       'record (reference)': ctx.get('rec_path_R') or '-', 'far_1m': reference[REF_KEY],
                        'freespace at_tx': ctx['fs_path'] or '(差分なし)'}}
     res = analyze_target(tgt, T, R, dt, x, events, tand, info)
     if OUTPUT_LOCATION == 'per_bscan':
@@ -1241,6 +1390,7 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
     out_dir = os.path.join(base, 'vs_' + REFERENCE_CONDITION)
     os.makedirs(out_dir, exist_ok=True)
     plot_bscan(res, T, R, dt, out_dir, tgt)
+    plot_reflection_ab(res, out_dir, tgt)
     plot_reflection(res, out_dir, tgt)
     if PLOT_BSCAN_ASCAN:
         plot_bscan_ascan(res, T, dt, out_dir, tgt, 'fig12_bscan_ascan', res['a_surf'], R=R)
@@ -1291,10 +1441,15 @@ def main():
     R, x = R[:, sel], x_all[sel]
     checks = ['基準: {}、{} 本のトレース（x = {:.2f}-{:.2f} {}）、dt = {:.4f} ps'
               .format(p_r, R.shape[1], x[0], x[-1], 'm' if has_x else '(番号)', dt * 1e12)]
-    if rec_R and rec_R.get('enable_ice'):
-        raise CmdInputError('基準 {} の記録ファイルでは氷が入っています（enable_ice = True）'.format(p_r))
+    if rec_R:
+        checks.append('基準の記録: {}（enable_ice = {}, ice_vol_frac = {}）'.format(
+            rec_path_R, rec_R.get('enable_ice'), rec_R.get('ice_vol_frac')))
+        if has_ice(rec_R):
+            raise CmdInputError('基準 {} の記録ファイル {} では氷が入っています'
+                                '（enable_ice = True, ice_vol_frac = {}）'
+                                .format(p_r, rec_path_R, rec_R.get('ice_vol_frac')))
     ctx = {'shape': full_shape, 'sel': sel, 'checks': checks, 'fs_path': fs_path,
-           'x_label': 'x [m]' if has_x else 'Trace number (no record file)'}
+           'x_label': 'x [m]' if has_x else 'Trace number (no record file)', 'rec_path_R': rec_path_R}
 
     out_base = None
     if OUTPUT_LOCATION != 'per_bscan':
