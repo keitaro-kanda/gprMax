@@ -9,7 +9,8 @@ analyze_size_estimation.py
 実行方法
 --------
 VS Code の実行ボタン（または `python analyze_size_estimation.py`）で実行する。引数は不要。
-実行すると、キャンペーンフォルダ、対象、形状、深さ、確認用図を作るかを順に尋ねる（Enter で既定値）。
+実行すると、キャンペーン（ascan_v01, ascan_v02, ... から番号で選ぶ）、対象、形状、深さ、
+確認用図を作るかを順に尋ねる（Enter で既定値）。結果は選んだキャンペーンの analysis/ に書く。
 検出の閾値などのパラメータは、下の [EDIT HERE] で変える。
 
 処理（詳しくは README_analysis.md）
@@ -61,9 +62,10 @@ from matplotlib.lines import Line2D                   # noqa: E402
 # =============================================================================
 # [EDIT HERE] 設定
 # =============================================================================
-# キャンペーンフォルダの既定値（実行時に Enter だけ押すとこれを使う）。
-# このスクリプトがキャンペーンの scripts/ にあるときは、その親フォルダが既定値になる。
-DEFAULT_CAMPAIGN = Path("/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x14/size_waveform_investigation/ascan_v01")
+# キャンペーン（ascan_v01, ascan_v02, ...）が並んでいる親フォルダ。
+# この下の manifest.json があるフォルダを一覧にして、番号で選ぶ（Enter = 名前順で最後 = 最新）。
+# このスクリプトがキャンペーンの scripts/ にあるときは、そのキャンペーンが既定値になる。
+CAMPAIGNS_ROOT = Path("/Volumes/SSD_Kanda_BUFFALO/gprMax/domain_5x14/size_waveform_investigation")
 
 THRESHOLD_DB = -90.0      # 検出の閾値（地表反射のエンベロープの最大値に対する dB、振幅比）
 TOLERANCE_NS = 1.0        # 予測時刻とエンベロープ極大点を対応づける許容差 [ns]
@@ -81,11 +83,16 @@ SHAPE_STYLES = {
     "square":  dict(ls="--", marker="s"),
     "irreg01": dict(ls="",   marker="^"),
     "irreg02": dict(ls="",   marker="v"),
+    # ascan_v02 のランダムな多角形（cut4: 切断面 4 面、cut8: 切断面 8 面）
+    "cut4v1":  dict(ls=":",  marker="^"),
+    "cut4v2":  dict(ls=":",  marker="v"),
+    "cut8v1":  dict(ls="-.", marker="<"),
+    "cut8v2":  dict(ls="-.", marker=">"),
 }
 OTHER_SHAPE = dict(ls="", marker="D")
 
 # =============================================================================
-ANALYSIS_VERSION = "1.1.0"
+ANALYSIS_VERSION = "1.2.0"
 C0 = 299792458.0
 NS = 1e-9
 # plt.rcParams["font.size"] = FONT_SIZE
@@ -534,6 +541,55 @@ def yes_no(prompt: str, default: bool = True) -> bool:
             return False
 
 
+def campaign_info(camp: Path) -> dict:
+    """campaign.json から、生成スクリプトの名前・版と計画（対象・形状）を読む（なければ空）"""
+    try:
+        cj = json.loads((camp / "campaign.json").read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    gen = cj.get("generator") or {}
+    scripts = [k for k in (gen.get("sha256") or {}) if k.startswith("generate_ascan_inputs")]
+    return dict(name=cj.get("campaign", camp.name), generator_script=scripts[0] if scripts else None,
+                generator_version=gen.get("version"))
+
+
+def choose_campaign() -> Path:
+    """CAMPAIGNS_ROOT の下のキャンペーンを一覧にして選ぶ。番号の代わりにパスも入力できる"""
+    here = Path(__file__).resolve().parent
+    if here.name == "scripts" and (here.parent / "manifest.json").exists():
+        default = here.parent.resolve()          # キャンペーンの scripts/ から実行したとき
+    else:
+        default = None
+    camps = []
+    if CAMPAIGNS_ROOT.is_dir():
+        camps = sorted(p for p in CAMPAIGNS_ROOT.iterdir()
+                       if p.is_dir() and (p / "manifest.json").exists())
+    if default is None and camps:
+        default = camps[-1]                      # 名前順で最後（= 最新の版）
+
+    print(f"\nキャンペーン（{CAMPAIGNS_ROOT}）")
+    if not camps:
+        print("  （一覧なし。CAMPAIGNS_ROOT を確認するか、パスを入力してください）")
+    for i, c in enumerate(camps, 1):
+        info = campaign_info(c)
+        gen = ""
+        if info.get("generator_script"):
+            gen = f"  {info['generator_script']} v{info.get('generator_version')}"
+        mark = "  <- 既定" if c == default else ""
+        print(f"  {i:2d}. {c.name}{gen}{mark}")
+    while True:
+        hint = f"Enter = {default.name}" if default else "パスを入力"
+        ans = ask(f"  番号、またはキャンペーンフォルダのパス（{hint}）")
+        if not ans and default is not None:
+            return default
+        if ans.isdigit() and 1 <= int(ans) <= len(camps):
+            return camps[int(ans) - 1]
+        p = clean_path(ans).resolve() if ans else None
+        if p is not None and (p / "manifest.json").exists():
+            return p
+        print(f"  キャンペーンが見つかりません: {ans or '(空)'}")
+
+
 def count_label(rows, is_done) -> str:
     n_done = sum(1 for r in rows if is_done(r))
     return f"計算済み {n_done:3d} / {len(rows):3d}"
@@ -545,15 +601,9 @@ def count_label(rows, is_done) -> str:
 def main() -> int:
     print("=== A-scan サイズ推定解析 ===")
 
-    # キャンペーンフォルダ
-    here = Path(__file__).resolve().parent
-    default = here.parent if (here.name == "scripts" and (here.parent / "manifest.json").exists()) \
-        else DEFAULT_CAMPAIGN
-    while True:
-        camp = clean_path(ask("キャンペーンフォルダ（manifest.json がある場所）", str(default))).resolve()
-        if (camp / "manifest.json").exists():
-            break
-        print(f"  {camp / 'manifest.json'} がありません。もう一度入力してください。")
+    # キャンペーン（版）
+    camp = choose_campaign()
+    print(f"  -> {camp.name}  ({camp})")
     man = json.loads((camp / "manifest.json").read_text(encoding="utf-8"))
     rows_all = man["cases"]
     cases = [r for r in rows_all if r["group"] in ("main", "irregular")]
@@ -563,16 +613,16 @@ def main() -> int:
 
     # 対象・形状・深さ（前の選択で絞った中から選ぶ）
     targets = list(dict.fromkeys(r["target"] for r in cases))
-    targets = choose("対象（target）", [(t, f"{t:10s} {count_label([r for r in cases if r['target'] == t], is_done)}")
+    targets = choose("対象（target）", [(t, f"{t:12s} {count_label([r for r in cases if r['target'] == t], is_done)}")
                                       for t in targets])
     cases = [r for r in cases if r["target"] in targets]
     shapes = list(dict.fromkeys(r["shape"] for r in cases))
-    shapes = choose("形状（shape）", [(s, f"{s:10s} {count_label([r for r in cases if r['shape'] == s], is_done)}")
+    shapes = choose("形状（shape）", [(s, f"{s:12s} {count_label([r for r in cases if r['shape'] == s], is_done)}")
                                     for s in shapes])
     cases = [r for r in cases if r["shape"] in shapes]
     depths = sorted({float(r["depth_m"]) for r in cases})
     depths = choose("深さ（対象上端、m）",
-                    [(d, f"{d:g} m{'':7s} {count_label([r for r in cases if float(r['depth_m']) == d], is_done)}")
+                    [(d, f"{f'{d:g} m':12s} {count_label([r for r in cases if float(r['depth_m']) == d], is_done)}")
                      for d in depths])
     cases = [r for r in cases if float(r["depth_m"]) in depths]
 
@@ -583,6 +633,8 @@ def main() -> int:
         print("解析できるケースがありません。")
         return 1
     make_plots = yes_no("ケースごとの確認用 A-scan 図を作りますか")
+    print(f"キャンペーン: {camp.name}")
+    print(f"出力先: {camp / 'analysis' / 'size_estimation'}（前回の結果は上書き）")
     print(f"パラメータ: 閾値 {THRESHOLD_DB:g} dB, 許容差 {TOLERANCE_NS:g} ns, "
           f"FWHM {'自動' if FWHM_NS is None else f'{FWHM_NS:g} ns'}, 図の余白 {PLOT_MARGIN_NS:g} ns"
           "（変えるときはスクリプト先頭の [EDIT HERE]）")
@@ -637,6 +689,8 @@ def run_analysis(camp: Path, rows_all, sel, pending, make_plots: bool, selection
         analysis="size_estimation", version=ANALYSIS_VERSION, script_sha256=sha256_of(script),
         run_at=_dt.datetime.now().astimezone().isoformat(timespec="seconds"),
         campaign=str(camp),
+        campaign_name=camp.name,
+        campaign_generator=campaign_info(camp),
         selection=dict(selection, n_analyzed=len(results), n_not_computed=len(pending),
                        failed=[dict(case_id=c, error=m) for c, m in failed]),
         parameters=dict(threshold_db=THRESHOLD_DB, tolerance_ns=TOLERANCE_NS,
@@ -655,7 +709,8 @@ def run_analysis(camp: Path, rows_all, sel, pending, make_plots: bool, selection
     (out_dir / "analysis_config.json").write_text(json.dumps(cfg, indent=1, ensure_ascii=False), encoding="utf-8")
     figs = plot_summary(csv_path, out_dir)
 
-    print("\n" + ", ".join(f"{c} {n}" for c, n in counts.items()) + (f", FAILED {len(failed)}" if failed else ""))
+    print(f"\n[{camp.name}] " + ", ".join(f"{c} {n}" for c, n in counts.items())
+          + (f", FAILED {len(failed)}" if failed else ""))
     print(f"written: {csv_path}")
     print(f"         {out_dir / 'analysis_config.json'}")
     for f in figs:
