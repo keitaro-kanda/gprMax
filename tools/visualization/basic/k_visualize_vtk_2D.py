@@ -340,7 +340,7 @@ def build_property_maps(freq):
 # =============================================================================
 # Plot settings
 # =============================================================================
-colors       = ['viridis', 'magma', 'plasma']
+colors       = ['viridis', 'plasma', 'cividis']
 names        = ['Relative permittivity', 'Conductivity [S/m]', 'Loss tangent']
 output_names = ['Permittivity', 'Conductivity', 'Losstangent']
 
@@ -366,7 +366,7 @@ def _imshow_kwargs(idx):
     if idx == 0:
         kw.update(vmin=1, vmax=4.0)
     elif idx == 2:
-        kw.update(vmin=0, vmax=0.020)
+        kw.update(vmin=0, vmax=0.005)
     return kw
 
 
@@ -379,7 +379,7 @@ def draw_map(fig, ax, freq, map_data, idx):
     ax.set_ylabel('Depth [m]', size=18)
     ax.set_ylim(depth_bottom, depth_top)   # deep at bottom (positive), vacuum at top (negative)
     ax.tick_params(labelsize=14)
-    ax.grid(alpha=0.3)
+    ax.grid(alpha=0.3, linestyle='-.')
     divider = axgrid1.make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
     cbar = fig.colorbar(im, cax=cax)
@@ -396,11 +396,11 @@ def draw_profile(ax, profile_data, idx, title=None):
     if idx == 0:
         ax.set_xlim(0.95, 4.0)
     elif idx == 2:
-        ax.set_xlim(-0.0005, 0.006)
+        ax.set_xlim(-0.0005, 0.005)
     ax.set_ylim(depth_bottom, depth_top)
     ax.tick_params(labelsize=14)
     ax.minorticks_on()
-    ax.grid(alpha=0.3)
+    ax.grid(alpha=0.3, linestyle='-.')
     if title:
         ax.set_title(title, size=14)
 
