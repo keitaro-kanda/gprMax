@@ -56,7 +56,18 @@ print(f"Calculated average background trace with shape {outputdata_ave.shape}")
 
 
 # 強度をdBに変換
+# 平均トレース（符号つき）の絶対値を、平均トレース自身の最大値で割って dB にする（0 dB = 平均トレースの最大）。
+# 包絡ではないので、波形が 0 を横切るたびに大きく落ち込む（1e-12 は log(0) よけ）。
 outputdata_ave_db = 20 * np.log10(np.abs(outputdata_ave) / np.amax(np.abs(outputdata_ave)) + 1e-12) # avoid log(0)
+
+# --- 軸ラベル（パネル 1 とパネル 2 で強度の単位が違うことを明示する）-------------
+# パネル 1：生の電場 Ez（線形・符号つき、gprMax の出力単位 V/m）。
+#           色の範囲は ±(最大振幅 / BSCAN_CLIP_DIVISOR) で切っており、これを超える値は端の色で飽和する。
+# パネル 2：全トレースの平均（コヒーレント平均）の |Ez| を dB にしたもの（上の式）。
+BSCAN_CLIP_DIVISOR = 1e3
+BSCAN_CLIP_DB = 20 * np.log10(BSCAN_CLIP_DIVISOR)
+BSCAN_CBAR_LABEL = ('$E_z$ [V/m] (color range clipped at ±max/{:g} = -{:.0f} dB)'.format(BSCAN_CLIP_DIVISOR, BSCAN_CLIP_DB))
+AVE_XLABEL = '|mean $E_z$| [dB]'
 
 # 移動平均の計算
 window_size = len(outputdata_ave_db)//20
@@ -67,7 +78,7 @@ outputdata_ave_db_moving = np.convolve(outputdata_ave_db, np.ones(window_size)/w
 plt.figure(figsize=(4, 8), facecolor='w', edgecolor='w')
 plt.plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='k', linestyle='-') # time in ns
 plt.plot(outputdata_ave_db_moving, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='r', linestyle='--', alpha=0.7) # time in ns
-plt.xlabel('Amplitude (dB)', size=18)
+plt.xlabel(AVE_XLABEL, size=14)
 plt.ylabel('Time (ns)', size=18)
 if closeup_option == False:
     plt.ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
@@ -99,9 +110,11 @@ fig, ax = plt.subplots(
 im = ax[0].imshow(outputdata,
              extent=[rx_start, rx_start + outputdata.shape[1] * rx_step, outputdata.shape[0] * dt * 1e9, 0],
             interpolation='nearest', aspect='auto', cmap='seismic',
-            vmin=-np.amax(np.abs(outputdata[:, 1:]))/1e3, vmax=np.amax(np.abs(outputdata[:, 1:]))/1e3)
-ax[0].set_xlabel('Distance (m)', size=18)
-ax[0].set_ylabel('Time (ns)', size=18)
+            vmin=-np.amax(np.abs(outputdata[:, 1:]))/BSCAN_CLIP_DIVISOR,
+            vmax=np.amax(np.abs(outputdata[:, 1:]))/BSCAN_CLIP_DIVISOR)
+ax[0].set_title('B-scan: raw $E_z$ (linear)', size=18)
+ax[0].set_xlabel('Horizontal position (m)', size=16)
+ax[0].set_ylabel('Time (ns)', size=16)
 if closeup_option == True:
     ax[0].set_ylim(time_end, time_start)
 ax[0].tick_params(labelsize=14)
@@ -112,13 +125,16 @@ ax[0].grid()
 delvider = axgrid1.make_axes_locatable(ax[0])
 cax = delvider.append_axes('right', size='5%', pad=0.1)
 cbar = fig.colorbar(im, cax=cax)
-cbar.set_label('Amplitude', size=18)
+cbar.set_label(BSCAN_CBAR_LABEL, size=16)
 cbar.ax.tick_params(labelsize=14)
+cbar.formatter.set_powerlimits((-2, 2))   # 小さい値は ×10^n 表記にする
+cbar.update_ticks()
 
 ax[1].plot(outputdata_ave_db, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='k', linestyle='-') # time in ns
 ax[1].plot(outputdata_ave_db_moving, np.arange(outputdata_ave.shape[0]) * dt * 1e9, color='r', linestyle='--', alpha=0.7) # time in ns
-ax[1].set_xlabel('Amplitude (dB)', size=18)
-ax[1].set_ylabel('Time (ns)', size=18)
+ax[1].set_title('Mean A-scan (dB)', size=18)
+ax[1].set_xlabel(AVE_XLABEL, size=16)
+ax[1].set_ylabel('Time (ns)', size=16)
 if closeup_option == False:
     ax[1].set_ylim(outputdata_ave.shape[0] * dt * 1e9, 0) # time in ns
 elif closeup_option == True:
