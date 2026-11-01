@@ -958,6 +958,8 @@ def _rate_panels_cd(res, key, ax3, ax4, tgt_name, ylab_rate, unit, channel):
     dts = sp['t'][1] - sp['t'][0]
     ax4.set_xticklabels(['{}\n{:.1f}–{:.1f} ns\n(used {:.1f} ns)'.format(
         r['window'], r['t_start_ns'], r['t_end_ns'], r['n_times'] * dts) for r in rows], fontsize=8)
+    for lab, r in zip(ax4.get_xticklabels(), rows):          # (b)(c) 上端の帯と同じ色
+        lab.set_color(WINDOW_COLORS.get(r['window'], 'k'))
     ax4.set_ylabel('{} fitted over the window [{}]'.format(ylab_rate.split(' [')[0], unit))
     ax4.legend(handles=[Line2D([], [], marker='o', ls='', color=COL_REF, label=REFERENCE_CONDITION + ' blocks'),
                         Line2D([], [], marker='o', ls='', color=COL_TGT, label=tgt_name + ' blocks'),
@@ -1173,6 +1175,8 @@ def _single_rate_figure(res, out_dir, tgt_name, stem, title, ylab_raw, raw, rate
     ax3.set_xlim(-0.7, len(rows) - 0.3)
     ax3.set_xticklabels(['{}\n{:.1f}–{:.1f} ns'.format(r['window'], r['t_start_ns'], r['t_end_ns'])
                          for r in rows], fontsize=8)
+    for lab, r in zip(ax3.get_xticklabels(), rows):          # (b) 上端の帯と同じ色
+        lab.set_color(WINDOW_COLORS.get(r['window'], 'k'))
     ax3.set_ylabel('{} fitted over the window [{}]'.format(ylab_rate.split(' [')[0], unit))
     ax3.legend(handles=[Line2D([], [], marker='o', ls='', color=COL_TGT, label='blocks'),
                         Line2D([], [], color='k', label='mean ± {:.2f} σ'.format(z))],
