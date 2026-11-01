@@ -92,6 +92,16 @@ GUARD_EXTRA_NS = 0.5               # 界面・反射の前後で窓から除く�
 SURFACE_GUARD_NS = 5.0             # 地表反射の後ろはさらに長く除く（強い地表反射の窓の裾）
 BAND_METHOD = 'normal'             # 'normal'：平均 ± z σ / 'percentile'：経験分位点
 
+# --- スペクトル比法（境界の反射どうし、LSR）-------------------------------------
+LSR_ENABLE = True                  # スペクトル比法の解析を行う
+LSR_SUBDIR = 'spectral_ratio'      # 出力先（bscan_detection/ の下）
+LSR_SEARCH_HW_NS = 1.0             # 反射の中心時刻の前後この範囲で、トレースごとに包絡のピークを探す
+LSR_GATE_HW_NS = 1.5               # ピークを中心に切り出す窓の半幅（パルス幅 約 0.7 ns）
+LSR_TAPER = 0.5                    # Tukey 窓のテーパー
+LSR_NFFT_MIN = 8192
+LSR_FLOOR_DB = 20.0                # 反射のスペクトルが最大からこれ以上落ちる周波数は使わない
+LSR_SNR_MIN_DB = 6.0               # 地表以外の反射：同じ時刻の基準（クラッタ）よりこれ以上強い周波数だけ使う
+
 # --- 作図 ---------------------------------------------------------------------
 IMG_DB_RANGE = 80.0                # B-scan 図の色の幅 [dB]
 DIFF_CMAP = 'RdBu_r'               # fig1(c)（包絡の差 [dB]）の色。0 dB が白、赤が対象のほうが強い
@@ -545,7 +555,9 @@ def analyze_target(name, T, R, dt, x, events, tand, info):
     if np.isfinite(info['t_bottom']):
         excl.append((info['t_bottom'] - g, np.inf))
     h = 0.5 * RATE_WIN_NS                                  # 局所レートは回帰窓の分だけ広がる
-    res['guard_zones'] = [(lo - h, min(hi + h, ts[-1])) for lo, hi in excl]
+    # 図の灰色は、窓の検定で実際に除いた時間帯そのもの（窓の検定は f_c(t)・帯域パワーを
+    # 直接回帰するので、局所レートの回帰窓 h の分は広げない）
+    res['guard_zones'] = [(max(lo, ts[0]), min(hi, ts[-1])) for lo, hi in excl]
 
     # --- 層ごとの窓 -----------------------------------------------------------
     t_end = ts[-1] - h
@@ -557,10 +569,18 @@ def analyze_target(name, T, R, dt, x, events, tand, info):
     else:
         wins = [('all', t0, t_end)]
     win_rows = []
+    res['win_used'] = []                                  # 図の「窓の検定に使った時刻」の帯
+    dts = ts[1] - ts[0]
     for wname, a, b in wins:
         m = window_mask(ts, a, b, excl)
         if m.sum() < 4:
             continue
+        idx = np.where(m)[0]
+        cuts = np.where(np.diff(idx) > 1)[0]
+        starts = np.r_[idx[0], idx[cuts + 1]]
+        ends = np.r_[idx[cuts], idx[-1]]
+        res['win_used'].append({'window': wname,
+                                'segments': [(ts[i] - dts / 2, ts[j] + dts / 2) for i, j in zip(starts, ends)]})
         fc_ref = float(np.nanmean(fcR[:, m]))
         sf2_ref = float(np.nanmean(sfR[:, m] ** 2))
         for ch, yT, yR, unit in (('decay_rate', dbT, dbR, 'dB/ns'),
@@ -617,9 +637,19 @@ def _event_lines(ax, events, orient='v', label=True):
                   label='model interfaces (mean medium)') if label and events else None
 
 
-def _shade_guards(ax, zones):
-    for a, b in zones:
-        ax.axvspan(a, b, color='0.88', zorder=0)
+WINDOW_COLORS = {'above': 'tab:blue', 'layer': 'tab:purple', 'below': 'tab:green', 'all': 'tab:blue'}
+
+
+def _mark_used_windows(ax, res, legend=True):
+    """窓の検定 (d) に使った時刻を、軸の上端の色つきの帯で示す（灰色の範囲の帯と区別するため）。
+    帯のない時刻は、反射の前後・地表・領域の底として窓の検定から除いた時刻。"""
+    handles = []
+    for w in res.get('win_used', []):
+        col = WINDOW_COLORS.get(w['window'], 'tab:blue')
+        for a, b in w['segments']:
+            ax.axvspan(a, b, ymin=0.955, ymax=1.0, color=col, alpha=0.85, lw=0, zorder=5)
+        handles.append(Patch(color=col, label='used in window test: {}'.format(w['window'])))
+    return handles if legend else []
 
 
 def plot_bscan(res, T, R, dt, out_dir, tgt_name):
@@ -842,52 +872,77 @@ def plot_reflection(res, out_dir, tgt_name):
     save_figure(fig, out_dir, 'fig2-2_reflection_traces')
 
 
-def _rate_figure(res, key, out_dir, tgt_name, stem, title, ylab_raw, raw_T, raw_R,
-                 ylab_rate, unit, channel):
+def _rate_panels_ab(res, key, ax1, ax2, tgt_name, ylab_raw, raw_T, raw_R, ylab_rate,
+                    show_guards):
+    """減衰率・シフトレートの図の (a) 生の観測量 (b) 局所レート。
+    細い薄い線が各ブロック（隣り合う BLOCK_TRACES 本のトレース）、太い実線がブロックの平均。
+    show_guards = True のときだけ、(b) に窓の検定から除いた時間帯（灰色）を描く。"""
     sp = res['spec']
     t = sp['t']
     tt = res[key]
-    fig = plt.figure(figsize=(15, 10), layout='constrained')
-    gs = fig.add_gridspec(3, 2, width_ratios=[3, 1])
-    ax1 = fig.add_subplot(gs[0, 0])
-    ax2 = fig.add_subplot(gs[1, 0], sharex=ax1)
-    ax3 = fig.add_subplot(gs[2, 0], sharex=ax1)
-    ax4 = fig.add_subplot(gs[:, 1])
-    for ax in (ax1, ax2, ax3):
-        _shade_guards(ax, res['guard_zones'])
+    # --- (a) -------------------------------------------------------------------
     for yy in raw_R:
-        ax1.plot(t, yy, color=COL_REF, lw=0.6, alpha=0.5)
+        ax1.plot(t, yy, color=COL_REF, lw=0.5, alpha=0.35)
     for yy in raw_T:
-        ax1.plot(t, yy, color=COL_TGT, lw=0.6, alpha=0.5)
-    ax1.plot(t, np.nanmean(raw_R, axis=0), color=COL_REF, lw=2, label=REFERENCE_CONDITION + ' (mean of blocks)')
-    ax1.plot(t, np.nanmean(raw_T, axis=0), color=COL_TGT, lw=2, label=tgt_name + ' (mean of blocks)')
+        ax1.plot(t, yy, color=COL_TGT, lw=0.5, alpha=0.35)
+    ax1.plot(t, np.nanmean(raw_R, axis=0), color=COL_REF, lw=2.2,
+             label='{}: mean of blocks'.format(REFERENCE_CONDITION))
+    ax1.plot(t, np.nanmean(raw_T, axis=0), color=COL_TGT, lw=2.2,
+             label='{}: mean of blocks'.format(tgt_name))
     h = _event_lines(ax1, res['events'])
+    handles = ax1.get_legend_handles_labels()[0]
+    handles.append(Line2D([], [], color='0.5', lw=0.5, alpha=0.6,
+                          label='thin: each block of {} traces'.format(BLOCK_TRACES)))
+    ax1.legend(handles=handles + ([h] if h else []), fontsize=8)
     ax1.set_ylabel(ylab_raw)
-    ax1.legend(handles=ax1.get_legend_handles_labels()[0] + ([h] if h else []), fontsize=8)
     ax1.grid(alpha=0.3)
-    ax1.set_title('(a) Raw observable (thin: each block of {} traces)'.format(BLOCK_TRACES))
+    ax1.set_title('(a) {} ({} vs {})'.format(ylab_raw.split('\n')[0].split(' [')[0],
+                                            tgt_name, REFERENCE_CONDITION))
+    # --- (b) -------------------------------------------------------------------
+
     rT = sp['rT'] if key == 'decay' else sp['sT']
     ax2.fill_between(t, tt['lo'], tt['hi'], color=COL_REF, alpha=0.25, lw=0,
-                     label='clutter range of {} ({:.0f} % two-sided)'.format(REFERENCE_CONDITION, 100 * P_FA))
+                     label='{}: clutter range (mean ± {:.2f} σ of blocks = {:.1f}–{:.1f} %)'
+                     .format(REFERENCE_CONDITION, stats.norm.ppf(1 - P_FA / 2),
+                             50 * P_FA, 100 - 50 * P_FA))
+    # 帯の上下の縁＝判定の境界（fig2 のしきい値と同じ黒い破線で描く）
+    ax2.plot(t, tt['lo'], color='k', lw=1.2, ls='--',
+             label='detection boundary ({:.0f} % false alarm, two-sided)'.format(100 * P_FA))
+    ax2.plot(t, tt['hi'], color='k', lw=1.2, ls='--')
+    ax2.plot(t, tt['mu'], color=COL_REF, lw=2.2, label='{}: mean of blocks'.format(REFERENCE_CONDITION))
     for yy in rT:
-        ax2.plot(t, yy, color=COL_TGT, lw=0.6, alpha=0.6)
-    ax2.plot(t, tt['mu'] + tt['paired'], color='k', lw=1.2,
-             label='reference mean + paired difference (ideal upper bound)')
+        ax2.plot(t, yy, color=COL_TGT, lw=0.5, alpha=0.4)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        ax2.plot(t, np.nanmean(rT, axis=0), color=COL_TGT, lw=2.2,
+                 label='{}: mean of blocks (thin: each block)'.format(tgt_name))
     _event_lines(ax2, res['events'], label=False)
     ax2.set_ylabel(ylab_rate)
-    ax2.legend(fontsize=8)
+    ax2.set_xlabel('Two-way time [ns]' + ('  (top bar: times used in the window test)' if show_guards else ''))
+    wh = _mark_used_windows(ax2, res) if show_guards else []
+    ax2.legend(handles=ax2.get_legend_handles_labels()[0] + wh, fontsize=8)
     ax2.grid(alpha=0.3)
-    ax2.set_title('(b) Local rate (regression over {:g} ns), thin red: target blocks'.format(RATE_WIN_NS))
-    ax3.plot(t, tt['pd'], color=COL_TGT, lw=1.3)
-    ax3.axhline(P_FA, color='k', ls=':', lw=1, label='false alarm rate')
-    ax3.axhline(PD_VISIBLE, color='k', ls='--', lw=1, label='visible threshold')
+    ax2.set_title('(b) Local {} (regression over {:g} ns)'.format(
+        ylab_rate.split(' [')[0].lower(), RATE_WIN_NS))
+
+
+def _rate_panels_cd(res, key, ax3, ax4, tgt_name, ylab_rate, unit, channel):
+    """(c) 時刻ごとの P_D (d) 窓の検定（判定）。"""
+    sp = res['spec']
+    t = sp['t']
+    tt = res[key]
+    _mark_used_windows(ax3, res, legend=False)
+    ax3.plot(t, tt['pd'], color=COL_TGT, lw=1.3, label='P_D')
+    ax3.axhline(P_FA, color='k', ls=':', lw=1, label='false alarm rate {:.0f} %'.format(100 * P_FA))
+    ax3.axhline(PD_VISIBLE, color='k', ls='--', lw=1,
+                label='visible if P_D ≥ {:.0f} %'.format(100 * PD_VISIBLE))
     _event_lines(ax3, res['events'], label=False)
     ax3.set_ylim(-0.02, 1.02)
     ax3.set_ylabel('P_D')
-    ax3.set_xlabel('Two-way time [ns]  (grey: interface zones, excluded from the window test)')
+    ax3.set_xlabel('Two-way time [ns]  (top bar: times used in the window test)')
     ax3.legend(fontsize=8)
     ax3.grid(alpha=0.3)
-    ax3.set_title('(c) Fraction of target blocks outside the clutter range')
+    ax3.set_title('(c) Fraction of {} blocks outside the clutter range'.format(tgt_name))
     rows = [r for r in res['window_rows'] if r['channel'] == channel]
     for i, r in enumerate(rows):
         jr = (np.random.RandomState(10 + i).rand(len(r['vals_R'])) - 0.5) * 0.25
@@ -895,44 +950,70 @@ def _rate_figure(res, key, out_dir, tgt_name, stem, title, ylab_raw, raw_T, raw_
         ax4.scatter(i - 0.18 + jr, r['vals_R'], s=14, color=COL_REF)
         ax4.scatter(i + 0.18 + jt, r['vals_T'], s=14, color=COL_TGT)
         ax4.errorbar(i - 0.18, r['ref_mean'], yerr=r['ref_half_width'], color='k', capsize=6, lw=1.2)
-        ax4.text(i, max(np.max(r['vals_R']), np.max(r['vals_T'])),
-                 '{}\nP_D={:.0f}%'.format(VERDICT_EN[r['verdict']], 100 * r['pd']),
+        top = max(np.max(r['vals_R']), np.max(r['vals_T']), r['ref_mean'] + r['ref_half_width'])
+        ax4.text(i, top, '{}\nP_D={:.0f}%'.format(VERDICT_EN[r['verdict']], 100 * r['pd']),
                  ha='center', va='bottom', fontsize=9)
     ax4.set_xticks(range(len(rows)))
     ax4.set_xlim(-0.7, len(rows) - 0.3)
-    ax4.set_xticklabels(['{}\n{:.1f}–{:.1f} ns'.format(r['window'], r['t_start_ns'], r['t_end_ns'])
-                         for r in rows], fontsize=8)
+    dts = sp['t'][1] - sp['t'][0]
+    ax4.set_xticklabels(['{}\n{:.1f}–{:.1f} ns\n(used {:.1f} ns)'.format(
+        r['window'], r['t_start_ns'], r['t_end_ns'], r['n_times'] * dts) for r in rows], fontsize=8)
     ax4.set_ylabel('{} fitted over the window [{}]'.format(ylab_rate.split(' [')[0], unit))
     ax4.legend(handles=[Line2D([], [], marker='o', ls='', color=COL_REF, label=REFERENCE_CONDITION + ' blocks'),
                         Line2D([], [], marker='o', ls='', color=COL_TGT, label=tgt_name + ' blocks'),
-                        Line2D([], [], color='k', label='clutter range')], fontsize=8, loc='lower right')
+                        Line2D([], [], color='k', label='clutter range of ' + REFERENCE_CONDITION)],
+               fontsize=8, loc='lower right')
     ax4.grid(alpha=0.3)
-    ax4.set_title('(d) Window test (interfaces excluded)')
+    ax4.set_title('(d) Window test: one straight-line fit per block\n(only the times under the top bars)',
+                  fontsize=10)
     if rows:
-        lo = min(min(np.min(r['vals_R']), np.min(r['vals_T'])) for r in rows)
-        hi = max(max(np.max(r['vals_R']), np.max(r['vals_T'])) for r in rows)
+        lo = min(min(np.min(r['vals_R']), np.min(r['vals_T']), r['ref_mean'] - r['ref_half_width'])
+                 for r in rows)
+        hi = max(max(np.max(r['vals_R']), np.max(r['vals_T']), r['ref_mean'] + r['ref_half_width'])
+                 for r in rows)
         pad = 0.25 * (hi - lo + 1e-12)
         ax4.set_ylim(lo - pad, hi + 2 * pad)
-    fig.suptitle(title + ' ({} vs {})'.format(tgt_name, REFERENCE_CONDITION))
-    save_figure(fig, out_dir, stem)
+
+
+def _rate_figures(res, key, out_dir, tgt_name, fignum, name, ylab_raw, raw_T, raw_R,
+                  ylab_rate, unit, channel):
+    """<fignum>-1_<name>：(a)(b) だけ（除外帯なし）、<fignum>-2_<name>_test：左に (a)(b)(c) を縦 3 段、右に (d)。"""
+    fig = plt.figure(figsize=(12, 8.5), layout='constrained')
+    gs = fig.add_gridspec(2, 1)
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    _rate_panels_ab(res, key, ax1, ax2, tgt_name, ylab_raw, raw_T, raw_R, ylab_rate,
+                    show_guards=False)
+    save_figure(fig, out_dir, '{}-1_{}'.format(fignum, name))
+
+    # (a)(b)(c) は横軸（往復走時）が共通なので左に縦 3 段、(d) は右に 1 段
+    fig = plt.figure(figsize=(15, 11), layout='constrained')
+    gs = fig.add_gridspec(3, 2, width_ratios=[3, 1])
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[1, 0], sharex=ax1)
+    ax3 = fig.add_subplot(gs[2, 0], sharex=ax1)
+    ax4 = fig.add_subplot(gs[:, 1])
+    _rate_panels_ab(res, key, ax1, ax2, tgt_name, ylab_raw, raw_T, raw_R, ylab_rate,
+                    show_guards=True)
+    _rate_panels_cd(res, key, ax3, ax4, tgt_name, ylab_rate, unit, channel)
+    ax2.set_xlabel('')                       # 横軸の説明は最下段 (c) にだけ書く
+    save_figure(fig, out_dir, '{}-2_{}_test'.format(fignum, name))
 
 
 def plot_decay(res, out_dir, tgt_name):
-    """fig3：減衰率チャネル。"""
+    """fig3-1 / fig3-2：減衰率チャネル。"""
     sp = res['spec']
-    _rate_figure(res, 'decay', out_dir, tgt_name, 'fig3_decay_rate',
-                 'Attenuation-rate channel: does the decay rate of band power change?',
-                 'Band power {:.1f}–{:.1f} GHz\n[dB re surface]'.format(*sm.BAND_GHZ),
-                 sp['dbT'], sp['dbR'], 'Decay rate [dB/ns]', 'dB/ns', 'decay_rate')
+    _rate_figures(res, 'decay', out_dir, tgt_name, 'fig3', 'decay_rate',
+                  'Band power {:.1f}–{:.1f} GHz\n[dB re surface]'.format(*sm.BAND_GHZ),
+                  sp['dbT'], sp['dbR'], 'Decay rate [dB/ns]', 'dB/ns', 'decay_rate')
 
 
 def plot_shift(res, out_dir, tgt_name):
-    """fig4：重心周波数シフトレートのチャネル。"""
+    """fig4-1 / fig4-2：重心周波数シフトレートのチャネル。"""
     sp = res['spec']
-    _rate_figure(res, 'shift', out_dir, tgt_name, 'fig4_fc_shift_rate',
-                 'Centroid-shift channel: does the shift rate of f_c change?',
-                 'Centroid frequency f_c [GHz]', sp['fcT'], sp['fcR'],
-                 'Shift rate df_c/dt [MHz/ns]', 'MHz/ns', 'fc_shift_rate')
+    _rate_figures(res, 'shift', out_dir, tgt_name, 'fig4', 'fc_shift_rate',
+                  'Centroid frequency f_c [GHz]', sp['fcT'], sp['fcR'],
+                  'Shift rate df_c/dt [MHz/ns]', 'MHz/ns', 'fc_shift_rate')
 
 
 def plot_spectrogram(res, out_dir, tgt_name):
@@ -1057,8 +1138,6 @@ def _single_rate_figure(res, out_dir, tgt_name, stem, title, ylab_raw, raw, rate
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[1, 0], sharex=ax1)
     ax3 = fig.add_subplot(gs[:, 1])
-    for ax in (ax1, ax2):
-        _shade_guards(ax, res['guard_zones'])
     for yy in raw:
         ax1.plot(t, yy, color=COL_TGT, lw=0.6, alpha=0.5)
     ax1.plot(t, np.nanmean(raw, axis=0), color=COL_TGT, lw=2, label='mean of blocks')
@@ -1077,8 +1156,8 @@ def _single_rate_figure(res, out_dir, tgt_name, stem, title, ylab_raw, raw, rate
     ax2.plot(t, mu, color=COL_TGT, lw=1.8, label='mean of blocks')
     _event_lines(ax2, res['events'], label=False)
     ax2.set_ylabel(ylab_rate)
-    ax2.set_xlabel('Two-way time [ns]  (grey: interface zones, excluded from the window fit)')
-    ax2.legend(fontsize=8)
+    ax2.set_xlabel('Two-way time [ns]  (top bar: times used in the window fit)')
+    ax2.legend(handles=ax2.get_legend_handles_labels()[0] + _mark_used_windows(ax2, res), fontsize=8)
     ax2.grid(alpha=0.3)
     ax2.set_title('(b) Local rate (regression over {:g} ns)'.format(RATE_WIN_NS))
     rows = [r for r in res['window_rows'] if r['channel'] == channel]
@@ -1099,7 +1178,7 @@ def _single_rate_figure(res, out_dir, tgt_name, stem, title, ylab_raw, raw, rate
                         Line2D([], [], color='k', label='mean ± {:.2f} σ'.format(z))],
                fontsize=8, loc='lower right')
     ax3.grid(alpha=0.3)
-    ax3.set_title('(c) Window fit (interfaces excluded)')
+    ax3.set_title('(c) Window fit (only the times under the top bars)')
     if rows:
         ms = [(np.mean(r['vals_T']), z * np.std(r['vals_T'], ddof=1)) for r in rows]
         lo = min(min(np.min(r['vals_T']), m - s) for r, (m, s) in zip(rows, ms))
@@ -1300,6 +1379,347 @@ def write_outputs(res, out_dir, tgt_name, info):
 
 
 # =============================================================================
+# 7b. スペクトル比法（境界の反射どうしのスペクトル比 = LSR）
+# =============================================================================
+# 2 つの反射 A（浅い）・B（深い）のパワースペクトルの比を dB で取ると、
+#   10 log10( S_B(f) / S_A(f) ) = C - 10 log10(e) * 2 pi * tan_delta * dt * f
+# となる（dt は A と B の往復走時の差 [ns]、f [GHz]）。C には反射係数の比・透過・
+# 幾何拡散の差が入るが、段差の境界なら周波数によらないので傾きには効かない。
+# 周波数に対する傾きから、A と B の間の層の tan_delta が求まる。
+#   tan_delta = - slope[dB/GHz] / (10 log10(e) * 2 pi * dt[ns])
+#
+# 判定：最初の区間（地表 → 最初の反射。乾燥レゴリスの上載層）を基準にして、
+#   d_b = tan_delta(区間, ブロック b) - tan_delta(基準区間, ブロック b)
+# をブロックごとに取る。d_b の 0 まわりの ±z σ_d（z = 1.96、両側 5 %）を外れた
+# ブロックの割合を P_D とし、P_D >= PD_VISIBLE で「見える」とする。
+# σ_d は d_b のブロック間の標準偏差（1 ブロックでの測定のばらつき）。
+# これは他のチャネルの「1 ブロック（1 測定点）で見えるか」と同じ考え方である。
+DB10E = 10.0 * np.log10(np.e)
+
+
+def lsr_reflections(res, events, info):
+    """スペクトル比に使う反射の一覧（時刻の順）。
+
+    理論の界面があればそれを（地表を含む）、無ければ地表＋データで見えた反射を使う。
+    usable：地表は常に使う。それ以外は反射チャネルで「見える」（P_D >= PD_VISIBLE）もの。
+    """
+    out = []
+    if events:
+        pd_by = {r['event']: r['pd'] for r in res['event_rows']}
+        for e in events:
+            pd = pd_by.get(e['name'], np.nan)
+            out.append({'name': e['name'], 'centre': e['t_ns'], 'depth_m': e['depth_m'], 'pd': pd,
+                        'usable': e['depth_m'] == 0 or (np.isfinite(pd) and pd >= PD_VISIBLE)})
+    else:
+        out.append({'name': 'surface', 'centre': info['t_surface_data'], 'depth_m': 0.0,
+                    'pd': np.nan, 'usable': True})
+        for r in res['regions']:
+            out.append({'name': 'refl@{:.1f}ns'.format(r['t_peak_ns']), 'centre': r['t_peak_ns'],
+                        'depth_m': np.nan, 'pd': r['pd_max'], 'usable': True})
+    return sorted(out, key=lambda r: r['centre'])
+
+
+def _gated_power(D, p, L, win, nfft, band):
+    """各トレースのピーク位置 p[j] を中心に長さ L の窓で切り出したパワースペクトル [トレース, 周波数]。"""
+    n, ntr = D.shape
+    h = L // 2
+    G = np.zeros((L, ntr))
+    for j in range(ntr):
+        a, b = p[j] - h, p[j] - h + L
+        lo, hi = max(a, 0), min(b, n)
+        G[lo - a:hi - a, j] = D[lo:hi, j]
+    X = np.fft.rfft(G * win[:, None], n=nfft, axis=0)[band]
+    return (np.abs(X) ** 2).T
+
+
+def _fit_slope(f, y, m):
+    if m.sum() < 5 or not np.all(np.isfinite(y[m])):
+        return np.nan
+    return float(np.polyfit(f[m], y[m], 1)[0])
+
+
+def lsr_model_tandelta(rec, z1, z2, n=41):
+    """深さ z1-z2 の平均の tan_delta（1 GHz、氷あり / 氷なし）。理論の目安。"""
+    if rec is None or not np.all(np.isfinite([z1, z2])):
+        return np.nan, np.nan
+    configure_mean_medium(rec)
+    z = np.linspace(z1, z2, n)[1:-1] if z2 - z1 > 1e-6 else np.array([z1])
+    f0 = np.array([1.0e9])
+    er, ei = sm.eps_at_depth(f0, z, THEORY_LEVEL)
+    keep = sm.LEVEL4_ICE_MODEL
+    sm.LEVEL4_ICE_MODEL = 'none'
+    er0, ei0 = sm.eps_at_depth(f0, z, THEORY_LEVEL)
+    sm.LEVEL4_ICE_MODEL = keep
+    return float(np.mean(ei[:, 0] / er[:, 0])), float(np.mean(ei0[:, 0] / er0[:, 0]))
+
+
+def _ttest_p(d):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        return float(stats.ttest_1samp(d, 0.0).pvalue)
+
+
+def lsr_analysis(res, T, R, dt, events, info, rec):
+    """スペクトル比法。res['lsr'] に結果を入れて返す。"""
+    dt_ns = dt * 1e9
+    t_axis = np.arange(T.shape[0]) * dt_ns
+    envT = envelope(T)
+    L = int(round(2 * LSR_GATE_HW_NS / dt_ns)) | 1
+    win = signal.windows.tukey(L, alpha=LSR_TAPER)
+    nfft = max(LSR_NFFT_MIN, int(2 ** np.ceil(np.log2(4 * L))))
+    f_all = np.fft.rfftfreq(nfft, d=dt) / 1e9
+    band = (f_all >= sm.BAND_GHZ[0]) & (f_all <= sm.BAND_GHZ[1])
+    f = f_all[band]
+    blocks = block_index(T.shape[1])
+
+    refl = lsr_reflections(res, events, info)
+    hw = int(round(LSR_SEARCH_HW_NS / dt_ns))
+    for r in refl:
+        c = int(round(r['centre'] / dt_ns))
+        lo, hi = max(c - hw, 0), min(c + hw + 1, T.shape[0])
+        p = lo + np.argmax(envT[lo:hi], axis=0)               # トレースごとのピーク位置
+        r['p'] = p
+        r['t_pk'] = t_axis[p]
+        r['ST'] = _gated_power(T, p, L, win, nfft, band)      # 対象 [トレース, 周波数]
+        r['SR'] = _gated_power(R, p, L, win, nfft, band)      # 基準（同じ時刻のクラッタ）
+        r['ST_stack'] = r['ST'].mean(axis=0)
+        r['SR_stack'] = r['SR'].mean(axis=0)
+        r['ST_block'] = np.array([r['ST'][idx].mean(axis=0) for idx in blocks])
+        r['snr_db'] = 10 * np.log10(r['ST_stack'] / np.maximum(r['SR_stack'], 1e-300))
+
+    use = [r for r in refl if r['usable']]
+    segs = []
+    for A, B in zip(use[:-1], use[1:]):
+        # 使う周波数：帯域内、両方の反射がそれぞれの最大から LSR_FLOOR_DB 以内、
+        # 地表以外の反射は同じ時刻の基準（クラッタ）より LSR_SNR_MIN_DB 以上強い
+        m = np.ones(f.size, dtype=bool)
+        for r in (A, B):
+            s = 10 * np.log10(r['ST_stack'] / r['ST_stack'].max())
+            m &= s >= -LSR_FLOOR_DB
+            if r['depth_m'] != 0:
+                m &= r['snr_db'] >= LSR_SNR_MIN_DB
+        lsr_stack = 10 * np.log10(B['ST_stack'] / A['ST_stack'])
+        lsr_block = 10 * np.log10(B['ST_block'] / A['ST_block'])
+        dt_tr = B['t_pk'] - A['t_pk']
+        dt_mean = float(np.mean(dt_tr))
+        dt_block = np.array([dt_tr[idx].mean() for idx in blocks])
+        slope = _fit_slope(f, lsr_stack, m)
+        slope_b = np.array([_fit_slope(f, y, m) for y in lsr_block])
+        tand = -slope / (DB10E * 2 * np.pi * dt_mean)
+        tand_b = -slope_b / (DB10E * 2 * np.pi * dt_block)
+        th_ice, th_dry = lsr_model_tandelta(rec, A['depth_m'], B['depth_m']) if events else (np.nan, np.nan)
+        segs.append({'name': '{}→{}'.format(A['name'], B['name']), 'A': A['name'], 'B': B['name'],
+                     'dt_ns': dt_mean, 'n_freq': int(m.sum()),
+                     'f_lo_ghz': float(f[m].min()) if m.any() else np.nan,
+                     'f_hi_ghz': float(f[m].max()) if m.any() else np.nan,
+                     'mask': m, 'lsr_stack': lsr_stack, 'lsr_block': lsr_block,
+                     'slope_db_per_ghz': slope, 'intercept_db': (float(np.polyfit(f[m], lsr_stack[m], 1)[1])
+                                                                 if m.sum() >= 5 else np.nan),
+                     'tand_stack': float(tand), 'tand_block': tand_b,
+                     'tand_block_mean': float(np.nanmean(tand_b)),
+                     'tand_block_sd': float(np.nanstd(tand_b, ddof=1)),
+                     'model_tand_ice': th_ice, 'model_tand_dry': th_dry})
+
+    # --- 判定：最初の区間（上載層）との差 ------------------------------------
+    z = stats.norm.ppf(1.0 - P_FA / 2.0)
+    for k, s in enumerate(segs):
+        s['role'] = 'reference' if k == 0 else 'test'
+        if k == 0:
+            continue
+        d = s['tand_block'] - segs[0]['tand_block']
+        d = d[np.isfinite(d)]
+        if len(d) < 3:
+            s.update(pd=np.nan, verdict=verdict(np.nan), d_mean=np.nan, d_sd=np.nan,
+                     min_detectable_dtand=np.nan, p_value=np.nan, d_block=d)
+            continue
+        sd = float(np.std(d, ddof=1))
+        pd = float(np.mean(np.abs(d) > z * sd))
+        s.update(d_block=d, d_mean=float(np.mean(d)), d_sd=sd, pd=pd, verdict=verdict(pd),
+                 min_detectable_dtand=z * sd,
+                 p_value=_ttest_p(d),
+                 model_d_ice=s['model_tand_ice'] - segs[0]['model_tand_dry'],
+                 model_d_dry=s['model_tand_dry'] - segs[0]['model_tand_dry'])
+    res['lsr'] = {'f': f, 'refl': refl, 'segs': segs, 'blocks': blocks,
+                  'gate_hw_ns': LSR_GATE_HW_NS, 'z': z}
+    return res['lsr']
+
+
+def _lsr_panels_ab(res, ax1, ax2, tgt_name):
+    """(a) 反射ごとのスペクトル (b) スペクトル比と直線の当てはめ。"""
+    L = res['lsr']
+    f = L['f']
+    refl = L['refl']
+    ref0 = max(r['ST_stack'].max() for r in refl)
+    cols = {}
+    for i, r in enumerate(refl):
+        col = ROW_COLORS[i % len(ROW_COLORS)]
+        cols[r['name']] = col
+        lab = '{}{}'.format(r['name'], '' if r['usable'] else ' (not visible, unused)')
+        ax1.plot(f, 10 * np.log10(r['ST_stack'] / ref0), color=col, lw=2,
+                 ls='-' if r['usable'] else ':', label=lab)
+        if r['depth_m'] != 0:
+            ax1.plot(f, 10 * np.log10(r['SR_stack'] / ref0), color=col, lw=1, ls='--', alpha=0.7)
+    ax1.plot([], [], color='0.4', lw=1, ls='--',
+             label='{} at the same gates (clutter level)'.format(REFERENCE_CONDITION))
+    ax1.set_xlabel('Frequency [GHz]')
+    ax1.set_ylabel('Gated power (mean of traces)\n[dB re strongest]')
+    ax1.set_title('(a) Spectra of the reflections ({}, gate ±{:g} ns around each trace peak)'
+                  .format(tgt_name, L['gate_hw_ns']))
+    ax1.legend(fontsize=8)
+    ax1.grid(alpha=0.3)
+    for k, s in enumerate(L['segs']):
+        col = cols[s['B']]
+        m = s['mask']
+        off = s['intercept_db'] if np.isfinite(s['intercept_db']) else 0.0
+        for y in s['lsr_block']:
+            ax2.plot(f, y - off, color=col, lw=0.5, alpha=0.3)
+        ax2.plot(f, s['lsr_stack'] - off, color=col, lw=2.2,
+                 label='{}: Δt = {:.2f} ns, tanδ = {:.2e}{}'.format(
+                     s['name'], s['dt_ns'], s['tand_stack'], ' (reference)' if k == 0 else ''))
+        if m.sum() >= 5:
+            ax2.plot(f[m], s['slope_db_per_ghz'] * f[m], color=col, lw=1.4, ls='--')
+            ax2.axvspan(f[m].min(), f[m].max(), color=col, alpha=0.06, lw=0)
+    ax2.plot([], [], color='0.4', lw=1.4, ls='--', label='straight-line fit (shaded: frequencies used)')
+    ax2.plot([], [], color='0.4', lw=0.5, alpha=0.5, label='thin: each block of {} traces'.format(BLOCK_TRACES))
+    ax2.axhline(0, color='k', lw=0.6)
+    ax2.set_xlabel('Frequency [GHz]')
+    ax2.set_ylabel('10 log10(S_deep / S_shallow) [dB]\n(offset: fitted intercept removed)')
+    ax2.set_title('(b) Log spectral ratio between successive reflections '
+                  '(slope = −27.3 tanδ Δt dB/GHz)')
+    ax2.legend(fontsize=8)
+    ax2.grid(alpha=0.3)
+    return cols
+
+
+def plot_lsr(res, out_dir, tgt_name):
+    """fig6-1：(a)(b) だけ。fig6-2：(a)(b) と (c) 区間ごとの tanδ、(d) 上載層との差の検定。"""
+    L = res.get('lsr')
+    if not L or not L['segs']:
+        print('  スペクトル比：使える反射が 2 つ未満なので図を作りません')
+        return
+    fig = plt.figure(figsize=(12, 9), layout='constrained')
+    gs = fig.add_gridspec(2, 1)
+    _lsr_panels_ab(res, fig.add_subplot(gs[0]), fig.add_subplot(gs[1]), tgt_name)
+    save_figure(fig, out_dir, 'fig6-1_spectral_ratio')
+
+    fig = plt.figure(figsize=(17, 9.5), layout='constrained')
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.6, 1])
+    cols = _lsr_panels_ab(res, fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[1, 0]), tgt_name)
+    ax3 = fig.add_subplot(gs[0, 1])
+    ax4 = fig.add_subplot(gs[1, 1])
+    segs = L['segs']
+    for i, s in enumerate(segs):
+        col = cols[s['B']]
+        v = s['tand_block'][np.isfinite(s['tand_block'])]
+        jit = (np.random.RandomState(30 + i).rand(len(v)) - 0.5) * 0.3
+        ax3.scatter(i + jit, v, s=14, color=col, alpha=0.8)
+        ax3.plot([i - 0.3, i + 0.3], [s['tand_stack']] * 2, color='k', lw=2)
+        for key, mk, lab in (('model_tand_ice', 'D', 'model (target)'), ('model_tand_dry', 's', 'model (no ice)')):
+            if np.isfinite(s.get(key, np.nan)):
+                ax3.scatter(i + 0.38, s[key], marker=mk, s=40, facecolor='none', edgecolor='k',
+                            label=lab if i == 0 else None, zorder=4)
+    ax3.plot([], [], color='k', lw=2, label='all traces stacked')
+    ax3.set_xticks(range(len(segs)))
+    ax3.set_xticklabels(['{}\n({})'.format(s['name'], s['role']) for s in segs], fontsize=8)
+    ax3.set_xlim(-0.7, len(segs) - 0.3)
+    ax3.set_ylabel('tanδ between the two reflections')
+    ax3.set_title('(c) tanδ of each interval (dots: blocks of {} traces)'.format(BLOCK_TRACES), fontsize=10)
+    ax3.grid(alpha=0.3)
+    ax3.legend(fontsize=8)
+    tests = [s for s in segs if s['role'] == 'test']
+    for i, s in enumerate(tests):
+        col = cols[s['B']]
+        d = s.get('d_block', np.array([]))
+        if len(d) == 0:
+            continue
+        jit = (np.random.RandomState(40 + i).rand(len(d)) - 0.5) * 0.3
+        ax4.scatter(i + jit, d, s=14, color=col, alpha=0.8)
+        half = L['z'] * s['d_sd']
+        ax4.plot([i - 0.35, i + 0.35], [half, half], color='k', ls='--', lw=1.2)
+        ax4.plot([i - 0.35, i + 0.35], [-half, -half], color='k', ls='--', lw=1.2)
+        for key, mk in (('model_d_ice', 'D'), ('model_d_dry', 's')):
+            if np.isfinite(s.get(key, np.nan)):
+                ax4.scatter(i + 0.42, s[key], marker=mk, s=40, facecolor='none', edgecolor='k', zorder=4)
+        ax4.text(i, max(np.max(d), half), '{}\nP_D={:.0f}%'.format(VERDICT_EN[s['verdict']], 100 * s['pd']),
+                 ha='center', va='bottom', fontsize=9)
+    ax4.axhline(0, color='k', lw=0.8)
+    lo_, hi_ = ax4.get_ylim()
+    ax4.set_ylim(lo_, hi_ + 0.25 * (hi_ - lo_))            # 判定の文字の場所
+    ax4.plot([], [], color='k', ls='--', lw=1.2,
+             label='0 ± {:.2f} σ of blocks ({:.0f} % false alarm)'.format(L['z'], 100 * P_FA))
+    ax4.scatter([], [], marker='D', facecolor='none', edgecolor='k', label='model: with ice')
+    ax4.scatter([], [], marker='s', facecolor='none', edgecolor='k', label='model: no ice (density profile only)')
+    ax4.set_xticks(range(len(tests)))
+    ax4.set_xticklabels(['{}\nminus {}'.format(s['name'], segs[0]['name']) for s in tests], fontsize=8)
+    ax4.set_xlim(-0.7, max(len(tests), 1) - 0.3)
+    ax4.set_ylabel('Δ tanδ vs the reference interval (per block)')
+    ax4.set_title('(d) Is the loss of the interval different from the overburden?', fontsize=10)
+    ax4.grid(alpha=0.3)
+    ax4.legend(fontsize=8, loc='lower right')
+    save_figure(fig, out_dir, 'fig6-2_spectral_ratio_test')
+
+
+def write_lsr_outputs(res, out_dir, tgt_name, info):
+    L = res.get('lsr')
+    if not L:
+        return
+    f = L['f']
+    keys = ['name', 'role', 'A', 'B', 'dt_ns', 'n_freq', 'f_lo_ghz', 'f_hi_ghz', 'slope_db_per_ghz',
+            'tand_stack', 'tand_block_mean', 'tand_block_sd', 'model_tand_ice', 'model_tand_dry',
+            'd_mean', 'd_sd', 'min_detectable_dtand', 'pd', 'verdict', 'p_value',
+            'model_d_ice', 'model_d_dry']
+    _write_csv(os.path.join(out_dir, 'spectral_ratio_segments.csv'), L['segs'], keys)
+    rows = []
+    for s in L['segs']:
+        for b, idx in enumerate(L['blocks']):
+            rows.append({'segment': s['name'], 'block': b, 'first_trace': int(idx[0]),
+                         'last_trace': int(idx[-1]), 'x_first': res['x'][idx[0]], 'x_last': res['x'][idx[-1]],
+                         'tand': s['tand_block'][b]})
+    _write_csv(os.path.join(out_dir, 'spectral_ratio_blocks.csv'), rows,
+               ['segment', 'block', 'first_trace', 'last_trace', 'x_first', 'x_last', 'tand'])
+    spec_rows = []
+    for i, fi in enumerate(f):
+        row = {'f_ghz': fi}
+        for r in L['refl']:
+            row['S_{}_db'.format(r['name'])] = 10 * np.log10(r['ST_stack'][i])
+            row['clutter_{}_db'.format(r['name'])] = 10 * np.log10(r['SR_stack'][i])
+        for s in L['segs']:
+            row['LSR_{}_db'.format(s['name'])] = s['lsr_stack'][i]
+            row['used_{}'.format(s['name'])] = bool(s['mask'][i])
+        spec_rows.append(row)
+    _write_csv(os.path.join(out_dir, 'spectral_ratio_spectra.csv'), spec_rows, list(spec_rows[0].keys()))
+    lines = ['bscan_detection.py スペクトル比法  {}'.format(datetime.now().isoformat(timespec='seconds')),
+             '対象: {}'.format(info['inputs']['target']),
+             '', '[設定]']
+    for k in ('LSR_SEARCH_HW_NS', 'LSR_GATE_HW_NS', 'LSR_TAPER', 'LSR_FLOOR_DB', 'LSR_SNR_MIN_DB',
+              'BLOCK_TRACES', 'P_FA', 'PD_VISIBLE'):
+        lines.append('  {:<20} {}'.format(k, globals()[k]))
+    lines += ['', '[反射]']
+    for r in L['refl']:
+        lines.append('  {:<12} 中心 {:6.2f} ns  ピーク {:6.2f}±{:.2f} ns  反射チャネルの P_D {}  {}'.format(
+            r['name'], r['centre'], float(np.mean(r['t_pk'])), float(np.std(r['t_pk'])),
+            '-' if not np.isfinite(r['pd']) else '{:.0f} %'.format(100 * r['pd']),
+            '使う' if r['usable'] else '使わない（反射が見えない）'))
+    lines += ['', '[区間] tanδ = −傾き / (27.3 Δt)。判定は最初の区間（上載層）との差（ブロックごと）']
+    for s in L['segs']:
+        lines.append('  {:<22} Δt {:5.2f} ns  {:.2f}-{:.2f} GHz ({} 点)  tanδ {:.2e}（ブロック {:.2e} ± {:.2e}）'
+                     '  理論 氷あり {:.2e} / 氷なし {:.2e}'.format(
+                         s['name'], s['dt_ns'], s['f_lo_ghz'], s['f_hi_ghz'], s['n_freq'], s['tand_stack'],
+                         s['tand_block_mean'], s['tand_block_sd'], s['model_tand_ice'], s['model_tand_dry']))
+        if s['role'] == 'test' and np.isfinite(s.get('pd', np.nan)):
+            lines.append('      上載層との差 {:+.2e}（ブロック間 σ {:.2e}）  P_D {:.0f} % -> {}  '
+                         '1 ブロックで検出に要る Δtanδ ≈ {:.1e}  全体の t 検定 p = {:.3f}'
+                         '  理論の差 氷あり {:+.2e} / 氷なし {:+.2e}'.format(
+                             s['d_mean'], s['d_sd'], 100 * s['pd'], s['verdict'], s['min_detectable_dtand'],
+                             s['p_value'], s['model_d_ice'], s['model_d_dry']))
+    path = os.path.join(out_dir, 'run_info.txt')
+    with open(path, 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(lines) + '\n')
+    print('Saved:', path)
+    print('\n'.join(lines[lines.index('[反射]'):]))
+
+
+# =============================================================================
 # 8. main
 # =============================================================================
 def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx):
@@ -1398,6 +1818,14 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
     plot_shift(res, out_dir, tgt)
     plot_spectrogram(res, out_dir, tgt)
     write_outputs(res, out_dir, tgt, info)
+
+    # --- スペクトル比法（境界の反射どうし）-------------------------------------
+    if LSR_ENABLE:
+        lsr_dir = os.path.join(base, LSR_SUBDIR)
+        os.makedirs(lsr_dir, exist_ok=True)
+        lsr_analysis(res, T, R, dt, events, info, rec_T)
+        plot_lsr(res, lsr_dir, tgt)
+        write_lsr_outputs(res, lsr_dir, tgt, info)
     return res
 
 
