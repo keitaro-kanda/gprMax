@@ -273,8 +273,8 @@ def draw(geo: Dict, d: Optional[Dict], out_base: Path, zoom: bool, annotate: boo
     ax.set_xlabel("Horizontal distance from antenna (m)")
     ax.set_ylabel("Depth below surface (m)")
     if title:
-        ax.set_title(d["case_id"] if d else out_base.stem, fontsize=10)
-    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False, fontsize=9)
+        ax.set_title(d["case_id"] if d else out_base.stem, fontsize=16)
+    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False, fontsize=14)
     fig.tight_layout()
     out_base.parent.mkdir(parents=True, exist_ok=True)
     for ext in formats:
@@ -291,15 +291,15 @@ def annotate_dimensions(ax, d: Dict, handles: List) -> None:
     kw = dict(arrowstyle="<->", color="k", lw=0.9, shrinkA=0, shrinkB=0)
     xr = (w / 2 if w is not None else 2.0) + 0.25
     ax.annotate("", (xr, 0), (xr, dep), arrowprops=kw)
-    ax.text(xr + 0.05, dep / 2, "d", va="center", fontsize=10)
+    ax.text(xr + 0.05, dep / 2, "d", va="center", fontsize=16)
     ax.annotate("", (xr, dep), (xr, dep + h), arrowprops=kw)
-    ax.text(xr + 0.05, dep + h / 2, "h", va="center", fontsize=10)
+    ax.text(xr + 0.05, dep + h / 2, "h", va="center", fontsize=16)
     ax.annotate("", (-0.25, -h_ant), (-0.25, 0), arrowprops=kw)
-    ax.text(-0.3, -h_ant / 2, r"$h_{\rm antenna}$", va="center", ha="right", fontsize=9)
+    ax.text(-0.3, -h_ant / 2, r"$h_{\rm antenna}$", va="center", ha="right", fontsize=14)
     if w is not None:
         yw = dep + h + 0.2
         ax.annotate("", (-w / 2, yw), (w / 2, yw), arrowprops=kw)
-        ax.text(0, yw + 0.05, "w", ha="center", va="top", fontsize=10)
+        ax.text(0, yw + 0.05, "w", ha="center", va="top", fontsize=16)
     for face, y in (("top", dep), ("bottom", dep + h)):
         r = th[face]["fresnel_radius_m"]
         ax.plot([-r, r], [y - 0.06, y - 0.06] if face == "top" else [y + 0.06, y + 0.06],
