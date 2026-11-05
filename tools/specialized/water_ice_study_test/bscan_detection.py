@@ -106,6 +106,8 @@ LSR_TAPER = 0.5                    # Tukey 窓のテーパー
 LSR_NFFT_MIN = 8192
 LSR_FLOOR_DB = 20.0                # 反射のスペクトルが最大からこれ以上落ちる周波数は使わない
 LSR_SNR_MIN_DB = 6.0               # 地表以外の反射：同じ時刻の基準（クラッタ）よりこれ以上強い周波数だけ使う
+LSR_BOOT_N = 2000                  # ブートストラップ（ブロックの復元抽出）の回数。0 で行わない
+LSR_BOOT_SEED = 0                  # ブートストラップの乱数シード（再現性のため固定）
 
 # --- 作図 ---------------------------------------------------------------------
 IMG_DB_RANGE = 80.0                # B-scan 図の色の幅 [dB]
@@ -1495,7 +1497,7 @@ def lsr_analysis(res, T, R, dt, events, info, rec):
                      'mask': m, 'lsr_stack': lsr_stack, 'lsr_block': lsr_block,
                      'slope_db_per_ghz': slope, 'intercept_db': (float(np.polyfit(f[m], lsr_stack[m], 1)[1])
                                                                  if m.sum() >= 5 else np.nan),
-                     'tand_stack': float(tand), 'tand_block': tand_b,
+                     'tand_stack': float(tand), 'tand_block': tand_b, 'dt_block': dt_block,
                      'tand_block_mean': float(np.nanmean(tand_b)),
                      'tand_block_sd': float(np.nanstd(tand_b, ddof=1)),
                      'model_tand_ice': th_ice, 'model_tand_dry': th_dry})
@@ -1645,6 +1647,113 @@ def plot_lsr(res, out_dir, tgt_name):
     save_figure(fig, out_dir, 'fig6-2_spectral_ratio_test')
 
 
+def lsr_bootstrap(res):
+    """全トレース平均の tanδ の不確かさ（ブロックの復元抽出によるブートストラップ）。
+
+    22 個のブロックから重複を許して同じ数を引き直し、選ばれたブロックのスペクトルを
+    （トレース数で重み付けして）平均 → スペクトル比 → 直線の当てはめ → tanδ、という
+    全トレース平均とまったく同じ手順で tanδ を求める。これを LSR_BOOT_N 回繰り返し、
+    2.5-97.5 % を 95 % 区間とする。使う周波数（mask）は元の解析のものに固定する。
+    区間どうしの差は、同じ引き直し（同じブロックの組）で両区間を計算して取る。
+    差の 95 % 区間が 0 をまたがなければ「測線全体で見える」。
+    """
+    L = res.get('lsr')
+    if not L or not L['segs'] or LSR_BOOT_N <= 0:
+        return None
+    blocks = L['blocks']
+    nb = len(blocks)
+    w_all = np.array([len(idx) for idx in blocks], dtype=float)
+    refl = {r['name']: r for r in L['refl']}
+    f = L['f']
+    rng = np.random.default_rng(LSR_BOOT_SEED)
+    draws = rng.integers(0, nb, size=(LSR_BOOT_N, nb))
+    counts = np.stack([np.bincount(d, minlength=nb) for d in draws]).astype(float)   # [回, ブロック]
+    W = counts * w_all[None, :]                                                       # トレース数の重み
+    W /= W.sum(axis=1, keepdims=True)
+    out = {'n': LSR_BOOT_N, 'segs': {}}
+    for s in L['segs']:
+        m = s['mask']
+        SA = W @ refl[s['A']]['ST_block']          # [回, 周波数]：引き直した全トレース平均のスペクトル
+        SB = W @ refl[s['B']]['ST_block']
+        lsr = 10 * np.log10(SB[:, m] / SA[:, m])
+        fm = f[m] - f[m].mean()
+        slope = (lsr - lsr.mean(axis=1, keepdims=True)) @ fm / (fm @ fm)
+        dtb = W @ s['dt_block']
+        tand = -slope / (DB10E * 2 * np.pi * dtb)
+        out['segs'][s['name']] = {'samples': tand, 'lo': float(np.percentile(tand, 2.5)),
+                                  'hi': float(np.percentile(tand, 97.5)), 'sd': float(np.std(tand, ddof=1))}
+    ref = L['segs'][0]
+    for s in L['segs'][1:]:
+        d = out['segs'][s['name']]['samples'] - out['segs'][ref['name']]['samples']
+        lo, hi = float(np.percentile(d, 2.5)), float(np.percentile(d, 97.5))
+        visible = lo > 0 or hi < 0
+        out['segs'][s['name']].update(d_samples=d, d_lo=lo, d_hi=hi,
+                                      d_point=s['tand_stack'] - ref['tand_stack'],
+                                      verdict=verdict(1.0 if visible else 0.0))
+    L['boot'] = out
+    return out
+
+
+def plot_lsr_bootstrap(res, out_dir, tgt_name):
+    """fig7：ブートストラップ。(a) 区間ごとの全トレース平均 tanδ の分布 (b) 上載層との差の分布。"""
+    L = res.get('lsr')
+    if not L or 'boot' not in L:
+        return
+    B = L['boot']
+    segs = L['segs']
+    cols = {r['name']: ROW_COLORS[i % len(ROW_COLORS)] for i, r in enumerate(L['refl'])}
+    tests = segs[1:]
+    fig = plt.figure(figsize=(16, 6.5), layout='constrained')
+    gs = fig.add_gridspec(1, 2)
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    allv = np.concatenate([B['segs'][s['name']]['samples'] for s in segs])
+    bins = np.linspace(*np.percentile(allv, [0.5, 99.5]), 50)
+    for s in segs:
+        b = B['segs'][s['name']]
+        col = cols[s['B']]
+        ax1.hist(b['samples'], bins=bins, color=col, alpha=0.4, label=s['name'])
+        ax1.axvline(s['tand_stack'], color=col, lw=2)
+        for v in (b['lo'], b['hi']):
+            ax1.axvline(v, color=col, lw=1.2, ls='--')
+        for key, ls in (('model_tand_ice', ':'), ('model_tand_dry', '-.')):
+            if np.isfinite(s.get(key, np.nan)):
+                ax1.axvline(s[key], color=col, lw=1.4, ls=ls)
+    ax1.legend(handles=ax1.get_legend_handles_labels()[0] + [
+        Line2D([], [], color='k', lw=2, label='all traces'),
+        Line2D([], [], color='k', lw=1.2, ls='--', label='95 % interval'),
+        Line2D([], [], color='k', lw=1.4, ls=':', label='model (ice)'),
+        Line2D([], [], color='k', lw=1.4, ls='-.', label='model (no ice)')])
+    ax1.set_xlabel('tanδ')
+    ax1.set_ylabel('Count')
+    ax1.set_title('(a) Bootstrap of tanδ')
+    ax1.grid(alpha=0.3)
+    for s in tests:
+        b = B['segs'][s['name']]
+        col = cols[s['B']]
+        ax2.hist(b['d_samples'], bins=50, color=col, alpha=0.4, label='{} − {}'.format(s['B'], s['A'])
+                 if len(tests) > 1 else None)
+        ax2.axvline(b['d_point'], color=col, lw=2)
+        for v in (b['d_lo'], b['d_hi']):
+            ax2.axvline(v, color=col, lw=1.2, ls='--')
+        for key, ls in (('model_d_ice', ':'), ('model_d_dry', '-.')):
+            if np.isfinite(s.get(key, np.nan)):
+                ax2.axvline(s[key], color=col, lw=1.4, ls=ls)
+    ax2.axvline(0, color='k', lw=1)
+    hd = ax2.get_legend_handles_labels()[0] if len(tests) > 1 else []
+    ax2.legend(handles=hd + [Line2D([], [], color='k', lw=2, label='all traces'),
+                             Line2D([], [], color='k', lw=1.2, ls='--', label='95 % interval'),
+                             Line2D([], [], color='k', lw=1.4, ls=':', label='model (ice)'),
+                             Line2D([], [], color='k', lw=1.4, ls='-.', label='model (no ice)')],
+               loc='upper right')
+    ax2.set_xlabel('Δ tanδ ({} − {})'.format(tests[0]['name'].split('→')[0] + '→' + tests[0]['B'],
+                                            segs[0]['name']) if len(tests) == 1 else 'Δ tanδ vs reference')
+    ax2.set_ylabel('Count')
+    ax2.set_title('(b) Difference: ' + ', '.join(VERDICT_EN[B['segs'][s['name']]['verdict']] for s in tests))
+    ax2.grid(alpha=0.3)
+    save_figure(fig, out_dir, 'fig7_spectral_ratio_bootstrap')
+
+
 def write_lsr_outputs(res, out_dir, tgt_name, info):
     L = res.get('lsr')
     if not L:
@@ -1701,6 +1810,31 @@ def write_lsr_outputs(res, out_dir, tgt_name, info):
                          '  理論の差 氷あり {:+.2e} / 氷なし {:+.2e}'.format(
                              100 * s['pd'], s['verdict'], segs0['ref_mean'], s['min_detectable_dtand'],
                              s['d_mean'], s['d_sd'], s['p_value'], s['model_d_ice'], s['model_d_dry']))
+    B = L.get('boot')
+    if B:
+        lines += ['', '[ブートストラップ] ブロックを {} 回復元抽出し、全トレース平均と同じ手順で tanδ を計算。'
+                  '95 % 区間 = 2.5-97.5 %'.format(B['n'])]
+        for s in L['segs']:
+            b = B['segs'][s['name']]
+            lines.append('  {:<22} tanδ {:.2e}  95 % [{:.2e}, {:.2e}]  σ {:.2e}'.format(
+                s['name'], s['tand_stack'], b['lo'], b['hi'], b['sd']))
+            if 'd_lo' in b:
+                lines.append('      上載層との差 {:+.2e}  95 % [{:+.2e}, {:+.2e}] -> 測線全体で {}'
+                             '  理論の差 氷あり {:+.2e} / 氷なし {:+.2e}'.format(
+                                 b['d_point'], b['d_lo'], b['d_hi'], b['verdict'],
+                                 s.get('model_d_ice', np.nan), s.get('model_d_dry', np.nan)))
+        rows = []
+        for s in L['segs']:
+            b = B['segs'][s['name']]
+            rows.append({'segment': s['name'], 'role': s['role'], 'tand_stack': s['tand_stack'],
+                         'boot_lo': b['lo'], 'boot_hi': b['hi'], 'boot_sd': b['sd'],
+                         'diff_point': b.get('d_point', np.nan), 'diff_lo': b.get('d_lo', np.nan),
+                         'diff_hi': b.get('d_hi', np.nan), 'verdict_survey': b.get('verdict', ''),
+                         'model_tand_ice': s['model_tand_ice'], 'model_tand_dry': s['model_tand_dry']})
+        _write_csv(os.path.join(out_dir, 'spectral_ratio_bootstrap.csv'), rows, list(rows[0].keys()))
+        samp = [dict({'draw': i}, **{s['name']: B['segs'][s['name']]['samples'][i] for s in L['segs']})
+                for i in range(B['n'])]
+        _write_csv(os.path.join(out_dir, 'spectral_ratio_bootstrap_samples.csv'), samp, list(samp[0].keys()))
     path = os.path.join(out_dir, 'run_info.txt')
     with open(path, 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(lines) + '\n')
@@ -1813,7 +1947,9 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
         lsr_dir = os.path.join(base, LSR_SUBDIR)
         os.makedirs(lsr_dir, exist_ok=True)
         lsr_analysis(res, T, R, dt, events, info, rec_T)
+        lsr_bootstrap(res)
         plot_lsr(res, lsr_dir, tgt)
+        plot_lsr_bootstrap(res, lsr_dir, tgt)
         write_lsr_outputs(res, lsr_dir, tgt, info)
     return res
 
