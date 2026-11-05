@@ -119,10 +119,9 @@ def pattern_of(d: Dict) -> str:
 # 図
 # -----------------------------------------------------------------------------
 def _mpl():
-    import matplotlib
-    matplotlib.use("Agg")
+    import figure_style
+    figure_style.apply()
     import matplotlib.pyplot as plt
-    plt.rcParams.update({"font.size": 9, "axes.titlesize": 9, "figure.dpi": 100})
     return plt
 
 
@@ -131,32 +130,34 @@ TYPE_LABEL = {1: "Type 1", 2: "Type 2", 3: "Type 3"}
 
 
 def plot_template(tpl: pc.Template, ref: pc.Trace, lag_max_s: float, out: Path) -> None:
+    """送信波形と切り出し範囲（左）、自己相関と t' の範囲（右）"""
     plt = _mpl()
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(9, 3.2))
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(13, 5))
     t = ref.t * 1e9
-    a1.plot(t, ref.ez / abs(tpl.peak_amplitude), color="0.6", lw=1, label="ref_freespace (normalized)")
     t0 = tpl.peak_time_s * 1e9
+    a1.plot(t, ref.ez / abs(tpl.peak_amplitude), color="0.6", lw=1.2, label="Free space")
     k0 = int(round(tpl.peak_time_s / tpl.dt)) - tpl.peak_index
     ts = (np.arange(tpl.s.size) + k0) * tpl.dt * 1e9
-    a1.plot(ts, tpl.s, color="k", lw=1.4, label=f"s(t): |s| >= {tpl.level:.0%} of max")
-    a1.axvline(t0, color="r", ls="--", lw=0.8)
+    a1.plot(ts, tpl.s, color="k", lw=1.8, label="s(t)")
+    a1.axvline(t0, color="r", ls="--", lw=1.0, label="Main peak")
     a1.set_xlim(t0 - 4, t0 + 6)
     a1.set_xlabel("Time (ns)")
-    a1.set_ylabel("Normalized Ez")
-    a1.set_title(f"Transmitted waveform ({tpl.polarity}); main peak {t0:.3f} ns, "
-                 f"delta_t = {tpl.delta_t_s*1e9:.3f} ns")
-    a1.legend(loc="upper right", fontsize=7)
+    a1.set_ylabel("Normalized amplitude")
+    a1.set_title("Transmitted waveform")
+    a1.text(0.02, 0.04, f"$\\delta t$ = {tpl.delta_t_s*1e9:.2f} ns", transform=a1.transAxes)
+    a1.legend(loc="upper right", frameon=False)
     lag, ac = tpl.autocorrelation()
-    a2.plot(lag * 1e9, ac, color="k", lw=1.2)
-    a2.axvspan(-lag_max_s * 1e9, lag_max_s * 1e9, color="0.85", label=f"|t' - tau| <= {lag_max_s*1e9:.2f} ns")
+    a2.axvspan(-lag_max_s * 1e9, lag_max_s * 1e9, color="0.85", label="Range of $t'$")
+    a2.plot(lag * 1e9, ac, color="k", lw=1.5)
     z = tpl.first_zero_of_autocorrelation_s() * 1e9
-    a2.axvline(z, color="r", ls=":", lw=0.8)
-    a2.axvline(-z, color="r", ls=":", lw=0.8, label=f"first zero {z:.2f} ns")
-    a2.axhline(0, color="0.5", lw=0.5)
+    a2.axvline(z, color="r", ls=":", lw=1.2, label="First zero")
+    a2.axvline(-z, color="r", ls=":", lw=1.2)
+    a2.axhline(0, color="0.5", lw=0.6)
     a2.set_xlim(-2.5, 2.5)
     a2.set_xlabel("Lag (ns)")
-    a2.set_ylabel("Normalized autocorrelation")
-    a2.legend(loc="upper right", fontsize=7)
+    a2.set_ylabel("Autocorrelation")
+    a2.set_title("Autocorrelation of s(t)")
+    a2.legend(loc="upper right", frameon=False)
     fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=150)
@@ -165,28 +166,26 @@ def plot_template(tpl: pc.Template, ref: pc.Trace, lag_max_s: float, out: Path) 
 
 def plot_ascan(path: Path, d: Dict, t: np.ndarray, x: np.ndarray, tpl: pc.Template,
                faces: Dict[str, Dict], t_w_s: float, lag_max_s: float) -> None:
+    """上段: 背景を除いた A-scan 全体。下段: 上面と底面の時間窓の拡大と判定"""
     plt = _mpl()
-    fig = plt.figure(figsize=(9, 5.4))
-    gs = fig.add_gridspec(2, 2, height_ratios=[1.0, 1.15], hspace=0.42, wspace=0.22)
+    fig = plt.figure(figsize=(14, 9.5))
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.0, 1.25], hspace=0.38, wspace=0.18)
     ax = fig.add_subplot(gs[0, :])
     tn = t * 1e9
     t_end = min(t[-1], faces["bottom"]["res"].tau_s + ASCAN_TAIL_S)
     m = t <= t_end
-    ax.plot(tn[m], x[m], color="k", lw=0.8)
+    ax.plot(tn[m], x[m], color="k", lw=1.0)
     ymax = max(np.max(np.abs(x[m])), 1e-30)
     for face, col in (("top", "#9467bd"), ("bottom", "#2ca02c")):
         r = faces[face]["res"]
-        ax.axvspan(r.window_s[0] * 1e9, r.window_s[1] * 1e9, color=col, alpha=0.15, lw=0)
-        ax.axvline(r.tau_s * 1e9, color=col, ls="--", lw=0.8)
-        ax.text(r.tau_s * 1e9, 1.02 * ymax, face, color=col, ha="center", va="bottom", fontsize=8)
+        ax.axvspan(r.window_s[0] * 1e9, r.window_s[1] * 1e9, color=col, alpha=0.2, lw=0)
+        ax.axvline(r.tau_s * 1e9, color=col, ls="--", lw=1.0)
+        ax.text(r.tau_s * 1e9, 1.03 * ymax, face.capitalize(), color=col, ha="center", va="bottom")
     ax.set_xlim(0, t_end * 1e9)
-    ax.set_ylim(-1.15 * ymax, 1.15 * ymax)
+    ax.set_ylim(-1.2 * ymax, 1.25 * ymax)
     ax.set_xlabel("Time (ns)")
-    ax.set_ylabel("Ez - background (V/m)")
-    t_info = d["target"]
-    w = t_info.get("width_m")
-    size = f"h = {t_info['height_m']:.3f} m, " + ("w = inf (slab)" if w is None else f"w = {w:.2f} m")
-    ax.set_title(f"{d['case_id']}   ({d['target']['kind']}, d = {t_info['depth_top_m']:.1f} m, {size})")
+    ax.set_ylabel("Amplitude (V/m)")
+    ax.set_title(d["case_id"])
 
     tt = tpl.t_rel
     for q, face in enumerate(FACES):
@@ -197,30 +196,26 @@ def plot_ascan(path: Path, d: Dict, t: np.ndarray, x: np.ndarray, tpl: pc.Templa
         mm = (t >= lo) & (t <= hi)
         a.axvspan(r.window_s[0] * 1e9, r.window_s[1] * 1e9, color="0.9", lw=0)
         a.axvspan((r.tau_s - lag_max_s) * 1e9, (r.tau_s + lag_max_s) * 1e9, ymin=0, ymax=0.04, color="k", lw=0)
-        a.plot(tn[mm], x[mm], color="k", lw=1.0, label="x(t)")
-        a.axvline(r.tau_s * 1e9, color="0.3", ls="--", lw=0.8)
+        a.plot(tn[mm], x[mm], color="k", lw=1.3, label="x(t)")
+        a.axvline(r.tau_s * 1e9, color="0.3", ls="--", lw=1.0)
         if np.isfinite(r.rho_best):
             tp = r.tau_s + r.lag_best_s
-            a.plot((tt + tp) * 1e9, r.amplitude_ls * tpl.s, color="r", lw=1.0, alpha=0.9,
-                   label="fitted s(t - t')")
+            a.plot((tt + tp) * 1e9, r.amplitude_ls * tpl.s, color="r", lw=1.3, alpha=0.9,
+                   label="s(t - t')")
         loc_max = np.max(np.abs(x[mm])) if mm.any() else 1.0
         a.set_xlim(lo * 1e9, hi * 1e9)
-        a.set_ylim(-1.3 * loc_max, 2.2 * loc_max)        # 上に数値を書く余白
+        a.set_ylim(-1.3 * loc_max, 2.3 * loc_max)        # 上に数値を書く余白
         a.set_xlabel("Time (ns)")
         ty = f["type"]
-        reason = f" ({f['reason']})" if f["reason"] else ""
-        a.set_title(f"{face}: expected {f['expected']}, observed {f['observed'] or '-'}  ->  "
-                    f"{TYPE_LABEL[ty]}{reason}", color=TYPE_COLOR[ty])
-        txt = (f"rho = {r.rho_best:+.2f}  (t' - tau = {r.lag_best_s*1e9:+.2f} ns)\n"
-               f"rho at tau = {r.rho_at_tau:+.2f}")
-        if f.get("w_over_2rf") is not None:
-            txt += f"\nw / 2r_F = {f['w_over_2rf']:.2f}"
-        a.text(0.02, 0.97, txt, transform=a.transAxes, va="top", fontsize=7.5)
+        a.set_title(f"{face.capitalize()}: {TYPE_LABEL[ty]}", color=TYPE_COLOR[ty])
+        txt = (f"$\\rho$ = {r.rho_best:+.2f},  $t' - \\tau$ = {r.lag_best_s*1e9:+.2f} ns\n"
+               f"{f['observed'] or '-'} (expected {f['expected']})")
+        a.text(0.02, 0.97, txt, transform=a.transAxes, va="top")
         if q == 0:
-            a.set_ylabel("Ez - background (V/m)")
-            a.legend(loc="upper right", fontsize=7, frameon=False)
+            a.set_ylabel("Amplitude (V/m)")
+        a.legend(loc="upper right", frameon=False)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=110, bbox_inches="tight")
+    fig.savefig(path, dpi=100, bbox_inches="tight")
     plt.close(fig)
 
 

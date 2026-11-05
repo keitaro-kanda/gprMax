@@ -77,3 +77,42 @@ ncc_v01/
 | `amplitude_ls`, `window_peak_abs` | 送信波形の倍率（最小二乗）と窓内の最大振幅 |
 
 段階 2 は `type_reason` が `overlap` のものを Type 3 のまま残し、それ以外は `--rho-min` で分類し直す。
+
+## 計算モデルの図（plot_model_geometry.py）
+
+各ケースの形状ファイル（.vti）から、媒質を固定の色で塗り分けたモデル図を描く（図 1 の素材）。
+
+```bash
+python plot_model_geometry.py /Volumes/.../polarity_v01              # 全ケース（manifest.json の順。既にある図は飛ばす）
+python plot_model_geometry.py /Volumes/.../polarity_v01 --groups slab reference
+python plot_model_geometry.py <case>/<case_id>_geometry.vti           # 1 ケースだけ
+python plot_model_geometry.py /Volumes/.../polarity_v01 --cases rock_depth02m_H1250mm_W0400mm --annotate
+```
+
+出力は各ケースの .in と同じ階層の `geometry/` に、`<case_id>_model_full`（計算領域の全体）と
+`<case_id>_model_zoom`（アンテナと反射体の周り）を PNG と PDF で保存する。
+
+| 描くもの | 色・記号 | 読み取り元 |
+|---|---|---|
+| 真空・空洞（ε = 1） | white | .vti の Material |
+| レゴリス（ε = 3） | light brown | 同上 |
+| 岩片（ε = 6） | dark gray | 同上 |
+| PML | blue（半透明、全体図のみ） | .vti の Sources_PML = 1 |
+| 送受信点 | red の星（送受信点が別なら、送信点 = 星、受信点 = 下向き三角） | .vti の Sources_PML = 2、Receivers = 1 |
+
+* 横軸はアンテナからの水平距離、縦軸は地表からの深さ（ケース JSON の地表の高さ）。縦横の縮尺は同じ。
+* 反射体の輪郭線は描かない。`--annotate` を付けると、拡大図に寸法線（w, h, d, h_antenna）と
+  上面・底面の第 1 フレネル帯の範囲（red の破線）を描いた `_annotated` 版を別に出力する。
+* `--no-title` でケース名の題を消す。`--force` で既にある図も作り直す。
+* 1 ケース 2 図で約 4 秒（こちらの環境）。全 336 ケースで 20 分程度。
+
+## 図の文字の大きさ（全ての図に共通の規則）
+
+`figure_style.py` にまとめ、全ての作図スクリプトが最初に読み込む。個々の図では fontsize を指定しない。
+
+| 対象 | 大きさ |
+|---|---|
+| タイトル、軸ラベル、カラーバーのラベル | 16 |
+| 目盛り、凡例、図中の文字 | 12 |
+
+文字が大きいので、タイトルと凡例には最低限の情報（線の意味や名称）だけを書く。

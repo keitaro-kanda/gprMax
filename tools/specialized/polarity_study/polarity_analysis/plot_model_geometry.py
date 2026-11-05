@@ -46,6 +46,10 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt                     # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import figure_style                                 # noqa: E402
+figure_style.apply()
 from matplotlib.lines import Line2D                 # noqa: E402
 from matplotlib.patches import Patch                # noqa: E402
 
@@ -140,7 +144,7 @@ def material_labels(d: Optional[Dict], names: Dict[int, str]) -> Dict[str, str]:
             base = "Rock"
         else:
             base = n
-        out[n] = f"{base} ($\\varepsilon_r$ = {eps[n]:g})" if n in eps else base
+        out[n] = base                      # 凡例は名称だけ（比誘電率はキャプションに書く）
     return out
 
 
@@ -241,7 +245,7 @@ def draw(geo: Dict, d: Optional[Dict], out_base: Path, zoom: bool, annotate: boo
     if has_pml and not zoom:
         n_pml = int(np.flatnonzero(sp[:, ny // 2] == 1).size // 2)
         handles.append(Patch(facecolor=PML_COLOR[1], alpha=PML_COLOR[2], edgecolor="none",
-                             label=f"PML ({n_pml} cells)"))
+                             label="PML"))
 
     # 送受信点（gprMax の座標は節点 i * dx）
     tx = np.argwhere(sp == 2) if sp is not None else np.empty((0, 2))
@@ -252,7 +256,7 @@ def draw(geo: Dict, d: Optional[Dict], out_base: Path, zoom: bool, annotate: boo
         x, y = to_xy(tx[0])
         ax.plot(x, y, marker="*", ms=14, color=ANTENNA_COLOR[1], mec="k", mew=0.6, ls="")
         handles.append(Line2D([], [], marker="*", ms=12, color=ANTENNA_COLOR[1], mec="k", mew=0.6,
-                              ls="", label="Antenna (Tx/Rx)"))
+                              ls="", label="Tx/Rx"))
     else:
         for ij in tx:
             ax.plot(*to_xy(ij), marker="*", ms=14, color=ANTENNA_COLOR[1], mec="k", mew=0.6, ls="")
@@ -260,10 +264,10 @@ def draw(geo: Dict, d: Optional[Dict], out_base: Path, zoom: bool, annotate: boo
             ax.plot(*to_xy(ij), marker="v", ms=9, color=ANTENNA_COLOR[1], mec="k", mew=0.6, ls="")
         if len(tx):
             handles.append(Line2D([], [], marker="*", ms=12, color=ANTENNA_COLOR[1], mec="k", ls="",
-                                  label="Transmitter (Tx)"))
+                                  label="Tx"))
         if len(rx):
             handles.append(Line2D([], [], marker="v", ms=8, color=ANTENNA_COLOR[1], mec="k", ls="",
-                                  label="Receiver (Rx)"))
+                                  label="Rx"))
 
     if annotate and zoom and d and d.get("target"):
         annotate_dimensions(ax, d, handles)
@@ -273,8 +277,8 @@ def draw(geo: Dict, d: Optional[Dict], out_base: Path, zoom: bool, annotate: boo
     ax.set_xlabel("Horizontal distance from antenna (m)")
     ax.set_ylabel("Depth below surface (m)")
     if title:
-        ax.set_title(d["case_id"] if d else out_base.stem, fontsize=16)
-    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False, fontsize=14)
+        ax.set_title(d["case_id"] if d else out_base.stem)
+    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False)
     fig.tight_layout()
     out_base.parent.mkdir(parents=True, exist_ok=True)
     for ext in formats:
@@ -291,21 +295,21 @@ def annotate_dimensions(ax, d: Dict, handles: List) -> None:
     kw = dict(arrowstyle="<->", color="k", lw=0.9, shrinkA=0, shrinkB=0)
     xr = (w / 2 if w is not None else 2.0) + 0.25
     ax.annotate("", (xr, 0), (xr, dep), arrowprops=kw)
-    ax.text(xr + 0.05, dep / 2, "d", va="center", fontsize=16)
+    ax.text(xr + 0.05, dep / 2, "d", va="center")
     ax.annotate("", (xr, dep), (xr, dep + h), arrowprops=kw)
-    ax.text(xr + 0.05, dep + h / 2, "h", va="center", fontsize=16)
+    ax.text(xr + 0.05, dep + h / 2, "h", va="center")
     ax.annotate("", (-0.25, -h_ant), (-0.25, 0), arrowprops=kw)
-    ax.text(-0.3, -h_ant / 2, r"$h_{\rm antenna}$", va="center", ha="right", fontsize=14)
+    ax.text(-0.3, -h_ant / 2, r"$h_{\rm antenna}$", va="center", ha="right")
     if w is not None:
         yw = dep + h + 0.2
         ax.annotate("", (-w / 2, yw), (w / 2, yw), arrowprops=kw)
-        ax.text(0, yw + 0.05, "w", ha="center", va="top", fontsize=16)
+        ax.text(0, yw + 0.05, "w", ha="center", va="top")
     for face, y in (("top", dep), ("bottom", dep + h)):
         r = th[face]["fresnel_radius_m"]
         ax.plot([-r, r], [y - 0.06, y - 0.06] if face == "top" else [y + 0.06, y + 0.06],
                 color=ANTENNA_COLOR[1], ls="--", lw=1.3)
     handles.append(Line2D([], [], color=ANTENNA_COLOR[1], ls="--", lw=1.3,
-                          label=r"First Fresnel zone ($2r_{\rm F}$)"))
+                          label=r"$2r_{\rm F}$"))
 
 
 # -----------------------------------------------------------------------------

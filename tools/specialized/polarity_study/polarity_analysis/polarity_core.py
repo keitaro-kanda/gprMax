@@ -204,6 +204,8 @@ def ncc_face(x: np.ndarray, dt: float, tpl: Template, tau_s: float,
     c_lo = int(math.ceil((tau_s - lag_max_s) / dt - 1e-9))
     c_hi = int(math.floor((tau_s + lag_max_s) / dt + 1e-9))
     i_tau = int(round(tau_s / dt))
+    if c_lo > c_hi:                       # LAG_MAX < dt/2（ずらさない）: tau に最も近い標本だけ
+        c_lo = c_hi = i_tau
     L = tpl.s.size
     ms = list(range(c_lo - i_tau, c_hi - i_tau + 1))
     rhos = np.empty(len(ms))

@@ -51,11 +51,12 @@ from matplotlib.lines import Line2D    # noqa: E402
 from matplotlib.patches import Patch   # noqa: E402
 from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter  # noqa: E402
 
-plt.rcParams.update({"font.size": 9, "axes.titlesize": 9.5})
+import figure_style  # noqa: E402
+figure_style.apply()
 
 FACES = ("top", "bottom")
 TYPE_COLOR = {1: "#d62728", 2: "#1f77b4", 3: "#9a9a9a"}
-TYPE_NAME = {1: "Type 1 (expected)", 2: "Type 2 (unexpected)", 3: "Type 3 (unclassified)"}
+TYPE_NAME = {1: "Type 1", 2: "Type 2", 3: "Type 3"}
 TARGET_NAME = {"rock": "Rock", "void": "Void"}
 DEPTH_MARKER = {1.0: "o", 2.0: "s", 4.0: "^"}
 FRESNEL_PE = [patheffects.withStroke(linewidth=3.2, foreground="w")]
@@ -111,15 +112,15 @@ def fmt_size(v: float) -> str:
 def set_value_ticks(ax, ws, hs) -> None:
     """目盛りを計算の設定値（各マスの中央）に置く"""
     ax.set_xticks(ws)
-    ax.set_xticklabels([fmt_size(v) for v in ws], rotation=90, fontsize=7.5)
+    ax.set_xticklabels([fmt_size(v) for v in ws], rotation=90)
     ax.set_yticks(hs)
-    ax.set_yticklabels([fmt_size(v) for v in hs], fontsize=7.5)
+    ax.set_yticklabels([fmt_size(v) for v in hs])
     ax.minorticks_off()
 
 
 def panel_height(hs) -> float:
     """図の高さ: 高さが 2 通りしかない深さ依存性の図は低くする"""
-    return 4.4 if len(hs) > 4 else 2.6
+    return 6.6 if len(hs) > 4 else 4.0
 
 
 def save(fig, base: Path, formats) -> None:
@@ -174,7 +175,7 @@ def type_map(rows, target, depth, consts, out: Path, fresnel: bool, formats, rho
     cmap = ListedColormap([TYPE_COLOR[1], TYPE_COLOR[2], TYPE_COLOR[3]])
     cmap.set_bad("white")
     norm = BoundaryNorm([0.5, 1.5, 2.5, 3.5], cmap.N)
-    fig, axes = plt.subplots(1, 2, figsize=(8.6, panel_height(hs)), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(13, panel_height(hs)), sharey=True)
     for ax, f in zip(axes, FACES):
         ax.pcolormesh(we, he, np.ma.masked_invalid(g[f]), cmap=cmap, norm=norm,
                       edgecolors="w", linewidth=0.4)
@@ -184,18 +185,18 @@ def type_map(rows, target, depth, consts, out: Path, fresnel: bool, formats, rho
         ax.set_ylim(he[0], he[-1])
         ax.set_xlabel("Width w (m)")
         set_value_ticks(ax, ws, hs)
-        ax.set_title(f"{TARGET_NAME[target]}, d = {depth:g} m: {f}")
+        ax.set_title(f"{TARGET_NAME[target]} {f}, d = {depth:g} m")
         if np.isnan(g[f]).any():
             ii, jj = np.nonzero(np.isnan(g[f]))
             for i, j in zip(ii, jj):
-                ax.text(ws[j], hs[i], "n/a", ha="center", va="center", fontsize=6, color="0.4")
+                ax.text(ws[j], hs[i], "n/a", ha="center", va="center", color="0.4")
     axes[0].set_ylabel("Height h (m)")
     handles = [Patch(color=TYPE_COLOR[k], label=TYPE_NAME[k]) for k in (1, 2, 3)]
     if fresnel:
-        handles.append(Line2D([], [], color="k", ls="--", lw=1.5, label="w = 2 r_F (Fresnel zone diameter)"))
-    fig.tight_layout(rect=(0, 0.4 / fig.get_figheight(), 1, 1))
+        handles.append(Line2D([], [], color="k", ls="--", lw=1.5, label="$w = 2r_{\\rm F}$"))
+    fig.tight_layout(rect=(0, 0.55 / fig.get_figheight(), 1, 1))
     fig.legend(handles=handles, loc="lower center", ncol=len(handles), frameon=False,
-               bbox_to_anchor=(0.5, 0.0), fontsize=8)
+               bbox_to_anchor=(0.5, 0.0))
     save(fig, out, formats)
 
 
@@ -211,34 +212,34 @@ def score_map(rows, target, depth, consts, out: Path, fresnel: bool, formats, rh
     cmap = plt.get_cmap("RdBu_r").copy()
     cmap.set_bad("#9a9a9a")
     H = panel_height(hs)
-    fig, axes = plt.subplots(1, 2, figsize=(9.2, H), sharey=True)
-    fig.subplots_adjust(left=0.07, right=0.88, bottom=0.95 / H, top=1 - 0.35 / H, wspace=0.08)
+    fig, axes = plt.subplots(1, 2, figsize=(14, H), sharey=True)
+    fig.subplots_adjust(left=0.08, right=0.87, bottom=1.45 / H, top=1 - 0.5 / H, wspace=0.06)
     for ax, f in zip(axes, FACES):
         pm = ax.pcolormesh(we, he, np.ma.masked_invalid(g[f]), cmap=cmap, vmin=-1, vmax=1,
                            edgecolors="w", linewidth=0.4)
         low = np.abs(g[f]) < rho_min
         ii, jj = np.nonzero(low & np.isfinite(g[f]))
-        ax.plot(ws[jj], hs[ii], "k.", ms=3)
+        ax.plot(ws[jj], hs[ii], "k.", ms=6)
         ii, jj = np.nonzero(np.isnan(g[f]) & (fx[f] != 1.0))
         for i, j in zip(ii, jj):
-            ax.text(ws[j], hs[i], "n/a", ha="center", va="center", fontsize=6, color="w")
+            ax.text(ws[j], hs[i], "n/a", ha="center", va="center", color="w")
         if fresnel:
             fresnel_lines(ax, f, [r for r in rows if r["face"] == f], consts, target, depth, he)
         ax.set_xlim(we[0], we[-1])
         ax.set_ylim(he[0], he[-1])
         ax.set_xlabel("Width w (m)")
         set_value_ticks(ax, ws, hs)
-        ax.set_title(f"{TARGET_NAME[target]}, d = {depth:g} m: {f}")
+        ax.set_title(f"{TARGET_NAME[target]} {f}, d = {depth:g} m")
     axes[0].set_ylabel("Height h (m)")
-    cax = fig.add_axes([0.9, 0.95 / H, 0.015, 1 - 1.3 / H])
+    cax = fig.add_axes([0.89, 1.45 / H, 0.015, 1 - 1.95 / H])
     cb = fig.colorbar(pm, cax=cax)
-    cb.set_label("rho x sign(expected)\n(+1: expected, -1: opposite)")
-    handles = [Patch(color="#9a9a9a", label="Type 3 (windows overlap)"),
-               Line2D([], [], color="k", marker=".", ls="", label=f"|rho| < {rho_min:g}")]
+    cb.set_label("Agreement score")
+    handles = [Patch(color="#9a9a9a", label="Overlap"),
+               Line2D([], [], color="k", marker=".", ls="", label=f"$|\\rho|$ < {rho_min:g}")]
     if fresnel:
-        handles.append(Line2D([], [], color="k", ls="--", lw=1.5, label="w = 2 r_F (Fresnel zone diameter)"))
+        handles.append(Line2D([], [], color="k", ls="--", lw=1.5, label="$w = 2r_{\\rm F}$"))
     fig.legend(handles=handles, loc="lower center", ncol=len(handles), frameon=False,
-               bbox_to_anchor=(0.47, 0.0), fontsize=8)
+               bbox_to_anchor=(0.47, 0.0))
     save(fig, out, formats)
 
 
@@ -254,7 +255,7 @@ def fresnel_normalized(rows_t, target, out: Path, formats, rho_min):
         print(f"  {target}: no common heights across depths; skipped the normalized figure")
         return
     lines = [(h, dm) for h in common for dm in depths]
-    fig, axes = plt.subplots(1, 2, figsize=(9.0, 0.42 * len(lines) + 1.6), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 0.55 * len(lines) + 2.6), sharey=True)
     for ax, f in zip(axes, FACES):
         for k, (h, dm) in enumerate(lines):
             sel = [r for r in rows_t if r["face"] == f and r["depth_m"] == dm
@@ -264,14 +265,14 @@ def fresnel_normalized(rows_t, target, out: Path, formats, rho_min):
             ty = [r["type_new"] for r in sel]
             ax.plot(x, np.full(x.size, k), color="0.8", lw=0.8, zorder=1)
             ax.scatter(x, np.full(x.size, k), c=[TYPE_COLOR[t] for t in ty],
-                       marker=DEPTH_MARKER.get(dm, "o"), s=30, edgecolors="k", linewidths=0.4, zorder=2)
+                       marker=DEPTH_MARKER.get(dm, "o"), s=70, edgecolors="k", linewidths=0.4, zorder=2)
         ax.axvline(1.0, color="k", ls="--", lw=0.9)
         ax.set_xscale("log")
         ax.xaxis.set_major_locator(FixedLocator([0.1, 0.2, 0.5, 1, 2, 5, 10]))
         ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
         ax.xaxis.set_minor_formatter(NullFormatter())
-        ax.set_xlabel("w / 2 r_F")
-        ax.set_title(f"{TARGET_NAME[target]}: {f}")
+        ax.set_xlabel("$w / 2r_{\\rm F}$")
+        ax.set_title(f"{TARGET_NAME[target]} {f}")
         for k in range(1, len(common)):
             ax.axhline(k * len(depths) - 0.5, color="0.6", lw=0.6)
     axes[0].set_yticks(range(len(lines)))
@@ -280,10 +281,9 @@ def fresnel_normalized(rows_t, target, out: Path, formats, rho_min):
     handles = [Patch(color=TYPE_COLOR[k], label=TYPE_NAME[k]) for k in (1, 2, 3)]
     handles += [Line2D([], [], color="w", marker=DEPTH_MARKER.get(dm, "o"), markeredgecolor="k",
                        markerfacecolor="0.7", ls="", label=f"d = {dm:g} m") for dm in depths]
-    handles.append(Line2D([], [], color="k", ls="--", label="w = 2 r_F"))
-    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 0.0),
-               fontsize=8)
-    fig.tight_layout(rect=(0, 0.75 / fig.get_figheight(), 1, 1))
+    handles.append(Line2D([], [], color="k", ls="--", label="$w = 2r_{\\rm F}$"))
+    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 0.0))
+    fig.tight_layout(rect=(0, 1.0 / fig.get_figheight(), 1, 1))
     save(fig, out, formats)
 
 
