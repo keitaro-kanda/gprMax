@@ -41,10 +41,14 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 
-# 図の文字の大きさ（全図共通のルール）：タイトル・軸ラベル 16、目盛り・凡例・図中の文字 12
+# 図の共通ルール
+#   文字の大きさ：タイトル・軸ラベル 16、目盛り・凡例・図中の文字 12
+#   グリッド線：特に意図がない限り全パネルに付ける（破線 '--'、alpha 0.3）
 plt.rcParams.update({'axes.titlesize': 16, 'axes.labelsize': 16, 'figure.titlesize': 16,
                      'xtick.labelsize': 12, 'ytick.labelsize': 12, 'legend.fontsize': 12,
-                     'font.size': 12})
+                     'font.size': 12,
+                     'axes.grid': True, 'axes.grid.which': 'major', 'axes.axisbelow': 'line',
+                     'grid.linestyle': '--', 'grid.alpha': 0.3})
 
 import subsurface_model as sm
 import ascan_spectrum as asp
@@ -746,7 +750,7 @@ def plot_bscan_ascan(res, T, dt, out_dir, tgt_name, stem, a_norm, R=None):
     ax2.set_ylim(t_max, 0)
     ax2.set_xlabel('Envelope [dB]')
     ax2.tick_params(labelleft=False)
-    ax2.grid(alpha=0.3)
+    ax2.grid(True, ls='--', alpha=0.3)
     ax2.legend(handles=ax2.get_legend_handles_labels()[0] + ([h] if h else []), loc='upper center', bbox_to_anchor=(0.5, -0.1))
     ax2.set_title('(b) Mean A-scan')
     save_figure(fig, out_dir, stem)
@@ -779,7 +783,7 @@ def _plot_reflection_ab(res, ax1, ax2, tgt_name, rows=(), cols=()):
     ax1.set_ylabel('Gated peak [dB]')
     ax1.set_ylim(-IMG_DB_RANGE - 10, 5)
     ax1.legend(handles=ax1.get_legend_handles_labels()[0] + ([h] if h else []), loc='upper right')
-    ax1.grid(alpha=0.3)
+    ax1.grid(True, ls='--', alpha=0.3)
     ax1.set_title('(a) Reflection strength')
 
     # --- (b) -------------------------------------------------------------------
@@ -801,7 +805,7 @@ def _plot_reflection_ab(res, ax1, ax2, tgt_name, rows=(), cols=()):
     ax2.set_xlabel('Two-way time [ns]')
     ax2.set_ylabel('P_D')
     ax2.legend(handles=handles, loc='upper right')
-    ax2.grid(alpha=0.3)
+    ax2.grid(True, ls='--', alpha=0.3)
     ax2.set_title('(b) Detection probability')
 
 
@@ -852,14 +856,14 @@ def plot_reflection(res, out_dir, tgt_name):
     ax3.axhline(0, color='k', ls='--', lw=1.2)
     ax3.set_ylabel('Peak − threshold [dB]')
     ax3.set_title('(c) Each trace')
-    ax3.grid(alpha=0.3)
+    ax3.grid(True, ls='--', alpha=0.3)
     if rows:
         ax3.legend(loc='best')
     ax3.tick_params(labelbottom=False)
     ax4.set_xlabel(res['x_label'])
     ax4.set_ylabel('Peak time [ns]')
     ax4.invert_yaxis()
-    ax4.grid(alpha=0.3)
+    ax4.grid(True, ls='--', alpha=0.3)
     ax4.set_title('(d) Peak time in the gate')
     save_figure(fig, out_dir, 'fig2-2_reflection_traces')
 
@@ -886,7 +890,7 @@ def _rate_panels_ab(res, key, ax1, ax2, tgt_name, ylab_raw, raw_T, raw_R, ylab_r
                           label='thin: blocks'))
     ax1.legend(handles=handles + ([h] if h else []))
     ax1.set_ylabel(ylab_raw)
-    ax1.grid(alpha=0.3)
+    ax1.grid(True, ls='--', alpha=0.3)
     ax1.set_title('(a) ' + ylab_raw.split(' [')[0])
     # --- (b) -------------------------------------------------------------------
 
@@ -910,7 +914,7 @@ def _rate_panels_ab(res, key, ax1, ax2, tgt_name, ylab_raw, raw_T, raw_R, ylab_r
     if show_guards:
         _mark_used_windows(ax2, res, legend=False)
     ax2.legend(ncol=2)
-    ax2.grid(alpha=0.3)
+    ax2.grid(True, ls='--', alpha=0.3)
     ax2.set_title('(b) Local ' + ylab_rate.split(' [')[0].lower())
 
 
@@ -929,7 +933,7 @@ def _rate_panels_cd(res, key, ax3, ax4, tgt_name, ylab_rate, unit, channel):
     ax3.set_ylabel('P_D')
     ax3.set_xlabel('Two-way time [ns]')
     ax3.legend()
-    ax3.grid(alpha=0.3)
+    ax3.grid(True, ls='--', alpha=0.3)
     ax3.set_title('(c) Detection probability')
     rows = [r for r in res['window_rows'] if r['channel'] == channel]
     for i, r in enumerate(rows):
@@ -951,7 +955,7 @@ def _rate_panels_cd(res, key, ax3, ax4, tgt_name, ylab_rate, unit, channel):
     ax4.legend(handles=[Line2D([], [], marker='o', ls='', color=COL_REF, label=REFERENCE_CONDITION),
                         Line2D([], [], marker='o', ls='', color=COL_TGT, label=tgt_name),
                         Line2D([], [], color='k', label='clutter range')], loc='lower right')
-    ax4.grid(alpha=0.3)
+    ax4.grid(True, ls='--', alpha=0.3)
     ax4.set_title('(d) Window test')
     if rows:
         lo = min(min(np.min(r['vals_R']), np.min(r['vals_T']), r['ref_mean'] - r['ref_half_width'])
@@ -1090,7 +1094,7 @@ def plot_single_reflection(res, out_dir, tgt_name):
     ax1.set_ylabel('Gated peak [dB]')
     ax1.set_ylim(-IMG_DB_RANGE - 10, 5)
     ax1.legend(handles=ax1.get_legend_handles_labels()[0] + ([h] if h else []), loc='upper right')
-    ax1.grid(alpha=0.3)
+    ax1.grid(True, ls='--', alpha=0.3)
     ax1.set_title('(a) Reflection strength ({})'.format(tgt_name))
     rows = _single_event_peaks(res)
     for i, r in enumerate(rows):
@@ -1104,7 +1108,7 @@ def plot_single_reflection(res, out_dir, tgt_name):
     ax2.set_xlim(-0.7, len(rows) - 0.3)
     ax2.set_ylabel('Trace peak [dB]')
     ax2.set_title('(b) At interfaces')
-    ax2.grid(alpha=0.3)
+    ax2.grid(True, ls='--', alpha=0.3)
     if rows:
         lo_ = min(np.nanmin(r['peaks_db']) for r in rows)
         hi_ = max(np.nanmax(r['peaks_db']) for r in rows)
@@ -1128,7 +1132,7 @@ def _single_rate_figure(res, out_dir, tgt_name, stem, title, ylab_raw, raw, rate
     h = _event_lines(ax1, res['events'])
     ax1.set_ylabel(ylab_raw)
     ax1.legend(handles=ax1.get_legend_handles_labels()[0] + ([h] if h else []))
-    ax1.grid(alpha=0.3)
+    ax1.grid(True, ls='--', alpha=0.3)
     ax1.set_title('(a) {} ({})'.format(ylab_raw.split(' [')[0], tgt_name))
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
@@ -1143,7 +1147,7 @@ def _single_rate_figure(res, out_dir, tgt_name, stem, title, ylab_raw, raw, rate
     ax2.set_xlabel('Two-way time [ns]')
     _mark_used_windows(ax2, res, legend=False)
     ax2.legend()
-    ax2.grid(alpha=0.3)
+    ax2.grid(True, ls='--', alpha=0.3)
     ax2.set_title('(b) Local ' + ylab_rate.split(' [')[0].lower())
     rows = [r for r in res['window_rows'] if r['channel'] == channel]
     for i, r in enumerate(rows):
@@ -1162,7 +1166,7 @@ def _single_rate_figure(res, out_dir, tgt_name, stem, title, ylab_raw, raw, rate
     ax3.set_ylabel('Fitted rate [{}]'.format(unit))
     ax3.legend(handles=[Line2D([], [], marker='o', ls='', color=COL_TGT, label='blocks'),
                         Line2D([], [], color='k', label='mean ± {:.2f} σ'.format(z))], loc='lower right')
-    ax3.grid(alpha=0.3)
+    ax3.grid(True, ls='--', alpha=0.3)
     ax3.set_title('(c) Window fit')
     if rows:
         ms = [(np.mean(r['vals_T']), z * np.std(r['vals_T'], ddof=1)) for r in rows]
@@ -1560,7 +1564,7 @@ def _lsr_panels_ab(res, ax1, ax2, tgt_name):
     ax1.set_ylabel('Gated power [dB]')
     ax1.set_title('(a) Reflection spectra ({})'.format(tgt_name))
     ax1.legend(loc='best')
-    ax1.grid(alpha=0.3)
+    ax1.grid(True, ls='--', alpha=0.3)
     bar_h = []
     for k, s in enumerate(L['segs']):
         col = cols[s['B']]
@@ -1588,7 +1592,7 @@ def _lsr_panels_ab(res, ax1, ax2, tgt_name):
     ax2.set_ylabel('LSR [dB]')
     ax2.set_title('(b) Log spectral ratio')
     ax2.legend(handles=ax2.get_legend_handles_labels()[0] + bar_h, loc='lower left', ncol=2)
-    ax2.grid(alpha=0.3)
+    ax2.grid(True, ls='--', alpha=0.3)
     return cols
 
 
@@ -1643,7 +1647,7 @@ def plot_lsr(res, out_dir, tgt_name):
         Line2D([], [], marker='D', ls='', mfc='none', mec='k', label='model (ice)'),
         Line2D([], [], marker='s', ls='', mfc='none', mec='k', label='model (no ice)')],
         loc='lower right')
-    ax3.grid(alpha=0.3)
+    ax3.grid(True, ls='--', alpha=0.3)
     save_figure(fig, out_dir, 'fig6-2_spectral_ratio_test')
 
 
@@ -1727,7 +1731,7 @@ def plot_lsr_bootstrap(res, out_dir, tgt_name):
     ax1.set_xlabel('tanδ')
     ax1.set_ylabel('Count')
     ax1.set_title('(a) Bootstrap of tanδ')
-    ax1.grid(alpha=0.3)
+    ax1.grid(True, ls='--', alpha=0.3)
     for s in tests:
         b = B['segs'][s['name']]
         col = cols[s['B']]
@@ -1750,7 +1754,7 @@ def plot_lsr_bootstrap(res, out_dir, tgt_name):
                                             segs[0]['name']) if len(tests) == 1 else 'Δ tanδ vs reference')
     ax2.set_ylabel('Count')
     ax2.set_title('(b) Difference: ' + ', '.join(VERDICT_EN[B['segs'][s['name']]['verdict']] for s in tests))
-    ax2.grid(alpha=0.3)
+    ax2.grid(True, ls='--', alpha=0.3)
     save_figure(fig, out_dir, 'fig7_spectral_ratio_bootstrap')
 
 
