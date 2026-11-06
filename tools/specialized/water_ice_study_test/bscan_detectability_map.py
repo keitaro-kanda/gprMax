@@ -15,7 +15,7 @@
           P_D = 0.5 の境界は信号の中央値 ＝ しきい値。
 
 先に案 C を出し、1 m・2 m で案 A と比べてから案 A の曲線と地図を使う。
-式の説明は detectability_map.md。
+式の説明は bscan_detectability_map.md。
 
 出力：<対象の merged.out のフォルダ>/bscan_detection/detectability_map/（PDF は pdf/ の下）
 """
