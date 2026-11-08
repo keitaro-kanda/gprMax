@@ -44,11 +44,13 @@ from matplotlib.lines import Line2D
 # 図の共通ルール
 #   文字の大きさ：タイトル・軸ラベル 16、目盛り・凡例・図中の文字 12
 #   グリッド線：特に意図がない限り全パネルに付ける（破線 '--'、alpha 0.3）
+#   補助目盛り（minor ticks）：全パネルで表示する
 plt.rcParams.update({'axes.titlesize': 16, 'axes.labelsize': 16, 'figure.titlesize': 16,
                      'xtick.labelsize': 12, 'ytick.labelsize': 12, 'legend.fontsize': 12,
                      'font.size': 12,
                      'axes.grid': True, 'axes.grid.which': 'major', 'axes.axisbelow': 'line',
-                     'grid.linestyle': '--', 'grid.alpha': 0.3})
+                     'grid.linestyle': '--', 'grid.alpha': 0.3,
+                     'xtick.minor.visible': True, 'ytick.minor.visible': True})
 
 import subsurface_model as sm
 import ascan_spectrum as asp
