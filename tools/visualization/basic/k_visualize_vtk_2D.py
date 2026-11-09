@@ -343,6 +343,7 @@ def build_property_maps(freq):
 colors       = ['viridis', 'plasma', 'cividis']
 names        = ['Relative permittivity', 'Conductivity [S/m]', 'Loss tangent']
 output_names = ['Permittivity', 'Conductivity', 'Losstangent']
+axis_labels  = [r'$\varepsilon_r$', 'Conductivity [S/m]', r'$\tan \delta$']   # colour bar / profile x-axis
 
 # imshow extent: [x_left, x_right, depth_bottom, depth_top]
 # imshow treats the 3rd value as "bottom" and 4th as "top", so placing
@@ -374,24 +375,24 @@ def draw_map(fig, ax, freq, map_data, idx):
     """2D map with colour bar (shared by the 'map + profile' and 'map only' figures)."""
     im = ax.imshow(map_data, **_imshow_kwargs(idx))
     # _add_surface_line(ax)
-    ax.set_title(names[idx] + f'  @ {freq_label(freq)}', size=14)
+    ax.set_title(names[idx] + f'  @ {freq_label(freq)}', size=18)
     ax.set_xlabel('X [m]', size=18)
     ax.set_ylabel('Depth [m]', size=18)
     ax.set_ylim(depth_bottom, depth_top)   # deep at bottom (positive), vacuum at top (negative)
     ax.tick_params(labelsize=14)
     ax.grid(alpha=0.3, linestyle='-.')
     divider = axgrid1.make_axes_locatable(ax)
-    cax = divider.append_axes('right', size='5%', pad=0.1)
+    cax = divider.append_axes('right', size=axgrid1.axes_size.AxesY(ax, aspect=1/20), pad=0.1)  # matplotlib default (aspect=20)
     cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label(names[idx], size=14)
-    cbar.ax.tick_params(labelsize=12)
+    cbar.set_label(axis_labels[idx], size=18)
+    cbar.ax.tick_params(labelsize=14)
 
 
 def draw_profile(ax, profile_data, idx, title=None):
     """Depth profile (shared by the 'map + profile' and 'profile only' figures)."""
     ax.plot(profile_data, depth_axis)
     # ax.axhline(0.0, color='gray', linewidth=1.0, linestyle='--')  # surface
-    ax.set_xlabel(names[idx], size=18)
+    ax.set_xlabel(axis_labels[idx], size=18)
     ax.set_ylabel('Depth [m]', size=18)
     if idx == 0:
         ax.set_xlim(0.95, 4.0)
@@ -402,7 +403,7 @@ def draw_profile(ax, profile_data, idx, title=None):
     ax.minorticks_on()
     ax.grid(alpha=0.3, linestyle='-.')
     if title:
-        ax.set_title(title, size=14)
+        ax.set_title(title, size=18)
 
 
 def _save(fig, folder, stem):
@@ -411,13 +412,40 @@ def _save(fig, folder, stem):
     print(f"Saved: {os.path.relpath(os.path.join(folder, stem), output_dir)}.png / .pdf")
 
 
+# Layout of the 'map + profile' figure [inch]
+MAP_HEIGHT_IN    = 7.0    # height of the map and profile axes (reduced if the map exceeds MAX_MAP_WIDTH_IN)
+PROFILE_WIDTH_IN = 2.5    # width of the profile axes (fixed)
+MAX_MAP_WIDTH_IN = 12.0   # upper limit of the map width
+_MARGIN_LEFT_IN   = 1.0   # y label / ticks of the map
+_MARGIN_RIGHT_IN  = 0.3
+_MARGIN_BOTTOM_IN = 0.9   # x labels / ticks
+_MARGIN_TOP_IN    = 0.5   # title
+_GAP_IN           = 2.0   # colour bar ticks/label + y label/ticks of the profile
+_CBAR_PAD_IN      = 0.1   # same as pad in draw_map
+
+
 def plot_map_profile(freq, map_data, profile_data, idx):
-    """2D map (left) and depth profile (right) side by side. Returns the figure (not closed)."""
+    """2D map (left) and depth profile (right) side by side. Returns the figure (not closed).
+    The profile width is fixed; the map width follows the aspect ratio of the .vti."""
     map_aspect = map_data.shape[0] / map_data.shape[1]
-    fig, ax = plt.subplots(nrows=1, ncols=2, width_ratios=[3, 1], figsize=(12, 9 * map_aspect))
-    draw_map(fig, ax[0], freq, map_data, idx)
-    draw_profile(ax[1], profile_data, idx)
-    fig.tight_layout()
+    map_h = MAP_HEIGHT_IN
+    profile_w = PROFILE_WIDTH_IN
+    map_w = map_h / map_aspect                            # map image width for the fixed height
+    if map_w > MAX_MAP_WIDTH_IN:                          # too wide: cap the width, shrink height and profile width
+        scale = MAX_MAP_WIDTH_IN / map_w
+        map_h *= scale
+        profile_w *= scale
+        map_w = MAX_MAP_WIDTH_IN
+    map_box_w = map_w + map_h / 20 + _CBAR_PAD_IN         # map + colour bar (aspect=20 in draw_map)
+    fig_w = _MARGIN_LEFT_IN + map_box_w + _GAP_IN + profile_w + _MARGIN_RIGHT_IN
+    fig_h = _MARGIN_BOTTOM_IN + map_h + _MARGIN_TOP_IN
+    fig = plt.figure(figsize=(fig_w, fig_h))
+    bottom, height = _MARGIN_BOTTOM_IN / fig_h, map_h / fig_h
+    ax_map = fig.add_axes([_MARGIN_LEFT_IN / fig_w, bottom, map_box_w / fig_w, height])
+    ax_prof = fig.add_axes([(_MARGIN_LEFT_IN + map_box_w + _GAP_IN) / fig_w, bottom,
+                            profile_w / fig_w, height])
+    draw_map(fig, ax_map, freq, map_data, idx)
+    draw_profile(ax_prof, profile_data, idx)
     _save(fig, output_dir, f'{output_names[idx]}_{freq:.2e}_map')
     return fig
 
