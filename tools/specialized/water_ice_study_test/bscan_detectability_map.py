@@ -40,12 +40,12 @@ from ascan_spectrum import load_trace, measure_peak
 from gprMax.exceptions import CmdInputError
 
 # 図の共通ルール（このファイルの中でも明示する。bscan_detection の版に依存しないように）
-#   文字の大きさ：タイトル・軸ラベル 16、目盛り・凡例・図中の文字 12
+#   文字の大きさ：タイトル・軸ラベル 18、目盛り・凡例・図中の文字 14
 #   グリッド線：特に意図がない限り全パネルに付ける（破線 '--'、alpha 0.3）
 #   補助目盛り（minor ticks）：全パネルで表示する
-plt.rcParams.update({'axes.titlesize': 16, 'axes.labelsize': 16, 'figure.titlesize': 16,
-                     'xtick.labelsize': 12, 'ytick.labelsize': 12, 'legend.fontsize': 12,
-                     'font.size': 12,
+plt.rcParams.update({'axes.titlesize': 18, 'axes.labelsize': 18, 'figure.titlesize': 18,
+                     'xtick.labelsize': 14, 'ytick.labelsize': 14, 'legend.fontsize': 14,
+                     'font.size': 14,
                      'axes.grid': True, 'axes.grid.which': 'major', 'axes.axisbelow': 'line',
                      'grid.linestyle': '--', 'grid.alpha': 0.3,
                      'xtick.minor.visible': True, 'ytick.minor.visible': True})
@@ -71,7 +71,10 @@ A_V_GRID = np.round(np.arange(0.0, 0.4001, 0.01), 4)    # 地図の横軸（体�
 A_Z_GRID = np.round(np.arange(0.20, 2.95 + 1e-9, 0.05), 3)  # 地図の縦軸：氷層の上端の深さ [m]
 A_SOURCE = 'same'                  # 使う基準点：'same'（上端→①、下端→②）/ 'nearest'（深さが近いほう）
 A_WORK_HW_NS = 6.0                 # 判定に使う時間窓の半幅（界面の走時 ± これ）
-CROSS_TOL_DB = 1.0                 # 相互予測の合格の目安 [dB]
+VMIN_SMOOTH_HW_M = 0.25            # v_min(z) を平滑化する移動中央値の半幅 h [m]（続けて半幅 h/2 の移動平均）
+CROSS_K_SIGMA = 2.0                # 検証の目安：差が「ばらつき σ の何倍以内」なら整合とみなすか
+BIAS_CHECK = True                  # 全深さで基準点を入れ替えた地図も作り、系統的な偏りを調べる
+                                   #（地図の計算時間が約 2 倍になる）
 SURFACE_SKIP_NS = 5.0              # 地表反射の後ろこの範囲は使わない
 EDGE_GUARD_NS = 1.0                # 計算領域の底からの反射の手前この範囲は使わない
 
@@ -357,25 +360,83 @@ def pd_point(ctx, k, v, z_top, source):
     return pd_local(ctx, Tw, i0, t_k), t_k, gain
 
 
+def compute_map(ctx, k, choose):
+    """界面 k の P_D(v, z) の地図。choose(z) が使う基準点を返す。"""
+    P = np.full((A_Z_GRID.size, A_V_GRID.size), np.nan)
+    Gm = np.full_like(P, np.nan)
+    tk = np.full(A_Z_GRID.size, np.nan)
+    srcs = []
+    for i, z in enumerate(A_Z_GRID):
+        s = choose(z)
+        srcs.append(s)
+        for j, v in enumerate(A_V_GRID):
+            P[i, j], t_k, Gm[i, j] = pd_point(ctx, k, v, z, s)
+            if j == 0:
+                tk[i] = t_k
+    vmin = np.array([crossing(A_V_GRID, P[i]) if np.isfinite(P[i]).any() else np.nan
+                     for i in range(A_Z_GRID.size)])
+    return P, Gm, tk, srcs, vmin
+
+
+def smooth_vmin(z, v, hw):
+    """v_min(z) を dB で移動中央値（半幅 hw）→ 移動平均（半幅 hw/2）にかける。有限の点だけを使う。
+    戻り値：平滑化した v_min、各点の残差 [dB]（平滑線からのずれ）、点ごとのばらつき σ_pt [dB]。"""
+    v = np.asarray(v, dtype=float)
+    ok = np.isfinite(v) & (v > 0)
+    x = np.full(v.shape, np.nan)
+    x[ok] = DB20 * np.log(v[ok])
+    xs = np.full(v.shape, np.nan)
+    for i in np.nonzero(ok)[0]:
+        sel = ok & (np.abs(z - z[i]) <= hw + 1e-9)
+        xs[i] = np.median(x[sel])
+    xm = xs.copy()                                  # 中央値の段差をならす短い移動平均（半幅 hw/2）
+    for i in np.nonzero(ok)[0]:
+        sel = ok & (np.abs(z - z[i]) <= 0.5 * hw + 1e-9)
+        xm[i] = np.mean(xs[sel])
+    xs = xm
+    r = x - xs
+    rr = r[np.isfinite(r)]
+    sig = float(1.4826 * np.median(np.abs(rr - np.median(rr)))) if rr.size >= 5 else np.nan
+    return 10.0 ** (xs / 20.0), r, sig
+
+
+def neff(d):
+    """隣り合う深さの相関を考えた実効的な独立点数 n(1 − ρ1)/(1 + ρ1)（ρ1：ずれ 1 の自己相関）。"""
+    d = d[np.isfinite(d)]
+    n = d.size
+    if n < 3:
+        return float(n)
+    a = d - d.mean()
+    rho1 = float(np.sum(a[1:] * a[:-1]) / np.sum(a * a)) if np.sum(a * a) > 0 else 0.0
+    rho1 = min(max(rho1, 0.0), 0.95)
+    return float(max(1.0, n * (1.0 - rho1) / (1.0 + rho1)))
+
+
 def case_new_a(ctx):
     t0 = time.time()
-    out = {'pd': {}, 'vmin': {}, 'source': {}, 'gain': {}, 't': {}}
+    out = {'pd': {}, 'vmin': {}, 'source': {}, 'gain': {}, 't': {},
+           'vmin_s': {}, 'resid_db': {}, 'sigma_pt': {}, 'bias': {}}
     for k in EVENTS:
-        P = np.full((A_Z_GRID.size, A_V_GRID.size), np.nan)
-        Gm = np.full_like(P, np.nan)
-        tk = np.full(A_Z_GRID.size, np.nan)
-        srcs = []
-        for i, z in enumerate(A_Z_GRID):
-            s = source_for(ctx, k, z)
-            srcs.append(s)
-            for j, v in enumerate(A_V_GRID):
-                P[i, j], t_k, Gm[i, j] = pd_point(ctx, k, v, z, s)
-                if j == 0:
-                    tk[i] = t_k
-        out['pd'][k], out['gain'][k], out['t'][k], out['source'][k] = P, Gm, tk, srcs
-        out['vmin'][k] = np.array([crossing(A_V_GRID, P[i]) if np.isfinite(P[i]).any() else np.nan
-                                   for i in range(A_Z_GRID.size)])
+        P, Gm, tk, srcs, vmin = compute_map(ctx, k, lambda z, k=k: source_for(ctx, k, z))
+        out['pd'][k], out['gain'][k], out['t'][k], out['source'][k], out['vmin'][k] = \
+            P, Gm, tk, srcs, vmin
+        d_k = depth_axis(ctx, k)
+        out['vmin_s'][k], out['resid_db'][k], out['sigma_pt'][k] = \
+            smooth_vmin(d_k, vmin, VMIN_SMOOTH_HW_M)
         print('  新案 A: {} の地図を計算しました（{:.0f} 秒）'.format(k, time.time() - t0))
+        if BIAS_CHECK:
+            # 全深さで基準点を入れ替えた地図（偏りの検証用）
+            other = {s: [e for e in EVENTS if e != s][0] for s in EVENTS}
+            _, _, _, _, valt = compute_map(ctx, k, lambda z, k=k: other[source_for(ctx, k, z)])
+            d = DB20 * np.log(valt / vmin)
+            d = np.where(np.isfinite(d), d, np.nan)
+            m = np.isfinite(d)
+            ne = neff(d)
+            out['bias'][k] = {'vmin_alt': valt, 'diff_db': d, 'n': int(m.sum()), 'n_eff': ne,
+                              'mean_db': float(np.nanmean(d)) if m.any() else np.nan,
+                              'std_db': float(np.nanstd(d)) if m.any() else np.nan,
+                              'se_db': float(np.nanstd(d) / np.sqrt(ne)) if m.any() else np.nan}
+            print('  新案 A: {} の入れ替え地図を計算しました（{:.0f} 秒）'.format(k, time.time() - t0))
     out['vcap'] = np.array([pore_capacity(ctx['rec_T'], z) for z in A_Z_GRID])
 
     # 検証：基準点どうしの相互予測（① → ② の位置、② → ① の位置）
@@ -387,7 +448,14 @@ def case_new_a(ctx):
         vx = crossing(C['v'], pdx)
         vc = C['anchor'][k]['vmin_C']
         diff = DB20 * np.log(vx / vc) if np.isfinite(vx) and np.isfinite(vc) else np.nan
-        out['cross'][k] = {'source': s, 'pd': pdx, 'vmin': vx, 'diff_db': diff}
+        # 差のばらつき σ_Δ：入れ替え地図があればその差の標準偏差（直接の測定）、
+        # なければ点ごとのばらつき σ_pt の √2 倍（独立な 2 つの推定値の差）
+        if BIAS_CHECK and np.isfinite(out['bias'][k]['std_db']):
+            sig, how = out['bias'][k]['std_db'], '入れ替え地図の差の標準偏差'
+        else:
+            sig, how = np.sqrt(2.0) * out['sigma_pt'][k], '√2 × σ_pt'
+        out['cross'][k] = {'source': s, 'pd': pdx, 'vmin': vx, 'diff_db': diff,
+                           'sigma_db': float(sig), 'sigma_how': how}
     # 自己整合：同じ基準点で z = z0 に置いたもの（案 C と同じはず）
     out['self'] = {}
     for k in EVENTS:
@@ -467,7 +535,7 @@ DEPTH_LABEL = 'Depth below surface [m]'
 
 
 # =============================================================================
-# 7. 作図（タイトル・軸ラベル 16、目盛り・凡例・図中の文字 12、グリッドは破線 alpha 0.3）
+# 7. 作図（タイトル・軸ラベル 18、目盛り・凡例・図中の文字 14、グリッドは破線 alpha 0.3）
 # =============================================================================
 def plot_cross(ctx, out_dir):
     """figV1：基準点での P_D と濃度。実線＝案 C、破線＝もう一方の基準点からの予測、★＝gprMax。"""
@@ -571,18 +639,28 @@ def plot_map(ctx, out_dir):
 
 
 def plot_vmin(ctx, out_dir):
-    """figA2：検出できる最小濃度 v_min（P_D = 0.5）と氷層の上端の深さ。"""
+    """figA2：検出できる最小濃度 v_min（P_D = 0.5）と界面の深さ。
+    細線＋点＝各深さの値、太線＝移動中央値、帯＝± CROSS_K_SIGMA · σ_pt（各深さの値のばらつき）。"""
     A, C, Ap = ctx['A'], ctx['C'], ctx['Ap']
-    fig, ax = plt.subplots(figsize=(9, 8), layout='constrained')
+    fig, ax = plt.subplots(figsize=(13, 8), layout='constrained')
     fin, ys = [], []
     for k in EVENTS:
         vm, z = A['vmin'][k], depth_axis(ctx, k)
+        vs, sig = A['vmin_s'][k], A['sigma_pt'][k]
         ys.append(z[np.isfinite(vm)])
-        ax.plot(100 * vm, z, color=EV_COL[k], lw=2.2, label='{}: A'.format(k))
+        ax.plot(100 * vm, z, color=EV_COL[k], lw=0.8, alpha=0.6, marker='.', ms=4)
+        ok = np.isfinite(vs)
+        if np.isfinite(sig) and ok.any():
+            f = 10.0 ** (CROSS_K_SIGMA * sig / 20.0)
+            ax.fill_betweenx(z[ok], 100 * vs[ok] / f, 100 * vs[ok] * f, color=EV_COL[k],
+                             alpha=0.2, lw=0)
+            fin.append(vs[ok] * f)
+        ax.plot(100 * vs, z, color=EV_COL[k], lw=2.4,
+                label='{}: A (±{:.0f}σ = ±{:.1f} dB)'.format(k, CROSS_K_SIGMA, CROSS_K_SIGMA * sig))
         fin.append(vm[np.isfinite(vm)])
         if SHOW_A_PRIME_REF and Ap['vmin'][k] is not None:
             vp = np.where(np.isfinite(Ap['vmin'][k]), Ap['vmin'][k], np.nan)
-            ax.plot(100 * vp, z, color=EV_COL[k], lw=1.0, ls='--', label="{}: A' (ref)".format(k))
+            ax.plot(100 * vp, z, color=EV_COL[k], lw=1.2, ls='--', label="{}: A' (ref)".format(k))
         anc = C['anchor'][k]
         if np.isfinite(anc['vmin_C']):
             ax.plot(100 * anc['vmin_C'], anc['depth_m'], marker='*', ms=16, color=EV_COL[k],
@@ -605,7 +683,7 @@ def plot_vmin(ctx, out_dir):
     ax.set_xlim(0, right)
     ax.set_xlabel('Minimum detectable ice [vol%]')
     ax.set_ylabel(DEPTH_LABEL)
-    ax.legend(loc='lower right')
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))   # 凡例は枠の外（線と重ねない）
     bd.save_figure(fig, out_dir, 'figA2_vmin_curve')
 
 
@@ -641,7 +719,10 @@ def write_outputs(ctx, out_dir):
                [dict(ice_top_depth_m=float(z), pores_full=float(A['vcap'][i]),
                      **{'{}_surface_depth_m'.format(k): float(depth_axis(ctx, k)[i]) for k in EVENTS},
                      **{'{}_vmin'.format(k): float(A['vmin'][k][i]) for k in EVENTS},
+                     **{'{}_vmin_smoothed'.format(k): float(A['vmin_s'][k][i]) for k in EVENTS},
                      **{'{}_source'.format(k): A['source'][k][i] for k in EVENTS},
+                     **({'{}_vmin_other_anchor'.format(k): float(A['bias'][k]['vmin_alt'][i])
+                         for k in EVENTS} if BIAS_CHECK else {}),
                      **{'{}_t_ns'.format(k): float(A['t'][k][i]) for k in EVENTS},
                      **({'{}_vmin_Aprime_ref'.format(k): float(Ap['vmin'][k][i]) for k in EVENTS}
                         if SHOW_A_PRIME_REF else {}))
@@ -671,17 +752,49 @@ def write_outputs(ctx, out_dir):
         an = C['anchor'][k]
         L.append('  {:<10} P_D：gprMax の T {:.3f} / 合成（v0）{:.3f}　→　v_min,C = {}'.format(
             k, an['pd_T'], an['pd_C_at_v0'], _fmt_v(an['vmin_C'])))
-    L += ['', '[新案 A の検証：基準点どうしの相互予測]  差 = 20 log10(v_min,予測 / v_min,C)']
+    kk = CROSS_K_SIGMA
+    L += ['', '[新案 A の検証]',
+          '  v_min の推定値は、1 回分のランダム場のクラッタによって深さごとに偶然上下する。',
+          '  そこで (1) 基準点による違い と (2) 相互予測の差 を、データから見積もった深さごとの',
+          '  ばらつきと比べて判定する（目安：{:.0f}σ 以内なら整合）。'.format(kk)]
+    L.append('  点ごとのばらつき σ_pt（v_min(z) の平滑線〔移動中央値 ±{:.2f} m → 移動平均〕からのずれ、ロバスト標準偏差）：'.format(
+        VMIN_SMOOTH_HW_M) + '、'.join('{} {:.2f} dB'.format(k, A['sigma_pt'][k]) for k in EVENTS))
     ok_all = True
+    if BIAS_CHECK:
+        L.append('  (1) 基準点による違い：全深さで基準点を入れ替えたときの v_min の差 d(z) = 20 log10(入れ替え後 / 元)')
+        L.append('      平均 b は「どちらの基準点を使うか」で地図全体がずれる量。帯の半幅 {:.0f}σ_pt と比べる。'.format(kk))
+        for k in EVENTS:
+            b = A['bias'][k]
+            ok = np.isfinite(b['mean_db']) and abs(b['mean_db']) <= kk * A['sigma_pt'][k]
+            ok_all &= ok
+            L.append('      {:<10} b = {:+.2f} dB（± {:.2f} 標準誤差、点数 {}、実効 {:.1f}）、d の標準偏差 {:.2f} dB'
+                     '  → {}'.format(
+                         k, b['mean_db'], b['se_db'], b['n'], b['n_eff'], b['std_db'],
+                         '帯の中（|b| ≤ {:.1f} dB）'.format(kk * A['sigma_pt'][k]) if ok else
+                         '帯より大きい（|b| > {:.1f} dB）'.format(kk * A['sigma_pt'][k])))
+        L.append('      ※ 基準点は 1 回分の計算なので、b が偶然（その基準点の応答のくせ）か、移し替えの式の'
+                 '偏りかは、2 点だけでは分けられない。')
+    else:
+        L.append('  (1) 系統的な偏り：BIAS_CHECK = False のため未評価')
+    L.append('  (2) 相互予測：もう一方の基準点から案 C の v_min を予測（差 Δ = 20 log10(予測 / 案 C)）')
     for k in EVENTS:
         cr = A['cross'][k]
-        ok = np.isfinite(cr['diff_db']) and abs(cr['diff_db']) <= CROSS_TOL_DB
+        ok = np.isfinite(cr['diff_db']) and abs(cr['diff_db']) <= kk * cr['sigma_db']
         ok_all &= ok
-        L.append('  {:<10} の位置を {} の応答から予測：v_min {} / 案 C {}（差 {:+.2f} dB）  {}'.format(
-            k, cr['source'], _fmt_v(cr['vmin']), _fmt_v(C['anchor'][k]['vmin_C']), cr['diff_db'],
-            '← {:.0f} dB 以内'.format(CROSS_TOL_DB) if ok else '← {:.0f} dB を超える'.format(CROSS_TOL_DB)))
-    L.append('  判定：{}'.format('合格（基本形 A_SOURCE = "same" のままでよい）' if ok_all else
-                               '不合格（A_SOURCE = "nearest" を試す、またはゆらぎの深さ依存を見直す）'))
+        L.append('      {:<10} {} から予測 {} / 案 C {}：Δ = {:+.2f} dB、σ_Δ = {:.2f} dB（{}）'
+                 '、|Δ| = {:.1f}σ  → {}'.format(
+                     k, cr['source'], _fmt_v(cr['vmin']), _fmt_v(C['anchor'][k]['vmin_C']),
+                     cr['diff_db'], cr['sigma_db'], cr['sigma_how'],
+                     abs(cr['diff_db']) / cr['sigma_db'] if cr['sigma_db'] > 0 else np.nan,
+                     '整合' if ok else '不整合'))
+    if ok_all:
+        L.append('  判定：整合（基準点による違いも相互予測の差も、深さごとのばらつきの範囲内。'
+                 'v_min(z) は平滑線 ± {:.0f}σ_pt の帯で読む）'
+                 .format(kk))
+    else:
+        L.append('  判定：帯を超える違いあり。基準点の選び方で v_min が帯より大きくずれる、または相互予測が外れる。')
+        L.append('        v_min(z) は帯に加えて、b の大きさも不確かさとして読む（figA2 の帯には含めていない）。')
+    L.append('  ※ (1)(2) は A_SOURCE の選び方によらない（どちらの基準点も両方の向きで試すため）。')
     L.append('  自己整合（同じ基準点を z0 に置いた P_D と案 C の差の最大）：' + '、'.join(
         '{} {:.3f}'.format(k, A['self'][k]['max_abs_diff']) for k in EVENTS))
     L += ['', '[新案 A：v_min（P_D = 0.5）と界面の地表からの深さ]  A_SOURCE = {}'.format(A_SOURCE)]
@@ -689,6 +802,9 @@ def write_outputs(ctx, out_dir):
         d = depth_axis(ctx, k)
         L.append('  {:<10} '.format(k) + '、'.join(
             '{:.1f} m: {}'.format(dd, _fmt_v(v)) for dd, v in zip(d[::10], A['vmin'][k][::10])))
+        f = 10.0 ** (kk * A['sigma_pt'][k] / 20.0) if np.isfinite(A['sigma_pt'][k]) else np.nan
+        L.append('  {:<10} 平滑（±{:.0f}σ_pt = ×/÷ {:.2f}）：'.format('', kk, f) + '、'.join(
+            '{:.1f} m: {}'.format(dd, _fmt_v(v)) for dd, v in zip(d[::10], A['vmin_s'][k][::10])))
         if SHOW_A_PRIME_REF:
             L.append("  {:<10} A' 参考（ΔM {:+.2f} dB）：".format('', Ap['dM']) + '、'.join(
                 '{:.1f} m: {}'.format(dd, _fmt_v(v)) for dd, v in zip(d[::10], Ap['vmin'][k][::10])))

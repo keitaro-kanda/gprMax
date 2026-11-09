@@ -42,12 +42,12 @@ from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 
 # 図の共通ルール
-#   文字の大きさ：タイトル・軸ラベル 16、目盛り・凡例・図中の文字 12
+#   文字の大きさ：タイトル・軸ラベル 18、目盛り・凡例・図中の文字 14
 #   グリッド線：特に意図がない限り全パネルに付ける（破線 '--'、alpha 0.3）
 #   補助目盛り（minor ticks）：全パネルで表示する
-plt.rcParams.update({'axes.titlesize': 16, 'axes.labelsize': 16, 'figure.titlesize': 16,
-                     'xtick.labelsize': 12, 'ytick.labelsize': 12, 'legend.fontsize': 12,
-                     'font.size': 12,
+plt.rcParams.update({'axes.titlesize': 18, 'axes.labelsize': 18, 'figure.titlesize': 18,
+                     'xtick.labelsize': 14, 'ytick.labelsize': 14, 'legend.fontsize': 14,
+                     'font.size': 14,
                      'axes.grid': True, 'axes.grid.which': 'major', 'axes.axisbelow': 'line',
                      'grid.linestyle': '--', 'grid.alpha': 0.3,
                      'xtick.minor.visible': True, 'ytick.minor.visible': True})
@@ -1714,11 +1714,14 @@ def plot_lsr_bootstrap(res, out_dir, tgt_name):
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[0, 1])
     allv = np.concatenate([B['segs'][s['name']]['samples'] for s in segs])
-    bins = np.linspace(*np.percentile(allv, [0.5, 99.5]), 50)
+    allv = allv[np.isfinite(allv)]
+    bins = np.linspace(*np.percentile(allv, [0.5, 99.5]), 50) if allv.size else 50
     for s in segs:
         b = B['segs'][s['name']]
         col = cols[s['B']]
-        ax1.hist(b['samples'], bins=bins, color=col, alpha=0.4, label=s['name'])
+        sv = np.asarray(b['samples'], dtype=float)
+        if np.isfinite(sv).any():
+            ax1.hist(sv[np.isfinite(sv)], bins=bins, color=col, alpha=0.4, label=s['name'])
         ax1.axvline(s['tand_stack'], color=col, lw=2)
         for v in (b['lo'], b['hi']):
             ax1.axvline(v, color=col, lw=1.2, ls='--')
@@ -1737,8 +1740,11 @@ def plot_lsr_bootstrap(res, out_dir, tgt_name):
     for s in tests:
         b = B['segs'][s['name']]
         col = cols[s['B']]
-        ax2.hist(b['d_samples'], bins=50, color=col, alpha=0.4, label='{} − {}'.format(s['B'], s['A'])
-                 if len(tests) > 1 else None)
+        ds = np.asarray(b['d_samples'], dtype=float)
+        ds = ds[np.isfinite(ds)]                     # 推定できなかった回（NaN）は除く
+        if ds.size:
+            ax2.hist(ds, bins=50, color=col, alpha=0.4, label='{} − {}'.format(s['B'], s['A'])
+                     if len(tests) > 1 else None)
         ax2.axvline(b['d_point'], color=col, lw=2)
         for v in (b['d_lo'], b['d_hi']):
             ax2.axvline(v, color=col, lw=1.2, ls='--')

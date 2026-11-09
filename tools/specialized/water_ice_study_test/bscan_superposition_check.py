@@ -56,12 +56,12 @@ from ascan_spectrum import load_trace, measure_peak
 from gprMax.exceptions import CmdInputError
 
 # 図の共通ルール（このファイルの中でも明示する。bscan_detection の版に依存しないように）
-#   文字の大きさ：タイトル・軸ラベル 16、目盛り・凡例・図中の文字 12
+#   文字の大きさ：タイトル・軸ラベル 18、目盛り・凡例・図中の文字 14
 #   グリッド線：特に意図がない限り全パネルに付ける（破線 '--'、alpha 0.3）
 #   補助目盛り（minor ticks）：全パネルで表示する
-plt.rcParams.update({'axes.titlesize': 16, 'axes.labelsize': 16, 'figure.titlesize': 16,
-                     'xtick.labelsize': 12, 'ytick.labelsize': 12, 'legend.fontsize': 12,
-                     'font.size': 12,
+plt.rcParams.update({'axes.titlesize': 18, 'axes.labelsize': 18, 'figure.titlesize': 18,
+                     'xtick.labelsize': 14, 'ytick.labelsize': 14, 'legend.fontsize': 14,
+                     'font.size': 14,
                      'axes.grid': True, 'axes.grid.which': 'major', 'axes.axisbelow': 'line',
                      'grid.linestyle': '--', 'grid.alpha': 0.3,
                      'xtick.minor.visible': True, 'ytick.minor.visible': True})
@@ -343,7 +343,7 @@ def window_table(t, windows, R, D, resids, S):
         m = (t >= a) & (t < b)
         if m.sum() < 10:
             continue
-        e = lambda X: float((X[m] ** 2).mean())
+        e = lambda X: max(float((X[m] ** 2).mean()), 1e-300)   # 0 除算を避ける（完全に一致する窓）
         eR, eD = e(R), e(D)
         eS = float((S[m] ** 2).mean())
         row = {'window': name, 't0_ns': a, 't1_ns': b,
@@ -363,7 +363,7 @@ def pd_at(rs, t_ev):
 
 
 # =============================================================================
-# 5. 作図（タイトル・軸ラベル 16、目盛り・凡例・図中の文字 12 は bscan_detection の rcParams）
+# 5. 作図（タイトル・軸ラベル 18、目盛り・凡例・図中の文字 14 は bscan_detection の rcParams）
 # =============================================================================
 def _vlines(ax, events, orient='v'):
     for e in events:
