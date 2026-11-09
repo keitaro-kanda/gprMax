@@ -266,6 +266,14 @@ This organization improves code maintainability, makes tools easier to find, and
 - **エラーメッセージの無視や隠蔽**: エラーを適切に処理せず、無視したり隠蔽したりする
 - **一時的な修正による問題の先送り**: 根本的な解決を避け、一時的な回避策で問題を先送りする
 
+## 絶対厳守ルール
+
+以下のルールは常に守ること:
+
+### 図のフォントサイズ（matplotlib）
+- **タイトル・軸ラベル・カラーバーラベル等**: 18
+- **目盛り（tick_params）・レジェンド・図中のテキスト等**: 14
+
 <language>Japanese</language>
 <character_code>UTF-8</character_code>
 <law>
