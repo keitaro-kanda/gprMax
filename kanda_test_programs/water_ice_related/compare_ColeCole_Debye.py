@@ -89,7 +89,7 @@ GPR_LO, GPR_HI = 5e8, 2.0e9
 FC_GPR = 1.25e9          # centre frequency of gprMax waveform
 
 # Output locations
-OUTPUT_DIR      = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/compare_ColeCole_debye'
+OUTPUT_DIR      = '/Volumes/gprMax_water_ice/test_programs_output/compare_ColeCole_Debye'
 RESULTS_FILENAME = "debye_fit_results.txt"
 
 

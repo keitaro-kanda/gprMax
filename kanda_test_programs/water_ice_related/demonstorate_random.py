@@ -57,7 +57,7 @@ from matplotlib.patches import Patch, Rectangle, FancyArrowPatch
 # =============================================================================
 # 設定  [EDIT HERE]
 # =============================================================================
-BASE_DIR = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/demonstrate_random'
+BASE_DIR = '/Volumes/gprMax_water_ice/test_programs_output/demonstrate_random'
 
 # --- 格子（Level 6 の Ascan.in と同じにしておくと、R が gprMax に渡るものと一致する）
 DX = 0.0025                 # 格子間隔 [m]

@@ -150,7 +150,7 @@ DX, C0 = 0.0025, 2.99792458e8
 DT_GPRMAX = DX / (np.sqrt(2) * C0)
 TAU_MIN = 2 * DT_GPRMAX
 
-OUTPUT_DIR = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/mixing_rule_validation'
+OUTPUT_DIR = '/Volumes/gprMax_water_ice/test_programs_output/compare_ColeCole_mixing'
 RESULTS_FILENAME = 'mixing_rule_validation.txt'
 
 freqs = np.geomspace(F_MIN, F_MAX, N_F)

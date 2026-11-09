@@ -44,7 +44,7 @@ EPS0 = 8.8541878128e-12   # [F/m] 真空の誘電率
 # =============================================================================
 # 0. 設定  [EDIT HERE]
 # =============================================================================
-OUTPUT_BASE = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/LLL_mixing_profile'
+OUTPUT_BASE = '/Volumes/gprMax_water_ice/test_programs_output/LLL_mixsing_profile'
 DIR_FREQ = 'profile_diff_frequency'      # 周波数を振ったプロファイル
 DIR_COMP = 'profile_diff_FeO+TiO2'       # 組成を振ったプロファイル
 DIR_SPEC = 'spectrum'                    # スペクトル解析

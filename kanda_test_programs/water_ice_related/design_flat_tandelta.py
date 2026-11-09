@@ -106,7 +106,7 @@ TAU_MIN_SAFE = 5.0             # tau/dt がこれを下回ったら警告
 N_EVAL = 601                   # 評価・作図に使う帯域内の周波数点数
 F_PLOT_LO, F_PLOT_HI = 1e8, 1e10          # 図の周波数範囲
 
-OUTPUT_DIR = '/Volumes/SSD_Kanda_BUFFALO/test_programs_output/flat_tandelta_design'
+OUTPUT_DIR = '/Volumes/gprMax_water_ice/test_programs_output/flat_tandelta_design'
 RESULTS_FILENAME = 'flat_tandelta_design.txt'
 
 
