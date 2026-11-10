@@ -76,6 +76,7 @@ EV_COL = {'ice_top': 'tab:orange', 'ice_bottom': 'tab:green'}   # 反射の地�
 DEPTH_LS = ('-', '--', ':', '-.')       # figL2 (a) の深さの線種（色は界面の色と混同しないよう黒）
 FIG4_PANELS = ('b', 'b')           # figL4 に並べるパネル：(figL1 の, figL3 の)。'a' = ブロック、'b' = 測線全体。
                                    # None なら figL4 を作らない
+MAP_GAP_FIGS = True                # figL5（figL1 (b) ＋ figL2 (a)）と figL6（figL3 (b) ＋ figL2 (b)）を作る
 GAP_YMIN = 1e-5                    # figL2 の縦軸の下限（打ち消し合う濃度の谷が深くなりすぎないよう）
 
 
@@ -361,37 +362,69 @@ def plot_maps(ctx):
         plot_compare(ctx)
 
 
-def plot_gap(ctx):
-    """figL2：信号 |Δtanδ| と、見えるのに必要な差。"""
+def _gap_panel(ctx, ax, which, block=True):
+    """信号 |Δtanδ| と見えるのに必要な差を 1 枚描く。which = 'v'（氷の濃度）/ 'S'（組成）。
+    block = False なら、必要な差は測線全体の線だけ描く。"""
     tp, tn = ctx['thr']
     need_line = 0.5 * (tp - tn)
-    fig, axs = plt.subplots(1, 2, figsize=(16, 7), sharey=True, layout='constrained')
-    ax = axs[0]
-    for (z, D), ls in zip(ctx['gap_v'].items(), DEPTH_LS):
-        ax.plot(100 * V_GRID, np.abs(D), color='k', lw=2, ls=ls, label='z = {:g} m'.format(z))
-        last = np.nonzero(np.isfinite(D))[0]
-        if last.size:                                # 空隙満杯の点
-            i = last[-1]
-            ax.plot(100 * V_GRID[i], abs(D[i]), marker='s', ms=9, color='white', mec='k', ls='none')
-    ax.set_xlabel('Ice volume fraction [vol%]')
-    ax.set_title('(a) ice content (FeO+TiO2 {:g} wt%)'.format(ctx['S0']))
-    ax = axs[1]
-    for (v, D), ls in zip(ctx['gap_S'].items(), ('-', '--')):
-        ax.plot(S_GRID, np.abs(D), color='k', lw=2, ls=ls,
-                label='{:.0f} vol%{}'.format(100 * v, ' (pores full)' if v == ctx['vfull'] else ''))
-    for m in S_MARKS:
-        ax.axvline(m, color='k', lw=1.2, ls=':')
-    ax.set_xlabel('FeO+TiO2 [wt%]')
-    ax.set_title('(b) composition (z = {:g} m)'.format(ctx['z0']))
-    for ax in axs:
+    if which == 'v':
+        for (z, D), ls in zip(ctx['gap_v'].items(), DEPTH_LS):
+            ax.plot(100 * V_GRID, np.abs(D), color='k', lw=2, ls=ls, label='z = {:g} m'.format(z))
+            last = np.nonzero(np.isfinite(D))[0]
+            if last.size:                                # 空隙満杯の点
+                i = last[-1]
+                ax.plot(100 * V_GRID[i], abs(D[i]), marker='s', ms=9, color='white', mec='k',
+                        ls='none')
+        ax.set_xlabel('Ice volume fraction [vol%]')
+    else:
+        for (v, D), ls in zip(ctx['gap_S'].items(), ('-', '--')):
+            ax.plot(S_GRID, np.abs(D), color='k', lw=2, ls=ls,
+                    label='{:.0f} vol%{}'.format(100 * v, ' (pores full)' if v == ctx['vfull'] else ''))
+        for m in S_MARKS:
+            ax.axvline(m, color='k', lw=1.2, ls=':')
+        ax.set_xlabel('FeO+TiO2 [wt%]')
+    if block:
         ax.axhline(ctx['half'], color='tab:red', lw=2, label='required (block)')
-        if np.isfinite(need_line):
-            ax.axhline(need_line, color='tab:blue', lw=2, label='required (whole line)')
-        ax.set_yscale('log')
-        ax.set_ylim(bottom=GAP_YMIN)
-        ax.legend(loc='lower right')
+    if np.isfinite(need_line):
+        ax.axhline(need_line, color='tab:blue', lw=2, label='required (whole line)')
+    ax.set_yscale('log')
+    data = list(ctx['gap_v'].values()) if which == 'v' else list(ctx['gap_S'].values())
+    top = max([float(np.nanmax(np.abs(D))) for D in data if np.isfinite(D).any()]
+              + [need_line if np.isfinite(need_line) else 0.0] + ([ctx['half']] if block else []))
+    ax.set_ylim(GAP_YMIN, 2.0 * top)                 # 一番上の線が枠に重ならないよう少し余白を取る
+    ax.legend(loc='lower right')
+
+
+def plot_gap(ctx):
+    """figL2：信号 |Δtanδ| と、見えるのに必要な差。"""
+    fig, axs = plt.subplots(1, 2, figsize=(16, 7), sharey=True, layout='constrained')
+    _gap_panel(ctx, axs[0], 'v')
+    axs[0].set_title('(a) ice content (FeO+TiO2 {:g} wt%)'.format(ctx['S0']))
+    _gap_panel(ctx, axs[1], 'S')
+    axs[1].set_title('(b) composition (z = {:g} m)'.format(ctx['z0']))
     axs[0].set_ylabel('|Δtanδ|')
     bd.save_figure(fig, ctx['out_dir'], 'figL2_lsr_gap')
+
+
+def plot_map_gap(ctx):
+    """figL5：figL1 (b) と figL2 (a)、figL6：figL3 (b) と figL2 (b)。
+    必要な差は測線全体の線だけ（地図の (b) と同じ判定）。"""
+    # タイトルは「何を見せるか」（地図か、深さを決めた断面か）だけにする。共通の条件
+    # （測線全体の判定、組成 S0）はパネルごとに書かない。左右で条件が違うと読まれないように。
+    for key, which, stem, t_map, t_gap in (
+            ('vz', 'v', 'figL5_lsr_ice_map_gap', '(a) Map', '(b) Profiles'),
+            ('Sz', 'S', 'figL6_lsr_composition_map_gap', '(a) Map',
+             '(b) Profiles at z = {:g} m'.format(ctx['z0']))):
+        fig, axs = plt.subplots(1, 2, figsize=(16, 8.2), layout='constrained')
+        im = _draw(ctx, axs[0], key, 'b')
+        fig.colorbar(im, ax=axs[0], label=CBAR_LABEL['b'], shrink=0.9, pad=0.01)
+        axs[0].set_title(t_map)
+        axs[0].set_ylabel(DEPTH_LABEL)
+        _gap_panel(ctx, axs[1], which, block=False)
+        axs[1].set_title(t_gap)
+        axs[1].set_ylabel('|Δtanδ|')
+        _legend(fig, MAP_SPEC[key][3], ctx if key == 'vz' else None)
+        bd.save_figure(fig, ctx['out_dir'], stem)
 
 
 # =============================================================================
@@ -490,6 +523,8 @@ def main():
     make_maps(ctx)
     plot_maps(ctx)
     plot_gap(ctx)
+    if MAP_GAP_FIGS:
+        plot_map_gap(ctx)
     write_outputs(ctx)
 
 
