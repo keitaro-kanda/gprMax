@@ -204,3 +204,86 @@ LSR は幾何減衰を含まない純粋な吸収項になる。理論の傾き 
 3. **f_c の勾配が恒等式 `df_c/dt = -2*pi*tan_delta*sigma_f^2` と一致するか**
 4. **v_ice が空隙率を超えていないか**（超えた深さを警告）
 5. **LSR の傾きから逆算した α が直接計算した α と一致するか**
+---
+
+## 8. レゴリス粒子の誘電率（追加、2026-11-11）
+
+描像（pore / excess）の違いを説明するときの参考として、Carrier の経験式を LLL で逆算した**粒子の誘電率**を出す。描像によらないので、`main()` の最初に 1 回だけ実行する。
+
+### 8.1 記号
+
+| 記号 | 意味 |
+|---|---|
+| $\rho$ | 乾燥レゴリスのバルク密度 [g/cm³]（深さ $z$ の密度プロファイル） |
+| $\rho_{\rm g}$ | 粒子密度 2.645 g/cm³（斜長岩、`RHO_GRAIN`） |
+| $v_{\rm g} = \rho/\rho_{\rm g}$ | 粒子の体積分率（残り $1 - v_{\rm g}$ は真空） |
+| $\varepsilon_{\rm dry}$ | 乾燥レゴリスの複素誘電率 $\varepsilon'(1 - j\tan\delta)$。$\varepsilon' = 1.871^{\rho}$、$\tan\delta = 10^{0.027S + 0.273\rho - 3.058}$（Fig. 9.53） |
+| $S$ | FeO+TiO2 [wt%]（`FEOTIO2_WT`） |
+| $\varepsilon_{\rm g}$ | 粒子の複素誘電率（求めるもの） |
+
+### 8.2 逆算
+
+乾燥レゴリスを「粒子＋真空」の 2 相とみて LLL を当てはめる。
+
+$$
+\varepsilon_{\rm dry}^{1/3} = v_{\rm g}\,\varepsilon_{\rm g}^{1/3} + (1 - v_{\rm g})\cdot 1
+\quad\Longrightarrow\quad
+\varepsilon_{\rm g}^{1/3} = 1 + \frac{\varepsilon_{\rm dry}^{1/3} - 1}{v_{\rm g}}
+$$
+
+複素数のまま計算するので、粒子の $\varepsilon''_{\rm g}$ と $\tan\delta_{\rm g}$ も出る。
+
+Carrier の $\varepsilon' = 1.871^{\rho}$ は LLL ではなく指数の当てはめなので、逆算した $\varepsilon'_{\rm g}$ は密度によって少し変わる。極限は次のとおり。
+
+$$
+\rho \to 0:\ \varepsilon'_{\rm g} = \Bigl(1 + \frac{\rho_{\rm g}\ln 1.871}{3}\Bigr)^{3} = 3.74,
+\qquad
+\rho \to \rho_{\rm g}:\ \varepsilon'_{\rm g} = 1.871^{\rho_{\rm g}} = 5.24
+$$
+
+### 8.3 代表値（一定の粒子の誘電率）
+
+試しに一定の $\varepsilon'_{\rm g}$ を決めて LLL で乾燥レゴリスの $\varepsilon'$ を計算し、Carrier との差の RMS を、モデルの深さの格子（`DZ` 刻み、0–`Z_MAX`）でとる。
+
+$$
+M(\varepsilon'_{\rm g}) = \sqrt{\frac{1}{N_z}\sum_z \left(\frac{\varepsilon'_{\rm LLL}(\rho(z);\,\varepsilon'_{\rm g})}{1.871^{\rho(z)}} - 1\right)^2}\ \times 100\ [\%],
+\qquad
+\varepsilon'_{\rm LLL} = \bigl(v_{\rm g}\,\varepsilon'^{1/3}_{\rm g} + 1 - v_{\rm g}\bigr)^3
+$$
+
+$N_z$ は深さの点の数。$M$ が最小になる $\varepsilon'_{\rm g}$ を「最もよく合う一定値」とする（`GRAIN_EPS_TRIAL` = 3.5–6.0 で探し、最小の点の前後で細かく探す）。図 `grain_permittivity_fit` の (a) がこの $M$ の曲線で、最小の点（赤丸）が代表値。
+
+深さの点を同じ重みで使うので、密度がほぼ一定になる 1 m より深いところ（点が多い）に引き寄せられる。
+
+S = 7.5 wt% での結果：
+
+| 量 | 値 |
+|---|---|
+| 一定の $\varepsilon'_{\rm g}$（最良） | **4.67**（差の RMS 0.97 %。差は −0.7 〜 +4.3 %、浅いほど大きい） |
+| 深さごとの逆算値 | $\varepsilon'_{\rm g}$ = 4.37（地表）〜 4.72（3 m） |
+| 粒子の $\tan\delta_{\rm g}$ | 5.2 × 10⁻³ 〜 5.7 × 10⁻³（乾燥レゴリスの約 1.25 倍） |
+
+### 8.4 描像の説明への使い方
+
+| 相 | $\varepsilon'$ |
+|---|---|
+| 真空 | 1.00 |
+| 氷 | 3.15 |
+| 乾燥レゴリス（0–3 m） | 2.26–3.26 |
+| 粒子 | 約 4.7（4.67） |
+
+- **pore**：氷は真空（1.00）を置き換える → $\varepsilon'$ が大きく増え、反射が立つ。粒子は減らないので $\varepsilon''$ は保存。
+- **excess**：氷は乾燥レゴリス（約 3）をまるごと置き換える → $\varepsilon'$ はほとんど変わらない。粒子（損失源）が減るので $\varepsilon''$ は $(1 - v)$ 倍。
+
+粒子の誘電率そのものは、どちらの描像の式にも現れない（増分形で消える）。
+
+### 8.5 出力（`<OUTPUT_BASE>/grain_permittivity/`）
+
+| ファイル | 内容 |
+|---|---|
+| `grain_permittivity.txt` | 方法、代表値、極限、置き換わる相の誘電率、深さ 0.25 m ごとの表 |
+| `grain_permittivity.csv` | 深さごとの $\rho$、$v_{\rm g}$、乾燥レゴリスの $\varepsilon'$・$\tan\delta$、粒子の $\varepsilon'$・$\varepsilon''$・$\tan\delta$、一定値での LLL の $\varepsilon'$ |
+| `grain_permittivity.png` / `.pdf` | (a) 乾燥レゴリスの $\varepsilon'$ と密度（Carrier と、代表値の $\varepsilon'_{\rm g}$ での LLL。点線は氷）(b) 粒子の $\varepsilon'$ と密度 (c) 粒子の $\varepsilon'$ と深さ。灰色の帯はモデルの密度範囲。赤の破線は代表値 |
+| `grain_permittivity_fit.png` / `.pdf` | 代表値の決め方。(a) 一定の $\varepsilon'_{\rm g}$ を変えたときの差の RMS $M$（最小の点＝赤丸が代表値）(b) Carrier と、いくつかの $\varepsilon'_{\rm g}$（`GRAIN_EPS_COMPARE` = 4.2 / 5.2 と代表値）での LLL。(a) の丸と (b) の線は同じ色が同じ値 |
+
+この 2 つの図だけは図のマスタールール（文字 18 / 14、グリッド `--`・alpha 0.3、補助目盛り、suptitle なし）で描く。

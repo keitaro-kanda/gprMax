@@ -32,6 +32,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 try:                      # numpy 2.x
     trapz = np.trapezoid
@@ -48,6 +49,8 @@ OUTPUT_BASE = '/Volumes/gprMax_water_ice/test_programs_output/LLL_mixsing_profil
 DIR_FREQ = 'profile_diff_frequency'      # 周波数を振ったプロファイル
 DIR_COMP = 'profile_diff_FeO+TiO2'       # 組成を振ったプロファイル
 DIR_SPEC = 'spectrum'                    # スペクトル解析
+DIR_GRAIN = 'grain_permittivity'         # レゴリス粒子の誘電率（描像によらないので OUTPUT_BASE 直下）
+GRAIN_RHO_PLOT = (1.0, 2.645)            # 粒子の誘電率の図の横軸（バルク密度）[g/cm^3]。上限は粒子密度
 
 # --- 深さ格子 ---------------------------------------------------------------
 Z_MAX = 3.0               # [m] 計算領域の地下部分の厚さに合わせる
@@ -1216,6 +1219,217 @@ def run_for_model(model):
     return made
 
 
+
+# =============================================================================
+# 11. レゴリス粒子の誘電率（Carrier の経験式を LLL で逆算）
+# =============================================================================
+# 乾燥レゴリスは粒子（体積分率 v_g = rho/rho_grain）と真空の 2 相。LLL を当てはめると
+#     eps_dry^(1/3) = v_g * eps_g^(1/3) + (1 - v_g) * 1
+# なので、Carrier の eps_dry = 1.871^rho を与えれば粒子の誘電率が逆算できる。
+#     eps_g^(1/3) = 1 + (eps_dry^(1/3) - 1) / v_g
+# 複素数のまま計算すると粒子の eps'' と tan_delta も出る（eps = eps' - j eps''）。
+#
+# Carrier の式は LLL ではない（指数関数の当てはめ）ので、逆算した eps_g は密度によって
+# 少し変わる。極限は
+#     rho -> 0         : eps_g = (1 + rho_grain * ln(1.871) / 3)^3
+#     rho -> rho_grain : eps_g = 1.871^rho_grain（粒子だけ）
+# 1 つの値で代表させるため、モデルの深さ範囲（0-Z_MAX）で LLL が Carrier に最も近くなる
+# 一定値 eps_g も求める。eps^(1/3) - 1 が v_g に比例するので、原点を通る直線の当てはめ
+#     (eps_g^(1/3) - 1) = sum(v_g * y) / sum(v_g^2),   y = eps_dry^(1/3) - 1
+# で閉形式に決まる。
+#
+# 粒子の誘電率は描像（pore / excess）の式には現れない（増分形で消える）。それでも
+# 「何を何で置き換えるか」の直観（真空 1 -> 氷 3.15 なのか、レゴリス約 3 -> 氷 3.15 なのか、
+# 粒子はどれくらいか）を説明するのに使う。
+# =============================================================================
+def grain_eps_from_carrier(rho_val, feotio2_wt=None):
+    """バルク密度 -> 粒子の (eps', eps'', tan_delta)。Carrier の乾燥レゴリスを LLL で逆算。"""
+    r = np.asarray(rho_val, dtype=float)
+    vg = r / RHO_GRAIN
+    eps_dry = carrier_eps_real(r) * (1.0 - 1j * carrier_tandelta(r, feotio2_wt))
+    cg = 1.0 + (eps_dry ** (1.0 / 3.0) - 1.0) / vg
+    eg = cg ** 3
+    return eg.real, -eg.imag, -eg.imag / eg.real
+
+
+GRAIN_EPS_TRIAL = np.linspace(3.5, 6.0, 501)   # 試す一定の粒子の eps'（grain_permittivity_fit (a) の横軸）
+GRAIN_EPS_COMPARE = (4.2, 5.2)                  # grain_permittivity_fit (b) で最良値と並べる粒子の eps'
+GRAIN_EPS_COLORS = ('tab:blue', 'tab:red', 'tab:brown')   # 小さい値・最良値・大きい値の順
+
+
+def grain_misfit(rho_val, eps_g):
+    """一定の粒子の eps' を使った LLL と Carrier の eps' の差の RMS [%]（密度の配列で平均）。"""
+    r = np.asarray(rho_val, dtype=float)
+    d = lll_dry_eps(r, eps_g) / carrier_eps_real(r) - 1.0
+    return 100.0 * float(np.sqrt(np.mean(d * d)))
+
+
+def grain_eps_fit(rho_val):
+    """密度の配列に対して、LLL と Carrier の eps' の差の RMS [%] が最小になる一定の粒子の eps'。
+    GRAIN_EPS_TRIAL で粗く探し、最小の点の前後で細かく探す。"""
+    m = np.array([grain_misfit(rho_val, e) for e in GRAIN_EPS_TRIAL])
+    i = int(np.argmin(m))
+    lo, hi = GRAIN_EPS_TRIAL[max(i - 1, 0)], GRAIN_EPS_TRIAL[min(i + 1, len(GRAIN_EPS_TRIAL) - 1)]
+    fine = np.linspace(lo, hi, 401)
+    return float(fine[int(np.argmin([grain_misfit(rho_val, e) for e in fine]))])
+
+
+def lll_dry_eps(rho_val, eps_g):
+    """一定の粒子の eps' を使った LLL の乾燥レゴリスの eps'（2 相：粒子・真空）。"""
+    vg = np.asarray(rho_val, dtype=float) / RHO_GRAIN
+    return (vg * eps_g ** (1.0 / 3.0) + (1.0 - vg)) ** 3
+
+
+def make_grain_permittivity():
+    """粒子の誘電率をテキスト・CSV・図で出す（描像によらないので 1 回だけ）。"""
+    import csv
+    d_out = os.path.join(OUTPUT_BASE, DIR_GRAIN)
+    os.makedirs(d_out, exist_ok=True)
+    eg_z, eig_z, tdg_z = grain_eps_from_carrier(rho)
+    eg_fit = grain_eps_fit(rho)
+    err = 100.0 * (lll_dry_eps(rho, eg_fit) / carrier_eps_real(rho) - 1.0)
+    lim0 = (1.0 + RHO_GRAIN * np.log(CARRIER_EPS_BASE) / 3.0) ** 3
+    lim1 = float(carrier_eps_real(RHO_GRAIN))
+
+    # --- テキスト -------------------------------------------------------------
+    L = ['レゴリス粒子の誘電率（Carrier Fig. 9.53 の乾燥レゴリスを LLL の 2 相で逆算）',
+         '=' * 74,
+         '  LLL（2 相）：eps_dry^(1/3) = v_g * eps_g^(1/3) + (1 - v_g)，  v_g = rho / rho_grain',
+         '  逆算      ：eps_g^(1/3) = 1 + (eps_dry^(1/3) - 1) / v_g（複素数のまま）',
+         '  eps_dry   ：eps\' = 1.871^rho，tan_delta = 10^(0.027 S + 0.273 rho - 3.058)，'
+         'S = {} wt%'.format(FEOTIO2_WT),
+         '  rho_grain = {} g/cm^3（斜長岩）'.format(RHO_GRAIN),
+         '',
+         '[代表値]',
+         '  モデルの深さ範囲 0-{:.1f} m（rho = {:.3f}-{:.3f}）で LLL が Carrier に最も近い一定値'
+         .format(Z_MAX, rho.min(), rho.max()),
+         '  （深さ {:g} m ごとの点で、eps\' の差の RMS が最小になる値）：'.format(DZ),
+         '      eps_g\' = {:.3f}（差の RMS {:.2f} %、差は {:+.2f} 〜 {:+.2f} %）'
+         .format(eg_fit, grain_misfit(rho, eg_fit), err.min(), err.max()),
+         '  深さごとの逆算値の範囲：eps_g\' = {:.3f}-{:.3f}，tan_delta_g = {:.2e}-{:.2e}'
+         .format(eg_z.min(), eg_z.max(), tdg_z.min(), tdg_z.max()),
+         '  極限：rho -> 0 で {:.3f}，rho -> rho_grain（粒子だけ）で {:.3f}（= 1.871^{}）'
+         .format(lim0, lim1, RHO_GRAIN),
+         '',
+         '[参考：置き換わる相の誘電率]',
+         '  真空 1.000 / 氷 {:.2f} / 乾燥レゴリス {:.3f}-{:.3f}（深さ 0-{:.1f} m）/ 粒子 約 {:.2f}'
+         .format(EPS_ICE, carrier_eps_real(rho).min(), carrier_eps_real(rho).max(), Z_MAX, eg_fit),
+         '  pore  ：氷は真空（1.000）を置き換える -> eps\' が大きく増える（反射が立つ）',
+         '  excess：氷は乾燥レゴリス（約 3）を置き換える -> eps\' はほとんど変わらない',
+         '',
+         '[深さごと]',
+         '  depth[m]  rho   v_g    eps_dry\'  tand_dry   eps_g\'  eps_g\'\'   tand_g']
+    for zz in np.arange(0.0, Z_MAX + 1e-9, 0.25):
+        i = int(round(zz / DZ))
+        L.append('  {:6.2f}  {:5.3f}  {:5.3f}  {:7.3f}  {:9.2e}  {:7.3f}  {:8.4f}  {:9.2e}'.format(
+            z[i], rho[i], rho[i] / RHO_GRAIN, carrier_eps_real(rho[i]), carrier_tandelta(rho[i]),
+            eg_z[i], eig_z[i], tdg_z[i]))
+    L += ['',
+          '注意：Carrier の式は LLL ではない（指数の当てはめ）ので、逆算した粒子の誘電率は',
+          '      密度で少し変わる。描像（pore / excess）の式には粒子の誘電率は現れない（増分形で消える）。']
+    text = '\n'.join(L)
+    print(text)
+    p_txt = os.path.join(d_out, 'grain_permittivity.txt')
+    with open(p_txt, 'w', encoding='utf-8') as fh:
+        fh.write(text + '\n')
+
+    # --- CSV ------------------------------------------------------------------
+    p_csv = os.path.join(d_out, 'grain_permittivity.csv')
+    with open(p_csv, 'w', newline='', encoding='utf-8') as fh:
+        w = csv.writer(fh)
+        w.writerow(['depth_m', 'rho', 'v_grain', 'eps_dry_real', 'tand_dry',
+                    'eps_grain_real', 'eps_grain_imag', 'tand_grain', 'eps_dry_lll_fit'])
+        lf = lll_dry_eps(rho, eg_fit)
+        for i in range(Nz):
+            w.writerow(['{:.3f}'.format(z[i]), '{:.5f}'.format(rho[i]),
+                        '{:.5f}'.format(rho[i] / RHO_GRAIN), '{:.5f}'.format(carrier_eps_real(rho[i])),
+                        '{:.5e}'.format(carrier_tandelta(rho[i])), '{:.5f}'.format(eg_z[i]),
+                        '{:.5e}'.format(eig_z[i]), '{:.5e}'.format(tdg_z[i]), '{:.5f}'.format(lf[i])])
+
+    # --- 図（このツールの他の図と違い、図のマスタールールで描く）--------------
+    #   文字の大きさ：タイトル・軸ラベル 18、目盛り・凡例・図中の文字 14
+    #   グリッド線：破線 '--'、alpha 0.3。補助目盛り：表示。suptitle なし
+    rc = {'axes.titlesize': 18, 'axes.labelsize': 18, 'xtick.labelsize': 14,
+          'ytick.labelsize': 14, 'legend.fontsize': 14, 'font.size': 14,
+          'axes.grid': True, 'grid.linestyle': '--', 'grid.alpha': 0.3,
+          'xtick.minor.visible': True, 'ytick.minor.visible': True}
+    rr = np.linspace(GRAIN_RHO_PLOT[0], GRAIN_RHO_PLOT[1], 300)
+    eg_r, _, _ = grain_eps_from_carrier(rr)
+    with plt.rc_context(rc):
+        fig, axs = plt.subplots(1, 3, figsize=(19, 6.5), layout='constrained')
+        band = dict(color='0.88', zorder=0)
+        # (a) 乾燥レゴリス：Carrier と、一定の粒子の誘電率での LLL
+        ax = axs[0]
+        ax.axvspan(rho.min(), rho.max(), **band)
+        ax.plot(rr, carrier_eps_real(rr), color='k', lw=2.2, label=r'Carrier ($1.871^{\rho}$)')
+        ax.plot(rr, lll_dry_eps(rr, eg_fit), color='tab:red', lw=2.0, ls='--',
+                label=r"LLL, $\varepsilon'_{\rm g}$ = " + '{:.2f}'.format(eg_fit))
+        ax.axhline(EPS_ICE, color='tab:blue', lw=1.4, ls=':', label='ice')
+        ax.set_xlabel('Bulk density [g/cm³]')
+        ax.set_ylabel(r"$\varepsilon'$ (dry regolith)")
+        ax.set_title('(a) dry regolith')
+        ax.legend(loc='upper left')
+        # (b) 粒子の誘電率と密度
+        ax = axs[1]
+        ax.axvspan(rho.min(), rho.max(), **band)
+        ax.plot(rr, eg_r, color='k', lw=2.2, label='inverted from Carrier')
+        ax.axhline(eg_fit, color='tab:red', lw=2.0, ls='--', label='best constant')
+        ax.set_xlabel('Bulk density [g/cm³]')
+        ax.set_ylabel(r"$\varepsilon'_{\rm g}$ (grain)")
+        ax.set_title('(b) grain vs density')
+        ax.legend(loc='upper left')
+        # (c) 粒子の誘電率と深さ（モデルの密度プロファイル）
+        ax = axs[2]
+        ax.plot(eg_z, z, color='k', lw=2.2)
+        ax.axvline(eg_fit, color='tab:red', lw=2.0, ls='--')
+        ax.set_ylim(z[-1], z[0])
+        ax.set_xlabel(r"$\varepsilon'_{\rm g}$ (grain)")
+        ax.set_ylabel('Depth [m]')
+        ax.set_title('(c) grain vs depth')
+        fig.legend(handles=[Patch(color='0.88', label='density range of the model (0–{:g} m)'.format(Z_MAX))],
+                   loc='outside lower center')
+        p_fig = save_fig(fig, os.path.join(d_out, 'grain_permittivity'))
+
+        # --- 別の図：一定の粒子の誘電率の決め方（合い方の曲線と、値を変えたときの比較）-----
+        vals = sorted(set([float(v) for v in GRAIN_EPS_COMPARE] + [eg_fit]))
+        cols = {v: GRAIN_EPS_COLORS[min(k, len(GRAIN_EPS_COLORS) - 1)] if v != eg_fit
+                else GRAIN_EPS_COLORS[1] for k, v in enumerate(vals)}
+        small = [v for v in vals if v < eg_fit]
+        large = [v for v in vals if v > eg_fit]
+        for v in small:
+            cols[v] = GRAIN_EPS_COLORS[0]
+        for v in large:
+            cols[v] = GRAIN_EPS_COLORS[2]
+        fig, axs = plt.subplots(1, 2, figsize=(15, 6.5), layout='constrained')
+        # (a) 一定の粒子の誘電率を変えたときの合い方（最小の点が最良値）
+        ax = axs[0]
+        mis = np.array([grain_misfit(rho, e) for e in GRAIN_EPS_TRIAL])
+        ax.plot(GRAIN_EPS_TRIAL, mis, color='k', lw=2.2)
+        for v in vals:
+            ax.plot(v, grain_misfit(rho, v), marker='o', ms=11, color=cols[v], ls='none',
+                    mec='k' if v == eg_fit else cols[v])
+        ax.set_ylim(0, None)
+        ax.set_xlabel(r"Constant $\varepsilon'_{\rm g}$ used in LLL")
+        ax.set_ylabel(r"RMS of LLL/Carrier $-$ 1 [%]")
+        ax.set_title('(a) misfit (0–{:g} m)'.format(Z_MAX))
+        # (b) Carrier と、いくつかの一定の粒子の誘電率での LLL
+        ax = axs[1]
+        ax.axvspan(rho.min(), rho.max(), **band)
+        ax.plot(rr, carrier_eps_real(rr), color='k', lw=2.4, label=r'Carrier ($1.871^{\rho}$)')
+        for v in vals:
+            ax.plot(rr, lll_dry_eps(rr, v), color=cols[v], lw=2.0, ls='--',
+                    label=r"LLL, $\varepsilon'_{\rm g}$ = " + '{:.2f}'.format(v)
+                    + (' (best)' if v == eg_fit else ''))
+        ax.set_xlabel('Bulk density [g/cm³]')
+        ax.set_ylabel(r"$\varepsilon'$ (dry regolith)")
+        ax.set_title('(b) dry regolith')
+        ax.legend(loc='upper left')
+        fig.legend(handles=[Patch(color='0.88', label='density range of the model (0–{:g} m)'.format(Z_MAX))],
+                   loc='outside lower center')
+        p_fit = save_fig(fig, os.path.join(d_out, 'grain_permittivity_fit'))
+    return [p_txt, p_csv, p_fig + '.png', p_fit + '.png']
+
+
 def compare_models(results):
     """描像どうしの比較表を出す（両方走らせたときだけ）。"""
     if len(results) < 2:
@@ -1270,6 +1484,8 @@ def compare_models(results):
 
 
 def main():
+    make_grain_permittivity()          # 描像によらないので最初に 1 回
+    print()
     for model in ICE_MODELS:
         run_for_model(model)
         print()
