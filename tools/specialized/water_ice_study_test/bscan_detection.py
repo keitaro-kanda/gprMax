@@ -120,6 +120,8 @@ IMG_DB_RANGE = 80.0                # B-scan 図の色の幅 [dB]
 DIFF_CMAP = 'RdBu_r'               # fig1(c)（包絡の差 [dB]）の色。0 dB が白、赤が対象のほうが強い
 DIFF_DB_RANGE = 20.0               # fig1(c) の色の範囲 ±[dB]
 PLOT_BSCAN_ASCAN = True            # B-scan と平均 A-scan を縦軸（two-way time）共有で並べた図も出す
+PLOT_CLUTTER_METRICS = True        # fig8：基準（no_ice）のクラッタの強さを、いくつもの指標で比べる図
+CLUTTER_YMIN_DB = -80.0            # fig8 の縦軸の下限 [dB re 基準の地表反射]
 COL_REF = '0.35'                   # 基準（no_ice）
 COL_TGT = 'tab:red'                # 対象
 COL_EVENT = 'tab:blue'             # 平均媒質の界面の理論走時
@@ -759,6 +761,95 @@ def plot_bscan_ascan(res, T, dt, out_dir, tgt_name, stem, a_norm, R=None):
 
 
 ROW_COLORS = ('tab:purple', 'tab:orange', 'tab:green', 'tab:brown', 'tab:cyan', 'tab:olive')  # 赤は対象の色なので使わない
+
+
+# -----------------------------------------------------------------------------
+# fig8：クラッタの強さの指標の比較（基準 no_ice だけ）
+# -----------------------------------------------------------------------------
+# 線の色 = 物理量（E・|E|・包絡）、線種 = 時間方向の操作（そのまま・移動平均・ゲート内の最大）。
+# 窓はすべて反射ゲートと同じ ±REFL_GATE_HW_NS。地表反射・領域の底の目印は灰色の点線。
+# 符号付きの E のゲート内の最大は、正の山しか見ない（|E| のゲート内の最大とほぼ同じ水準）ので入れない。
+CLUTTER_QTY = (('E', 'tab:red', 'E'), ('absE', 'tab:blue', '|E|'), ('env', 'tab:green', 'envelope'))
+CLUTTER_OPS = (('', '-', 'raw'), ('ma_', '--', 'moving average'), ('max_', '-.', 'gated max'))
+CLUTTER_METRICS = (
+    # (名前, 色, 線種)
+    ('E', 'tab:red', '-'), ('ma_E', 'tab:red', '--'),
+    ('absE', 'tab:blue', '-'), ('ma_absE', 'tab:blue', '--'), ('max_absE', 'tab:blue', '-.'),
+    ('env', 'tab:green', '-'), ('ma_env', 'tab:green', '--'), ('max_env', 'tab:green', '-.'),
+)
+CLUTTER_STATS = (('mean', '(a) mean across traces'), ('rms', '(b) RMS across traces'),
+                 ('p95', '(c) 95th percentile across traces'), ('median', '(d) median across traces'))
+
+
+def clutter_metrics(R, dt):
+    """基準の B-scan から、トレースごとの 8 つの指標（時間方向の操作）を作り、
+    各時刻で全トレースの 4 つの統計量（トレース方向）にまとめる。
+    戻り値：{'t': 時刻 [ns], (指標, 統計量): 値}。統計量は符号のまま（平均・中央値は負にもなる）。"""
+    dt_ns = dt * 1e9
+    n = max(3, int(round(2 * REFL_GATE_HW_NS / dt_ns)) | 1)
+    step = max(1, int(round(REFL_STEP_NS / dt_ns)))
+    idx = np.arange(n // 2, R.shape[0] - n // 2, step)
+    A, env = np.abs(R), envelope(R)
+    ma = lambda X: ndimage.uniform_filter1d(X, n, axis=0, mode='nearest')     # 時間方向の移動平均
+    mx = lambda X: ndimage.maximum_filter1d(X, n, axis=0, mode='nearest')     # 時間方向のゲート内の最大
+    M = {'E': R, 'ma_E': ma(R),
+         'absE': A, 'ma_absE': ma(A), 'max_absE': mx(A),
+         'env': env, 'ma_env': ma(env), 'max_env': mx(env)}
+    out = {'t': idx * dt_ns}
+    for k, X in M.items():
+        Y = X[idx]
+        out[(k, 'mean')] = Y.mean(axis=1)
+        out[(k, 'rms')] = np.sqrt((Y * Y).mean(axis=1))
+        out[(k, 'p95')] = np.quantile(Y, 0.95, axis=1)
+        out[(k, 'median')] = np.median(Y, axis=1)
+    return out
+
+
+def plot_clutter_metrics(res, R, dt, out_dir, info):
+    """fig8：基準（no_ice）のクラッタの強さを、8 つの指標 × 4 つの統計量で比べる。
+    指標は各トレースの時間方向の操作、統計量は各時刻のトレース方向のまとめ。
+    縦軸は |統計量| の dB（基準の地表反射が 0 dB）。符号付きの E（とその移動平均）の
+    平均・中央値は打ち消し合って小さくなる（正負を消さないと強さにならないことを示す線）。"""
+    C = clutter_metrics(R, dt)
+    a = res['a_surf']
+    t = C['t']
+    fig, axs = plt.subplots(2, 2, figsize=(16, 11), sharex=True, sharey=True, layout='constrained')
+    for ax, (st, title) in zip(axs.ravel(), CLUTTER_STATS):
+        for k, col, ls in CLUTTER_METRICS:
+            v = np.abs(C[(k, st)])
+            with np.errstate(divide='ignore'):
+                y = DB20 * np.log(np.where(v > 0, v, np.nan) / a)
+            ax.plot(t, y, color=col, ls=ls, lw=1.4)
+        ax.axvline(info['t_surface_model'], color='0.5', lw=1.2, ls=':')   # 目印はどちらもモデルの走時
+        if np.isfinite(info['t_bottom']):
+            ax.axvline(info['t_bottom'], color='0.5', lw=1.2, ls=':')
+        ax.set_title(title)
+    top = max(float(np.nanmax(DB20 * np.log(np.abs(C[(k, s)]) / a + 1e-300)))
+              for k, _, _ in CLUTTER_METRICS for s, _ in CLUTTER_STATS)
+    axs[0, 0].set_ylim(CLUTTER_YMIN_DB, top + 3.0)
+    axs[0, 0].set_xlim(t[0], t[-1])
+    for ax in axs[1]:
+        ax.set_xlabel('Two-way time [ns]')
+    for ax in axs[:, 0]:
+        ax.set_ylabel('dB re surface')
+    # 凡例は「色 = 物理量」3 つ、「線種 = 操作」3 つ、目印 1 つだけ。
+    # 列ごとに埋まるので、上の段が色、下の段が線種になるよう交互に並べる。
+    hq = [Line2D([], [], color=col, ls='-', lw=2.4, label=lab) for _, col, lab in CLUTTER_QTY]
+    w = '±{:g} ns'.format(REFL_GATE_HW_NS)           # 窓の幅を凡例に書き、図だけで分かるようにする
+    lab_op = {'raw': 'raw', 'moving average': '{} moving average'.format(w), 'gated max': '{} max'.format(w)}
+    ho = [Line2D([], [], color='k', ls=ls, lw=1.8, label=lab_op[lab]) for _, ls, lab in CLUTTER_OPS]
+    h = [x for pair in zip(hq, ho) for x in pair]
+    h.append(Line2D([], [], color='0.5', ls=':', lw=1.2, label='surface / domain bottom'))
+    fig.legend(handles=h, loc='outside lower center', ncol=4)
+    save_figure(fig, out_dir, 'fig8_clutter_metrics')
+    rows = []
+    for i, ti in enumerate(t):
+        r = {'t_ns': float(ti)}
+        for k, _, _ in CLUTTER_METRICS:
+            for s, _ in CLUTTER_STATS:
+                r['{}_{}'.format(k, s)] = float(C[(k, s)][i])
+        rows.append(r)
+    _write_csv(os.path.join(out_dir, 'clutter_metrics.csv'), rows, list(rows[0].keys()))
 
 
 def reflection_rows(res):
@@ -1915,7 +2006,8 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
     if np.isfinite(t_bottom):
         checks.append('計算領域の底（PML 上端）の往復走時 {:.2f} ns。これより後は窓の検定に使わない'
                       .format(t_bottom))
-    info = {'t_surface_data': t_s_data, 't_bottom': t_bottom, 'same_field': same, 'checks': checks,
+    info = {'t_surface_data': t_s_data, 't_surface_model': t_s_model, 't_bottom': t_bottom,
+            'same_field': same, 'checks': checks,
             'x_label': ctx['x_label'],
             'inputs': {'level': level, 'target': '{} ({})'.format(tgt, p_t),
                        'reference': '{} ({})'.format(REFERENCE_CONDITION,
@@ -1952,6 +2044,8 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
     plot_decay(res, out_dir, tgt)
     plot_shift(res, out_dir, tgt)
     plot_spectrogram(res, out_dir, tgt)
+    if PLOT_CLUTTER_METRICS:
+        plot_clutter_metrics(res, R, dt, out_dir, info)
     write_outputs(res, out_dir, tgt, info)
 
     # --- スペクトル比法（境界の反射どうし）-------------------------------------
