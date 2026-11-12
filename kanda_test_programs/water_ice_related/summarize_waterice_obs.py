@@ -45,6 +45,11 @@ for paper, info in data.items():
     if loc:
         plt.text(paper, wt_percent + 0.5, loc, ha='center', fontsize=14)
 
+    """メモ
+    - 上限・もしくは下限のみの場合にそれがわかるようにしたい？
+    - 文献名でプロットしているので、同じ文献で複数の観測地がある場合は別々にプロットする必要がある。
+    """
+
 plt.xticks(rotation=45, ha='right', fontsize=14)
 plt.yticks(fontsize=14)
 plt.ylabel("Water Ice Concentration (wt%)", fontsize=18)
@@ -52,8 +57,8 @@ plt.grid()
 plt.legend(fontsize=14)
 plt.tight_layout()
 
-plt.show()
 output_dir = "/Volumes/gprMax_water_ice/test_programs_output/water_ice_summary"
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 plt.savefig(os.path.join(output_dir, "water_ice_summary.png"))
+plt.show()
