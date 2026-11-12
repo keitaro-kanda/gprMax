@@ -306,14 +306,25 @@ def layer_tandelta(rec):
 # =============================================================================
 # 3. 反射チャネル
 # =============================================================================
+def peak_label(unit='dB'):
+    """反射の判定に使う量の軸ラベル（例：±1 ns peak of |E| [dB]）。"""
+    return '±{:g} ns peak of |E| [{}]'.format(REFL_GATE_HW_NS, unit)
+
+
 def reflection_scan(T, R, dt):
-    """ゲートを滑らせ、トレースごとの包絡ピークを基準の 95 % 点と比べる。"""
+    """ゲートを滑らせ、トレースごとの「±REFL_GATE_HW_NS の |E| の最大値」を基準の 95 % 点と比べる。
+    ゲート（2 ns）は波の周期（約 0.8 ns）より長いので、包絡の最大値とほぼ同じ値になる
+    （包絡を使わないので、ヒルベルト変換を説明しなくてよい）。"""
     dt_ns = dt * 1e9
-    envT = envelope(T)
-    envR = envelope(R)
     n_gate = max(3, int(round(2 * REFL_GATE_HW_NS / dt_ns)) | 1)
-    pkT = ndimage.maximum_filter1d(envT, size=n_gate, axis=0, mode='nearest')
-    pkR = ndimage.maximum_filter1d(envR, size=n_gate, axis=0, mode='nearest')
+    pkT = ndimage.maximum_filter1d(np.abs(T), size=n_gate, axis=0, mode='nearest')
+    pkR = ndimage.maximum_filter1d(np.abs(R), size=n_gate, axis=0, mode='nearest')
+    # 波が届く前は |E| がちょうど 0 になる（包絡と違い、まわりから値がにじまない）。
+    # 0/0 や log(0) を避けるため、基準の最大値の 1e-12 倍（−240 dB）を下限にする。
+    # 判定（PT > th）は、0 どうしと同じく下限どうしでも「超えない」ので変わらない。
+    floor = 1e-12 * float(pkR.max()) if pkR.max() > 0 else 1e-300
+    pkT = np.maximum(pkT, floor)
+    pkR = np.maximum(pkR, floor)
     step = max(1, int(round(REFL_STEP_NS / dt_ns)))
     half = n_gate // 2
     idx = np.arange(half, T.shape[0] - half, step)
@@ -481,14 +492,14 @@ def _argmax_centre(pd, idx, t=None, prefer_t=None):
 def analyze_target(name, T, R, dt, x, events, tand, info):
     dt_ns = dt * 1e9
     # --- dB の基準：基準 B-scan の地表反射（全トレースの中央値）---------------
-    envR = envelope(R)
+    # 反射の判定と同じ量（地表反射の時刻 ±REFL_GATE_HW_NS の |E| の最大値）で測る
+    absR, absT = np.abs(R), np.abs(T)
     t_axis = np.arange(R.shape[0]) * dt_ns
     t_s = info['t_surface_data']
     ms = (t_axis >= t_s - REFL_GATE_HW_NS) & (t_axis <= t_s + REFL_GATE_HW_NS)
-    a_surf = float(np.median(envR[ms].max(axis=0)))
+    a_surf = float(np.median(absR[ms].max(axis=0)))
     # 対象だけの図では、対象自身の地表反射で規格化する（基準に依らない）
-    envT = envelope(T)
-    a_surf_T = float(np.median(envT[ms].max(axis=0)))
+    a_surf_T = float(np.median(absT[ms].max(axis=0)))
 
     res = {'name': name, 'a_surf': a_surf, 'a_surf_T': a_surf_T, 'x': x, 'events': events,
            'x_label': info.get('x_label', 'x [m]')}
@@ -500,12 +511,12 @@ def analyze_target(name, T, R, dt, x, events, tand, info):
 
     def trace_detail(k):
         """fig2(c) 用：ゲート中心 t_k（全トレース共通）と、各トレースでゲート内の
-        包絡が最大になった時刻（＝ピークの値を取った時刻）。"""
+        |E| が最大になった時刻（＝ピークの値を取った時刻）。"""
         tk = float(rs['t'][k])
         m = np.abs(t_axis - tk) <= REFL_GATE_HW_NS
         idx = np.where(m)[0]
         return {'t_k': tk, 'gate': (float(t_axis[idx[0]]), float(t_axis[idx[-1]])),
-                'peak_t_ns': t_axis[idx[np.argmax(envT[idx], axis=0)]]}
+                'peak_t_ns': t_axis[idx[np.argmax(absT[idx], axis=0)]]}
 
     reg_rows = []
     for i0, i1 in regs:
@@ -770,7 +781,7 @@ ROW_COLORS = ('tab:purple', 'tab:orange', 'tab:green', 'tab:brown', 'tab:cyan', 
 # 窓はすべて反射ゲートと同じ ±REFL_GATE_HW_NS。地表反射・領域の底の目印は灰色の点線。
 # 符号付きの E のゲート内の最大は、正の山しか見ない（|E| のゲート内の最大とほぼ同じ水準）ので入れない。
 CLUTTER_QTY = (('E', 'tab:red', 'E'), ('absE', 'tab:blue', '|E|'), ('env', 'tab:green', 'envelope'))
-CLUTTER_OPS = (('', '-', 'raw'), ('ma_', '--', 'moving average'), ('max_', '-.', 'gated max'))
+CLUTTER_OPS = (('', '-', 'raw'), ('ma_', '--', 'moving average'), ('max_', '-.', 'peak'))
 CLUTTER_METRICS = (
     # (名前, 色, 線種)
     ('E', 'tab:red', '-'), ('ma_E', 'tab:red', '--'),
@@ -836,7 +847,7 @@ def plot_clutter_metrics(res, R, dt, out_dir, info):
     # 列ごとに埋まるので、上の段が色、下の段が線種になるよう交互に並べる。
     hq = [Line2D([], [], color=col, ls='-', lw=2.4, label=lab) for _, col, lab in CLUTTER_QTY]
     w = '±{:g} ns'.format(REFL_GATE_HW_NS)           # 窓の幅を凡例に書き、図だけで分かるようにする
-    lab_op = {'raw': 'raw', 'moving average': '{} moving average'.format(w), 'gated max': '{} max'.format(w)}
+    lab_op = {'raw': 'raw', 'moving average': '{} moving average'.format(w), 'peak': '{} peak'.format(w)}
     ho = [Line2D([], [], color='k', ls=ls, lw=1.8, label=lab_op[lab]) for _, ls, lab in CLUTTER_OPS]
     h = [x for pair in zip(hq, ho) for x in pair]
     h.append(Line2D([], [], color='0.5', ls=':', lw=1.2, label='surface / domain bottom'))
@@ -873,7 +884,7 @@ def _plot_reflection_ab(res, ax1, ax2, tgt_name, rows=(), cols=()):
     ax1.plot(t, to_db(rs['th']), color='k', lw=1.4, ls='--',
              label='threshold')
     h = _event_lines(ax1, res['events'])
-    ax1.set_ylabel('Gated peak [dB]')
+    ax1.set_ylabel(peak_label())
     ax1.set_ylim(-IMG_DB_RANGE - 10, 5)
     ax1.legend(handles=ax1.get_legend_handles_labels()[0] + ([h] if h else []), loc='upper right')
     ax1.grid(True, ls='--', alpha=0.3)
@@ -1184,7 +1195,7 @@ def plot_single_reflection(res, out_dir, tgt_name):
     ax1.plot(t, to_db(med), color=COL_TGT, lw=1.2, label='median')
     h = _event_lines(ax1, res['events'])
     ax1.set_xlabel('Two-way time [ns]')
-    ax1.set_ylabel('Gated peak [dB]')
+    ax1.set_ylabel(peak_label())
     ax1.set_ylim(-IMG_DB_RANGE - 10, 5)
     ax1.legend(handles=ax1.get_legend_handles_labels()[0] + ([h] if h else []), loc='upper right')
     ax1.grid(True, ls='--', alpha=0.3)
@@ -1199,7 +1210,7 @@ def plot_single_reflection(res, out_dir, tgt_name):
     ax2.set_xticks(range(len(rows)))
     ax2.set_xticklabels([r['event'] for r in rows], rotation=20)
     ax2.set_xlim(-0.7, len(rows) - 0.3)
-    ax2.set_ylabel('Trace peak [dB]')
+    ax2.set_ylabel(peak_label())
     ax2.set_title('(b) At interfaces')
     ax2.grid(True, ls='--', alpha=0.3)
     if rows:
