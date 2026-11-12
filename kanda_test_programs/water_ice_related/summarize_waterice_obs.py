@@ -53,7 +53,7 @@ plt.legend(fontsize=14)
 plt.tight_layout()
 
 plt.show()
-# output_dir = "output"
-# if not os.path.exists(output_dir):
-#     os.makedirs(output_dir)
-# plt.savefig(os.path.join(output_dir, "water_ice_summary.png"))
+output_dir = "/Volumes/gprMax_water_ice/test_programs_output/water_ice_summary"
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+plt.savefig(os.path.join(output_dir, "water_ice_summary.png"))
