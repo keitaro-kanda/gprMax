@@ -1,9 +1,14 @@
 """クラッタの強さの指標の比較（bscan_detection の fig8）を、1 つの B-scan だけで作るツール
 
-使い方：python clutter_metrics_plot.py を実行し、merged.out のパスを貼る。
+使い方：python bscan_clutter_metrics.py を実行し、merged.out のパスを貼る。
     - 想定は水氷なし（no_ice）の B-scan。シード（ランダム場）を変えた計算どうしを比べるために使う。
-    - 前処理と図・CSV は bscan_detection.py と同じ（同じフォルダに置く）。直達波の除去と波源遅延には、
-      JSON_PATH の _reference（at_tx・far_1m）を使う。
+    - 前処理と図・CSV は bscan_detection.py と同じ（同じフォルダに置く）。
+    - 参照計算を 2 つ使う（どちらも励振波形と格子が同じなら、どの計算でも共通）。
+        at_tx（自由空間）：直達波の除去。地表反射は直達波と重なるので、除去しないと dB の基準
+                          （地表反射の強さ）が変わり、他の結果と比べられなくなる
+        far_1m           ：波源遅延。地表反射・計算領域の底の目印の走時に使う
+      探す順：設定の AT_TX_PATH / FAR_1M_PATH → JSON_PATH の _reference（あれば）→ input() で聞く。
+      at_tx が無ければ直達波を除去せずに続ける（注意を出す）。far_1m が無ければ SOURCE_DELAY_NS を使う。
     - 記録ファイル（Ascan_level6_record.json）は B-scan の近くから bscan_detection と同じ規則で探す。
       見つからなければ、計算領域の底の目印なしで続ける。
 
@@ -23,7 +28,10 @@ import subsurface_model as sm
 # =============================================================================
 # 設定  [EDIT HERE]
 # =============================================================================
-JSON_PATH = '/Volumes/gprMax_water_ice/2D_12x4/water_ice_study_test/out_file_paths.json'
+JSON_PATH = '/Volumes/gprMax_water_ice/2D_12x4/water_ice_study_test/out_file_paths.json'   # 無くてもよい
+AT_TX_PATH = ''                                 # 自由空間 at_tx（直達波の除去）。空なら JSON → input()
+FAR_1M_PATH = ''                                # far_1m（波源遅延）。空なら JSON → input()
+SOURCE_DELAY_NS = 5.008                         # far_1m が無いときの波源遅延 [ns]（これまでの計算の値）
 OUTPUT_SUBDIR = 'clutter_metrics'               # bscan_detection/ の下に作るフォルダ
 
 
@@ -34,18 +42,30 @@ def ask_path():
     return os.path.abspath(p)
 
 
+def _ask_optional(prompt):
+    p = input(prompt).strip().strip("'\"").replace('\\ ', ' ')
+    if p and not os.path.exists(p):
+        print('  見つかりません（使わずに続けます）: {}'.format(p))
+        return ''
+    return os.path.abspath(p) if p else ''
+
+
 def reference_paths():
-    """JSON の _reference から far_1m（波源遅延）と at_tx（直達波の除去）のパスを取る。"""
-    _, _, _, reference = bd.select_conditions(JSON_PATH)
-    far = reference.get(bd.REF_KEY, '')
-    if not far or not os.path.exists(far):
-        sys.exit('Error: _reference の {} がありません（波源遅延に必要）'.format(bd.REF_KEY))
-    fs = ''
-    if bd.SUBTRACT_FREESPACE:
-        fs = bd.FREESPACE_AT_TX_PATH or reference.get(bd.FREESPACE_KEY, '')
-        if not fs or not os.path.exists(fs):
-            sys.exit('Error: 直達波の除去に使う自由空間 at_tx が見つかりません'
-                     '（除去しないなら bscan_detection.SUBTRACT_FREESPACE = False）')
+    """at_tx（直達波の除去）と far_1m（波源遅延）のパス。設定 → JSON → input() の順に探す。"""
+    fs, far = AT_TX_PATH, FAR_1M_PATH
+    if (not fs or not far) and JSON_PATH and os.path.exists(JSON_PATH):
+        try:
+            _, _, _, reference = bd.select_conditions(JSON_PATH)
+            fs = fs or bd.FREESPACE_AT_TX_PATH or reference.get(bd.FREESPACE_KEY, '')
+            far = far or reference.get(bd.REF_KEY, '')
+        except Exception as exc:
+            print('注意: JSON から参照計算を読めませんでした: {}'.format(exc))
+    if bd.SUBTRACT_FREESPACE and not (fs and os.path.exists(fs)):
+        fs = _ask_optional('Enter free-space at_tx path for direct-wave removal (Enter to skip): ')
+    if not (far and os.path.exists(far)):
+        far = _ask_optional('Enter far_1m path for source delay (Enter to use {} ns): '.format(SOURCE_DELAY_NS))
+    if not bd.SUBTRACT_FREESPACE:
+        fs = ''
     return far, fs
 
 
@@ -68,8 +88,11 @@ def main():
     R, x = R[:, sel], x_all[sel]
 
     # --- 走時の目印（モデル）と dB の基準 ---------------------------------------
-    far_tr, dt_far = bd.load_trace(far_path)
-    src_delay = bd.measure_peak(far_tr, dt_far)['t_peak'] - sm.R_REF / sm.C
+    if far_path:
+        far_tr, dt_far = bd.load_trace(far_path)
+        src_delay = bd.measure_peak(far_tr, dt_far)['t_peak'] - sm.R_REF / sm.C
+    else:
+        src_delay = SOURCE_DELAY_NS
     t_bottom = np.inf
     if rec:
         try:
@@ -93,10 +116,10 @@ def main():
 
     # --- run_info ---------------------------------------------------------------
     rnd = (rec or {}).get('random', {})
-    L = ['clutter_metrics_plot.py  {}'.format(datetime.now().isoformat(timespec='seconds')),
+    L = ['{}  {}'.format(os.path.basename(__file__), datetime.now().isoformat(timespec='seconds')),
          'B-scan: {}'.format(path),
          '記録: {}'.format(rec_path or '(見つからない)'),
-         'far_1m: {}'.format(far_path),
+         'far_1m: {}'.format(far_path or '(なし。波源遅延は設定の {} ns)'.format(SOURCE_DELAY_NS)),
          'at_tx（直達波の除去）: {}'.format(fs_path or '(除去なし)'),
          'トレース {} 本（x = {:.2f}–{:.2f} {}）、dt = {:.4f} ps'.format(
              R.shape[1], x[0], x[-1], 'm' if has_x else '(番号)', dt * 1e12)]
@@ -108,6 +131,9 @@ def main():
               '  rho_map_sha256 = {}'.format((rec.get('rho') or {}).get('rho_map_sha256'))]
         if bd.has_ice(rec):
             L.append('注意: 氷が入った計算です。fig8 は水氷なし（no_ice）での比較を想定しています')
+    if not fs_path:
+        L.append('注意: 直達波を除去していません。地表反射に直達波が重なるので、dB の基準（地表反射）が'
+                 '除去した結果と違い、他の fig8 と縦軸の位置を直接は比べられません（形は比べられる）')
     L += ['波源遅延 {:.3f} ns、地表反射の走時：モデル {:.3f} ns / データ {:.3f} ns'.format(
               src_delay, t_s_model, t_s_data),
           '計算領域の底の走時（モデル）: {}'.format('{:.2f} ns'.format(t_bottom) if np.isfinite(t_bottom)
