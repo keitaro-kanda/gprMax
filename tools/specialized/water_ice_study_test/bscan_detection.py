@@ -116,6 +116,15 @@ LSR_BOOT_N = 2000                  # ブートストラップ（ブロックの�
 LSR_BOOT_SEED = 0                  # ブートストラップの乱数シード（再現性のため固定）
 LSR_PLOT_TAND_ONLY = True          # fig6-3：fig6-2 の (c)（区間ごとの tanδ）だけの図も出す
 LSR_ERRORBAR = True                # (c) の全トレース平均に、ブートストラップの 95 % 区間をエラーバーで描く
+# fig6-4：氷の濃度・深さごとの理論の |Δtanδ|（水氷なしとの差）と、この解析で得た検出限界を並べる
+LSR_DTAND_ENABLE = True
+LSR_DTAND_DEPTHS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]   # [m] 線を描く深さ（色で示す）
+LSR_DTAND_VMAX = 30.0              # [vol%] 横軸の上限
+LSR_DTAND_NV = 61                  # 横軸（濃度）の点数
+LSR_DTAND_MODELS = None            # None：対象の描像だけ。('pore', 'excess') で両方を (a)(b) に並べる
+LSR_DTAND_FREQ_HZ = 1.0e9          # tanδ を評価する周波数（理論の目安 lsr_model_tandelta と同じ）
+LSR_DTAND_CMAP = 'viridis'         # 深さの色
+LSR_DTAND_YLOG = False             # True で縦軸を対数にする
 
 # --- 作図 ---------------------------------------------------------------------
 IMG_DB_RANGE = 80.0                # B-scan 図の色の幅 [dB]
@@ -1911,6 +1920,125 @@ def plot_lsr_bootstrap(res, out_dir, tgt_name):
     save_figure(fig, out_dir, 'fig7_spectral_ratio_bootstrap')
 
 
+def _lsr_limit_segment(L):
+    """検出限界を取る検定区間。氷層の区間（ice_top → ice_bottom）があればそれ、無ければ最初の検定区間。"""
+    tests = [s for s in L['segs'] if s['role'] == 'test']
+    for s in tests:
+        if s['A'] == 'ice_top' and s['B'] == 'ice_bottom':
+            return s
+    return tests[0] if tests else None
+
+
+def lsr_detection_limits(L):
+    """この解析で得た、LSR で検出できる tanδ の差。
+
+    'per block'  : 上載層のブロックの範囲の半幅（1.96 σ_block）= min_detectable_dtand
+    'whole line' : 上載層との差のブートストラップ 95 % 区間の半幅
+    """
+    s = _lsr_limit_segment(L)
+    out = {}
+    if s is None:
+        return None, out
+    if np.isfinite(s.get('min_detectable_dtand', np.nan)):
+        out['per block'] = float(s['min_detectable_dtand'])
+    b = L.get('boot', {}).get('segs', {}).get(s['name'], {})
+    if np.isfinite(b.get('d_lo', np.nan)) and np.isfinite(b.get('d_hi', np.nan)):
+        out['whole line'] = 0.5 * (b['d_hi'] - b['d_lo'])
+    return s['name'], out
+
+
+def _model_tandelta_at(rec, model, depth, v_pct, freq_hz):
+    """平均媒質の深さ depth に、描像 model の氷を v_pct [vol%] 混ぜたときの tanδ。
+
+    subsurface_model の Level 5 の式（level5_eps）をそのまま使う。pore で空隙率を超えると NaN。
+    """
+    keys = ('LEVEL4_ICE_MODEL', 'LEVEL4_ICE_VOL_PCT', 'LEVEL4_ICE_TOP_M', 'LEVEL4_ICE_THICK_M',
+            'LEVEL4_ICE_SPEC')
+    keep = {k: getattr(sm, k) for k in keys}
+    try:
+        sm.LEVEL4_ICE_MODEL = model if v_pct > 0 else 'none'
+        sm.LEVEL4_ICE_SPEC = 'vol'
+        sm.LEVEL4_ICE_VOL_PCT = float(v_pct)
+        sm.LEVEL4_ICE_TOP_M = float(depth)          # 空隙率の判定をこの深さで行うため
+        sm.LEVEL4_ICE_THICK_M = 0.0
+        er, ei = sm.level5_eps(np.array([freq_hz]), np.array([float(depth)]), in_ice=v_pct > 0)
+        return float(np.atleast_1d(ei)[0] / np.atleast_1d(er)[0])
+    except CmdInputError:
+        return np.nan
+    finally:
+        for k, v in keep.items():
+            setattr(sm, k, v)
+
+
+def lsr_dtand_analysis(res, rec):
+    """理論の |Δtanδ|（氷の濃度 × 深さ × 描像）を計算し、この解析の検出限界と合わせて res['lsr']['dtand'] に入れる。"""
+    L = res.get('lsr')
+    if not LSR_DTAND_ENABLE or not L or not L['segs'] or rec is None:
+        return None
+    seg_name, limits = lsr_detection_limits(L)
+    if not limits:
+        print('  |Δtanδ| の図：検定区間の検出限界が得られないので作りません')
+        return None
+    if LSR_DTAND_MODELS is None:
+        models = [rec['ice_model']] if has_ice(rec) else ['pore', 'excess']
+    else:
+        models = list(LSR_DTAND_MODELS)
+    configure_mean_medium(rec)                       # 組成（FeO+TiO2）を記録の値にする
+    depths = np.asarray(LSR_DTAND_DEPTHS, dtype=float)
+    v = np.linspace(0.0, LSR_DTAND_VMAX, LSR_DTAND_NV)
+    curves = {}
+    for m in models:
+        td0 = np.array([_model_tandelta_at(rec, m, d, 0.0, LSR_DTAND_FREQ_HZ) for d in depths])
+        td = np.array([[_model_tandelta_at(rec, m, d, vv, LSR_DTAND_FREQ_HZ) for vv in v] for d in depths])
+        curves[m] = {'td0': td0, 'dtand': np.abs(td - td0[:, None])}
+    configure_mean_medium(rec)                       # 元の平均媒質に戻す
+    L['dtand'] = {'models': models, 'depths': depths, 'v': v, 'curves': curves,
+                  'limits': limits, 'limit_segment': seg_name,
+                  'v_run': 100.0 * float(rec['ice_vol_frac']) if has_ice(rec) else None,
+                  'feotio2_wt': float(rec['feotio2_wt'])}
+    return L['dtand']
+
+
+LSR_LIMIT_STYLES = {'per block': '--', 'whole line': ':'}
+
+
+def plot_lsr_dtand(res, out_dir, tgt_name):
+    """fig6-4：横軸 氷の濃度、縦軸 |Δtanδ|（理論）、線の色 深さ。黒の横線はこの解析の検出限界。"""
+    L = res.get('lsr')
+    if not L or 'dtand' not in L:
+        return
+    D = L['dtand']
+    depths, v = D['depths'], D['v']
+    cols = plt.get_cmap(LSR_DTAND_CMAP)(np.linspace(0.0, 0.9, depths.size))
+    n = len(D['models'])
+    fig, axs = plt.subplots(1, n, figsize=(6.5 * n + 3.5, 6.5), sharey=True, layout='constrained',
+                            squeeze=False)
+    axs = axs[0]
+    for k, (ax, m) in enumerate(zip(axs, D['models'])):
+        for i in range(depths.size):
+            ax.plot(v, D['curves'][m]['dtand'][i], color=cols[i], lw=2.2)
+        for lab, val in D['limits'].items():
+            ax.axhline(val, color='k', lw=1.6, ls=LSR_LIMIT_STYLES.get(lab, '--'))
+        if D['v_run'] is not None:
+            ax.axvline(D['v_run'], color='0.5', lw=1.2, ls='-.')
+        ax.set_xlim(0.0, v[-1])
+        ax.set_xlabel('Ice content [vol%]')
+        ax.set_title('({}) {} ice'.format('abcdefgh'[k], m) if n > 1 else '{} ice'.format(m))
+        ax.grid(True, ls='--', alpha=0.3)
+    axs[0].set_ylabel(r'$|\Delta\tan\delta|$ (vs. no ice)')
+    if LSR_DTAND_YLOG:
+        axs[0].set_yscale('log')
+    else:
+        axs[0].set_ylim(0.0, None)
+    h = [Line2D([], [], color=cols[i], lw=2.2, label='{:g} m'.format(d)) for i, d in enumerate(depths)]
+    h += [Line2D([], [], color='k', lw=1.6, ls=LSR_LIMIT_STYLES.get(lab, '--'),
+                 label='detection limit ({})'.format(lab)) for lab in D['limits']]
+    if D['v_run'] is not None:
+        h.append(Line2D([], [], color='0.5', lw=1.2, ls='-.', label='this B-scan'))
+    fig.legend(handles=h, loc='outside right center')
+    save_figure(fig, out_dir, 'fig6-4_dtand_vs_ice')
+
+
 def write_lsr_outputs(res, out_dir, tgt_name, info):
     L = res.get('lsr')
     if not L:
@@ -1992,6 +2120,32 @@ def write_lsr_outputs(res, out_dir, tgt_name, info):
         samp = [dict({'draw': i}, **{s['name']: B['segs'][s['name']]['samples'][i] for s in L['segs']})
                 for i in range(B['n'])]
         _write_csv(os.path.join(out_dir, 'spectral_ratio_bootstrap_samples.csv'), samp, list(samp[0].keys()))
+    D = L.get('dtand')
+    if D:
+        v = D['v']
+        marks = [x for x in (1, 5, 10, 20, 30) if x <= v[-1] + 1e-9]
+        lines += ['', '[氷の濃度・深さごとの理論の |Δtanδ|（fig6-4）]',
+                  '  平均媒質（{}）、{:.2f} GHz、FeO+TiO2 = {:g} wt%。pore で空隙率を超える濃度は NaN'
+                  .format(THEORY_LEVEL, LSR_DTAND_FREQ_HZ / 1e9, D['feotio2_wt']),
+                  '  検出限界（区間 {}）：'.format(D['limit_segment'])
+                  + '、'.join('{} {:.2e}'.format(k, val) for k, val in D['limits'].items())]
+        rows = []
+        for m in D['models']:
+            lines.append('  [{}]  深さ[m]  tanδ(0)    '.format(m)
+                         + ''.join('{:>10}'.format('{:g} vol%'.format(x)) for x in marks))
+            for i, d in enumerate(D['depths']):
+                y = [D['curves'][m]['dtand'][i][int(np.argmin(np.abs(v - x)))] for x in marks]
+                lines.append('          {:6.2f}  {:.3e}  '.format(d, D['curves'][m]['td0'][i])
+                             + ''.join('{:>10.2e}'.format(val) for val in y))
+                for j, vv in enumerate(v):
+                    rows.append({'model': m, 'depth_m': d, 'ice_vol_pct': vv,
+                                 'tand_no_ice': D['curves'][m]['td0'][i],
+                                 'abs_dtand': D['curves'][m]['dtand'][i, j]})
+        lo = min(D['limits'].values())
+        mx = max(float(np.nanmax(D['curves'][m]['dtand'])) for m in D['models'])
+        lines.append('  最大の |Δtanδ|（{:g} vol% まで、空隙率以内）= {:.2e}：小さいほうの検出限界 {:.2e} の {:.0f} %'
+                     .format(v[-1], mx, lo, 100 * mx / lo))
+        _write_csv(os.path.join(out_dir, 'spectral_ratio_dtand_vs_ice.csv'), rows, list(rows[0].keys()))
     path = os.path.join(out_dir, 'run_info.txt')
     with open(path, 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(lines) + '\n')
@@ -2108,8 +2262,10 @@ def run_target(tgt, conds, reference, R, rec_R, dt, x, fs, out_base, level, ctx)
         os.makedirs(lsr_dir, exist_ok=True)
         lsr_analysis(res, T, R, dt, events, info, rec_T)
         lsr_bootstrap(res)
+        lsr_dtand_analysis(res, rec_T)
         plot_lsr(res, lsr_dir, tgt)
         plot_lsr_bootstrap(res, lsr_dir, tgt)
+        plot_lsr_dtand(res, lsr_dir, tgt)
         write_lsr_outputs(res, lsr_dir, tgt, info)
     return res
 

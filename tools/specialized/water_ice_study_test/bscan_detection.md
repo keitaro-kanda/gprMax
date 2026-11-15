@@ -164,6 +164,13 @@ $$
 
 6. **ブートストラップ（`LSR_BOOT_N`、fig7）：** 全トレース平均の tanδ の不確かさを見積もる。ブロックを重複を許して同じ数だけ引き直し（復元抽出）、選ばれたブロックのスペクトルをトレース数で重み付けして平均 → スペクトル比 → 直線の当てはめ → tanδ と、全トレース平均と同じ手順で計算する。これを 2000 回繰り返し、2.5–97.5 % を 95 % 区間とする。使う周波数は元の解析のものに固定する。区間どうしの差は同じ引き直しで両方を計算して取り、差の 95 % 区間が 0 をまたがなければ「測線全体で見える」。4 の判定（1 ブロックで見えるか）とは問いが違う。前提：ブロックどうしが独立で、測線のどこも同じ統計。この 95 % 区間は fig6-2(c)・fig6-3 の全トレースの値にエラーバーとしても描く（百分位の区間なので上下は非対称）。
 
+7. **氷の量と tanδ の差の理論（`LSR_DTAND_ENABLE`、fig6-4）：** 平均媒質（`THEORY_LEVEL`、記録の FeO+TiO₂）の深さ $z$ に、氷を $v$ [vol%] 混ぜたときの $\tan\delta$ を `subsurface_model.level5_eps`（gprMax の媒質と同じ式、1 GHz）で計算し、水氷なしとの差の絶対値 $\lvert\Delta\tan\delta\rvert = \lvert\tan\delta(v,z) - \tan\delta(0,z)\rvert$ を描く。pore で空隙率を超える濃度は描かない。これに、この解析で得た検出限界を横線で重ねる。
+   - 1 ブロック（per block）：4 の範囲の半幅（`min_detectable_dtand` = 1.96 σ_block）
+   - 測線全体（whole line）：6 の上載層との差の 95 % 区間の半幅
+   - どちらも氷層の区間（ice_top → ice_bottom）の値。無ければ最初の検定区間。
+
+   どちらの描像でも氷が入ると $\tan\delta$ は下がる（pore は $\varepsilon'$ が増える、excess は $\varepsilon''$ が薄まる）ので、差は絶対値で描く。線が横線より下なら、その濃度の氷は LSR では見分けられない。
+
 注意：
 - 層の中の散乱損失は高い周波数ほど大きいので、tanδ を大きめに見積もる向きの偏りが入る。上載層との差を取ると一部打ち消すが、深さで散乱の強さが変われば残る。
 - 両方の反射が見えないと使えない。反射が見えない条件（excess の弱い反射など）では区間が作られない。
@@ -185,7 +192,7 @@ level_6/pore/bscan_detection/
 │   └── pdf/
 └── spectral_ratio/   スペクトル比法（境界の反射どうし）。判定つき（4.4、5.3）
     ├── fig6-1_spectral_ratio.png, fig6-2_spectral_ratio_test.png, fig6-3_spectral_ratio_tand.png,
-    │   fig7_spectral_ratio_bootstrap.png,
+    │   fig6-4_dtand_vs_ice.png, fig7_spectral_ratio_bootstrap.png,
     │   spectral_ratio_*.csv, run_info.txt
     └── pdf/
 ```
@@ -292,13 +299,15 @@ fig8 は 2 段の操作でできている。
 | `fig6-1_spectral_ratio` | (a) 反射ごとのスペクトル（線：全トレース平均、薄い帯：トレースの 2.5–97.5 %、破線：同じゲートでの no_ice＝クラッタ） (b) 隣り合う反射のスペクトル比（太線：全トレース、細線：ブロック）、黒の点線：直線の当てはめ、軸の上端の色の帯：当てはめに使った周波数 |
 | `fig6-2_spectral_ratio_test` | 左に (a)(b)（fig6-1 と同じ）、右に (c) 区間ごとの tanδ（点：ブロック、黒線：全トレース、黒線のエラーバー：全トレースの 95 % 区間（ブートストラップ、fig7(a) の破線と同じ値）、◇□：理論）、灰色の帯と破線：上載層のブロックの範囲（判定の境界）、P_D と判定。凡例は (c) の下 |
 | `fig6-3_spectral_ratio_tand` | fig6-2 の (c) だけ（`LSR_PLOT_TAND_ONLY = True` のとき）。中身は (c) と同じ。凡例は枠の右 |
+| `fig6-4_dtand_vs_ice` | 横軸：氷の濃度 [vol%]、縦軸：理論の $\lvert\Delta\tan\delta\rvert$（水氷なしとの差）、線の色：深さ（`LSR_DTAND_DEPTHS`）。黒の横線：この解析の検出限界（破線：1 ブロック、点線：測線全体）。灰色の一点鎖線：この B-scan の氷の濃度。既定は対象の描像だけ、`LSR_DTAND_MODELS = ('pore', 'excess')` で (a)(b) に並べる（4.4 の 7） |
+| `spectral_ratio_dtand_vs_ice.csv` | fig6-4 の中身：描像 × 深さ × 濃度ごとの $\tan\delta(0)$ と $\lvert\Delta\tan\delta\rvert$ |
 | `spectral_ratio_segments.csv` | 区間ごとの Δt、使った周波数、傾き、tanδ（全体・ブロック平均・σ）、理論値、上載層との差、P_D、判定、検出に要る Δtanδ、p 値 |
 | `spectral_ratio_blocks.csv` | 区間 × ブロックの tanδ |
 | `spectral_ratio_spectra.csv` | 周波数ごとの反射スペクトル、クラッタ、スペクトル比、使った周波数 |
 | `fig7_spectral_ratio_bootstrap` | (a) 区間ごとの全トレース平均 tanδ のブートストラップ分布（実線：元の値、破線：95 % 区間、点線・一点鎖線：理論 氷あり / 氷なし） (b) 上載層との差の分布と判定（タイトル） |
 | `spectral_ratio_bootstrap.csv` | 区間ごとの 95 % 区間・σ、差の 95 % 区間、測線全体での判定 |
 | `spectral_ratio_bootstrap_samples.csv` | 引き直しごとの tanδ（全区間） |
-| `run_info.txt` | 設定、反射（ピーク時刻と使ったか）、区間ごとの結果、ブートストラップの結果 |
+| `run_info.txt` | 設定、反射（ピーク時刻と使ったか）、区間ごとの結果、ブートストラップの結果、fig6-4 の表（深さ × 1/5/10/20/30 vol%）と検出限界との比 |
 
 ---
 
@@ -324,6 +333,11 @@ fig8 は 2 段の操作でできている。
 | `CLUTTER_YMIN_DB` | −80 | fig8 の縦軸の下限 [dB re 基準の地表反射] |
 | `LSR_PLOT_TAND_ONLY` | True | fig6-3（fig6-2 の (c) だけの図）を出す |
 | `LSR_ERRORBAR` | True | (c) の全トレースの tanδ に、ブートストラップの 95 % 区間のエラーバーを描く（`LSR_BOOT_N = 0` なら描かない） |
+| `LSR_DTAND_ENABLE` | True | fig6-4（氷の量と tanδ の差の理論と検出限界）を出す |
+| `LSR_DTAND_DEPTHS` | 0.5–3.0 m（0.5 m ごと） | fig6-4 の線の深さ |
+| `LSR_DTAND_VMAX` | 30 | fig6-4 の横軸の上限 [vol%] |
+| `LSR_DTAND_MODELS` | None | None：対象の描像だけ。`('pore', 'excess')` で両方 |
+| `LSR_DTAND_YLOG` | False | fig6-4 の縦軸を対数にする |
 
 ---
 
