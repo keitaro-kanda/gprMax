@@ -114,6 +114,8 @@ LSR_FLOOR_DB = 20.0                # 反射のスペクトルが最大からこ�
 LSR_SNR_MIN_DB = 6.0               # 地表以外の反射：同じ時刻の基準（クラッタ）よりこれ以上強い周波数だけ使う
 LSR_BOOT_N = 2000                  # ブートストラップ（ブロックの復元抽出）の回数。0 で行わない
 LSR_BOOT_SEED = 0                  # ブートストラップの乱数シード（再現性のため固定）
+LSR_PLOT_TAND_ONLY = True          # fig6-3：fig6-2 の (c)（区間ごとの tanδ）だけの図も出す
+LSR_ERRORBAR = True                # (c) の全トレース平均に、ブートストラップの 95 % 区間をエラーバーで描く
 
 # --- 作図 ---------------------------------------------------------------------
 IMG_DB_RANGE = 80.0                # B-scan 図の色の幅 [dB]
@@ -1700,34 +1702,46 @@ def _lsr_panels_ab(res, ax1, ax2, tgt_name):
     return cols
 
 
-def plot_lsr(res, out_dir, tgt_name):
-    """fig6-1：(a)(b) だけ。fig6-2：左に (a)(b)、右に (c) 区間ごとの tanδ と判定。"""
-    L = res.get('lsr')
-    if not L or not L['segs']:
-        print('  スペクトル比：使える反射が 2 つ未満なので図を作りません')
-        return
-    fig = plt.figure(figsize=(13, 11), layout='constrained')
-    gs = fig.add_gridspec(2, 1)
-    _lsr_panels_ab(res, fig.add_subplot(gs[0]), fig.add_subplot(gs[1]), tgt_name)
-    save_figure(fig, out_dir, 'fig6-1_spectral_ratio')
+def _lsr_boot_interval(L, s):
+    """区間 s の全トレース平均 tanδ のブートストラップ 95 % 区間 (lo, hi)。無ければ None。"""
+    b = L.get('boot', {}).get('segs', {}).get(s['name'])
+    if not b or not (np.isfinite(b['lo']) and np.isfinite(b['hi'])):
+        return None
+    return b['lo'], b['hi']
 
-    fig = plt.figure(figsize=(20, 11.5), layout='constrained')
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.6, 1])
-    cols = _lsr_panels_ab(res, fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[1, 0]), tgt_name)
-    ax3 = fig.add_subplot(gs[:, 1])
+
+def _lsr_panel_c(res, ax3, cols, title, legend_at='below'):
+    """区間ごとの tanδ（点：ブロック、黒線：全トレース平均とその 95 % 区間、◇□：理論）と判定。
+
+    凡例はデータに重ならないよう枠の外に置く。legend_at = 'below'（軸の下）/ 'right'（軸の右）。
+    """
+    L = res['lsr']
     segs = L['segs']
     ref = segs[0]
+    err_handle = None
     for i, s in enumerate(segs):
         col = cols[s['B']]
         v = s['tand_block'][np.isfinite(s['tand_block'])]
         jit = (np.random.RandomState(30 + i).rand(len(v)) - 0.5) * 0.3
         ax3.scatter(i + jit, v, s=16, color=col, alpha=0.85)
         ax3.plot([i - 0.3, i + 0.3], [s['tand_stack']] * 2, color='k', lw=2)
+        ci = _lsr_boot_interval(L, s) if LSR_ERRORBAR else None
+        if ci is not None:
+            # 百分位の区間は点推定に対して非対称。点推定が区間の外に出る場合に備えて 0 で切る
+            yerr = [[max(s['tand_stack'] - ci[0], 0.0)], [max(ci[1] - s['tand_stack'], 0.0)]]
+            h = ax3.errorbar(i, s['tand_stack'], yerr=yerr, fmt='none', ecolor='k', elinewidth=1.8,
+                             capsize=8, capthick=1.8, zorder=5, label='95 % (bootstrap)')
+            err_handle = err_handle or h
         for key, mk, dx in (('model_tand_ice', 'D', 0.34), ('model_tand_dry', 's', 0.46)):
             if np.isfinite(s.get(key, np.nan)):
                 ax3.scatter(i + dx, s[key], marker=mk, s=42, facecolor='none', edgecolor='k', zorder=4)
         if s['role'] == 'test' and np.isfinite(s.get('pd', np.nan)):
-            ax3.text(i, max(np.max(v), ref['ref_mean'] + ref['ref_half_width']),
+            top = [ref['ref_mean'] + ref['ref_half_width'], s['tand_stack']]
+            if v.size:
+                top.append(np.max(v))
+            if ci is not None:
+                top.append(ci[1])
+            ax3.text(i, max(top),
                      '{}\n{:.0f} %'.format(VERDICT_EN[s['verdict']], 100 * s['pd']),
                      ha='center', va='bottom')
     if 'ref_mean' in ref:
@@ -1743,16 +1757,45 @@ def plot_lsr(res, out_dir, tgt_name):
     lo_, hi_ = ax3.get_ylim()
     ax3.set_ylim(lo_, hi_ + 0.15 * (hi_ - lo_))
     ax3.set_ylabel('tanδ')
-    ax3.set_title('(c) tanδ per interval')
-    ax3.legend(handles=[
-        Patch(color='0.85', label='reference range'),
-        Line2D([], [], color='k', ls='--', lw=1.2, label='boundary'),
-        Line2D([], [], color='k', lw=2, label='all traces'),
-        Line2D([], [], marker='D', ls='', mfc='none', mec='k', label='model (ice)'),
-        Line2D([], [], marker='s', ls='', mfc='none', mec='k', label='model (no ice)')],
-        loc='lower right')
+    ax3.set_title(title)
+    handles = [Patch(color='0.85', label='reference range'),
+               Line2D([], [], color='k', ls='--', lw=1.2, label='boundary'),
+               Line2D([], [], color='k', lw=2, label='all traces')]
+    if err_handle is not None:
+        handles.append(err_handle)
+    handles += [Line2D([], [], marker='D', ls='', mfc='none', mec='k', label='model (ice)'),
+                Line2D([], [], marker='s', ls='', mfc='none', mec='k', label='model (no ice)')]
+    if legend_at == 'right':
+        ax3.legend(handles=handles, loc='upper left', bbox_to_anchor=(1.02, 1.0))
+    else:
+        ax3.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.10), ncol=2)
     ax3.grid(True, ls='--', alpha=0.3)
+
+
+def plot_lsr(res, out_dir, tgt_name):
+    """fig6-1：(a)(b) だけ。fig6-2：左に (a)(b)、右に (c) 区間ごとの tanδ と判定。
+    fig6-3：(c) だけ（LSR_PLOT_TAND_ONLY）。"""
+    L = res.get('lsr')
+    if not L or not L['segs']:
+        print('  スペクトル比：使える反射が 2 つ未満なので図を作りません')
+        return
+    fig = plt.figure(figsize=(13, 11), layout='constrained')
+    gs = fig.add_gridspec(2, 1)
+    _lsr_panels_ab(res, fig.add_subplot(gs[0]), fig.add_subplot(gs[1]), tgt_name)
+    save_figure(fig, out_dir, 'fig6-1_spectral_ratio')
+
+    fig = plt.figure(figsize=(20, 11.5), layout='constrained')
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.6, 1])
+    cols = _lsr_panels_ab(res, fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[1, 0]), tgt_name)
+    _lsr_panel_c(res, fig.add_subplot(gs[:, 1]), cols, '(c) tanδ per interval')
     save_figure(fig, out_dir, 'fig6-2_spectral_ratio_test')
+
+    if LSR_PLOT_TAND_ONLY:
+        # (a)(b) と同じ色（反射の並び順で ROW_COLORS を割り当てる。_lsr_panels_ab と同じ規則）
+        cols = {r['name']: ROW_COLORS[i % len(ROW_COLORS)] for i, r in enumerate(L['refl'])}
+        fig, ax = plt.subplots(figsize=(11, 7), layout='constrained')
+        _lsr_panel_c(res, ax, cols, 'tanδ per interval ({})'.format(tgt_name), legend_at='right')
+        save_figure(fig, out_dir, 'fig6-3_spectral_ratio_tand')
 
 
 def lsr_bootstrap(res):
