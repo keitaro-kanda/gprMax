@@ -125,6 +125,8 @@ LSR_DTAND_MODELS = None            # None：対象の描像だけ。('pore', 'ex
 LSR_DTAND_FREQ_HZ = 1.0e9          # tanδ を評価する周波数（理論の目安 lsr_model_tandelta と同じ）
 LSR_DTAND_CMAP = 'viridis'         # 深さの色
 LSR_DTAND_YLOG = False             # True で縦軸を対数にする
+LSR_DTAND_PLOT_LIMITS = ('all traces',)   # 図に描く検出限界。'all traces'：全トレース平均（ブートストラップ）、
+                                          # 'per block'：1 ブロック。run_info には両方書く
 
 # --- 作図 ---------------------------------------------------------------------
 IMG_DB_RANGE = 80.0                # B-scan 図の色の幅 [dB]
@@ -1933,7 +1935,7 @@ def lsr_detection_limits(L):
     """この解析で得た、LSR で検出できる tanδ の差。
 
     'per block'  : 上載層のブロックの範囲の半幅（1.96 σ_block）= min_detectable_dtand
-    'whole line' : 上載層との差のブートストラップ 95 % 区間の半幅
+    'all traces' : 全トレース平均の、上載層との差のブートストラップ 95 % 区間の半幅
     """
     s = _lsr_limit_segment(L)
     out = {}
@@ -1943,7 +1945,7 @@ def lsr_detection_limits(L):
         out['per block'] = float(s['min_detectable_dtand'])
     b = L.get('boot', {}).get('segs', {}).get(s['name'], {})
     if np.isfinite(b.get('d_lo', np.nan)) and np.isfinite(b.get('d_hi', np.nan)):
-        out['whole line'] = 0.5 * (b['d_hi'] - b['d_lo'])
+        out['all traces'] = 0.5 * (b['d_hi'] - b['d_lo'])
     return s['name'], out
 
 
@@ -1976,8 +1978,9 @@ def lsr_dtand_analysis(res, rec):
     if not LSR_DTAND_ENABLE or not L or not L['segs'] or rec is None:
         return None
     seg_name, limits = lsr_detection_limits(L)
-    if not limits:
-        print('  |Δtanδ| の図：検定区間の検出限界が得られないので作りません')
+    if not any(k in limits for k in LSR_DTAND_PLOT_LIMITS):
+        print('  |Δtanδ| の図：検出限界（{}）が得られないので作りません（ブートストラップ LSR_BOOT_N > 0 が必要）'
+              .format(', '.join(LSR_DTAND_PLOT_LIMITS)))
         return None
     if LSR_DTAND_MODELS is None:
         models = [rec['ice_model']] if has_ice(rec) else ['pore', 'excess']
@@ -1999,7 +2002,7 @@ def lsr_dtand_analysis(res, rec):
     return L['dtand']
 
 
-LSR_LIMIT_STYLES = {'per block': '--', 'whole line': ':'}
+LSR_LIMIT_STYLES = {'per block': '--', 'all traces': ':'}
 
 
 def plot_lsr_dtand(res, out_dir, tgt_name):
@@ -2009,6 +2012,7 @@ def plot_lsr_dtand(res, out_dir, tgt_name):
         return
     D = L['dtand']
     depths, v = D['depths'], D['v']
+    plot_limits = {k: D['limits'][k] for k in LSR_DTAND_PLOT_LIMITS if k in D['limits']}
     cols = plt.get_cmap(LSR_DTAND_CMAP)(np.linspace(0.0, 0.9, depths.size))
     n = len(D['models'])
     fig, axs = plt.subplots(1, n, figsize=(6.5 * n + 3.5, 6.5), sharey=True, layout='constrained',
@@ -2017,7 +2021,7 @@ def plot_lsr_dtand(res, out_dir, tgt_name):
     for k, (ax, m) in enumerate(zip(axs, D['models'])):
         for i in range(depths.size):
             ax.plot(v, D['curves'][m]['dtand'][i], color=cols[i], lw=2.2)
-        for lab, val in D['limits'].items():
+        for lab, val in plot_limits.items():
             ax.axhline(val, color='k', lw=1.6, ls=LSR_LIMIT_STYLES.get(lab, '--'))
         if D['v_run'] is not None:
             ax.axvline(D['v_run'], color='0.5', lw=1.2, ls='-.')
@@ -2029,10 +2033,12 @@ def plot_lsr_dtand(res, out_dir, tgt_name):
     if LSR_DTAND_YLOG:
         axs[0].set_yscale('log')
     else:
-        axs[0].set_ylim(0.0, None)
+        top = max(list(plot_limits.values())
+                  + [float(np.nanmax(D['curves'][m]['dtand'])) for m in D['models']])
+        axs[0].set_ylim(0.0, 1.15 * top)
     h = [Line2D([], [], color=cols[i], lw=2.2, label='{:g} m'.format(d)) for i, d in enumerate(depths)]
     h += [Line2D([], [], color='k', lw=1.6, ls=LSR_LIMIT_STYLES.get(lab, '--'),
-                 label='detection limit ({})'.format(lab)) for lab in D['limits']]
+                 label='detection limit ({})'.format(lab)) for lab in plot_limits]
     if D['v_run'] is not None:
         h.append(Line2D([], [], color='0.5', lw=1.2, ls='-.', label='this B-scan'))
     fig.legend(handles=h, loc='outside right center')
@@ -2141,10 +2147,10 @@ def write_lsr_outputs(res, out_dir, tgt_name, info):
                     rows.append({'model': m, 'depth_m': d, 'ice_vol_pct': vv,
                                  'tand_no_ice': D['curves'][m]['td0'][i],
                                  'abs_dtand': D['curves'][m]['dtand'][i, j]})
-        lo = min(D['limits'].values())
         mx = max(float(np.nanmax(D['curves'][m]['dtand'])) for m in D['models'])
-        lines.append('  最大の |Δtanδ|（{:g} vol% まで、空隙率以内）= {:.2e}：小さいほうの検出限界 {:.2e} の {:.0f} %'
-                     .format(v[-1], mx, lo, 100 * mx / lo))
+        for k, val in D['limits'].items():
+            lines.append('  最大の |Δtanδ|（{:g} vol% まで、空隙率以内）= {:.2e}：検出限界（{}）{:.2e} の {:.0f} %'
+                         .format(v[-1], mx, k, val, 100 * mx / val))
         _write_csv(os.path.join(out_dir, 'spectral_ratio_dtand_vs_ice.csv'), rows, list(rows[0].keys()))
     path = os.path.join(out_dir, 'run_info.txt')
     with open(path, 'w', encoding='utf-8') as fh:
